@@ -7,23 +7,24 @@
 \maketitle
 
 Given applications $1, 2, \ldots, n$, our goal is to make placement
-decisions on the provided hardware. For now, we will assume that we have machines
-of three types: $a$, $b$, and $c$ (for example, this could correspond to three
-different GPU architectures: K80s, P100s, and V100s).
+decisions, assuming that the hardware available is heterogeneous. For now, we
+assume machines of three types: $a$, $b$, and $c$ (for example, machines with
+K80s, P100s, and V100s).
 
-We assume that our profiling run gives us rough performance estimates for each
+We assume that a profiling run gives us rough performance estimates for each
 of these applications (for example, we can time 100 minibatches of each application
-on each hardware, or use some collaborative filtering technique to estimate these
-times given previous measurements of different applications on different hardware).
+on each hardware, or use collaborative filtering to extrapolate these
+times given other measurements).
 
-Let these estimates be $a_i$, $b_i$, $c_i$. Also, let $x_{ai}$, $x_{bi}$, $x_{ci}$ represent
-an integer in $\{0, 1\}$ that represents whether application $i$ is run on
+Let these profiled estimates be $a_i$, $b_i$, $c_i$. Also, let $x_{ai}$, $x_{bi}$, $x_{ci}$ represent
+an integer in $\{0, 1\}$ that represents whether application $i$ should be run on
 machines $a$, $b$, $c$ respectively. Then, we observe that the following constraints
-must hold for all $1 \leq i \leq n$,
+must hold for all $1 \leq i \leq n$ (each application must be run on exactly
+one machine),
 
 \begin{eqnarray}
-0 &\leq x_{ai}, x_{bi}, x_{ci}   &\leq 1 \nonumber \\
-0 &\leq x_{ai} + x_{bi} + x_{ci} &\leq 1 \nonumber
+0 \leq x_{ai}, x_{bi}, x_{ci} \leq 1 \nonumber \\
+x_{ai} + x_{bi} + x_{ci} = 1 \nonumber
 \end{eqnarray}
 
 Then, we can minimize the total running time across applications by minimizing
@@ -33,7 +34,7 @@ Then, we can minimize the total running time across applications by minimizing
 \end{eqnarray}
 
 Note that this doesn't actually optimize ``time-to-completion'' (since applications
-can run in parallel in a cluster), and also doesn't account for the fact that
-there are a finite number of each machine.
+can run in parallel), and also doesn't account for the fact that
+there are a finite number of resources of each type.
 
 \end{document}
