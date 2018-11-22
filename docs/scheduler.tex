@@ -1,4 +1,5 @@
 \documentclass{article}
+\usepackage{amsmath}
 \title{ILP Formulation for Scheduler}
 
 \date{\today}
@@ -8,33 +9,33 @@
 
 Given applications $1, 2, \ldots, n$, our goal is to make placement
 decisions, assuming that the hardware available is heterogeneous. For now, we
-assume machines of three types: $a$, $b$, and $c$ (for example, machines with
-K80s, P100s, and V100s).
+assume we have $m$ machines: these $m$ machines can be of different types (for
+example, machines with different generations of GPUs like K80s, P100s, and V100s).
 
 We assume that a profiling run gives us rough performance estimates for each
 of these applications (for example, we can time 100 minibatches of each application
 on each hardware, or use collaborative filtering to extrapolate these
-times given other measurements).
+times from other measurements). The performance estimate for application $i$
+on machine $j$ is represented by $a_{ij}$.
 
-Let these profiled estimates be $a_i$, $b_i$, $c_i$. Also, let $x_{ai}$, $x_{bi}$, $x_{ci}$ represent
-an integer in $\{0, 1\}$ that represents whether application $i$ should be run on
-machines $a$, $b$, $c$ respectively. Then, we observe that the following constraints
-must hold for all $1 \leq i \leq n$ (each application must be run on exactly
-one machine),
-
-\begin{eqnarray}
-0 \leq x_{ai}, x_{bi}, x_{ci} \leq 1 \nonumber \\
-x_{ai} + x_{bi} + x_{ci} = 1 \nonumber
-\end{eqnarray}
-
-Then, we can minimize the total running time across applications by minimizing
+Now, let $x_{ij}$ be an integer in $\{0, 1\}$ that represents whether application $i$ should be run on
+machines $j$. Then, we observe that the following constraints
+must hold, since each application must be run on exactly one machine,
 
 \begin{eqnarray}
-\min \sum_{i=1}^n (a_i \cdot x_{ai} + b_i \cdot x_{bi} + c_i \cdot x_{ci}) \nonumber
+0 \leq x_{ij} \leq 1 & \forall (i,j) \in \{1, 2, \ldots, n\} \times \{1, 2, \ldots, m\} \nonumber  \\
+\sum_j x_{ij} = 1 & \forall i \in \{1, 2, \ldots, n\} \nonumber
 \end{eqnarray}
 
-Note that this doesn't actually optimize ``time-to-completion'' (since applications
-can run in parallel), and also doesn't account for the fact that
-there are a finite number of resources of each type.
+Now, let $y_j$ represent the total running time of applications run on machine
+$j$, and $y_{\text{max}}$ as the maximum $y_j$ (since applications run on different
+machines can run concurrently).
+\begin{eqnarray}
+y_j = \sum_i x_{ij} \cdot a_{ij} & \forall j \in \{1, 2, \ldots, m\} \nonumber \\
+y_{\text{max}} \geq y_j & \forall j \in \{1, 2, \ldots, m\} \nonumber
+\end{eqnarray}
+
+Now, we can minimize $y_{\text{max}}$ to find the allocation of applications
+among different hardware devices that minimizes total execution time.
 
 \end{document}
