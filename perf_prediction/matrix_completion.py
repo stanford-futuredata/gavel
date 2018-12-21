@@ -5,6 +5,14 @@ import random
 
 from fancyimpute import NuclearNormMinimization
 
+def mse(matrix, matrix_with_missing_entries, missing_entries):
+    predicted_matrix = NuclearNormMinimization(
+        verbose=False).fit_transform(matrix_with_missing_entries)
+    error = []
+    for (i, j) in missing_entries:
+        error.append(matrix[(i, j)] - predicted_matrix[(i, j)])
+    return (np.array(error) ** 2).mean()
+
 def matrix_completion(matrices_filename, p_drops, num_trials):
     matrices = pickle.load(open(matrices_filename, 'rb'))
     for gpu_architecture in matrices:
@@ -16,22 +24,18 @@ def matrix_completion(matrices_filename, p_drops, num_trials):
         for p_drop in p_drops:
             mses = []
             for trial in range(num_trials):
-                original_matrix = np.array(matrices[gpu_architecture])
+                matrix = np.array(matrices[gpu_architecture])
 
-                matrix_with_missing_entries = original_matrix.copy()
+                matrix_with_missing_entries = matrix.copy()
                 (m, n) = matrix_with_missing_entries.shape
                 for i in range(m):
                     for j in range(n):
                         if random.uniform(0, 1) < p_drop:
                             matrix_with_missing_entries[(i, j)] = np.NaN
+                            matrix_with_missing_entries[(j, i)] = np.NaN
                             missing_entries.append((i, j))
-
-                predicted_matrix = NuclearNormMinimization(
-                    verbose=False).fit_transform(matrix_with_missing_entries)
-                error = []
-                for (i, j) in missing_entries:
-                    error.append(original_matrix[(i, j)] - predicted_matrix[(i, j)])
-                mses.append((np.array(error) ** 2).mean())
+                mses.append(mse(matrix, matrix_with_missing_entries,
+                                missing_entries))
             print "Average MSE with p_{drop}=%.1f: %.3f" % (p_drop,
                                                             np.array(mses).mean())
 
