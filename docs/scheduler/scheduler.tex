@@ -7,6 +7,7 @@
 
 \maketitle
 
+\section{Without Application Packing}
 Given applications $1, 2, \ldots, n$, our goal is to make placement
 decisions, assuming that the hardware available is heterogeneous. For now, we
 assume we have $m$ machines: these $m$ machines can be of different types (for
@@ -37,5 +38,41 @@ y_{\text{max}} \geq y_j & \forall j \in \{1, 2, \ldots, m\} \nonumber
 
 Now, we can minimize $y_{\text{max}}$ to find the allocation of applications
 among different hardware devices that minimizes total execution time.
+
+\section{With Application Packing}
+The above formulation doesn't allow concurrent execution of applications
+on any given machine. We can relax this restriction.
+
+Instead of having a variable $x_{ij}$ for all combinations of application $i$
+with machine $j$, we instead create a variable $x_{cj}$,
+where $c$ is an application combination. Formally,
+$$c \in \{1, 2, \ldots, n\} \times \{1, 2, \ldots, n\} \cup \{1, 2, \ldots, n\}$$
+if we only consider combinations of up to two applications.
+Similarly, the performance estimate for an application combination is represented
+as $a_{cj}$.
+
+As before, $x_{cj}$ is an integer in $\{0, 1\}$ that represents whether
+application combination $c$ should be run on machine $j$. Then, we observe that
+the following constraints must hold,
+
+\begin{eqnarray}
+0 \leq x_{cj} \leq 1 & \forall c,j \nonumber \\
+\sum_{c \in C_i} \sum_j x_{cj} = 1 & \forall i \in \{1, 2, \ldots, n\} \nonumber
+\end{eqnarray}
+
+Here, $C_i$ represent all application combinations containing the application $i$.
+This constraint ensures that every application $i$ is executed on \emph{exactly}
+one machine.
+
+We now define $y_j$ as,
+\begin{eqnarray}
+y_j = \sum_c x_{cj} \cdot a_{cj} & \forall j \in \{1, 2, \ldots, m\} \nonumber \\
+\end{eqnarray}
+
+And minimize $y_{\text{max}}$ as before.
+
+Note that this formulation uses a total number of variables
+linear in the total number of application combinations
+under consideration. Can we do better? (probably)
 
 \end{document}
