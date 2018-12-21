@@ -1,0 +1,162 @@
+alexnet
+529.27
+
+lm_small
+11.956
+
+lm_large
+1.888
+
+inception3
+33.65
+
+resnet50
+55.65
+
+vgg16
+33.96
+
+nmt
+28.19
+
+vae
+6571.0
+
+lm_medium
+5.686
+
+(alexnet, alexnet)
+[193.76, 192.84]
+
+(alexnet, lm_small)
+[482.48, 2.836]
+
+(alexnet, lm_large)
+[303.39, 1.415]
+
+(alexnet, inception3)
+[112.9, 26.24]
+
+(alexnet, resnet50)
+[138.56, 42.63]
+
+(alexnet, vgg16)
+[184.65, 17.77]
+
+(alexnet, nmt)
+[479.12, 8.11]
+
+(alexnet, vae)
+[444.62, 2231.0]
+
+(alexnet, lm_medium)
+[426.04, 2.435]
+
+(lm_small, lm_small)
+[7.714, 7.711]
+
+(lm_small, lm_large)
+[2.205, 1.755]
+
+(lm_small, inception3)
+[2.601, 32.98]
+
+(lm_small, resnet50)
+[2.605, 54.5]
+
+(lm_small, vgg16)
+[2.75, 32.53]
+
+(lm_small, nmt)
+[8.399, 27.38]
+
+(lm_small, vae)
+[7.444, 5208.0]
+
+(lm_small, lm_medium)
+[5.039, 4.507]
+
+(lm_large, lm_large)
+[-1, 1.893]
+
+(lm_large, inception3)
+[1.891, -1]
+
+(lm_large, resnet50)
+[1.894, -1]
+
+(lm_large, vgg16)
+[1.317, 17.86]
+
+(lm_large, nmt)
+[1.787, 7.66]
+
+(lm_large, vae)
+[1.724, 1840.0]
+
+(lm_large, lm_medium)
+[1.51, 1.514]
+
+(inception3, inception3)
+[-1, 33.65]
+
+(inception3, resnet50)
+[-1, 54.57]
+
+(inception3, vgg16)
+[-1, 33.75]
+
+(inception3, nmt)
+[32.63, 2.49]
+
+(inception3, vae)
+[32.04, 1356.0]
+
+(inception3, lm_medium)
+[31.16, 2.138]
+
+(resnet50, resnet50)
+[54.49, -1]
+
+(resnet50, vgg16)
+[-1, 33.82]
+
+(resnet50, nmt)
+[53.53, 2.96]
+
+(resnet50, vae)
+[52.03, 1392.0]
+
+(resnet50, lm_medium)
+[51.77, 2.149]
+
+(vgg16, vgg16)
+[19.96, -1]
+
+(vgg16, nmt)
+[29.21, 5.53]
+
+(vgg16, vae)
+[29.59, 1932.0]
+
+(vgg16, lm_medium)
+[29.18, 2.315]
+
+(nmt, nmt)
+[25.6, 24.35]
+
+(nmt, vae)
+[27.59, 4815.0]
+
+(nmt, lm_medium)
+[18.92, 4.657]
+
+(vae, vae)
+[4098.0, 4094.0]
+
+(vae, lm_medium)
+[3573.0, 4.364]
+
+(lm_medium, lm_medium)
+[3.205, 3.205]
+
