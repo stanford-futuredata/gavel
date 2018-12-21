@@ -12,7 +12,6 @@ def matrix_completion(matrices_filename, p_drops, num_trials):
         print "                              %s" % gpu_architecture
         print "===================================================================="
         print(np.array(matrices[gpu_architecture]))
-        if gpu_architecture == "K80": continue  # No app combinations in this matrix.
         missing_entries = []
         for p_drop in p_drops:
             mses = []
