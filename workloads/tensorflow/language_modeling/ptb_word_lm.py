@@ -85,6 +85,8 @@ flags.DEFINE_string("rnn_mode", None,
 flags.DEFINE_integer("max_max_epoch", None, "Maximum number of training epochs")
 flags.DEFINE_float("max_duration", None,
                    "Maximum training duration in minutes")
+flags.DEFINE_integer("max_steps", None,
+                     "Maximum number of training steps")
 
 FLAGS = flags.FLAGS
 BASIC = "basic"
@@ -398,7 +400,12 @@ def run_epoch(session, model, eval_op=None, verbose=False, start_time_mb=0):
   if eval_op is not None:
     fetches["eval_op"] = eval_op
 
-  for step in range(model.input.epoch_size):
+  if FLAGS.max_steps:
+    num_steps = FLAGS.max_steps
+  else:
+    num_steps = model.input.epoch_size
+  for step in range(num_steps):
+    print('step %d/%d...' % (step, num_steps))
     feed_dict = {}
     for i, (c, h) in enumerate(model.initial_state):
       feed_dict[c] = state[i].c
@@ -516,7 +523,7 @@ def main(_):
       for i in range(config.max_max_epoch):
         seconds = (datetime.datetime.now() - start_time_mb).total_seconds()
         minutes = seconds / 60.0
-        if minutes >= max_duration:
+        if max_duration is not None and minutes >= max_duration:
           break
         lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
         m.assign_lr(session, config.learning_rate * lr_decay)
