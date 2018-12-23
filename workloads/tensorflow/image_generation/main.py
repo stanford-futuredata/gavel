@@ -66,7 +66,7 @@ if __name__ == "__main__":
             total_images += FLAGS.batch_size
             seconds = (datetime.datetime.now() - start_time_mb).total_seconds()
             minutes = seconds / 60.0
-            if minutes >= FLAGS.max_duration:
+            if FLAGS.max_duration is not None and minutes >= FLAGS.max_duration:
               end_time_mb = datetime.datetime.now()
               print("end:", str(end_time_mb))
               total_time = (end_time_mb - start_time_mb).total_seconds()
