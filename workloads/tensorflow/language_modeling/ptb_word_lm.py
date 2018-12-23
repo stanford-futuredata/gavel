@@ -405,7 +405,6 @@ def run_epoch(session, model, eval_op=None, verbose=False, start_time_mb=0):
   else:
     num_steps = model.input.epoch_size
   for step in range(num_steps):
-    print('step %d/%d...' % (step, num_steps))
     feed_dict = {}
     for i, (c, h) in enumerate(model.initial_state):
       feed_dict[c] = state[i].c

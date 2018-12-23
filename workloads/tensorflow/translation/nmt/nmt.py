@@ -132,7 +132,7 @@ def add_arguments(parser):
                       default=True,
                       help=("Whether try colocating gradients with "
                             "corresponding op"))
-  parser.add_argument("--max_duration", type=float, required=True, help="""\
+  parser.add_argument("--max_duration", type=float, default=None, help="""\
       Maximum duration in minutes of the training loop.\
       """)
 
