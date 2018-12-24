@@ -1,16 +1,16 @@
 ## Models
 
-| Model                   | URL                                                                            | Throughput metric               |
-| ----------------------- | ------------------------------------------------------------------------------ | ------------------------------- |
-| ResNet-50               | https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks | Images / second                 |
-| VGG16                   | https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks | Images / second                 |
-| Inception v3            | https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks | Images / second                 |
-| AlexNet                 | https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks | Images / second                 |
-| NMT                     | https://github.com/tensorflow/nmt                                              | Words per second (in thousands) |
-| Language Model (small)  | https://github.com/tensorflow/models/tree/master/tutorials/rnn/ptb             | Words per second (in thousands) |
-| Language Model (medium) | https://github.com/tensorflow/models/tree/master/tutorials/rnn/ptb             | Words per second (in thousands) |
-| Language Model (large)  | https://github.com/tensorflow/models/tree/master/tutorials/rnn/ptb             | Words per second (in thousands) |
-| VAE                     | https://github.com/ikostrikov/TensorFlow-VAE-GAN-DRAW                          | Images / second                 |
+| Model                   | Throughput metric                                                              |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| [ResNet-50](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks) | Images / second             |
+| [VGG16](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks) | Images / second                 |
+| [Inception v3](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks) | Images / second          |
+| [AlexNet](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks) | Images / second               |
+| [NMT](https://github.com/tensorflow/nmt)                                              | Words per second (in thousands) |
+| [Language Model (small)](https://github.com/tensorflow/models/tree/master/tutorials/rnn/ptb)             | Words per second (in thousands) |
+| [Language Model (medium)](https://github.com/tensorflow/models/tree/master/tutorials/rnn/ptb)             | Words per second (in thousands) |
+| [Language Model (large)](https://github.com/tensorflow/models/tree/master/tutorials/rnn/ptb)             | Words per second (in thousands) |
+| [VAE](https://github.com/ikostrikov/TensorFlow-VAE-GAN-DRAW)                          | Images / second                 |
 
 ## measure\_throughput.py
 ```
@@ -18,7 +18,7 @@ usage: measure_throughput.py [-h] -o OUTPUT_FILE [-c DATA_DIR_CNN]
                              [-n DATA_DIR_NMT] [-r DATA_DIR_LM] [-m MINUTES]
                              [-d]
 
-Measure throughput of colocated pairs of models.
+Measure throughput of co-located pairs of models
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -41,7 +41,7 @@ usage: measure_nvprof_metrics.py [-h] -l LOG_DIR [-c DATA_DIR_CNN]
                                  [-n DATA_DIR_NMT] [-r DATA_DIR_LM]
                                  [-m NUM_STEPS] [-d]
 
-Measure throughput of colocated models
+Measure nvprof metrics for different models
 
 optional arguments:
   -h, --help            show this help message and exit
