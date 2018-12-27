@@ -181,7 +181,7 @@ def main(output_file, data_dir, minutes, debug):
 
 if __name__=='__main__':
   parser = argparse.ArgumentParser(
-      description='Measure throughput of colocated models')
+      description='Measure throughput of co-located models')
   parser.add_argument('-o', '--output_file', type=str, required=True,
                       help='File to write results to')
   parser.add_argument('-c', '--data_dir_cnn', type=str,

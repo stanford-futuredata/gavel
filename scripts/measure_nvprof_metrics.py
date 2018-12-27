@@ -171,7 +171,7 @@ def main(log_dir, data_dir, num_steps, debug):
 
 if __name__=='__main__':
   parser = argparse.ArgumentParser(
-      description='Measure throughput of colocated models')
+      description='Measure nvprof metrics for different models')
   parser.add_argument('-l', '--log_dir', type=str, required=True,
                       help='Log directory')
   parser.add_argument('-c', '--data_dir_cnn', type=str,
