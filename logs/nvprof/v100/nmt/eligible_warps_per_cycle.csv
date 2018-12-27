@@ -1,0 +1,293 @@
+max_duration: None
+# Job id 0
+# Creating output directory /tmp/nmt_model_3JC0TF ...
+# Vocab file /home/keshavsanthanam/data/nmt_data/vocab.vi exists
+# Vocab file /home/keshavsanthanam/data/nmt_data/vocab.en exists
+  saving hparams to /tmp/nmt_model_3JC0TF/hparams
+  saving hparams to /tmp/nmt_model_3JC0TF/best_bleu/hparams
+  attention=
+  attention_architecture=standard
+  avg_ckpts=False
+  batch_size=128
+  beam_width=0
+  best_bleu=0
+  best_bleu_dir=/tmp/nmt_model_3JC0TF/best_bleu
+  check_special_token=True
+  colocate_gradients_with_ops=True
+  decay_scheme=
+  dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012
+  dropout=0.2
+  embed_prefix=None
+  encoder_type=uni
+  eos=</s>
+  epoch_step=0
+  forget_bias=1.0
+  infer_batch_size=32
+  infer_mode=greedy
+  init_op=uniform
+  init_weight=0.1
+  language_model=False
+  learning_rate=1.0
+  length_penalty_weight=0.0
+  log_device_placement=False
+  max_duration=None
+  max_gradient_norm=5.0
+  max_train=0
+  metrics=['bleu']
+  num_buckets=5
+  num_dec_emb_partitions=0
+  num_decoder_layers=2
+  num_decoder_residual_layers=0
+  num_embeddings_partitions=0
+  num_enc_emb_partitions=0
+  num_encoder_layers=2
+  num_encoder_residual_layers=0
+  num_gpus=1
+  num_inter_threads=0
+  num_intra_threads=0
+  num_keep_ckpts=5
+  num_sampled_softmax=0
+  num_train_steps=10
+  num_translations_per_input=1
+  num_units=128
+  optimizer=sgd
+  out_dir=/tmp/nmt_model_3JC0TF
+  output_attention=True
+  override_loaded_hparams=False
+  pass_hidden_state=True
+  random_seed=None
+  residual=False
+  sampling_temperature=0.0
+  share_vocab=False
+  sos=<s>
+  src=vi
+  src_embed_file=
+  src_max_len=50
+  src_max_len_infer=None
+  src_vocab_file=/home/keshavsanthanam/data/nmt_data/vocab.vi
+  src_vocab_size=7709
+  steps_per_external_eval=None
+  steps_per_stats=100
+  subword_option=
+  test_prefix=/home/keshavsanthanam/data/nmt_data/tst2013
+  tgt=en
+  tgt_embed_file=
+  tgt_max_len=50
+  tgt_max_len_infer=None
+  tgt_vocab_file=/home/keshavsanthanam/data/nmt_data/vocab.en
+  tgt_vocab_size=17191
+  time_major=True
+  train_prefix=/home/keshavsanthanam/data/nmt_data/train
+  unit_type=lstm
+  use_char_encode=False
+  vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab
+  warmup_scheme=t2t
+  warmup_steps=0
+WARNING:tensorflow:From nmt/utils/iterator_utils.py:235: group_by_window (from tensorflow.contrib.data.python.ops.grouping) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use `tf.data.experimental.group_by_window(...)`.
+# Creating train graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1WARNING:tensorflow:From nmt/model_helper.py:402: __init__ (from tensorflow.python.ops.rnn_cell_impl) is deprecated and will be removed in a future version.
+Instructions for updating:
+This class is deprecated, please use tf.nn.rnn_cell.LSTMCell, which supports all the feature this cell currently has. Please replace the existing code with tf.nn.rnn_cell.LSTMCell(name='basic_lstm_cell').
+  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  learning_rate=1, warmup_steps=0, warmup_scheme=t2t
+  decay_scheme=, start_decay_step=10, decay_steps 0, decay_factor 1
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), /device:GPU:0
+# Creating eval graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), /device:GPU:0
+# Creating infer graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  decoder: infer_mode=greedybeam_width=0, length_penalty=0.000000
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), 
+# log_file=/tmp/nmt_model_3JC0TF/log_1545598340
+==4403== NVPROF is profiling process 4403, command: python -m nmt.nmt --src=vi --tgt=en --vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab --train_prefix=/home/keshavsanthanam/data/nmt_data/train --dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012 --test_prefix=/home/keshavsanthanam/data/nmt_dat
+2018-12-23 20:52:21.174474: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:964] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2018-12-23 20:52:21.175057: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1432] Found device 0 with properties: 
+name: Tesla V100-SXM2-16GB major: 7 minor: 0 memoryClockRate(GHz): 1.53
+pciBusID: 0000:00:04.0
+totalMemory: 15.75GiB freeMemory: 15.33GiB
+2018-12-23 20:52:21.175085: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 20:52:22.033379: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 20:52:22.033419: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 20:52:22.033429: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 20:52:22.033806: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+2018-12-23 20:52:22.035471: I tensorflow/core/common_runtime/process_util.cc:69] Creating new thread pool with default inter op setting: 2. Tune using inter_op_parallelism_threads for best performance.
+2018-12-23 20:52:22.035776: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 20:52:22.035815: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 20:52:22.035824: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 20:52:22.035832: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 20:52:22.036159: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+2018-12-23 20:52:22.036514: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 20:52:22.036548: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 20:52:22.036556: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 20:52:22.036564: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 20:52:22.036884: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+  created train model with fresh parameters, time 1.10s
+  created infer model with fresh parameters, time 1.01s
+  # 1177
+    src: Và chúng ta đang ở thời điểm trong quá trình mà tương tự như khi những cơ thể sống đơn bào chuyển sang cơ thể sống đa bào .
+    ref: And what we are is we &apos;re at a point in time which is analogous to when single-celled organisms were turning into multi-celled organisms .
+    nmt: cloning lunch playlist playlist playlist agnostic nothing nothing nothing droughts droughts ask ask ask favela favela promote promote curse curse inhabit inhabit inhabit agricultural agricultural agricultural agricultural lastly lastly lastly 14-year-old 14-year-old vents Kay Kay Kay PhD PhD PhD ages ages ages Afghan Afghan ages Milky Milky Milky sheets sheets sheets sheets against desolate grounds grounds Ben Ben
+  created eval model with fresh parameters, time 1.01s
+  eval dev: perplexity 17192.39, time 1442s, Sun Dec 23 21:18:27 2018.
+  eval test: perplexity 17193.61, time 1225s, Sun Dec 23 21:38:53 2018.
+2018-12-23 21:38:54.089480: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-23 21:38:54.089607: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 21:38:54.089804: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 1.02s
+# Start step 0, lr 1, Sun Dec 23 21:38:54 2018
+# Init train iterator, skipping 0 elements
+start: 2018-12-23 21:38:54.543400
+end: 2018-12-23 22:19:53.928222
+# Done training!, time 2459s, Sun Dec 23 22:19:54 2018.
+# Start evaluating saved best models.
+2018-12-23 22:19:55.233819: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 22:19:55.233875: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-23 22:19:55.233919: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 1.03s
+  # 360
+    src: Tôi nói , &quot; Cháu là luật sư &quot; . Ông ấy nói : &quot; Cậu là luật sư ? &quot; , Tôi nói &quot; Dạ đúng rồi &quot; .
+    ref: I said , &quot; I &apos;m a lawyer . &quot; He said , &quot; You &apos;re a lawyer ? &quot; I said , &quot; Yes , sir . &quot;
+    nmt: benefited benefited benefited benefited Britannica weakened weakened repairs repairs Notice Notice trustworthy trustworthy computer-generated computer-generated computer-generated computer-generated computer-generated computer-generated computer-generated actively actively actively actively bombsight bombsight Honey Honey Honey Honey writer attackers commerce attackers attackers attackers attackers Ice Ice judges judges criminals Sending Sending Sending Sending Sending wastewater lymph lymph lymph lymph battle battle immigrants Jefferson Matty Matty Matty random
+2018-12-23 22:21:59.871096: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 22:21:59.871193: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 22:21:59.871310: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+  created eval model with fresh parameters, time 1.01s
+  eval dev: perplexity 17189.63, time 1452s, Sun Dec 23 22:46:12 2018.
+  eval test: perplexity 17188.47, time 1228s, Sun Dec 23 23:06:41 2018.
+2018-12-23 23:06:42.363077: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-23 23:06:42.363273: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 23:06:42.363558: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 1.01s
+# Best bleu, step 0 lr 1 step-time 0.00s wps 0.00K ppl 0.00 gN 0.00 dev ppl 17189.63, test ppl 17188.47, Sun Dec 23 23:06:42 2018
+==4403== Profiling application: python -m nmt.nmt --src=vi --tgt=en --vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab --train_prefix=/home/keshavsanthanam/data/nmt_data/train --dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012 --test_prefix=/home/keshavsanthanam/data/nmt_dat
+==4403== Profiling result:
+==4403== Metric result:
+"Device","Kernel","Invocations","Metric Name","Metric Description","Min","Max","Avg"
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<bool, bool, Eigen::internal::scalar_boolean_or_op>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",120,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.321637,0.427019,0.367958
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_product_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",2279,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.544594,6.284991,2.455866
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_difference_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float const , float const >, Eigen::TensorBroadcastingOp<Eigen::array<long, unsigned long=1> const , Eigen::TensorReshapingOp<Eigen::Sizes<> const , Eigen::TensorMap<Eigen::TensorFixedSize<float const , Eigen::Sizes<>, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const > const , Eigen::GpuDevice>, long>(float, int=1)",90,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.535516,4.331915,2.455795
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_min_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",10,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.112443,1.278033,1.254568
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::MaxReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::MaxReducer<float>, int>(Eigen::internal::MaxReducer<float>, float, long=1, float, Eigen::internal::MaxReducer<float>::CoeffReturnType*)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.687520,1.394799,1.183305
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=32, int=32, int=9, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=32, int=32, int=9, bool=0>*)",8,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.043667,0.122568,0.100609
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_binary_pow_op_google<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",11,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.217641,0.445059,0.250113
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<int, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<int, Eigen::TensorMap<Eigen::Tensor<__int64 const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(int, int=1)",25,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.270602,0.844252,0.612118
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_boolean_not_op<bool>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",2092,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.367539,0.636469,0.569188
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",32998,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.244091,2.736870,2.528298
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_difference_op<float const , float const >, Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorBroadcastingOp<Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorReshapingOp<Eigen::IndexList<int> const , Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>> const > const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.791775,1.043816,0.853266
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x32_nn",118,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",3.028031,4.184148,4.057780
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_tanh_gradient_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",2068,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.851658,2.913914,2.777583
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x32_sliced1x4_tn",1034,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.844284,1.307767,1.230674
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__59_tmpxft_00001636_00000000_6_check_numerics_op_gpu_cu_cpp1_ii_a7101fcd::CheckNumericsKernel<float>(float const *, int, int*)",10,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.192075,1.316000,1.290651
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseNullaryOp<Eigen::internal::scalar_const_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",64,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.288732,2.491082,2.286612
+"Tesla V100-SXM2-16GB (0)","void cub::DeviceReduceKernel<cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int, cub::Sum>(int, cub::Sum, cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, cub::GridEvenShare<cub::Sum>, float)",28,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.642070,1.131034,0.917864
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<float, Eigen::TensorMap<Eigen::Tensor<int const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",75,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.408333,0.805164,0.526969
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x32_nt",1,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",9.505387,9.505387,9.505387
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x128_nt",2,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",7.677264,7.735920,7.706592
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorBroadcastingOp<Eigen::array<int, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",10,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.933950,2.901923,2.193701
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::ColumnReduceKernel<float const *, float*, cub::Sum>(float const *, float*, int, int, cub::Sum, std::iterator_traits<tensorflow::functor::ColumnReduceKernel<float const *, float*, cub::Sum>>::value_type)",1034,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.084016,1.823478,1.791863
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_boolean_or_op, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(bool, int=1)",1910,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.366808,0.795501,0.625249
+"Tesla V100-SXM2-16GB (0)","void tensorflow::BiasNHWCKernel<float>(int, float const *, float const , tensorflow::BiasNHWCKernel<float>*, int)",8218,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.793461,2.616767,1.727488
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sum_op<float const , float const >, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",2858,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.894609,2.933722,2.802134
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_sum_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",8784,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.546610,4.372224,2.387427
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=3, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorSlicingOp<Eigen::DSizes<long, int=3> const , Eigen::DSizes<long, int=3> const , Eigen::TensorMap<Eigen::Tensor<float const , int=3, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=3)",4248,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.363733,3.029156,2.601286
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x128_tn",10,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",5.980847,8.674804,8.283447
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<bool*, bool*, int=256, tensorflow::functor::And>(bool*, bool*, int, tensorflow::functor::And, std::iterator_traits<tensorflow::functor::BlockReduceKernel<bool*, bool*, int=256, tensorflow::functor::And>>::value_type)",4006,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.353811,0.720577,0.646405
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::ReductionInitKernel<float, int>(float, int, Eigen::internal::ReductionInitKernel<float, int>*)",186,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.707498,1.919116,1.416728
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_round_op_google<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",2,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.357463,0.395464,0.376464
+"Tesla V100-SXM2-16GB (0)","void tensorflow::BiasGradNHWC_SharedAtomics<float>(int, float const *, tensorflow::BiasGradNHWC_SharedAtomics<float>*, int)",1,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",2.876365,2.876365,2.876365
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_64x32_sliced1x4_nn",7636,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.856458,3.135926,2.872678
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_64x32_sliced1x4_nt",1034,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.687545,2.818447,2.726702
+"Tesla V100-SXM2-16GB (0)","void tensorflow::GatherOpKernel<float, int, bool=1>(float const *, int const *, tensorflow::GatherOpKernel<float, int, bool=1>*, __int64, __int64, __int64, __int64)",246,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.370707,4.525912,1.868956
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::CleanupSegments<float*, float*, tensorflow::functor::Sum<float>>(float*, float*, int, int, int, float, std::iterator_traits<tensorflow::functor::CleanupSegments<float*, float*, tensorflow::functor::Sum<float>>>::value_type)",14,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.050341,0.079602,0.062205
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_floor_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1034,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.886435,1.452242,1.385857
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__57_tmpxft_0000199c_00000000_6_concat_lib_gpu_impl_cu_cpp1_ii_7a2efeeb::concat_fixed_kernel<float, int>(tensorflow::CudaDeviceArrayStruct<float const *, int=8>, int, int, int, tensorflow::CudaDeviceArrayStruct*)",75,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.748432,2.536498,1.225943
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_sigmoid_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",24654,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.853360,3.806246,3.465238
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int=256, cub::Sum>(float, float, int, float*, std::iterator_traits<tensorflow::functor::BlockReduceKernel<cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int=256, cub::Sum>>::value_type)",192,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.177070,0.367746,0.299710
+"Tesla V100-SXM2-16GB (0)","void gemv2N_kernel_val<float, float, float, int=128, int=8, int=4, int=4, int=1, cublasGemvParams<cublasGemvTensor<float const >, cublasGemvTensor<float>, float>>(float, float, float const )",354,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.140150,0.389878,0.321818
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorSlicingOp<Eigen::array<int, unsigned long=2> const , Eigen::array<int, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>>, Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::GpuDevice>, int>(int, unsigned long=2)",19864,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.280030,2.952021,2.607510
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorSlicingOp<Eigen::DSizes<int, int=2> const , Eigen::DSizes<int, int=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",2068,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.541043,2.664059,2.389318
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::ShuffleInTensor3Simple<unsigned int, int=0, int=2, int=1, bool=0>(int, unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::ShuffleInTensor3Simple<unsigned int, int=0, int=2, int=1, bool=0>*)",8,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.789306,3.056478,2.652612
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sigmoid_gradient_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",3102,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.804977,2.976367,2.870177
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::SumReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorGeneratorOp<tensorflow::generator::SparseXentLossGenerator<float, int>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::SumReducer<float>, int>(Eigen::internal::SumReducer<float>, float, long=1, float, Eigen::internal::SumReducer<float>::CoeffReturnType*)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.147695,6.914573,3.936676
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<float, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.968963,1.765976,1.399918
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x64_nn",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",6.288122,6.728633,6.599092
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_quotient_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.679590,1.352000,1.224285
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<__int64, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<__int64, Eigen::TensorMap<Eigen::Tensor<int const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(__int64, int=1)",2,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.275618,0.431469,0.353544
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x32_sliced1x4_nn",228,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.506046,0.973862,0.951985
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x64_nt",7,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",7.108928,7.295217,7.198802
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorSelectOp<Eigen::TensorBroadcastingOp<Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorReshapingOp<Eigen::IndexList<int> const , Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=2)",10404,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.444336,3.700174,3.218216
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_left<float, float, Eigen::internal::scalar_sum_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1034,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.549332,2.631312,2.416863
+"Tesla V100-SXM2-16GB (0)","void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, float*, float*, int, cub::Sum, float>(int, cub::Sum, cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, float*, float*)",28,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.154281,0.365321,0.253577
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float, float>, Eigen::TensorBroadcastingOp<Eigen::array<long, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",10,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.893883,0.944979,0.908381
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sum_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",10286,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.414175,5.741029,2.760810
+"Tesla V100-SXM2-16GB (0)","void tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp>(float*, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, int const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *)",20,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.839085,3.412694,2.616927
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_inverse_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",20,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.126959,1.833333,1.433486
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseNullaryOp<Eigen::internal::scalar_constant_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1152,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.732025,2.949038,2.887181
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=256, int=32, int=32, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=256, int=32, int=32, bool=0>*)",220,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.337635,1.260787,1.052907
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorGeneratorOp<tensorflow::generator::SparseXentGradGenerator<float, int>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",2.972491,4.978800,4.501876
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::FillPhiloxRandomKernelLaunch<tensorflow::random::UniformDistribution<tensorflow::random::PhiloxRandom, float>>(tensorflow::random::PhiloxRandom, tensorflow::random::PhiloxRandomResultElementType*, __int64, tensorflow::functor::FillPhiloxRandomKernelLaunch<tensorflow::random::UniformDistribution<tensorflow::random::PhiloxRandom, float>>)",1083,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",5.387191,9.099060,7.208819
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<bool, bool, Eigen::internal::scalar_boolean_and_op>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",2265,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.302747,0.619101,0.472122
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<int, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<int, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(int, int=1)",2,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.540583,0.542722,0.541652
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_sqrt_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",20,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.968823,1.776170,1.422343
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_exp_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.974358,1.060658,1.016259
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::SumReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_exp_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::SumReducer<float>, int>(Eigen::internal::SumReducer<float>, float, long=1, float, Eigen::internal::SumReducer<float>::CoeffReturnType*)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.971440,3.595126,3.137876
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<float*, float*, int=256, tensorflow::functor::Sum<float>>(float*, float*, int, float, std::iterator_traits<tensorflow::functor::BlockReduceKernel<float*, float*, int=256, tensorflow::functor::Sum<float>>>::value_type)",82,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.235090,0.470035,0.326826
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::CleanupSegments<float*, float*, cub::Sum>(float*, float*, int, int, int, cub::Sum, std::iterator_traits<tensorflow::functor::CleanupSegments<float*, float*, cub::Sum>>::value_type)",112,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.046719,0.073749,0.069128
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=128, int=128, int=9, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=128, int=128, int=9, bool=0>*)",12,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.171271,0.482338,0.387306
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__51_tmpxft_00003abd_00000000_6_split_lib_gpu_cu_cpp1_ii_90844e49::SplitOpKernel<float>(float const *, int, int, int, tensorflow::CudaDeviceArrayStruct<tensorflow::_GLOBAL__N__51_tmpxft_00003abd_00000000_6_split_lib_gpu_cu_cpp1_ii_90844e49::SplitOpKernel<float>*, int=8>)",8218,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",1.935537,5.167650,3.186973
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_tanh_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",16436,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.459133,3.070489,2.435405
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<int*, int*, int=256, tensorflow::functor::Prod<int>>(int*, int*, int, int, std::iterator_traits<tensorflow::functor::BlockReduceKernel<int*, int*, int=256, tensorflow::functor::Prod<int>>>::value_type)",62,"eligible_warps_per_cycle","Eligible Warps Per Active Cycle",0.237661,0.416996,0.320873

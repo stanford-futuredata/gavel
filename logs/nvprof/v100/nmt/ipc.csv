@@ -1,0 +1,293 @@
+max_duration: None
+# Job id 0
+# Creating output directory /tmp/nmt_model_J3K55D ...
+# Vocab file /home/keshavsanthanam/data/nmt_data/vocab.vi exists
+# Vocab file /home/keshavsanthanam/data/nmt_data/vocab.en exists
+  saving hparams to /tmp/nmt_model_J3K55D/hparams
+  saving hparams to /tmp/nmt_model_J3K55D/best_bleu/hparams
+  attention=
+  attention_architecture=standard
+  avg_ckpts=False
+  batch_size=128
+  beam_width=0
+  best_bleu=0
+  best_bleu_dir=/tmp/nmt_model_J3K55D/best_bleu
+  check_special_token=True
+  colocate_gradients_with_ops=True
+  decay_scheme=
+  dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012
+  dropout=0.2
+  embed_prefix=None
+  encoder_type=uni
+  eos=</s>
+  epoch_step=0
+  forget_bias=1.0
+  infer_batch_size=32
+  infer_mode=greedy
+  init_op=uniform
+  init_weight=0.1
+  language_model=False
+  learning_rate=1.0
+  length_penalty_weight=0.0
+  log_device_placement=False
+  max_duration=None
+  max_gradient_norm=5.0
+  max_train=0
+  metrics=['bleu']
+  num_buckets=5
+  num_dec_emb_partitions=0
+  num_decoder_layers=2
+  num_decoder_residual_layers=0
+  num_embeddings_partitions=0
+  num_enc_emb_partitions=0
+  num_encoder_layers=2
+  num_encoder_residual_layers=0
+  num_gpus=1
+  num_inter_threads=0
+  num_intra_threads=0
+  num_keep_ckpts=5
+  num_sampled_softmax=0
+  num_train_steps=10
+  num_translations_per_input=1
+  num_units=128
+  optimizer=sgd
+  out_dir=/tmp/nmt_model_J3K55D
+  output_attention=True
+  override_loaded_hparams=False
+  pass_hidden_state=True
+  random_seed=None
+  residual=False
+  sampling_temperature=0.0
+  share_vocab=False
+  sos=<s>
+  src=vi
+  src_embed_file=
+  src_max_len=50
+  src_max_len_infer=None
+  src_vocab_file=/home/keshavsanthanam/data/nmt_data/vocab.vi
+  src_vocab_size=7709
+  steps_per_external_eval=None
+  steps_per_stats=100
+  subword_option=
+  test_prefix=/home/keshavsanthanam/data/nmt_data/tst2013
+  tgt=en
+  tgt_embed_file=
+  tgt_max_len=50
+  tgt_max_len_infer=None
+  tgt_vocab_file=/home/keshavsanthanam/data/nmt_data/vocab.en
+  tgt_vocab_size=17191
+  time_major=True
+  train_prefix=/home/keshavsanthanam/data/nmt_data/train
+  unit_type=lstm
+  use_char_encode=False
+  vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab
+  warmup_scheme=t2t
+  warmup_steps=0
+WARNING:tensorflow:From nmt/utils/iterator_utils.py:235: group_by_window (from tensorflow.contrib.data.python.ops.grouping) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use `tf.data.experimental.group_by_window(...)`.
+# Creating train graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1WARNING:tensorflow:From nmt/model_helper.py:402: __init__ (from tensorflow.python.ops.rnn_cell_impl) is deprecated and will be removed in a future version.
+Instructions for updating:
+This class is deprecated, please use tf.nn.rnn_cell.LSTMCell, which supports all the feature this cell currently has. Please replace the existing code with tf.nn.rnn_cell.LSTMCell(name='basic_lstm_cell').
+  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  learning_rate=1, warmup_steps=0, warmup_scheme=t2t
+  decay_scheme=, start_decay_step=10, decay_steps 0, decay_factor 1
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), /device:GPU:0
+# Creating eval graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), /device:GPU:0
+# Creating infer graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  decoder: infer_mode=greedybeam_width=0, length_penalty=0.000000
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), 
+# log_file=/tmp/nmt_model_J3K55D/log_1545609058
+==6019== NVPROF is profiling process 6019, command: python -m nmt.nmt --src=vi --tgt=en --vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab --train_prefix=/home/keshavsanthanam/data/nmt_data/train --dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012 --test_prefix=/home/keshavsanthanam/data/nmt_dat
+2018-12-23 23:50:58.396991: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:964] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2018-12-23 23:50:58.397609: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1432] Found device 0 with properties: 
+name: Tesla V100-SXM2-16GB major: 7 minor: 0 memoryClockRate(GHz): 1.53
+pciBusID: 0000:00:04.0
+totalMemory: 15.75GiB freeMemory: 15.33GiB
+2018-12-23 23:50:58.397635: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 23:50:59.260561: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 23:50:59.260600: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 23:50:59.260606: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 23:50:59.260942: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+2018-12-23 23:50:59.262940: I tensorflow/core/common_runtime/process_util.cc:69] Creating new thread pool with default inter op setting: 2. Tune using inter_op_parallelism_threads for best performance.
+2018-12-23 23:50:59.263264: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 23:50:59.263296: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 23:50:59.263302: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 23:50:59.263307: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 23:50:59.263619: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+2018-12-23 23:50:59.263898: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 23:50:59.263929: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 23:50:59.263935: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 23:50:59.263940: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 23:50:59.264270: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+  created train model with fresh parameters, time 1.11s
+  created infer model with fresh parameters, time 1.00s
+  # 1219
+    src: Có người nói với chúng tôi rằng như bình thường , để xây dựng lên một phần mềm sẽ phải mất ít nhất 2 năm và tiêu tốn khoảng hai triệu đô-la .
+    ref: We were told afterward that if that had gone through normal channels , it would have taken at least two years and it would have cost about two million dollars .
+    nmt: gay riding riding rows cleverly cleverly cleverly kit hacking hacking hacking hacking copy copy copy Headwaters Headwaters Headwaters Headwaters Headwaters Headwaters breakdown breakdown breakdown breakdown Tasmania Tasmania Tasmania quitting quitting inappropriate inappropriate inappropriate great great whoa whoa whoa whoa whoa whoa tablet tablet fast-forward fast-forward fast-forward fast-forward skim skim skim skim Partners Teacher Teacher Jo Jo Jo Jo Jo Jo Jo victim 1500 1500 1500 1500
+  created eval model with fresh parameters, time 1.04s
+  eval dev: perplexity 17195.38, time 1455s, Mon Dec 24 00:17:35 2018.
+  eval test: perplexity 17194.65, time 1221s, Mon Dec 24 00:37:57 2018.
+2018-12-24 00:37:58.250836: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-24 00:37:58.250900: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-24 00:37:58.251016: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 1.01s
+# Start step 0, lr 1, Mon Dec 24 00:37:58 2018
+# Init train iterator, skipping 0 elements
+start: 2018-12-24 00:37:58.685851
+end: 2018-12-24 01:21:06.297994
+# Done training!, time 2588s, Mon Dec 24 01:21:06 2018.
+# Start evaluating saved best models.
+2018-12-24 01:21:07.535411: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-24 01:21:07.535534: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-24 01:21:07.535601: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 0.94s
+  # 1072
+    src: Tôi có ở đây 100 micrograms bột trắng , thứ mà tôi thường phải cố gắng giấu nhân viên bảo vệ ở sân bay .
+    ref: And I &apos;ve got here a little 100 micrograms of white powder , which I try not to let the security people see at airports .
+    nmt: universities greeting indication MoMA MoMA devils devils devils devils ridiculous Grandma Grandma exhibit exhibit scattered long scattered parallel diffuse diffuse rendering Pierpont circles circles circles circles circles Genspace Genspace Genspace demonstrating demonstrating retention draw draw magazines magazines magazines magazines touch Google Google diffuse transformations transformations transformations Internet Internet Internet Internet
+2018-12-24 01:22:47.046574: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-24 01:22:47.046700: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-24 01:22:47.046732: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created eval model with fresh parameters, time 0.98s
+  eval dev: perplexity 17194.88, time 1394s, Mon Dec 24 01:46:01 2018.
+  eval test: perplexity 17194.99, time 1227s, Mon Dec 24 02:06:29 2018.
+2018-12-24 02:06:30.259957: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-24 02:06:30.260042: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-24 02:06:30.260065: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 0.98s
+# Best bleu, step 0 lr 1 step-time 0.00s wps 0.00K ppl 0.00 gN 0.00 dev ppl 17194.88, test ppl 17194.99, Mon Dec 24 02:06:30 2018
+==6019== Profiling application: python -m nmt.nmt --src=vi --tgt=en --vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab --train_prefix=/home/keshavsanthanam/data/nmt_data/train --dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012 --test_prefix=/home/keshavsanthanam/data/nmt_dat
+==6019== Profiling result:
+==6019== Metric result:
+"Device","Kernel","Invocations","Metric Name","Metric Description","Min","Max","Avg"
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<bool, bool, Eigen::internal::scalar_boolean_or_op>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",118,"ipc","Executed IPC",0.128178,0.190252,0.169408
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_product_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",2459,"ipc","Executed IPC",0.148971,1.104955,0.754081
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_difference_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float const , float const >, Eigen::TensorBroadcastingOp<Eigen::array<long, unsigned long=1> const , Eigen::TensorReshapingOp<Eigen::Sizes<> const , Eigen::TensorMap<Eigen::TensorFixedSize<float const , Eigen::Sizes<>, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const > const , Eigen::GpuDevice>, long>(float, int=1)",90,"ipc","Executed IPC",0.153999,0.837742,0.574393
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_min_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",10,"ipc","Executed IPC",0.352240,0.406946,0.396277
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::MaxReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::MaxReducer<float>, int>(Eigen::internal::MaxReducer<float>, float, long=1, float, Eigen::internal::MaxReducer<float>::CoeffReturnType*)",62,"ipc","Executed IPC",0.363391,0.428155,0.398557
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=32, int=32, int=9, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=32, int=32, int=9, bool=0>*)",8,"ipc","Executed IPC",0.044440,0.123795,0.101597
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_binary_pow_op_google<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",11,"ipc","Executed IPC",0.116360,0.231513,0.129944
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<int, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<int, Eigen::TensorMap<Eigen::Tensor<__int64 const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(int, int=1)",25,"ipc","Executed IPC",0.107115,0.334155,0.252743
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_boolean_not_op<bool>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",2110,"ipc","Executed IPC",0.141672,0.277262,0.246268
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",33940,"ipc","Executed IPC",0.412928,0.860298,0.802976
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_difference_op<float const , float const >, Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorBroadcastingOp<Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorReshapingOp<Eigen::IndexList<int> const , Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>> const > const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"ipc","Executed IPC",0.475909,0.523856,0.493740
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x32_nn",116,"ipc","Executed IPC",1.504956,1.993221,1.952031
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_tanh_gradient_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",2248,"ipc","Executed IPC",0.597601,0.873052,0.832827
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x32_sliced1x4_tn",1124,"ipc","Executed IPC",0.864600,1.305758,1.231492
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__59_tmpxft_00001636_00000000_6_check_numerics_op_gpu_cu_cpp1_ii_a7101fcd::CheckNumericsKernel<float>(float const *, int, int*)",10,"ipc","Executed IPC",0.350867,0.401453,0.395088
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseNullaryOp<Eigen::internal::scalar_const_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",64,"ipc","Executed IPC",0.354048,0.735632,0.577151
+"Tesla V100-SXM2-16GB (0)","void cub::DeviceReduceKernel<cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int, cub::Sum>(int, cub::Sum, cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, cub::GridEvenShare<cub::Sum>, float)",32,"ipc","Executed IPC",0.273437,0.505857,0.352070
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<float, Eigen::TensorMap<Eigen::Tensor<int const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",75,"ipc","Executed IPC",0.165860,0.318235,0.212061
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x32_nt",1,"ipc","Executed IPC",2.454769,2.454769,2.454769
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x128_nt",4,"ipc","Executed IPC",2.197481,2.202926,2.201526
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorBroadcastingOp<Eigen::array<int, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",10,"ipc","Executed IPC",0.548239,1.038842,0.864830
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::ColumnReduceKernel<float const *, float*, cub::Sum>(float const *, float*, int, int, cub::Sum, std::iterator_traits<tensorflow::functor::ColumnReduceKernel<float const *, float*, cub::Sum>>::value_type)",1,"ipc","Executed IPC",0.563870,0.563870,0.563870
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_boolean_or_op, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(bool, int=1)",1930,"ipc","Executed IPC",0.155985,0.366255,0.280540
+"Tesla V100-SXM2-16GB (0)","void tensorflow::BiasNHWCKernel<float>(int, float const *, float const , tensorflow::BiasNHWCKernel<float>*, int)",8292,"ipc","Executed IPC",0.414136,1.002468,0.680736
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sum_op<float const , float const >, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",3101,"ipc","Executed IPC",0.551446,0.830149,0.799417
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_sum_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",8903,"ipc","Executed IPC",0.153426,0.834763,0.750180
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=3, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorSlicingOp<Eigen::DSizes<long, int=3> const , Eigen::DSizes<long, int=3> const , Eigen::TensorMap<Eigen::Tensor<float const , int=3, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=3)",4311,"ipc","Executed IPC",0.181633,0.891132,0.777795
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x128_tn",10,"ipc","Executed IPC",2.048970,2.446381,2.391584
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<bool*, bool*, int=256, tensorflow::functor::And>(bool*, bool*, int, tensorflow::functor::And, std::iterator_traits<tensorflow::functor::BlockReduceKernel<bool*, bool*, int=256, tensorflow::functor::And>>::value_type)",4046,"ipc","Executed IPC",0.285555,0.584791,0.541355
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::ReductionInitKernel<float, int>(float, int, Eigen::internal::ReductionInitKernel<float, int>*)",186,"ipc","Executed IPC",0.354139,0.682970,0.527198
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_round_op_google<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",2,"ipc","Executed IPC",0.121227,0.121701,0.121464
+"Tesla V100-SXM2-16GB (0)","void tensorflow::BiasGradNHWC_SharedAtomics<float>(int, float const *, tensorflow::BiasGradNHWC_SharedAtomics<float>*, int)",1124,"ipc","Executed IPC",1.071499,1.330361,1.308411
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_64x32_sliced1x4_nn",7716,"ipc","Executed IPC",1.247330,1.984259,1.830097
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_64x32_sliced1x4_nt",1124,"ipc","Executed IPC",0.923265,1.391328,1.354365
+"Tesla V100-SXM2-16GB (0)","void tensorflow::GatherOpKernel<float, int, bool=1>(float const *, int const *, tensorflow::GatherOpKernel<float, int, bool=1>*, __int64, __int64, __int64, __int64)",244,"ipc","Executed IPC",0.213602,1.967951,0.814078
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::CleanupSegments<float*, float*, tensorflow::functor::Sum<float>>(float*, float*, int, int, int, float, std::iterator_traits<tensorflow::functor::CleanupSegments<float*, float*, tensorflow::functor::Sum<float>>>::value_type)",15,"ipc","Executed IPC",0.043026,0.048872,0.047091
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_floor_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1124,"ipc","Executed IPC",0.318276,0.597820,0.567129
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__57_tmpxft_0000199c_00000000_6_concat_lib_gpu_impl_cu_cpp1_ii_7a2efeeb::concat_fixed_kernel<float, int>(tensorflow::CudaDeviceArrayStruct<float const *, int=8>, int, int, int, tensorflow::CudaDeviceArrayStruct*)",75,"ipc","Executed IPC",0.285309,0.840697,0.455316
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_sigmoid_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",24876,"ipc","Executed IPC",0.292144,1.353317,1.243645
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int=256, cub::Sum>(float, float, int, float*, std::iterator_traits<tensorflow::functor::BlockReduceKernel<cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int=256, cub::Sum>>::value_type)",188,"ipc","Executed IPC",0.168782,0.322824,0.274469
+"Tesla V100-SXM2-16GB (0)","void gemv2N_kernel_val<float, float, float, int=128, int=8, int=4, int=4, int=1, cublasGemvParams<cublasGemvTensor<float const >, cublasGemvTensor<float>, float>>(float, float, float const )",348,"ipc","Executed IPC",0.155960,0.384809,0.313701
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorSlicingOp<Eigen::array<int, unsigned long=2> const , Eigen::array<int, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>>, Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::GpuDevice>, int>(int, unsigned long=2)",20384,"ipc","Executed IPC",0.457764,0.902468,0.810607
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorSlicingOp<Eigen::DSizes<int, int=2> const , Eigen::DSizes<int, int=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",2248,"ipc","Executed IPC",0.486076,0.770053,0.699152
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::ShuffleInTensor3Simple<unsigned int, int=0, int=2, int=1, bool=0>(int, unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::ShuffleInTensor3Simple<unsigned int, int=0, int=2, int=1, bool=0>*)",8,"ipc","Executed IPC",0.783398,1.271303,1.091361
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sigmoid_gradient_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",3372,"ipc","Executed IPC",0.551130,0.887502,0.863995
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::SumReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorGeneratorOp<tensorflow::generator::SparseXentLossGenerator<float, int>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::SumReducer<float>, int>(Eigen::internal::SumReducer<float>, float, long=1, float, Eigen::internal::SumReducer<float>::CoeffReturnType*)",62,"ipc","Executed IPC",0.825115,2.265382,1.733340
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<float, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",62,"ipc","Executed IPC",0.400737,0.613861,0.511264
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x64_nn",62,"ipc","Executed IPC",2.287628,2.364139,2.341764
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_quotient_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",62,"ipc","Executed IPC",0.223308,0.381634,0.296933
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<__int64, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<__int64, Eigen::TensorMap<Eigen::Tensor<int const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(__int64, int=1)",2,"ipc","Executed IPC",0.119968,0.175824,0.147896
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x32_sliced1x4_nn",228,"ipc","Executed IPC",0.517467,0.967274,0.948729
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x64_nt",5,"ipc","Executed IPC",2.259415,2.276615,2.268437
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorSelectOp<Eigen::TensorBroadcastingOp<Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorReshapingOp<Eigen::IndexList<int> const , Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=2)",10648,"ipc","Executed IPC",0.221700,1.019855,0.897681
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_left<float, float, Eigen::internal::scalar_sum_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1124,"ipc","Executed IPC",0.535151,0.830993,0.756647
+"Tesla V100-SXM2-16GB (0)","void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, float*, float*, int, cub::Sum, float>(int, cub::Sum, cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, float*, float*)",32,"ipc","Executed IPC",0.149110,0.331108,0.246849
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float, float>, Eigen::TensorBroadcastingOp<Eigen::array<long, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",10,"ipc","Executed IPC",0.487453,0.494929,0.490063
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sum_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",10540,"ipc","Executed IPC",0.456631,1.021792,0.800482
+"Tesla V100-SXM2-16GB (0)","void tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp>(float*, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, int const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *)",20,"ipc","Executed IPC",0.745068,1.326538,0.994426
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_inverse_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",20,"ipc","Executed IPC",0.289862,0.539451,0.401192
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseNullaryOp<Eigen::internal::scalar_constant_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1236,"ipc","Executed IPC",0.428378,0.885074,0.860603
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=256, int=32, int=32, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=256, int=32, int=32, bool=0>*)",220,"ipc","Executed IPC",0.260211,1.001224,0.821019
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorGeneratorOp<tensorflow::generator::SparseXentGradGenerator<float, int>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"ipc","Executed IPC",1.094760,1.533106,1.442516
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::FillPhiloxRandomKernelLaunch<tensorflow::random::UniformDistribution<tensorflow::random::PhiloxRandom, float>>(tensorflow::random::PhiloxRandom, tensorflow::random::PhiloxRandomResultElementType*, __int64, tensorflow::functor::FillPhiloxRandomKernelLaunch<tensorflow::random::UniformDistribution<tensorflow::random::PhiloxRandom, float>>)",1173,"ipc","Executed IPC",1.351986,2.036345,1.647845
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<bool, bool, Eigen::internal::scalar_boolean_and_op>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",2282,"ipc","Executed IPC",0.128300,0.268805,0.207988
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<int, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<int, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(int, int=1)",2,"ipc","Executed IPC",0.214397,0.215578,0.214988
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_sqrt_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",20,"ipc","Executed IPC",0.296192,0.541237,0.427490
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_exp_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"ipc","Executed IPC",0.451870,0.500264,0.466054
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::SumReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_exp_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::SumReducer<float>, int>(Eigen::internal::SumReducer<float>, float, long=1, float, Eigen::internal::SumReducer<float>::CoeffReturnType*)",62,"ipc","Executed IPC",0.936059,1.124897,1.057602
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<float*, float*, int=256, tensorflow::functor::Sum<float>>(float*, float*, int, float, std::iterator_traits<tensorflow::functor::BlockReduceKernel<float*, float*, int=256, tensorflow::functor::Sum<float>>>::value_type)",82,"ipc","Executed IPC",0.195075,0.382866,0.273855
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::CleanupSegments<float*, float*, cub::Sum>(float*, float*, int, int, int, cub::Sum, std::iterator_traits<tensorflow::functor::CleanupSegments<float*, float*, cub::Sum>>::value_type)",108,"ipc","Executed IPC",0.042450,0.069359,0.065035
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=128, int=128, int=9, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=128, int=128, int=9, bool=0>*)",12,"ipc","Executed IPC",0.163534,0.469295,0.381996
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__51_tmpxft_00003abd_00000000_6_split_lib_gpu_cu_cpp1_ii_90844e49::SplitOpKernel<float>(float const *, int, int, int, tensorflow::CudaDeviceArrayStruct<tensorflow::_GLOBAL__N__51_tmpxft_00003abd_00000000_6_split_lib_gpu_cu_cpp1_ii_90844e49::SplitOpKernel<float>*, int=8>)",8292,"ipc","Executed IPC",0.702799,1.516911,1.068729
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_tanh_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",16584,"ipc","Executed IPC",0.234463,1.263402,0.947473
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<int*, int*, int=256, tensorflow::functor::Prod<int>>(int*, int*, int, int, std::iterator_traits<tensorflow::functor::BlockReduceKernel<int*, int*, int=256, tensorflow::functor::Prod<int>>>::value_type)",62,"ipc","Executed IPC",0.193759,0.254165,0.227335

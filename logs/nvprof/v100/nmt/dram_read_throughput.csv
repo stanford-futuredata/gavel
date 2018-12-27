@@ -1,0 +1,293 @@
+max_duration: None
+# Job id 0
+# Creating output directory /tmp/nmt_model_IPPMRV ...
+# Vocab file /home/keshavsanthanam/data/nmt_data/vocab.vi exists
+# Vocab file /home/keshavsanthanam/data/nmt_data/vocab.en exists
+  saving hparams to /tmp/nmt_model_IPPMRV/hparams
+  saving hparams to /tmp/nmt_model_IPPMRV/best_bleu/hparams
+  attention=
+  attention_architecture=standard
+  avg_ckpts=False
+  batch_size=128
+  beam_width=0
+  best_bleu=0
+  best_bleu_dir=/tmp/nmt_model_IPPMRV/best_bleu
+  check_special_token=True
+  colocate_gradients_with_ops=True
+  decay_scheme=
+  dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012
+  dropout=0.2
+  embed_prefix=None
+  encoder_type=uni
+  eos=</s>
+  epoch_step=0
+  forget_bias=1.0
+  infer_batch_size=32
+  infer_mode=greedy
+  init_op=uniform
+  init_weight=0.1
+  language_model=False
+  learning_rate=1.0
+  length_penalty_weight=0.0
+  log_device_placement=False
+  max_duration=None
+  max_gradient_norm=5.0
+  max_train=0
+  metrics=['bleu']
+  num_buckets=5
+  num_dec_emb_partitions=0
+  num_decoder_layers=2
+  num_decoder_residual_layers=0
+  num_embeddings_partitions=0
+  num_enc_emb_partitions=0
+  num_encoder_layers=2
+  num_encoder_residual_layers=0
+  num_gpus=1
+  num_inter_threads=0
+  num_intra_threads=0
+  num_keep_ckpts=5
+  num_sampled_softmax=0
+  num_train_steps=10
+  num_translations_per_input=1
+  num_units=128
+  optimizer=sgd
+  out_dir=/tmp/nmt_model_IPPMRV
+  output_attention=True
+  override_loaded_hparams=False
+  pass_hidden_state=True
+  random_seed=None
+  residual=False
+  sampling_temperature=0.0
+  share_vocab=False
+  sos=<s>
+  src=vi
+  src_embed_file=
+  src_max_len=50
+  src_max_len_infer=None
+  src_vocab_file=/home/keshavsanthanam/data/nmt_data/vocab.vi
+  src_vocab_size=7709
+  steps_per_external_eval=None
+  steps_per_stats=100
+  subword_option=
+  test_prefix=/home/keshavsanthanam/data/nmt_data/tst2013
+  tgt=en
+  tgt_embed_file=
+  tgt_max_len=50
+  tgt_max_len_infer=None
+  tgt_vocab_file=/home/keshavsanthanam/data/nmt_data/vocab.en
+  tgt_vocab_size=17191
+  time_major=True
+  train_prefix=/home/keshavsanthanam/data/nmt_data/train
+  unit_type=lstm
+  use_char_encode=False
+  vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab
+  warmup_scheme=t2t
+  warmup_steps=0
+WARNING:tensorflow:From nmt/utils/iterator_utils.py:235: group_by_window (from tensorflow.contrib.data.python.ops.grouping) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use `tf.data.experimental.group_by_window(...)`.
+# Creating train graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1WARNING:tensorflow:From nmt/model_helper.py:402: __init__ (from tensorflow.python.ops.rnn_cell_impl) is deprecated and will be removed in a future version.
+Instructions for updating:
+This class is deprecated, please use tf.nn.rnn_cell.LSTMCell, which supports all the feature this cell currently has. Please replace the existing code with tf.nn.rnn_cell.LSTMCell(name='basic_lstm_cell').
+  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DropoutWrapper, dropout=0.2   DeviceWrapper, device=/gpu:0
+  learning_rate=1, warmup_steps=0, warmup_scheme=t2t
+  decay_scheme=, start_decay_step=10, decay_steps 0, decay_factor 1
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), /device:GPU:0
+# Creating eval graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), /device:GPU:0
+# Creating infer graph ...
+# Build a basic encoder
+  num_layers = 2, num_residual_layers=0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 0  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  cell 1  LSTM, forget_bias=1  DeviceWrapper, device=/gpu:0
+  decoder: infer_mode=greedybeam_width=0, length_penalty=0.000000
+# Trainable variables
+Format: <name>, <shape>, <(soft) device placement>
+  embeddings/encoder/embedding_encoder:0, (7709, 128), /device:GPU:0
+  embeddings/decoder/embedding_decoder:0, (17191, 128), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/encoder/rnn/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_0/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/kernel:0, (256, 512), /device:GPU:0
+  dynamic_seq2seq/decoder/multi_rnn_cell/cell_1/basic_lstm_cell/bias:0, (512,), /device:GPU:0
+  dynamic_seq2seq/decoder/output_projection/kernel:0, (128, 17191), 
+# log_file=/tmp/nmt_model_IPPMRV/log_1545596139
+==3516== NVPROF is profiling process 3516, command: python -m nmt.nmt --src=vi --tgt=en --vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab --train_prefix=/home/keshavsanthanam/data/nmt_data/train --dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012 --test_prefix=/home/keshavsanthanam/data/nmt_dat
+2018-12-23 20:15:40.290666: I tensorflow/stream_executor/cuda/cuda_gpu_executor.cc:964] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero
+2018-12-23 20:15:40.291271: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1432] Found device 0 with properties: 
+name: Tesla V100-SXM2-16GB major: 7 minor: 0 memoryClockRate(GHz): 1.53
+pciBusID: 0000:00:04.0
+totalMemory: 15.75GiB freeMemory: 15.33GiB
+2018-12-23 20:15:40.291300: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 20:15:41.196043: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 20:15:41.196088: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 20:15:41.196095: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 20:15:41.196491: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+2018-12-23 20:15:41.198214: I tensorflow/core/common_runtime/process_util.cc:69] Creating new thread pool with default inter op setting: 2. Tune using inter_op_parallelism_threads for best performance.
+2018-12-23 20:15:41.198510: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 20:15:41.198551: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 20:15:41.198557: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 20:15:41.198562: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 20:15:41.198944: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+2018-12-23 20:15:41.199340: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1511] Adding visible gpu devices: 0
+2018-12-23 20:15:41.199376: I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-23 20:15:41.199381: I tensorflow/core/common_runtime/gpu/gpu_device.cc:988]      0 
+2018-12-23 20:15:41.199386: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1001] 0:   N 
+2018-12-23 20:15:41.199717: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1115] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 14837 MB memory) -> physical GPU (device: 0, name: Tesla V100-SXM2-16GB, pci bus id: 0000:00:04.0, compute capability: 7.0)
+  created train model with fresh parameters, time 0.33s
+  created infer model with fresh parameters, time 0.24s
+  # 401
+    src: Bạn sẽ nói gì với những ai tin vào chuyện này ?
+    ref: What would you say to someone who believed that ?
+    nmt: resting valves pen Great Great verifiable verifiable implausible implausible bureaucrats bureaucrats colleges colleges colleges colleges idiot idiot idiot idiot Kiribati Kiribati Kiribati &apos;ve &apos;ve
+  created eval model with fresh parameters, time 0.23s
+  eval dev: perplexity 17190.14, time 196s, Sun Dec 23 20:19:06 2018.
+  eval test: perplexity 17190.87, time 165s, Sun Dec 23 20:21:51 2018.
+2018-12-23 20:21:52.178873: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-23 20:21:52.179010: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 20:21:52.179148: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 0.21s
+# Start step 0, lr 1, Sun Dec 23 20:21:52 2018
+# Init train iterator, skipping 0 elements
+start: 2018-12-23 20:21:52.362309
+end: 2018-12-23 20:27:44.569283
+# Done training!, time 352s, Sun Dec 23 20:27:44 2018.
+# Start evaluating saved best models.
+2018-12-23 20:27:45.117185: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-23 20:27:45.117274: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 20:27:45.117435: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 0.22s
+  # 1162
+    src: Nhưng chúng thực hiện được công việc .
+    ref: But they do the job .
+    nmt: subsequently legally focuses Image focus products products peer-reviewed peer-reviewed peer-reviewed curl curl curl interconnection interconnection trillion
+2018-12-23 20:27:50.019426: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-23 20:27:50.019628: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 20:27:50.019631: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created eval model with fresh parameters, time 0.23s
+  eval dev: perplexity 17187.01, time 194s, Sun Dec 23 20:31:04 2018.
+  eval test: perplexity 17185.00, time 168s, Sun Dec 23 20:33:53 2018.
+2018-12-23 20:33:54.007702: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.vi is already initialized.
+2018-12-23 20:33:54.007798: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+2018-12-23 20:33:54.008009: I tensorflow/core/kernels/lookup_util.cc:376] Table trying to initialize from file /home/keshavsanthanam/data/nmt_data/vocab.en is already initialized.
+  created infer model with fresh parameters, time 0.21s
+# Best bleu, step 0 lr 1 step-time 0.00s wps 0.00K ppl 0.00 gN 0.00 dev ppl 17187.01, test ppl 17185.00, Sun Dec 23 20:33:54 2018
+==3516== Profiling application: python -m nmt.nmt --src=vi --tgt=en --vocab_prefix=/home/keshavsanthanam/data/nmt_data/vocab --train_prefix=/home/keshavsanthanam/data/nmt_data/train --dev_prefix=/home/keshavsanthanam/data/nmt_data/tst2012 --test_prefix=/home/keshavsanthanam/data/nmt_dat
+==3516== Profiling result:
+==3516== Metric result:
+"Device","Kernel","Invocations","Metric Name","Metric Description","Min","Max","Avg"
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<bool, bool, Eigen::internal::scalar_boolean_or_op>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",42,"dram_read_throughput","Device Memory Read Throughput",26.386246MB/s,353.212709MB/s,69.712240MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_product_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",2299,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,333.551725GB/s,33.653335GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_difference_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float const , float const >, Eigen::TensorBroadcastingOp<Eigen::array<long, unsigned long=1> const , Eigen::TensorReshapingOp<Eigen::Sizes<> const , Eigen::TensorMap<Eigen::TensorFixedSize<float const , Eigen::Sizes<>, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const > const , Eigen::GpuDevice>, long>(float, int=1)",90,"dram_read_throughput","Device Memory Read Throughput",976.562500MB/s,470.464141GB/s,273.221532GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_min_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",10,"dram_read_throughput","Device Memory Read Throughput",404.099286MB/s,489.063751MB/s,455.414966MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::MaxReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::MaxReducer<float>, int>(Eigen::internal::MaxReducer<float>, float, long=1, float, Eigen::internal::MaxReducer<float>::CoeffReturnType*)",62,"dram_read_throughput","Device Memory Read Throughput",633.968659GB/s,808.570060GB/s,787.675541GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=32, int=32, int=9, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=32, int=32, int=9, bool=0>*)",8,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,1.158474GB/s,431.589705MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_binary_pow_op_google<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",11,"dram_read_throughput","Device Memory Read Throughput",33.171280MB/s,648.758038MB/s,591.481416MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<int, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<int, Eigen::TensorMap<Eigen::Tensor<__int64 const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(int, int=1)",25,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,382.861952MB/s,120.089503MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_boolean_not_op<bool>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",2018,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,444.430749MB/s,12.010933MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",32406,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,25.626997GB/s,5.370900GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_difference_op<float const , float const >, Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorBroadcastingOp<Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorReshapingOp<Eigen::IndexList<int> const , Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>> const > const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"dram_read_throughput","Device Memory Read Throughput",366.775511GB/s,378.484553GB/s,370.399854GB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x32_nn",40,"dram_read_throughput","Device Memory Read Throughput",312.386691GB/s,392.285049GB/s,376.519634GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_tanh_gradient_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",2088,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,26.490953GB/s,125.650144MB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x32_sliced1x4_tn",1044,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,23.695218GB/s,4.431698GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__59_tmpxft_00001636_00000000_6_check_numerics_op_gpu_cu_cpp1_ii_a7101fcd::CheckNumericsKernel<float>(float const *, int, int*)",10,"dram_read_throughput","Device Memory Read Throughput",258.623543MB/s,272.478375MB/s,266.761786MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseNullaryOp<Eigen::internal::scalar_const_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",64,"dram_read_throughput","Device Memory Read Throughput",196.789938MB/s,342.344625MB/s,276.538013MB/s
+"Tesla V100-SXM2-16GB (0)","void cub::DeviceReduceKernel<cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int, cub::Sum>(int, cub::Sum, cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, cub::GridEvenShare<cub::Sum>, float)",28,"dram_read_throughput","Device Memory Read Throughput",91.521321GB/s,449.927010GB/s,397.817408GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<float, Eigen::TensorMap<Eigen::Tensor<int const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",75,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,351.353695MB/s,289.556665MB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x32_nt",1,"dram_read_throughput","Device Memory Read Throughput",575.608615GB/s,575.608615GB/s,575.608615GB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x128_nt",2,"dram_read_throughput","Device Memory Read Throughput",188.547552GB/s,201.450767GB/s,195.545743GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorBroadcastingOp<Eigen::array<int, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",10,"dram_read_throughput","Device Memory Read Throughput",945.004549MB/s,0.995237GB/s,980.362823MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::ColumnReduceKernel<float const *, float*, cub::Sum>(float const *, float*, int, int, cub::Sum, std::iterator_traits<tensorflow::functor::ColumnReduceKernel<float const *, float*, cub::Sum>>::value_type)",1,"dram_read_throughput","Device Memory Read Throughput",593.904963MB/s,593.904963MB/s,593.904784MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_boolean_or_op, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(bool, int=1)",1914,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,414.641006MB/s,15.130460MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::BiasNHWCKernel<float>(int, float const *, float const , tensorflow::BiasNHWCKernel<float>*, int)",7994,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,49.078825GB/s,844.813301MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sum_op<float const , float const >, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",2881,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,26.490953GB/s,2.682961GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_sum_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",8565,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,336.180561GB/s,4.611175GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=3, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorSlicingOp<Eigen::DSizes<long, int=3> const , Eigen::DSizes<long, int=3> const , Eigen::TensorMap<Eigen::Tensor<float const , int=3, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=3)",4218,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,15.506899GB/s,4.889388GB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x128_tn",10,"dram_read_throughput","Device Memory Read Throughput",160.361582GB/s,236.993628GB/s,222.813164GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<bool*, bool*, int=256, tensorflow::functor::And>(bool*, bool*, int, tensorflow::functor::And, std::iterator_traits<tensorflow::functor::BlockReduceKernel<bool*, bool*, int=256, tensorflow::functor::And>>::value_type)",4014,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,871.930803MB/s,8.671369MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::ReductionInitKernel<float, int>(float, int, Eigen::internal::ReductionInitKernel<float, int>*)",186,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,397.364298MB/s,93.736477MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_round_op_google<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",2,"dram_read_throughput","Device Memory Read Throughput",328.853212MB/s,337.583828MB/s,333.161073MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::BiasGradNHWC_SharedAtomics<float>(int, float const *, tensorflow::BiasGradNHWC_SharedAtomics<float>*, int)",1044,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,376.760223MB/s,4.251075MB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_64x32_sliced1x4_nn",7648,"dram_read_throughput","Device Memory Read Throughput",755.477942MB/s,39.225115GB/s,18.156986GB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_64x32_sliced1x4_nt",1044,"dram_read_throughput","Device Memory Read Throughput",7.321627GB/s,9.071379GB/s,8.583781GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::GatherOpKernel<float, int, bool=1>(float const *, int const *, tensorflow::GatherOpKernel<float, int, bool=1>*, __int64, __int64, __int64, __int64)",168,"dram_read_throughput","Device Memory Read Throughput",130.417000MB/s,50.600539GB/s,33.117358GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::CleanupSegments<float*, float*, tensorflow::functor::Sum<float>>(float*, float*, int, int, int, float, std::iterator_traits<tensorflow::functor::CleanupSegments<float*, float*, tensorflow::functor::Sum<float>>>::value_type)",14,"dram_read_throughput","Device Memory Read Throughput",69.218297MB/s,555.684247MB/s,379.843925MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_floor_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1044,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,15.005469GB/s,85.207927MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__57_tmpxft_0000199c_00000000_6_concat_lib_gpu_impl_cu_cpp1_ii_7a2efeeb::concat_fixed_kernel<float, int>(tensorflow::CudaDeviceArrayStruct<float const *, int=8>, int, int, int, tensorflow::CudaDeviceArrayStruct*)",75,"dram_read_throughput","Device Memory Read Throughput",9.516618GB/s,149.082441GB/s,63.800866GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_sigmoid_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",23982,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,9.613652GB/s,18.434063MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int=256, cub::Sum>(float, float, int, float*, std::iterator_traits<tensorflow::functor::BlockReduceKernel<cub::TransformInputIterator<float, tensorflow::squareHalf<float>, float*, long>, float*, int=256, cub::Sum>>::value_type)",192,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,32.253332GB/s,4.941251GB/s
+"Tesla V100-SXM2-16GB (0)","void gemv2N_kernel_val<float, float, float, int=128, int=8, int=4, int=4, int=1, cublasGemvParams<cublasGemvTensor<float const >, cublasGemvTensor<float>, float>>(float, float, float const )",120,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,88.217028GB/s,60.798963GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorSlicingOp<Eigen::array<int, unsigned long=2> const , Eigen::array<int, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>>, Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::GpuDevice>, int>(int, unsigned long=2)",19924,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,17.096422GB/s,3.436772GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorSlicingOp<Eigen::DSizes<int, int=2> const , Eigen::DSizes<int, int=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",2088,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,16.206605GB/s,3.491381GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::ShuffleInTensor3Simple<unsigned int, int=0, int=2, int=1, bool=0>(int, unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::ShuffleInTensor3Simple<unsigned int, int=0, int=2, int=1, bool=0>*)",8,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,551.768711MB/s,156.587296MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sigmoid_gradient_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",3132,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,26.308257GB/s,167.099720MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::SumReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorGeneratorOp<tensorflow::generator::SparseXentLossGenerator<float, int>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::SumReducer<float>, int>(Eigen::internal::SumReducer<float>, float, long=1, float, Eigen::internal::SumReducer<float>::CoeffReturnType*)",62,"dram_read_throughput","Device Memory Read Throughput",327.966049MB/s,878.404872MB/s,689.169419MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<float, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",62,"dram_read_throughput","Device Memory Read Throughput",67.516766MB/s,3.197541GB/s,458.850127MB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x64_nn",62,"dram_read_throughput","Device Memory Read Throughput",302.626505GB/s,360.945432GB/s,348.923735GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<float, float, Eigen::internal::scalar_quotient_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",62,"dram_read_throughput","Device Memory Read Throughput",16.879191MB/s,561.854635MB/s,291.041794MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<__int64, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<__int64, Eigen::TensorMap<Eigen::Tensor<int const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(__int64, int=1)",2,"dram_read_throughput","Device Memory Read Throughput",376.661284MB/s,449.194424MB/s,415.608809MB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_32x32_sliced1x4_nn",226,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,43.596540GB/s,1.607540GB/s
+"Tesla V100-SXM2-16GB (0)","volta_sgemm_128x64_nt",7,"dram_read_throughput","Device Memory Read Throughput",239.687753GB/s,277.465087GB/s,256.582247GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorSelectOp<Eigen::TensorBroadcastingOp<Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorReshapingOp<Eigen::IndexList<int> const , Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, long>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=2)",10260,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,14.024622GB/s,2.308684GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_left<float, float, Eigen::internal::scalar_sum_op<float, float>>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1044,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,13.891636GB/s,330.034076MB/s
+"Tesla V100-SXM2-16GB (0)","void cub::DeviceReduceSingleTileKernel<cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, float*, float*, int, cub::Sum, float>(int, cub::Sum, cub::DeviceReducePolicy<float, int, cub::Sum>::Policy600, float*, float*)",28,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,953.674316MB/s,434.108766MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_product_op<float, float>, Eigen::TensorBroadcastingOp<Eigen::array<long, unsigned long=2> const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::TensorMap<Eigen::Tensor<float const , int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",10,"dram_read_throughput","Device Memory Read Throughput",365.934284GB/s,375.181918GB/s,372.054192GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseBinaryOp<Eigen::internal::scalar_sum_op<float, float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const , Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(float, int=1)",10082,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,172.605117GB/s,5.037203GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp>(float*, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, int const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *, tensorflow::scatter_op_gpu::ScatterOpCustomKernel<float, int, tensorflow::scatter_op::UpdateOp> const *)",20,"dram_read_throughput","Device Memory Read Throughput",79.003247GB/s,252.795743GB/s,120.316648GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_inverse_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",20,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,600.739726MB/s,357.924027MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseNullaryOp<Eigen::internal::scalar_constant_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",1156,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,911.099569MB/s,21.015970MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=256, int=32, int=32, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=256, int=32, int=32, bool=0>*)",220,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,4.211198GB/s,317.416463MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorGeneratorOp<tensorflow::generator::SparseXentGradGenerator<float, int>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"dram_read_throughput","Device Memory Read Throughput",180.980444GB/s,268.951051GB/s,257.645060GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::FillPhiloxRandomKernelLaunch<tensorflow::random::UniformDistribution<tensorflow::random::PhiloxRandom, float>>(tensorflow::random::PhiloxRandom, tensorflow::random::PhiloxRandomResultElementType*, __int64, tensorflow::functor::FillPhiloxRandomKernelLaunch<tensorflow::random::UniformDistribution<tensorflow::random::PhiloxRandom, float>>)",1093,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,629.926982MB/s,11.725660MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<bool, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_right<bool, bool, Eigen::internal::scalar_boolean_and_op>, Eigen::TensorMap<Eigen::Tensor<bool const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(bool, int=1)",2149,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,336.590935MB/s,16.973031MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<int, int=1, int=1, long>, int=16, Eigen::MakePointer>, Eigen::TensorConversionOp<int, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, long>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, long>(int, int=1)",2,"dram_read_throughput","Device Memory Read Throughput",346.790660MB/s,346.790660MB/s,346.790389MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_sqrt_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",20,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,600.739726MB/s,321.237576MB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_exp_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=2)",62,"dram_read_throughput","Device Memory Read Throughput",367.281233GB/s,379.218045GB/s,371.257223GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::InnerReductionKernel<int=128, Eigen::TensorEvaluator<Eigen::TensorReductionOp<Eigen::internal::SumReducer<float>, Eigen::IndexList<Eigen::type2index<long=1>> const , Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_exp_op<float>, Eigen::TensorMap<Eigen::Tensor<float, int=2, int=1, int>, int=16, Eigen::MakePointer> const > const , Eigen::MakePointer> const , Eigen::GpuDevice>, Eigen::internal::SumReducer<float>, int>(Eigen::internal::SumReducer<float>, float, long=1, float, Eigen::internal::SumReducer<float>::CoeffReturnType*)",62,"dram_read_throughput","Device Memory Read Throughput",617.229903GB/s,802.547306GB/s,780.899666GB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<float*, float*, int=256, tensorflow::functor::Sum<float>>(float*, float*, int, float, std::iterator_traits<tensorflow::functor::BlockReduceKernel<float*, float*, int=256, tensorflow::functor::Sum<float>>>::value_type)",82,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,704.251802MB/s,420.137359MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::CleanupSegments<float*, float*, cub::Sum>(float*, float*, int, int, int, cub::Sum, std::iterator_traits<tensorflow::functor::CleanupSegments<float*, float*, cub::Sum>>::value_type)",112,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,508.626302MB/s,48.256982MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=128, int=128, int=9, bool=0>(unsigned int const *, tensorflow::functor::Dimension<int=3>, tensorflow::functor::SwapDimension1And2InTensor3UsingTiles<unsigned int, int=128, int=128, int=9, bool=0>*)",12,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,1.188239GB/s,427.061373MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::_GLOBAL__N__51_tmpxft_00003abd_00000000_6_split_lib_gpu_cu_cpp1_ii_90844e49::SplitOpKernel<float>(float const *, int, int, int, tensorflow::CudaDeviceArrayStruct<tensorflow::_GLOBAL__N__51_tmpxft_00003abd_00000000_6_split_lib_gpu_cu_cpp1_ii_90844e49::SplitOpKernel<float>*, int=8>)",7994,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,12.120770GB/s,3.055890GB/s
+"Tesla V100-SXM2-16GB (0)","void Eigen::internal::EigenMetaKernel<Eigen::TensorEvaluator<Eigen::TensorAssignOp<Eigen::TensorMap<Eigen::Tensor<float, int=1, int=1, int>, int=16, Eigen::MakePointer>, Eigen::TensorCwiseUnaryOp<Eigen::internal::scalar_tanh_op<float>, Eigen::TensorMap<Eigen::Tensor<float const , int=1, int=1, int>, int=16, Eigen::MakePointer> const > const > const , Eigen::GpuDevice>, int>(float, int=1)",15988,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,10.702818GB/s,13.287506MB/s
+"Tesla V100-SXM2-16GB (0)","void tensorflow::functor::BlockReduceKernel<int*, int*, int=256, tensorflow::functor::Prod<int>>(int*, int*, int, int, std::iterator_traits<tensorflow::functor::BlockReduceKernel<int*, int*, int=256, tensorflow::functor::Prod<int>>>::value_type)",62,"dram_read_throughput","Device Memory Read Throughput",0.000000B/s,722.434049MB/s,313.389979MB/s
