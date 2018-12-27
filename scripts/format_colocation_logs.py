@@ -86,7 +86,7 @@ def main(log_file):
 
 if __name__=='__main__':
   parser = argparse.ArgumentParser(
-      description='Parse scheduling colocation logs')
+      description='Parse scheduling co-location logs')
   parser.add_argument('-f', '--file', type=str, required=True, help='Log file')
 
   args = parser.parse_args()
