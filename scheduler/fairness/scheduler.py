@@ -12,12 +12,12 @@ class Problem:
 
     @property
     def n(self):
-        """Number of users in the problem"""
+        """Number of users in the problem."""
         return self.a.shape[0]
 
     @property
     def m(self):
-        """Number of resources in the problem"""
+        """Number of resources in the problem."""
         return self.a.shape[1]
 
     @property
@@ -30,30 +30,28 @@ class Problem:
         new_a = self.a * scale.reshape(self.n, 1)
         return Problem(new_a)
 
+    def user_rates(self, solution):
+        """Return the progress rate achieved by each user in a solution."""
+        return (self.a * solution.x).sum(axis=1)
+
+    def normalized_user_rates(self, solution):
+        """Return the normalized progress rate achieved by each user in a solution."""
+        return (self.normalized.a * solution.x).sum(axis=1)
+
     def __repr__(self):
         return "Problem(a=%s)" % self.a
 
 
 class Solution:
-    def __init__(self, problem, x):
+    def __init__(self, x):
         """
-        problem: the problem we are solving
         x: 2D matrix where x[i][j] is the fraction of resource j allocated to user i
         """
         assert len(x.shape) == 2
-        self.problem = problem
         self.x = x
 
     def __repr__(self):
         return "Solution(x=%s)" % self.x
-
-    @property
-    def user_rates(self):
-        return (self.x * self.problem.a).sum(axis=1)
-
-    @property
-    def normalized_user_rates(self):
-        return (self.x * self.problem.normalized.a).sum(axis=1)
 
 
 def solve_isolated(problem):
@@ -61,7 +59,7 @@ def solve_isolated(problem):
     This algorithm splits all resources equally between all users, giving the isolation baseline.
     """
     x = np.full(problem.a.shape, 1.0 / problem.n)
-    return Solution(problem, x)
+    return Solution(x)
 
 
 def solve_max_throughput(problem, normalize=True):
@@ -79,7 +77,7 @@ def solve_max_throughput(problem, normalize=True):
     num_equal_to_max = is_max.sum(axis=0)
     scale = 1.0 / num_equal_to_max
     x = is_max * scale
-    return Solution(problem, x)
+    return Solution(x)
 
 
 def solve_isolated_max_throughput(problem):
@@ -97,7 +95,25 @@ def solve_isolated_max_throughput(problem):
     ]
     cvxprob = cp.Problem(objective, constraints)
     result = cvxprob.solve()
-    return Solution(problem, x.value)
+    assert cvxprob.status == "optimal"
+    return Solution(x.value)
+
+
+def solve_nash_bargaining(problem):
+    """
+    This algorithm tries to maximize the product of the throughputs of each user.
+    """
+    a = problem.normalized.a   # Technically we don't need to normalize for this one
+    x = cp.Variable(a.shape)
+    objective = cp.Maximize(cp.geo_mean(cp.sum(cp.multiply(a, x), axis=1)))
+    constraints = [
+        x >= 0,
+        cp.sum(x, axis=0) <= 1,
+    ]
+    cvxprob = cp.Problem(objective, constraints)
+    result = cvxprob.solve()
+    assert cvxprob.status == "optimal"
+    return Solution(x.value)
 
 
 def explore_problem(a):
@@ -108,34 +124,40 @@ def explore_problem(a):
     problem = Problem(a)
     print("For problem %s:" % str(a).replace('\n', ''))
     print("  (normalized: %s)" % str(problem.normalized.a).replace('\n', ''))
-    print_solution("Isolated", solve_isolated(problem))
-    print_solution("Unnormalized max throughput", solve_max_throughput(problem, False))
-    print_solution("Max throughput", solve_max_throughput(problem))
-    print_solution("Isolated max throughput", solve_isolated_max_throughput(problem))
+    print_solution("Isolated", problem, solve_isolated(problem))
+    print_solution("Unnormalized max throughput", problem, solve_max_throughput(problem, False))
+    print_solution("Max throughput", problem, solve_max_throughput(problem))
+    print_solution("Isolated max throughput", problem, solve_isolated_max_throughput(problem))
+    print_solution("Nash bargaining", problem, solve_nash_bargaining(problem))
     print()
 
 
-def print_solution(name, solution):
+def print_solution(name, problem, solution):
     """
     Pretty-print and analyze a problem solution.
     """
     print("%s solution:" % name)
     print("  assignments: %s" % str(solution.x).replace('\n', ''))
-    rates = solution.user_rates
+    rates = problem.user_rates(solution)
     print("  user rates: %s (total: %.3g)" % (rates, rates.sum()))
-    norm_rates = solution.normalized_user_rates
+    norm_rates = problem.normalized_user_rates(solution)
     print("  normalized rates: %s (total: %.3g)" % (norm_rates, norm_rates.sum()))
 
 
 def main():
-    np.set_printoptions(precision=3, suppress=True)
+    np.set_printoptions(precision=4, suppress=True)
     explore_problem([[1., 2.], [2., 1.]])
     explore_problem([[1., 2.], [1., 1.]])
     explore_problem([[1., 2.], [10., 10.]])
     explore_problem([[1., 2.], [2., 1.], [1., 1.]])
-    print("Example showing lack of strategy-proofness (P3 gets more by faking their demand):\n")
+    print("Example showing lack of strategy-proofness of isolated max throughput ",
+          "(P3 gets more by faking their demand):\n")
     explore_problem([[2., 1.], [1., 1.], [1., 1.]])
     explore_problem([[2., 1.], [1., 1.], [1., 3.]])
+    print("Example showing lack of strategy-proofness of Nash bargaining ",
+          "(P4 gets more by faking their demand):\n")
+    explore_problem([[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 2., 1.]])
+    explore_problem([[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 1.5, 1.]])
 
 
 if __name__ == "__main__":
