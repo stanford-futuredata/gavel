@@ -106,7 +106,8 @@ def explore_problem(a):
     """
     a = np.array(a, dtype=np.float64)
     problem = Problem(a)
-    print("Exploring problem:\n  %s" % str(a).replace('\n', ''))
+    print("For problem %s:" % str(a).replace('\n', ''))
+    print("  (normalized: %s)" % str(problem.normalized.a).replace('\n', ''))
     print_solution("Isolated", solve_isolated(problem))
     #print_solution("Unnormalized max throughput", solve_max_throughput(problem, False))
     print_solution("Max throughput", solve_max_throughput(problem))
@@ -120,11 +121,10 @@ def print_solution(name, solution):
     """
     print("%s solution:" % name)
     print("  assignments: %s" % str(solution.x).replace('\n', ''))
-    rates = solution.user_rates
-    print("  user rates: %s (total %.3g, min %.3g)" % (rates, rates.sum(), rates.min()))
+    #rates = solution.user_rates
+    #print("  user rates: %s (total: %.3g)" % (rates, rates.sum()))
     norm_rates = solution.normalized_user_rates
-    print("  normalized rates: %s (total %.3g, min %.3g)" %
-        (norm_rates, norm_rates.sum(), norm_rates.min()))
+    print("  normalized rates: %s (total: %.3g)" % (norm_rates, norm_rates.sum()))
 
 
 def main():
@@ -133,6 +133,9 @@ def main():
     explore_problem([[1., 2.], [1., 1.]])
     explore_problem([[1., 2.], [10., 10.]])
     explore_problem([[1., 2.], [2., 1.], [1., 1.]])
+    print("Example showing lack of strategy-proofness (P3 gets more by faking their demand):\n")
+    explore_problem([[2., 1.], [1., 1.], [1., 1.]])
+    explore_problem([[2., 1.], [1., 1.], [1., 3.]])
 
 
 if __name__ == "__main__":
