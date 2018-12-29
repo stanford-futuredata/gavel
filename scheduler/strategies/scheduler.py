@@ -109,7 +109,7 @@ def explore_problem(a):
     print("For problem %s:" % str(a).replace('\n', ''))
     print("  (normalized: %s)" % str(problem.normalized.a).replace('\n', ''))
     print_solution("Isolated", solve_isolated(problem))
-    #print_solution("Unnormalized max throughput", solve_max_throughput(problem, False))
+    print_solution("Unnormalized max throughput", solve_max_throughput(problem, False))
     print_solution("Max throughput", solve_max_throughput(problem))
     print_solution("Isolated max throughput", solve_isolated_max_throughput(problem))
     print()
@@ -121,8 +121,8 @@ def print_solution(name, solution):
     """
     print("%s solution:" % name)
     print("  assignments: %s" % str(solution.x).replace('\n', ''))
-    #rates = solution.user_rates
-    #print("  user rates: %s (total: %.3g)" % (rates, rates.sum()))
+    rates = solution.user_rates
+    print("  user rates: %s (total: %.3g)" % (rates, rates.sum()))
     norm_rates = solution.normalized_user_rates
     print("  normalized rates: %s (total: %.3g)" % (norm_rates, norm_rates.sum()))
 
