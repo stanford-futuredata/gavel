@@ -1,3 +1,4 @@
+import cvxpy as cp
 import numpy as np
 
 
@@ -36,7 +37,8 @@ class Problem:
 class Solution:
     def __init__(self, problem, x):
         """
-        x: a 2D matrix where x[i][j] is the fraction of resource j allocated to user i
+        problem: the problem we are solving
+        x: 2D matrix where x[i][j] is the fraction of resource j allocated to user i
         """
         assert len(x.shape) == 2
         self.problem = problem
@@ -71,12 +73,31 @@ def solve_max_throughput(problem, normalize=True):
     a = problem.a
     if normalize:
         a = problem.normalized.a
+
     col_maxes = a.max(axis=0)
     is_max = a == col_maxes
     num_equal_to_max = is_max.sum(axis=0)
     scale = 1.0 / num_equal_to_max
     x = is_max * scale
     return Solution(problem, x)
+
+
+def solve_isolated_max_throughput(problem):
+    """
+    This algorithm tries to maximize total normalized throughput subject to giving each user
+    at least as much as they'd get in the isolated solution.
+    """
+    a = problem.normalized.a
+    x = cp.Variable(a.shape)
+    objective = cp.Maximize(cp.sum(cp.multiply(a, x)))
+    constraints = [
+        x >= 0,
+        cp.sum(x, axis=0) <= 1,
+        cp.sum(cp.multiply(a, x), axis=1) >= 1.0 / problem.n
+    ]
+    cvxprob = cp.Problem(objective, constraints)
+    result = cvxprob.solve()
+    return Solution(problem, x.value)
 
 
 def explore_problem(a):
@@ -89,6 +110,7 @@ def explore_problem(a):
     print_solution("Isolated", solve_isolated(problem))
     #print_solution("Unnormalized max throughput", solve_max_throughput(problem, False))
     print_solution("Max throughput", solve_max_throughput(problem))
+    print_solution("Isolated max throughput", solve_isolated_max_throughput(problem))
     print()
 
 
@@ -106,7 +128,7 @@ def print_solution(name, solution):
 
 
 def main():
-    np.set_printoptions(precision=3)
+    np.set_printoptions(precision=3, suppress=True)
     explore_problem([[1., 2.], [2., 1.]])
     explore_problem([[1., 2.], [1., 1.]])
     explore_problem([[1., 2.], [10., 10.]])
