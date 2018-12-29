@@ -19,9 +19,10 @@ on each hardware, or use collaborative filtering to extrapolate these
 times from other measurements). The performance estimate for application $i$
 on machine $j$ is represented by $a_{ij}$.
 
-Now, let $x_{ij}$ be an integer in $\{0, 1\}$ that represents whether application $i$ should be run on
-machines $j$. Then, we observe that the following constraints
-must hold, since each application must be run on exactly one machine,
+Now, let $x_{ij}$ be a float in $[0, 1]$ that represents the fraction of
+iterations of application $i$ that should be run on
+machine $j$. Then, we observe that the following constraints
+must hold,
 
 \begin{eqnarray}
 0 \leq x_{ij} \leq 1 & \forall (i,j) \in \{1, 2, \ldots, n\} \times \{1, 2, \ldots, m\} \nonumber  \\
@@ -48,12 +49,12 @@ with machine $j$, we instead create a variable $x_{cj}$,
 where $c$ is an application combination. Formally,
 $$c \in \{1, 2, \ldots, n\} \times \{1, 2, \ldots, n\} \cup \{1, 2, \ldots, n\}$$
 if we only consider combinations of up to two applications.
-Similarly, the performance estimate for an application combination is represented
+The performance estimate for an application combination is represented
 as $a_{cj}$.
 
-As before, $x_{cj}$ is an integer in $\{0, 1\}$ that represents whether
-application combination $c$ should be run on machine $j$. Then, we observe that
-the following constraints must hold,
+As before, $x_{cj}$ is a float in $[0, 1]$ that represents the
+fraction of iterations application combination $c$ should be run on
+machine $j$. Then, we observe that the following constraints must hold,
 
 \begin{eqnarray}
 0 \leq x_{cj} \leq 1 & \forall c,j \nonumber \\
@@ -61,8 +62,6 @@ the following constraints must hold,
 \end{eqnarray}
 
 Here, $C_i$ represent all application combinations containing the application $i$.
-This constraint ensures that every application $i$ is executed on \emph{exactly}
-one machine.
 
 We now define $y_j$ as,
 \begin{eqnarray}
@@ -74,5 +73,38 @@ And minimize $y_{\text{max}}$ as before.
 Note that this formulation uses a total number of variables
 linear in the total number of application combinations
 under consideration. Can we do better? (probably)
+
+\section{With Sharing Incentive}
+The previous two formulations do not encourage sharing; that is, some users
+could be worse off sharing the cluster compared to being given a $1/n$ fraction
+of the $m$ machines (using time slicing).
+
+This can be rectified by computing $z_i^{\text{avg}}$, which is the estimated
+time needed to compute application $i$ assuming an equal share of resources.
+Mathematically,
+
+\begin{eqnarray}
+z_i^{\text{avg}} = \dfrac{1}{n} \sum_{j=1}^m t_{ij} \nonumber
+\end{eqnarray}
+
+We can also compute $z_i$, which is the estimated time needed to compute application
+$i$ assuming sharing of the cluster (with application packing). $z_i$ can be
+computed as,
+
+\begin{eqnarray}
+z_i = \sum_{c \in C_i, j} x_{cj} t_{cj} f_{icj} \nonumber
+\end{eqnarray}
+
+Here, $f_{icj}$ is an estimate of the effective fraction of time application $i$
+runs on machine $j$ when application combination $c$ is run (this could be estimated
+when estimating $a_{cj}$).
+
+Now, if we add the constraint
+\begin{eqnarray}
+z_i \leq z_i^{\text{avg}} \nonumber
+\end{eqnarray}
+to the Linear Programming formulation from above, we can ensure that each user
+is awarded a resource allocation that is \emph{at least} as good as being given
+a fair fraction of the cluster.
 
 \end{document}
