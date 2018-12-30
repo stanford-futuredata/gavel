@@ -135,20 +135,26 @@ def solve_ks(problem):
     return Solution(x.value)
 
 
-def explore_problem(a):
+def explore_problem(a, a_test=None):
     """
     Explore a scheduling problem, printing the various solutions.
     """
     a = np.array(a, dtype=np.float64)
     problem = Problem(a)
+    problem_test = Problem(a)
+    if a_test is not None:
+        a_test = np.array(a_test, dtype=np.float64)
+        problem_test = Problem(a_test)
     print("For problem %s:" % str(a).replace('\n', ''))
     print("  (normalized: %s)" % str(problem.normalized.a).replace('\n', ''))
-    print_solution("Isolated", problem, solve_isolated(problem))
-    print_solution("Unnormalized max throughput", problem, solve_max_throughput(problem, False))
-    print_solution("Max throughput", problem, solve_max_throughput(problem))
-    print_solution("Isolated max throughput", problem, solve_isolated_max_throughput(problem))
-    print_solution("Nash bargaining", problem, solve_nash(problem))
-    print_solution("Kalai-Smorodinsky", problem, solve_ks(problem))
+    print_solution("Isolated", problem_test, solve_isolated(problem))
+    print_solution("Unnormalized max throughput", problem_test,
+                   solve_max_throughput(problem, False))
+    print_solution("Max throughput", problem_test, solve_max_throughput(problem))
+    print_solution("Isolated max throughput", problem_test,
+                   solve_isolated_max_throughput(problem))
+    print_solution("Nash bargaining", problem_test, solve_nash(problem))
+    print_solution("Kalai-Smorodinsky", problem_test, solve_ks(problem))
     print()
 
 
@@ -170,14 +176,24 @@ def main():
     explore_problem([[1., 2.], [1., 1.]])
     explore_problem([[1., 2.], [10., 10.]])
     explore_problem([[1., 2.], [2., 1.], [1., 1.]])
+
+    print("=====================================================\n")
     print("Example showing lack of strategy-proofness of isolated max throughput ",
           "(P3 gets more by faking their demand):\n")
-    explore_problem([[2., 1.], [1., 1.], [1., 1.]])
-    explore_problem([[2., 1.], [1., 1.], [1., 3.]])
+    a = [[2., 1.], [1., 1.], [1., 1.]]
+    a_fake = [[2., 1.], [1., 1.], [1., 3.]]
+    explore_problem(a)
+    # Evaluate solution obtained from faking a on original a.
+    explore_problem(a_fake, a_test=a)
+
+    print("=====================================================\n")
     print("Example showing lack of strategy-proofness of Nash bargaining ",
           "(P4 gets more by faking their demand):\n")
-    explore_problem([[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 2., 1.]])
-    explore_problem([[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 1.5, 1.]])
+    a = [[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 2., 1.]]
+    a_fake = [[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 1.5, 1.]]
+    explore_problem(a)
+    # As before, evaluate solution obtained from faking a on original a.
+    explore_problem(a_fake, a_test=a)
 
 
 if __name__ == "__main__":
