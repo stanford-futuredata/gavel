@@ -90,7 +90,7 @@ def solve_isolated_max_throughput(problem):
     objective = cp.Maximize(cp.sum(cp.multiply(a, x)))
     constraints = [
         x >= 0,
-        cp.sum(x, axis=0) <= 1,
+        cp.sum(x, axis=0) == 1,
         cp.sum(cp.multiply(a, x), axis=1) >= 1.0 / problem.n
     ]
     cvxprob = cp.Problem(objective, constraints)
@@ -99,16 +99,35 @@ def solve_isolated_max_throughput(problem):
     return Solution(x.value)
 
 
-def solve_nash_bargaining(problem):
+def solve_nash(problem):
     """
-    This algorithm tries to maximize the product of the throughputs of each user.
+    This algorithm tries to maximize the product of the throughputs of each user (i.e. the
+    Nash bargaining solution, also called CEEI).
     """
     a = problem.normalized.a   # Technically we don't need to normalize for this one
     x = cp.Variable(a.shape)
     objective = cp.Maximize(cp.geo_mean(cp.sum(cp.multiply(a, x), axis=1)))
     constraints = [
         x >= 0,
-        cp.sum(x, axis=0) <= 1,
+        cp.sum(x, axis=0) == 1,
+    ]
+    cvxprob = cp.Problem(objective, constraints)
+    result = cvxprob.solve()
+    assert cvxprob.status == "optimal"
+    return Solution(x.value)
+
+
+def solve_ks(problem):
+    """
+    This algorithm tries to equalize the users' normalized throughputs (i.e. the
+    Kalai-Smorodinsky bargaining solution, similar to DRF).
+    """
+    a = problem.normalized.a
+    x = cp.Variable(a.shape)
+    objective = cp.Maximize(cp.min(cp.sum(cp.multiply(a, x), axis=1)))
+    constraints = [
+        x >= 0,
+        cp.sum(x, axis=0) == 1,
     ]
     cvxprob = cp.Problem(objective, constraints)
     result = cvxprob.solve()
@@ -128,7 +147,8 @@ def explore_problem(a):
     print_solution("Unnormalized max throughput", problem, solve_max_throughput(problem, False))
     print_solution("Max throughput", problem, solve_max_throughput(problem))
     print_solution("Isolated max throughput", problem, solve_isolated_max_throughput(problem))
-    print_solution("Nash bargaining", problem, solve_nash_bargaining(problem))
+    print_solution("Nash bargaining", problem, solve_nash(problem))
+    print_solution("Kalai-Smorodinsky", problem, solve_ks(problem))
     print()
 
 
