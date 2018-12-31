@@ -154,7 +154,6 @@ def find_strategy_proofness_counterexample(solve_fn):
         problem_fake = Problem(a_fake)
         rates_fake = problem.normalized_user_rates(solve_fn(problem_fake))
         if rates_fake[3] > (1.01 * rates[3]):
-            print(rates_fake, rates)
             explore_problem(a)
             explore_problem(a_fake, a_test=a)
             break
