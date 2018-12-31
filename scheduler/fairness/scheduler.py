@@ -209,22 +209,23 @@ def main():
     a = [[2., 1.], [1., 1.], [1., 1.]]
     a_fake = [[2., 1.], [1., 1.], [1., 3.]]
     explore_problem(a)
-    # Evaluate solution obtained from faking a on original a.
     explore_problem(a_fake, a_test=a)
 
     print("=====================================================\n")
     print("Example showing lack of strategy-proofness of Nash bargaining ",
           "(P4 gets more by faking their demand):\n")
     a = [[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 2., 1.]]
-    a_fake = [[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 3, 1.]]
+    a_fake = [[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 1.5, 1.]]
     explore_problem(a)
-    # As before, evaluate solution obtained from faking a on original a.
     explore_problem(a_fake, a_test=a)
 
     print("=====================================================\n")
     print("Example showing lack of strategy-proofness of Kalai-Smorodinsky ",
-          "(P4 gets more by faking their demand):\n")
-    find_strategy_proofness_counterexample(solve_ks)
+          "(P2 gets more by faking their demand):\n")
+    a = [[1., 1.], [1., 3.]]
+    a_fake = [[1., 1.], [1., 2.]]
+    explore_problem(a)
+    explore_problem(a_fake, a_test=a)
 
 
 if __name__ == "__main__":
