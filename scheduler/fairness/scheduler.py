@@ -135,6 +135,31 @@ def solve_ks(problem):
     return Solution(x.value)
 
 
+def find_strategy_proofness_counterexample(solve_fn):
+    """
+    Perturbs a single entry in random throughput matrix to attempt to generate
+    examples that show lack of strategy-proofness of passed-in policy.
+    """
+    for i in range(50):
+        a = np.random.random((4, 3))
+        a_fake = a.copy()
+        import random
+        # Mis-advertise P4's advertised throughput for resource B.
+        if i < 25:
+            a_fake[3][1] += random.uniform(1, 10)
+        else:
+            a_fake[3][1] -= random.uniform(0, a_fake[3][1])
+        problem = Problem(a)
+        rates = problem.normalized_user_rates(solve_fn(problem))
+        problem_fake = Problem(a_fake)
+        rates_fake = problem.normalized_user_rates(solve_fn(problem_fake))
+        if rates_fake[3] > (1.01 * rates[3]):
+            print(rates_fake, rates)
+            explore_problem(a)
+            explore_problem(a_fake, a_test=a)
+            break
+
+
 def explore_problem(a, a_test=None):
     """
     Explore a scheduling problem, printing the various solutions.
@@ -176,6 +201,7 @@ def main():
     explore_problem([[1., 2.], [1., 1.]])
     explore_problem([[1., 2.], [10., 10.]])
     explore_problem([[1., 2.], [2., 1.], [1., 1.]])
+    explore_problem([[3., 1.], [2.5, 1.], [2., 1.]])
 
     print("=====================================================\n")
     print("Example showing lack of strategy-proofness of isolated max throughput ",
@@ -190,10 +216,15 @@ def main():
     print("Example showing lack of strategy-proofness of Nash bargaining ",
           "(P4 gets more by faking their demand):\n")
     a = [[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 2., 1.]]
-    a_fake = [[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 1.5, 1.]]
+    a_fake = [[1., 1., 8.], [2., 4., 1.], [8., 1., 1.], [1., 3, 1.]]
     explore_problem(a)
     # As before, evaluate solution obtained from faking a on original a.
     explore_problem(a_fake, a_test=a)
+
+    print("=====================================================\n")
+    print("Example showing lack of strategy-proofness of Kalai-Smorodinsky ",
+          "(P4 gets more by faking their demand):\n")
+    find_strategy_proofness_counterexample(solve_ks)
 
 
 if __name__ == "__main__":
