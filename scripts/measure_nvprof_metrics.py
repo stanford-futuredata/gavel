@@ -10,7 +10,8 @@ import subprocess
 import sys
 
 metrics = [
-  'flop_count_sp', 
+  'per_kernel_runtimes',
+  'flop_count_sp',
   'sm_efficiency',
   'dram_read_throughput',
   'dram_write_throughput',
@@ -34,9 +35,8 @@ def measure_metric_cnn(args):
                '--model=%s --data_dir=%s --allow_growth') % (batch_size,
                                                              num_batches,
                                                              model, data_dir)
-  profile_cmd = ('cd %s; /usr/local/cuda/bin/nvprof --metrics %s --csv '
-                 '--devices 0 --normalized-time-unit ms %s') % (cmd_loc, metric,
-                                                                model_cmd)
+  profile_cmd = ('cd %s; /usr/local/cuda/bin/nvprof %s --csv --devices 0 '
+                 '--normalized-time-unit ms %s') % (cmd_loc, metric, model_cmd)
   try:
     output = subprocess.check_output(profile_cmd,
                                      stderr=subprocess.STDOUT,
@@ -57,9 +57,8 @@ def measure_metric_nmt(args):
                '--dropout=0.2 --metrics=bleu '
                '--num_train_steps=%d') % (data_dir, data_dir, data_dir,
                                           data_dir, model_dir, num_train_steps)
-  profile_cmd = ('cd %s; /usr/local/cuda/bin/nvprof --metrics %s --csv '
-                 '--devices 0 --normalized-time-unit ms %s') % (cmd_loc, metric,
-                                                                model_cmd)
+  profile_cmd = ('cd %s; /usr/local/cuda/bin/nvprof %s --csv --devices 0 '
+                 '--normalized-time-unit ms %s') % (cmd_loc, metric, model_cmd)
 
   try:
     output = subprocess.check_output(profile_cmd,
@@ -78,9 +77,8 @@ def measure_metric_lm(args):
   model_cmd = ('python ptb_word_lm.py --data_path=%s --model=%s '
                '--max_max_epoch=1 --max_steps=%d') % (data_dir, model_size,
                                                       max_steps)
-  profile_cmd = ('cd %s; /usr/local/cuda/bin/nvprof --metrics %s --csv '
-                 '--devices 0 --normalized-time-unit ms %s') % (cmd_loc, metric,
-                                                                model_cmd)
+  profile_cmd = ('cd %s; /usr/local/cuda/bin/nvprof %s --csv --devices 0 '
+                 '--normalized-time-unit ms %s') % (cmd_loc, metric, model_cmd)
   try:
     output = subprocess.check_output(profile_cmd,
                                      stderr=subprocess.STDOUT,
@@ -96,9 +94,8 @@ def measure_metric_vae(args):
   model_cmd = ('python main.py --working_directory /tmp/gan '
                ' --model vae --max_epoch 1 '
                '--updates_per_epoch %d') % (updates_per_epoch)
-  profile_cmd = ('cd %s; /usr/local/cuda/bin/nvprof --metrics %s --csv '
-                 '--devices 0 --normalized-time-unit ms %s') % (cmd_loc, metric,
-                                                                model_cmd)
+  profile_cmd = ('cd %s; /usr/local/cuda/bin/nvprof %s --csv --devices 0 '
+                 '--normalized-time-unit ms %s') % (cmd_loc, metric, model_cmd)
 
   try:
     output = subprocess.check_output(profile_cmd,
@@ -111,6 +108,7 @@ def measure_metric_vae(args):
 
 def measure_metric(args):
   model = args[0]
+
   if (model == 'resnet50' or model == 'vgg16' or model == 'inception3' or
       model == 'alexnet'):
     return measure_metric_cnn(args)
@@ -130,7 +128,7 @@ def main(log_dir, data_dir, num_steps, debug):
     'resnet50': ('resnet50', data_dir['cnn'], 64, 2),
     'vae': ('vae', 1),
   }
-  
+
   config = {
     'alexnet': ('alexnet', data_dir['cnn'], 64, num_steps),
     'resnet50': ('resnet50', data_dir['cnn'], 64, num_steps),
@@ -157,7 +155,11 @@ def main(log_dir, data_dir, num_steps, debug):
     if not os.path.isdir(model_path):
       os.makedirs(model_path)
     for metric in metrics:
-      output, error = measure_metric(config[model] + (metric,))
+      if metric == 'per_kernel_runtimes':
+        output, error = measure_metric(config[model] + ('',))
+      else:
+        output, error = measure_metric(config[model]
+            + ('--metrics %s' % (metric),))
       if output is not None:
         log_path = os.path.join(model_path, metric + '.csv')
         with open(log_path, 'w') as f:
