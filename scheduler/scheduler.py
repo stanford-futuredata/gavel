@@ -102,7 +102,7 @@ class Scheduler:
                     allocation[application_id][resource_type]
             heapq.heapify(self.index[resource_type])
 
-    def _schedule(self, resource_type):
+    def schedule(self, resource_type):
         # Schedules the _inactive_ application most in need of the passed-in
         # resource_type (that is, the resource with the lowest
         # fraction_run/fraction_allocated ratio).
@@ -113,21 +113,23 @@ class Scheduler:
         # As an algorithmic optimization, might be good to maintain
         # a heap of all currently inactive applications for each
         # resource, sorted by fraction_run/fraction_allocated ratio.
-        while True:
-            # Get the application_id for this resource_type with minimum
-            # fraction_run/fraction_allocated.
-            [_, application_id] = self.index[resource_type][0]
-            self.remove_from_index_and_update(application_id)
 
-            # Number of epochs to run the application on needs to be
-            # determined.
-            num_epochs = self.get_num_epochs_to_run(application_id,
-                                                    resource_type)
-            run_application(application_id, resource_type,
-                            num_epochs)
-            # Now, we can update the data structures to reflect the
-            # fact that active_application run on a particular resource_
-            # type for a certain num_epochs.
-            self.run_so_far[application_id][resource_type] += num_epochs
+        # Get the application_id for this resource_type with minimum
+        # fraction_run/fraction_allocated.
+        [_, application_id] = self.index[resource_type][0]
+        self.remove_from_index_and_update(application_id)
 
-            self.add_to_index_and_update(application_id)
+        # Number of epochs to run the application on needs to be
+        # determined.
+        num_epochs = self.get_num_epochs_to_run(application_id,
+                                                resource_type)
+        run_application(application_id, resource_type,
+                        num_epochs)
+
+    def schedule_callback(self, application_id, resource_type, num_epochs):
+        # Now, we can update the data structures to reflect the
+        # fact that active_application run on a particular resource_
+        # type for a certain num_epochs.
+        self.run_so_far[application_id][resource_type] += num_epochs
+
+        self.add_to_index_and_update(application_id)
