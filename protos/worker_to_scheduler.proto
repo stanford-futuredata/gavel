@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+import "common.proto";
+import "enums.proto";
+
+service WorkerToScheduler {
+  // Registers the worker with the scheduler
+  rpc RegisterWorker (RegisterWorkerRequest) returns (RegisterWorkerResponse);
+
+  // Sends a heartbeat message about a job to scheduler
+  rpc SendHeartbeat (SendHeartbeatRequest) returns (Empty);
+}
+
+message RegisterWorkerRequest {
+  message Device {
+    uint32 device_id = 1;
+    enum DeviceType {
+      UNKNOWN = 0;
+      K80 = 1;
+      P100 = 2;
+      V100 = 3;
+    }
+    DeviceType device_type = 2;
+    float available_memory = 3;
+  }
+  repeated Device devices = 1;
+}
+
+message RegisterWorkerResponse {
+  oneof status {
+    uint64 worker_id = 1;
+    string error_message = 2;
+  }
+}
+
+message SendHeartbeatRequest {
+  uint64 worker_id = 1;
+  uint32 device_id = 2;
+  uint64 job_id = 3;
+  JobStatus status = 4;
+}

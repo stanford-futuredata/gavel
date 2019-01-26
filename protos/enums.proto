@@ -1,0 +1,10 @@
+  syntax = "proto3";
+
+  enum JobStatus {
+    UNKNOWN = 0;
+    QUEUED = 1;
+    RUNNING = 2;
+    SUCCEEDED = 3;
+    FAILED = 4;
+  }
+
