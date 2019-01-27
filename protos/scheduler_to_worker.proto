@@ -4,7 +4,7 @@ import "enums.proto";
 
 service SchedulerToWorker {
   // Starts a job on a worker
-  rpc StartJob (StartJobRequest) returns (StartJobReply) {}
+  rpc StartJob (StartJobRequest) returns (StartJobResponse) {}
 }
 
 message StartJobRequest {
@@ -12,7 +12,7 @@ message StartJobRequest {
   string command = 2;
 }
 
-message StartJobReply {
+message StartJobResponse {
   uint64 job_id = 1;
   JobStatus status = 2;
 }

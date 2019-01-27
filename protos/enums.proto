@@ -1,10 +1,18 @@
-  syntax = "proto3";
+syntax = "proto3";
 
-  enum JobStatus {
-    UNKNOWN = 0;
+enum DeviceType {
+  UNKNOWN_DEVICE = 0;
+  K80 = 1;
+  P100 = 2;
+  V100 = 3;
+}
+
+enum JobStatus {
+    UNKNOWN_STATUS = 0;
     QUEUED = 1;
     RUNNING = 2;
     SUCCEEDED = 3;
     FAILED = 4;
-  }
+}
+
 
