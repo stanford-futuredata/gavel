@@ -19,6 +19,8 @@ class Scheduler:
         self.allocation = {}
         # Epochs run on each resource_id, for all current incomplete applications.
         self.run_so_far = {}
+        # Commands to run for all current incomplete applications.
+        self.commands = {}
         # priority_queue for each resource_id.
         self.index = {}
         for resource_id in resource_ids:
@@ -51,7 +53,7 @@ class Scheduler:
         flattened_allocation = self.policy.get_allocation(flattened_throughputs)
         return unflatten(flattened_allocation, index)
 
-    def add_new_job(self, throughputs):
+    def add_new_job(self, throughputs, command):
         # Application is a collection of throughputs for each
         # resource_id. (right now, not considering app packing)
 
@@ -62,6 +64,7 @@ class Scheduler:
         # mechanism needs to ensure that each application receives
         # this fraction correctly.
         app_id = self.last_app_id_assigned
+        self.commands[app_id] = command
         self.last_app_id_assigned += 1
         self.throughputs[app_id] = throughputs
         self.allocation = self._get_allocation()
@@ -77,9 +80,10 @@ class Scheduler:
     def remove_old_job(self, app_id):
         # Public-facing API call to remove a completed job, updates
         # the internal allocation of resources to jobs.
+        del self.commands[app_id]
         del self.throughputs[app_id]
-        self.allocation = self._get_allocation()
         del self.run_so_far[app_id]
+        self.allocation = self._get_allocation()
         self.remove_from_index_and_update(app_id)
 
     def remove_from_index_and_update(self, old_app_id):
@@ -138,7 +142,7 @@ class Scheduler:
         # determined.
         num_epochs = self.get_num_epochs_to_run(app_id,
                                                 resource_id)
-        self.stub.run_application(app_id, resource_id,
+        self.stub.run_application(self.commands[app_id], app_id, resource_id,
                                   num_epochs)
         return app_id, num_epochs
 
