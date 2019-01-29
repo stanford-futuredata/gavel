@@ -12,9 +12,9 @@ def run(command):
   with grpc.insecure_channel('localhost:50052') as channel:
     stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
 
-    request = s2w_pb2.StartJobRequest(job_id=0,
-                                      command=command)
-    response = stub.StartJob(request)
+    request = s2w_pb2.RunRequest(job_id=0,
+                                 command=command)
+    response = stub.Run(request)
     print('Job %d has status %s' % (response.job_id,
                                     enums_pb2.JobStatus.Name(response.status)))
 

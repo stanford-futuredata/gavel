@@ -14,10 +14,10 @@ class SchedulerToWorkerStub(object):
     Args:
       channel: A grpc.Channel.
     """
-    self.StartJob = channel.unary_unary(
-        '/SchedulerToWorker/StartJob',
-        request_serializer=scheduler__to__worker__pb2.StartJobRequest.SerializeToString,
-        response_deserializer=scheduler__to__worker__pb2.StartJobResponse.FromString,
+    self.Run = channel.unary_unary(
+        '/SchedulerToWorker/Run',
+        request_serializer=scheduler__to__worker__pb2.RunRequest.SerializeToString,
+        response_deserializer=scheduler__to__worker__pb2.RunResponse.FromString,
         )
 
 
@@ -25,7 +25,7 @@ class SchedulerToWorkerServicer(object):
   # missing associated documentation comment in .proto file
   pass
 
-  def StartJob(self, request, context):
+  def Run(self, request, context):
     """Starts a job on a worker
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -35,10 +35,10 @@ class SchedulerToWorkerServicer(object):
 
 def add_SchedulerToWorkerServicer_to_server(servicer, server):
   rpc_method_handlers = {
-      'StartJob': grpc.unary_unary_rpc_method_handler(
-          servicer.StartJob,
-          request_deserializer=scheduler__to__worker__pb2.StartJobRequest.FromString,
-          response_serializer=scheduler__to__worker__pb2.StartJobResponse.SerializeToString,
+      'Run': grpc.unary_unary_rpc_method_handler(
+          servicer.Run,
+          request_deserializer=scheduler__to__worker__pb2.RunRequest.FromString,
+          response_serializer=scheduler__to__worker__pb2.RunResponse.SerializeToString,
       ),
   }
   generic_handler = grpc.method_handlers_generic_handler(

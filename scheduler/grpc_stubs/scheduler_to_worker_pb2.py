@@ -20,29 +20,29 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x19scheduler_to_worker.proto\x1a\x0b\x65nums.proto\"2\n\x0fStartJobRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\x04\x12\x0f\n\x07\x63ommand\x18\x02 \x01(\t\">\n\x10StartJobResponse\x12\x0e\n\x06job_id\x18\x01 \x01(\x04\x12\x1a\n\x06status\x18\x02 \x01(\x0e\x32\n.JobStatus2F\n\x11SchedulerToWorker\x12\x31\n\x08StartJob\x12\x10.StartJobRequest\x1a\x11.StartJobResponse\"\x00\x62\x06proto3')
+  serialized_pb=_b('\n\x19scheduler_to_worker.proto\x1a\x0b\x65nums.proto\"-\n\nRunRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\x04\x12\x0f\n\x07\x63ommand\x18\x02 \x01(\t\"9\n\x0bRunResponse\x12\x0e\n\x06job_id\x18\x01 \x01(\x04\x12\x1a\n\x06status\x18\x02 \x01(\x0e\x32\n.JobStatus27\n\x11SchedulerToWorker\x12\"\n\x03Run\x12\x0b.RunRequest\x1a\x0c.RunResponse\"\x00\x62\x06proto3')
   ,
   dependencies=[enums__pb2.DESCRIPTOR,])
 
 
 
 
-_STARTJOBREQUEST = _descriptor.Descriptor(
-  name='StartJobRequest',
-  full_name='StartJobRequest',
+_RUNREQUEST = _descriptor.Descriptor(
+  name='RunRequest',
+  full_name='RunRequest',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='job_id', full_name='StartJobRequest.job_id', index=0,
+      name='job_id', full_name='RunRequest.job_id', index=0,
       number=1, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='command', full_name='StartJobRequest.command', index=1,
+      name='command', full_name='RunRequest.command', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -61,26 +61,26 @@ _STARTJOBREQUEST = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=42,
-  serialized_end=92,
+  serialized_end=87,
 )
 
 
-_STARTJOBRESPONSE = _descriptor.Descriptor(
-  name='StartJobResponse',
-  full_name='StartJobResponse',
+_RUNRESPONSE = _descriptor.Descriptor(
+  name='RunResponse',
+  full_name='RunResponse',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='job_id', full_name='StartJobResponse.job_id', index=0,
+      name='job_id', full_name='RunResponse.job_id', index=0,
       number=1, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='status', full_name='StartJobResponse.status', index=1,
+      name='status', full_name='RunResponse.status', index=1,
       number=2, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -98,28 +98,28 @@ _STARTJOBRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=94,
-  serialized_end=156,
+  serialized_start=89,
+  serialized_end=146,
 )
 
-_STARTJOBRESPONSE.fields_by_name['status'].enum_type = enums__pb2._JOBSTATUS
-DESCRIPTOR.message_types_by_name['StartJobRequest'] = _STARTJOBREQUEST
-DESCRIPTOR.message_types_by_name['StartJobResponse'] = _STARTJOBRESPONSE
+_RUNRESPONSE.fields_by_name['status'].enum_type = enums__pb2._JOBSTATUS
+DESCRIPTOR.message_types_by_name['RunRequest'] = _RUNREQUEST
+DESCRIPTOR.message_types_by_name['RunResponse'] = _RUNRESPONSE
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
-StartJobRequest = _reflection.GeneratedProtocolMessageType('StartJobRequest', (_message.Message,), dict(
-  DESCRIPTOR = _STARTJOBREQUEST,
+RunRequest = _reflection.GeneratedProtocolMessageType('RunRequest', (_message.Message,), dict(
+  DESCRIPTOR = _RUNREQUEST,
   __module__ = 'scheduler_to_worker_pb2'
-  # @@protoc_insertion_point(class_scope:StartJobRequest)
+  # @@protoc_insertion_point(class_scope:RunRequest)
   ))
-_sym_db.RegisterMessage(StartJobRequest)
+_sym_db.RegisterMessage(RunRequest)
 
-StartJobResponse = _reflection.GeneratedProtocolMessageType('StartJobResponse', (_message.Message,), dict(
-  DESCRIPTOR = _STARTJOBRESPONSE,
+RunResponse = _reflection.GeneratedProtocolMessageType('RunResponse', (_message.Message,), dict(
+  DESCRIPTOR = _RUNRESPONSE,
   __module__ = 'scheduler_to_worker_pb2'
-  # @@protoc_insertion_point(class_scope:StartJobResponse)
+  # @@protoc_insertion_point(class_scope:RunResponse)
   ))
-_sym_db.RegisterMessage(StartJobResponse)
+_sym_db.RegisterMessage(RunResponse)
 
 
 
@@ -129,16 +129,16 @@ _SCHEDULERTOWORKER = _descriptor.ServiceDescriptor(
   file=DESCRIPTOR,
   index=0,
   serialized_options=None,
-  serialized_start=158,
-  serialized_end=228,
+  serialized_start=148,
+  serialized_end=203,
   methods=[
   _descriptor.MethodDescriptor(
-    name='StartJob',
-    full_name='SchedulerToWorker.StartJob',
+    name='Run',
+    full_name='SchedulerToWorker.Run',
     index=0,
     containing_service=None,
-    input_type=_STARTJOBREQUEST,
-    output_type=_STARTJOBRESPONSE,
+    input_type=_RUNREQUEST,
+    output_type=_RUNRESPONSE,
     serialized_options=None,
   ),
 ])

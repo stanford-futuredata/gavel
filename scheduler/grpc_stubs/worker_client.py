@@ -23,7 +23,8 @@ def run():
     response = stub.RegisterWorker(request)
     worker_id = response.worker_id
     print('Registered worker %d' % (worker_id))
-    
+
+    """
     # Send a Heartbeat message 
     request = \
       w2s_pb2.HeartbeatRequest(worker_id=worker_id,
@@ -31,7 +32,7 @@ def run():
                                job_id=0,
                                status=enums_pb2.JobStatus.Value('RUNNING'))
     stub.Heartbeat(request)
-    
+    """
 
 if __name__=='__main__':
   logging.basicConfig()

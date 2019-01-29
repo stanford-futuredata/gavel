@@ -21,7 +21,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x19worker_to_scheduler.proto\x1a\x0c\x63ommon.proto\x1a\x0b\x65nums.proto\"\xa0\x01\n\x15RegisterWorkerRequest\x12.\n\x07\x64\x65vices\x18\x01 \x03(\x0b\x32\x1d.RegisterWorkerRequest.Device\x1aW\n\x06\x44\x65vice\x12\x11\n\tdevice_id\x18\x01 \x01(\r\x12 \n\x0b\x64\x65vice_type\x18\x02 \x01(\x0e\x32\x0b.DeviceType\x12\x18\n\x10\x61vailable_memory\x18\x03 \x01(\x02\"P\n\x16RegisterWorkerResponse\x12\x13\n\tworker_id\x18\x01 \x01(\x04H\x00\x12\x17\n\rerror_message\x18\x02 \x01(\tH\x00\x42\x08\n\x06status\"d\n\x10HeartbeatRequest\x12\x11\n\tworker_id\x18\x01 \x01(\x04\x12\x11\n\tdevice_id\x18\x02 \x01(\r\x12\x0e\n\x06job_id\x18\x03 \x01(\x04\x12\x1a\n\x06status\x18\x04 \x01(\x0e\x32\n.JobStatus2~\n\x11WorkerToScheduler\x12\x41\n\x0eRegisterWorker\x12\x16.RegisterWorkerRequest\x1a\x17.RegisterWorkerResponse\x12&\n\tHeartbeat\x12\x11.HeartbeatRequest\x1a\x06.Emptyb\x06proto3')
+  serialized_pb=_b('\n\x19worker_to_scheduler.proto\x1a\x0c\x63ommon.proto\x1a\x0b\x65nums.proto\"\xa0\x01\n\x15RegisterWorkerRequest\x12.\n\x07\x64\x65vices\x18\x01 \x03(\x0b\x32\x1d.RegisterWorkerRequest.Device\x1aW\n\x06\x44\x65vice\x12\x11\n\tdevice_id\x18\x01 \x01(\r\x12 \n\x0b\x64\x65vice_type\x18\x02 \x01(\x0e\x32\x0b.DeviceType\x12\x18\n\x10\x61vailable_memory\x18\x03 \x01(\x02\"P\n\x16RegisterWorkerResponse\x12\x13\n\tworker_id\x18\x01 \x01(\x04H\x00\x12\x17\n\rerror_message\x18\x02 \x01(\tH\x00\x42\x08\n\x06status\"C\n\x0b\x44oneRequest\x12\x11\n\tworker_id\x18\x01 \x01(\x04\x12\x11\n\tdevice_id\x18\x02 \x01(\r\x12\x0e\n\x06job_id\x18\x03 \x01(\x04\x32t\n\x11WorkerToScheduler\x12\x41\n\x0eRegisterWorker\x12\x16.RegisterWorkerRequest\x1a\x17.RegisterWorkerResponse\x12\x1c\n\x04\x44one\x12\x0c.DoneRequest\x1a\x06.Emptyb\x06proto3')
   ,
   dependencies=[common__pb2.DESCRIPTOR,enums__pb2.DESCRIPTOR,])
 
@@ -144,37 +144,30 @@ _REGISTERWORKERRESPONSE = _descriptor.Descriptor(
 )
 
 
-_HEARTBEATREQUEST = _descriptor.Descriptor(
-  name='HeartbeatRequest',
-  full_name='HeartbeatRequest',
+_DONEREQUEST = _descriptor.Descriptor(
+  name='DoneRequest',
+  full_name='DoneRequest',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='worker_id', full_name='HeartbeatRequest.worker_id', index=0,
+      name='worker_id', full_name='DoneRequest.worker_id', index=0,
       number=1, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='device_id', full_name='HeartbeatRequest.device_id', index=1,
+      name='device_id', full_name='DoneRequest.device_id', index=1,
       number=2, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='job_id', full_name='HeartbeatRequest.job_id', index=2,
+      name='job_id', full_name='DoneRequest.job_id', index=2,
       number=3, type=4, cpp_type=4, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='status', full_name='HeartbeatRequest.status', index=3,
-      number=4, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -192,7 +185,7 @@ _HEARTBEATREQUEST = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=301,
-  serialized_end=401,
+  serialized_end=368,
 )
 
 _REGISTERWORKERREQUEST_DEVICE.fields_by_name['device_type'].enum_type = enums__pb2._DEVICETYPE
@@ -204,10 +197,9 @@ _REGISTERWORKERRESPONSE.fields_by_name['worker_id'].containing_oneof = _REGISTER
 _REGISTERWORKERRESPONSE.oneofs_by_name['status'].fields.append(
   _REGISTERWORKERRESPONSE.fields_by_name['error_message'])
 _REGISTERWORKERRESPONSE.fields_by_name['error_message'].containing_oneof = _REGISTERWORKERRESPONSE.oneofs_by_name['status']
-_HEARTBEATREQUEST.fields_by_name['status'].enum_type = enums__pb2._JOBSTATUS
 DESCRIPTOR.message_types_by_name['RegisterWorkerRequest'] = _REGISTERWORKERREQUEST
 DESCRIPTOR.message_types_by_name['RegisterWorkerResponse'] = _REGISTERWORKERRESPONSE
-DESCRIPTOR.message_types_by_name['HeartbeatRequest'] = _HEARTBEATREQUEST
+DESCRIPTOR.message_types_by_name['DoneRequest'] = _DONEREQUEST
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 RegisterWorkerRequest = _reflection.GeneratedProtocolMessageType('RegisterWorkerRequest', (_message.Message,), dict(
@@ -232,12 +224,12 @@ RegisterWorkerResponse = _reflection.GeneratedProtocolMessageType('RegisterWorke
   ))
 _sym_db.RegisterMessage(RegisterWorkerResponse)
 
-HeartbeatRequest = _reflection.GeneratedProtocolMessageType('HeartbeatRequest', (_message.Message,), dict(
-  DESCRIPTOR = _HEARTBEATREQUEST,
+DoneRequest = _reflection.GeneratedProtocolMessageType('DoneRequest', (_message.Message,), dict(
+  DESCRIPTOR = _DONEREQUEST,
   __module__ = 'worker_to_scheduler_pb2'
-  # @@protoc_insertion_point(class_scope:HeartbeatRequest)
+  # @@protoc_insertion_point(class_scope:DoneRequest)
   ))
-_sym_db.RegisterMessage(HeartbeatRequest)
+_sym_db.RegisterMessage(DoneRequest)
 
 
 
@@ -247,8 +239,8 @@ _WORKERTOSCHEDULER = _descriptor.ServiceDescriptor(
   file=DESCRIPTOR,
   index=0,
   serialized_options=None,
-  serialized_start=403,
-  serialized_end=529,
+  serialized_start=370,
+  serialized_end=486,
   methods=[
   _descriptor.MethodDescriptor(
     name='RegisterWorker',
@@ -260,11 +252,11 @@ _WORKERTOSCHEDULER = _descriptor.ServiceDescriptor(
     serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
-    name='Heartbeat',
-    full_name='WorkerToScheduler.Heartbeat',
+    name='Done',
+    full_name='WorkerToScheduler.Done',
     index=1,
     containing_service=None,
-    input_type=_HEARTBEATREQUEST,
+    input_type=_DONEREQUEST,
     output_type=common__pb2._EMPTY,
     serialized_options=None,
   ),

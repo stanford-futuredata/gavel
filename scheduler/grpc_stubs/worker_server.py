@@ -46,10 +46,10 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
   def _dispatch(self, job_proto):
     self._dispatcher.dispatch_job(Job(job_proto))
 
-  def StartJob(self, request, context):
+  def Run(self, request, context):
     self._dispatch(request)
-    return s2w_pb2.StartJobResponse(job_id=request.job_id,
-                                    status=enums_pb2.JobStatus.Value('QUEUED'))
+    return s2w_pb2.RunResponse(job_id=request.job_id,
+                               status=enums_pb2.JobStatus.Value('QUEUED'))
 
 def serve():
   server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

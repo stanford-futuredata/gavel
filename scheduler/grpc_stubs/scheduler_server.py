@@ -62,6 +62,7 @@ class SchedulerServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
       self._add_device(worker_id, device)
     return w2s_pb2.RegisterWorkerResponse(worker_id=worker_id)
 
+  """
   def Heartbeat(self, request, context):
     worker_id = request.worker_id
     device_id = request.device_id
@@ -72,6 +73,7 @@ class SchedulerServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
                                                               job_id,
                                                               status))
     return common_pb2.Empty()
+  """
 
 def serve():
   server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

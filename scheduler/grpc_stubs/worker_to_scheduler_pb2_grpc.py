@@ -20,9 +20,9 @@ class WorkerToSchedulerStub(object):
         request_serializer=worker__to__scheduler__pb2.RegisterWorkerRequest.SerializeToString,
         response_deserializer=worker__to__scheduler__pb2.RegisterWorkerResponse.FromString,
         )
-    self.Heartbeat = channel.unary_unary(
-        '/WorkerToScheduler/Heartbeat',
-        request_serializer=worker__to__scheduler__pb2.HeartbeatRequest.SerializeToString,
+    self.Done = channel.unary_unary(
+        '/WorkerToScheduler/Done',
+        request_serializer=worker__to__scheduler__pb2.DoneRequest.SerializeToString,
         response_deserializer=common__pb2.Empty.FromString,
         )
 
@@ -38,8 +38,8 @@ class WorkerToSchedulerServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
-  def Heartbeat(self, request, context):
-    """Sends a heartbeat message about a job to scheduler
+  def Done(self, request, context):
+    """Indicates to the scheduler that a job has completed
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
@@ -53,9 +53,9 @@ def add_WorkerToSchedulerServicer_to_server(servicer, server):
           request_deserializer=worker__to__scheduler__pb2.RegisterWorkerRequest.FromString,
           response_serializer=worker__to__scheduler__pb2.RegisterWorkerResponse.SerializeToString,
       ),
-      'Heartbeat': grpc.unary_unary_rpc_method_handler(
-          servicer.Heartbeat,
-          request_deserializer=worker__to__scheduler__pb2.HeartbeatRequest.FromString,
+      'Done': grpc.unary_unary_rpc_method_handler(
+          servicer.Done,
+          request_deserializer=worker__to__scheduler__pb2.DoneRequest.FromString,
           response_serializer=common__pb2.Empty.SerializeToString,
       ),
   }
