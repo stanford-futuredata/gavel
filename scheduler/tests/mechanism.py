@@ -1,4 +1,6 @@
 import numpy as np
+
+import sys; sys.path.append(".")
 import scheduler
 
 class TestPolicy:
@@ -25,7 +27,8 @@ def test():
         s.add_new_job({resource_id: 10 for resource_id in resource_ids},
                       "cmd%d" % j)
     for i in range(100):
-        app_id, num_epochs = s.schedule(resource_ids[0])
+        resource_id = s.get_available_resource()
+        app_id, num_epochs = s.schedule(resource_id)
         s.schedule_callback(app_id, resource_ids[0], num_epochs)
         if app_id not in run_so_far:
             run_so_far[app_id] = 0

@@ -13,6 +13,8 @@ class Scheduler:
         # get_num_epochs_to_run function pointer.
         self.get_num_epochs_to_run = get_num_epochs_to_run
 
+        # List of free resources.
+        self.free_resource_ids = [resource_id for resource_id in self.resource_ids]
         # Throughputs for all current incomplete applications.
         self.throughputs = {}
         # Allocations for all current incomplete applications.
@@ -121,6 +123,12 @@ class Scheduler:
                 self.index[resource_id][i][1] = self.run_so_far[app_id][resource_id]
             heapq.heapify(self.index[resource_id])
 
+    def get_available_resource(self):
+        # TODO: Make more efficient.
+        while len(self.free_resource_ids) == 0:
+            pass
+        return self.free_resource_ids[0]
+
     def schedule(self, resource_id):
         # Schedules the _inactive_ application most in need of the passed-in
         # resource_id (that is, the resource with the lowest
@@ -142,6 +150,7 @@ class Scheduler:
         # determined.
         num_epochs = self.get_num_epochs_to_run(app_id,
                                                 resource_id)
+        self.free_resource_ids.pop(0)
         self.stub.run_application(self.commands[app_id], app_id, resource_id,
                                   num_epochs)
         return app_id, num_epochs
@@ -153,3 +162,4 @@ class Scheduler:
         self.run_so_far[app_id][resource_id] += num_epochs
 
         self.add_to_index_and_update(app_id)
+        self.free_resource_ids.append(resource_id)
