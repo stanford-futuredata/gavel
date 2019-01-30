@@ -9,34 +9,34 @@ class TestPolicy:
         return np.full((m, n), 1.0 / n)
 
 class TestStub:
-    def run_application(self, command, app_id, resource_id,
+    def run_application(self, command, job_id, worker_id,
                         num_epochs):
         print("Running application_%d on %s for %d epochs: %s" %
-            (app_id, resource_id, num_epochs, command))
+            (job_id, worker_id, num_epochs, command))
 
-def get_num_epochs_to_run(app_id, resource_id):
+def get_num_epochs_to_run(job_id, worker_id):
     return 1
 
 def test():
-    resource_ids = ["v100"]
+    worker_ids = ["v100"]
     num_applications = 10
     run_so_far = {}
-    s = scheduler.Scheduler(resource_ids, TestPolicy(), TestStub(),
+    s = scheduler.Scheduler(worker_ids, TestPolicy(), TestStub(),
                             get_num_epochs_to_run)
     for j in range(num_applications):
-        s.add_new_job({resource_id: 10 for resource_id in resource_ids},
+        s.add_new_job({worker_id: 10 for worker_id in worker_ids},
                       "cmd%d" % j)
     for i in range(100):
-        resource_id = s.get_available_resource()
-        app_id, num_epochs = s.schedule(resource_id)
-        s.schedule_callback(app_id, resource_ids[0], num_epochs)
-        if app_id not in run_so_far:
-            run_so_far[app_id] = 0
-        run_so_far[app_id] += num_epochs
-        if i > 70 and app_id > 1 and app_id < 10:
-            s.remove_old_job(app_id)
+        job_id, worker_id, num_epochs = s._schedule()
+        s._schedule_callback(job_id, worker_id, num_epochs)
+        s._add_available_worker_id(worker_id)
+        if job_id not in run_so_far:
+            run_so_far[job_id] = 0
+        run_so_far[job_id] += num_epochs
+        if i > 70 and job_id > 1 and job_id < 10:
+            s.remove_old_job(job_id)
         if i == 90:
-            s.add_new_job({resource_id: 10 for resource_id in resource_ids},
+            s.add_new_job({worker_id: 10 for worker_id in worker_ids},
                           "cmd10")
     print()
     print("Number of epochs run:", run_so_far)
