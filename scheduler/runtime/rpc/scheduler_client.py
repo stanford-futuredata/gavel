@@ -10,8 +10,8 @@ def register_worker(worker_id):
   with grpc.insecure_channel('localhost:50052') as channel:
     stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
 
-    request = s2w_pb2.RegisterWorker(worker_id=worker_id)
-    response = stub.Run(request)
+    request = s2w_pb2.RegisterWorkerRequest(worker_id=worker_id)
+    response = stub.RegisterWorker(request)
 
 def run(job_id, command):
   with grpc.insecure_channel('localhost:50052') as channel:

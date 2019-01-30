@@ -58,6 +58,7 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
   def RegisterWorker(self, request, context):
     self._worker_id = request.worker_id
     self._dispatcher = Dispatcher(self._worker_id)
+    return common_pb2.Empty()
 
   def Run(self, request, context):
     self._dispatch(request)

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "common.proto"
+import "common.proto";
 import "enums.proto";
 
 service SchedulerToWorker {
