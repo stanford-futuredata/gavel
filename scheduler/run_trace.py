@@ -16,12 +16,12 @@ def get_num_epochs_to_run(job_id, worker_id):
 def read_trace(trace_filename):
     commands = []
     with open(trace_filename, 'r') as f:
-       for command in f.read().split('\n'):
+       for command in f.read().strip().split('\n'):
            commands.append(command)
     return commands
 
 def main(trace_filename):
-    worker_ids = ["worker1"]
+    worker_ids = [1]
     run_so_far = {}
     s = scheduler.Scheduler(worker_ids, TestPolicy(), stub,
                             get_num_epochs_to_run, run_server=True)

@@ -41,9 +41,7 @@ class Dispatcher:
                                      stderr=subprocess.STDOUT,
                                      shell=True)
     print(output)
-    print("Notifying scheduler...")
     worker_client.notify_scheduler(job.job_id(), self._worker_id)
-    print("Done notifying scheduler...")
 
   def dispatch_job(self, job):
     self._thread_pool.apply_async(self.launch_job, (job,))
@@ -62,7 +60,7 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
 
 def serve():
   server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-  worker_id = "v100"  # TODO: Don't hardcode this. Ideally set this through a round-trip between scheduler and worker.
+  worker_id = 1  # TODO: Don't hardcode this. Ideally set this through a round-trip between scheduler and worker.
   s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(WorkerServer(worker_id),
                                                        server)
   server.add_insecure_port('[::]:50052')
@@ -72,7 +70,3 @@ def serve():
       time.sleep(_ONE_DAY_IN_SECONDS)
   except KeyboardInterrupt:
     server.stop(0)
-
-if __name__=='__main__':
-  logging.basicConfig()
-  serve()

@@ -21,19 +21,3 @@ def run(job_id, command):
     request = s2w_pb2.RunRequest(job_id=job_id,
                                  command=command)
     response = stub.Run(request)
-    print('Job %d has status %s' % (response.job_id,
-                                    enums_pb2.JobStatus.Name(response.status)))
-
-if __name__=='__main__':
-  logging.basicConfig()
-  
-  parser = argparse.ArgumentParser(
-      description='Remotely schedule a job on a worker')
-  parser.add_argument('-c', '--command', type=str,
-                      default='echo "Hello world!"')
-
-  args = parser.parse_args()
-  opt_dict = vars(args)
-  command = opt_dict['command']
-
-  run(job_id=0, command=command)

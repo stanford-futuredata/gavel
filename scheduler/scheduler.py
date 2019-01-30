@@ -37,7 +37,7 @@ class Scheduler:
         if run_server:
             self.server_thread = threading.Thread(
                 target=serve,
-                args=(self._available_worker_ids,))
+                args=(self,))
             self.server_thread.daemon = True
             self.server_thread.start()
 
@@ -171,10 +171,11 @@ class Scheduler:
         self._stub(job_id, self._commands[job_id])
         return job_id, worker_id, num_epochs
 
-    def _schedule_callback(self, job_id, worker_id, num_epochs):
+    def _schedule_callback(self, job_id, worker_id, num_epochs=1):
         # Now, we can update the data structures to reflect the
         # fact that active_application run on a particular worker_id
         # for a certain num_epochs.
+        self._add_available_worker_id(worker_id)
         self._run_so_far[job_id][worker_id] += num_epochs
 
         self._add_to_index_and_update(job_id)
