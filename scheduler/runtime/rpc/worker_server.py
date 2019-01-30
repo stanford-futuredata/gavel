@@ -10,6 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../rpc_stubs'))
 
 import scheduler_to_worker_pb2 as s2w_pb2
 import scheduler_to_worker_pb2_grpc as s2w_pb2_grpc
+import common_pb2
 import enums_pb2
 
 
@@ -19,12 +20,16 @@ class Job:
   def __init__(self, job_proto):
     self._job_id = job_proto.job_id
     self._command = job_proto.command
+    self._num_epochs = job_proto.num_epochs
 
   def job_id(self):
     return self._job_id
 
   def command(self):
     return self._command
+
+  def num_epochs(self):
+    return self._num_epochs
 
 class Dispatcher:
   def __init__(self, worker_id):
@@ -43,21 +48,24 @@ class Dispatcher:
     self._thread_pool.apply_async(self.launch_job, (job,))
 
 class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
-  def __init__(self, worker_id):
-    self._dispatcher = Dispatcher(worker_id)
+  def __init__(self):
+    self._dispatcher = None
 
   def _dispatch(self, job_proto):
+    assert self._dispatcher is not None
     self._dispatcher.dispatch_job(Job(job_proto))
+
+  def RegisterWorker(self, request, context):
+    self._worker_id = request.worker_id
+    self._dispatcher = Dispatcher(self._worker_id)
 
   def Run(self, request, context):
     self._dispatch(request)
-    return s2w_pb2.RunResponse(job_id=request.job_id,
-                               status=enums_pb2.JobStatus.Value('QUEUED'))
+    return common_pb2.Empty()
 
 def serve():
   server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-  worker_id = 1  # TODO: Don't hardcode this. Ideally set this through a round-trip between scheduler and worker.
-  s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(WorkerServer(worker_id),
+  s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(WorkerServer(),
                                                        server)
   server.add_insecure_port('[::]:50052')
   server.start()

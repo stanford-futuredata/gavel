@@ -29,6 +29,5 @@ message RegisterWorkerResponse {
 
 message DoneRequest {
   uint64 worker_id = 1;
-  uint32 device_id = 2;
-  uint64 job_id = 3;
+  uint64 job_id = 2;
 }

@@ -22,6 +22,8 @@ def read_trace(trace_filename):
 
 def main(trace_filename):
     worker_ids = [1]
+    for worker_id in worker_ids:
+        scheduler_client.register_worker(worker_id)
     run_so_far = {}
     s = scheduler.Scheduler(worker_ids, TestPolicy(), scheduler_client.run,
                             get_num_epochs_to_run, run_server=True)
