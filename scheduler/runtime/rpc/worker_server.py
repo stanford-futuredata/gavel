@@ -1,22 +1,17 @@
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'rpc_stubs'))
-
 from concurrent import futures
 import time
-import logging
 from multiprocessing.pool import ThreadPool
 import subprocess
 
 import grpc
+import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '../rpc_stubs'))
 
 import scheduler_to_worker_pb2 as s2w_pb2
 import scheduler_to_worker_pb2_grpc as s2w_pb2_grpc
-import common_pb2
 import enums_pb2
 
-import worker_client
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
@@ -37,6 +32,7 @@ class Dispatcher:
     self._worker_id = worker_id
   
   def launch_job(self, job):
+    import worker_client
     output = subprocess.check_output(job.command(),
                                      stderr=subprocess.STDOUT,
                                      shell=True)
@@ -70,3 +66,7 @@ def serve():
       time.sleep(_ONE_DAY_IN_SECONDS)
   except KeyboardInterrupt:
     server.stop(0)
+
+
+if __name__ == '__main__':
+  serve()

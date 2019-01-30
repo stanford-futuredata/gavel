@@ -1,16 +1,11 @@
-from __future__ import print_function
+import grpc
 import os
 import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'rpc_stubs'))
-
-import logging
-
-import grpc
+sys.path.append(os.path.join(os.path.dirname(__file__), '../rpc_stubs'))
 
 import worker_to_scheduler_pb2 as w2s_pb2
 import worker_to_scheduler_pb2_grpc as w2s_pb2_grpc
-import enums_pb2
+
 
 def notify_scheduler(job_id, worker_id):
   with grpc.insecure_channel('localhost:50051') as channel:

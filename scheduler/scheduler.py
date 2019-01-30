@@ -2,7 +2,7 @@ import heapq
 import numpy as np
 import threading
 
-from runtime.rpc import serve
+import runtime.rpc.scheduler_server as scheduler_server
 import threadsafe_queue
 
 class Scheduler:
@@ -36,7 +36,7 @@ class Scheduler:
 
         if run_server:
             self.server_thread = threading.Thread(
-                target=serve,
+                target=scheduler_server.serve,
                 args=(self,))
             self.server_thread.daemon = True
             self.server_thread.start()

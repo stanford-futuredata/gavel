@@ -2,7 +2,7 @@ import argparse
 import grpc
 import numpy as np
 
-from runtime.rpc import run as stub
+import runtime.rpc.scheduler_client as scheduler_client
 import scheduler
 
 class TestPolicy:
@@ -23,7 +23,7 @@ def read_trace(trace_filename):
 def main(trace_filename):
     worker_ids = [1]
     run_so_far = {}
-    s = scheduler.Scheduler(worker_ids, TestPolicy(), stub,
+    s = scheduler.Scheduler(worker_ids, TestPolicy(), scheduler_client.run,
                             get_num_epochs_to_run, run_server=True)
     for command in read_trace(trace_filename):
         s.add_new_job({worker_id: 10 for worker_id in worker_ids},
