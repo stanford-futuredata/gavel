@@ -16,6 +16,8 @@ import scheduler_to_worker_pb2_grpc as s2w_pb2_grpc
 import common_pb2
 import enums_pb2
 
+import worker_client
+
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
 class Job:
@@ -30,21 +32,23 @@ class Job:
     return self._command
 
 class Dispatcher:
-  def __init__(self):
+  def __init__(self, worker_id):
     self._thread_pool = ThreadPool()
+    self._worker_id = worker_id
   
   def launch_job(self, job):
     output = subprocess.check_output(job.command(),
                                      stderr=subprocess.STDOUT,
                                      shell=True)
     print(output)
+    worker_client.notify_scheduler(job.job_id(), self.worker_id)
 
   def dispatch_job(self, job):
     self._thread_pool.apply_async(self.launch_job, (job,))
 
 class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
-  def __init__(self):
-    self._dispatcher = Dispatcher()
+  def __init__(self, worker_id):
+    self._dispatcher = Dispatcher(worker_id)
 
   def _dispatch(self, job_proto):
     self._dispatcher.dispatch_job(Job(job_proto))
@@ -56,7 +60,8 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
 
 def serve():
   server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-  s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(WorkerServer(),
+  worker_id = "v100"  # TODO: Don't hardcode this. Ideally set this through a round-trip between scheduler and worker.
+  s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(WorkerServer(worker_id),
                                                        server)
   server.add_insecure_port('[::]:50052')
   server.start()

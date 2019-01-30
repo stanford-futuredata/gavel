@@ -1,10 +1,12 @@
 import heapq
 import numpy as np
 
+import runtime
 import threadsafe_queue
 
 class Scheduler:
-    def __init__(self, worker_ids, policy, stub, get_num_epochs_to_run):
+    def __init__(self, worker_ids, policy, stub, get_num_epochs_to_run,
+                 run_server=False):
         # List of worker IDs.
         self._worker_ids = worker_ids
         # Policy instance.
@@ -30,6 +32,13 @@ class Scheduler:
         self._index = {}
         for worker_id in worker_ids:
             self._index[worker_id] = []
+
+        if run_server:
+            self.server_thread = threading.Thread(
+                runtime.rpc.scheduler_server.serve,
+                args=(self._available_worker_ids,))
+            self.server_thread.daemon = True
+            self.server_thread.start()
 
         self._last_job_id_assigned = 0
 

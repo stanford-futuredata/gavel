@@ -14,11 +14,11 @@ import scheduler_to_worker_pb2 as s2w_pb2
 import scheduler_to_worker_pb2_grpc as s2w_pb2_grpc
 import enums_pb2
 
-def run(command):
+def run(job_id, command):
   with grpc.insecure_channel('localhost:50052') as channel:
     stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
 
-    request = s2w_pb2.RunRequest(job_id=0,
+    request = s2w_pb2.RunRequest(job_id=job_id,
                                  command=command)
     response = stub.Run(request)
     print('Job %d has status %s' % (response.job_id,
@@ -36,4 +36,4 @@ if __name__=='__main__':
   opt_dict = vars(args)
   command = opt_dict['command']
 
-  run(command)
+  run(job_id=0, command=command)

@@ -17,17 +17,17 @@ class GrpcStub:
         self.channel = grpc.insecure_channel('localhost:50052')
         self.stub = s2w_pb2_grpc.SchedulerToWorkerStub(self.channel)
 
-    def run_application(self, command, app_id, resource_id,
+    def run_application(self, command, job_id, worker_id,
                         num_epochs):
         print("Running application_%d on %s for %d epochs: %s" %
-            (app_id, resource_id, num_epochs, command))
+            (job_id, worker_id, num_epochs, command))
         request = s2w_pb2.StartJobRequest(job_id=application_id,
                                           command=command)
         response = self.stub.StartJob(request)
         print("Job %d has status %s" % (response.job_id,
                                         enums_pb2.JobStatus.Name(response.status)))
 
-def get_num_epochs_to_run(app_id, resource_id):
+def get_num_epochs_to_run(job_id, worker_id):
     return 1
 
 def read_trace(trace_filename):
@@ -38,25 +38,17 @@ def read_trace(trace_filename):
     return commands
 
 def main(trace_filename):
-    resource_ids = ["v100"]
+    worker_ids = ["worker1"]
     run_so_far = {}
-    s = scheduler.Scheduler(resource_ids, TestPolicy(), GrpcStub(),
-                            get_num_epochs_to_run)
+    s = scheduler.Scheduler(worker_ids, TestPolicy(), GrpcStub(),
+                            get_num_epochs_to_run, run_server=True)
     for command in read_trace(trace_filename):
-        s.add_new_job({resource_id: 10 for resource_id in resource_ids},
+        s.add_new_job({worker_id: 10 for worker_id in worker_ids},
                       command)
     for i in range(100):  # Some arbitrary number.
-        resource_id = s.get_available_resource()
-        app_id, num_epochs = s.schedule(resource_id)
-        # Leverage the fact that there's only one resource right now.
-        # while s.get_status(app_id) == RUNNING:  # Busy wait till app is done.
-        #     pass
-        s.schedule_callback(app_id, resource_ids[0], num_epochs)
-        if app_id not in run_so_far:
-            run_so_far[app_id] = 0
-        run_so_far[app_id] += num_epochs
+        job_id, worker_id, num_epochs = s._schedule()
+        # TODO: Do something here.
     print()
-    print("Number of epochs run:", run_so_far)
 
 
 if __name__ == '__main__':
