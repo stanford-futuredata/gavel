@@ -41,7 +41,8 @@ class Dispatcher:
     output = subprocess.check_output(job.command(),
                                      stderr=subprocess.STDOUT,
                                      shell=True)
-    print(output)
+    print("Job ID: %d, Command: '%s', Num_epochs: %d, Output:" % (
+          job.job_id(), job.command(), job.num_epochs()), output)
     worker_client.notify_scheduler(job.job_id(), self._worker_id)
 
   def dispatch_job(self, job):

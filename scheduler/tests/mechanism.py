@@ -8,9 +8,9 @@ class TestPolicy:
         (m, n) = throughputs.shape
         return np.full((m, n), 1.0 / n)
     
-def stub(job_id, command):
-    print("Running application_%d: %s" %
-          (job_id, command))
+def stub(job_id, command, num_epochs):
+    print("Running application_%d for %d epochs: %s" %
+          (job_id, num_epochs, command))
 
 def get_num_epochs_to_run(job_id, worker_id):
     return 1

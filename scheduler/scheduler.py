@@ -2,7 +2,6 @@ import heapq
 import numpy as np
 import threading
 
-import runtime.rpc.scheduler_server as scheduler_server
 import threadsafe_queue
 
 class Scheduler:
@@ -35,6 +34,7 @@ class Scheduler:
             self._index[worker_id] = []
 
         if run_server:
+            import runtime.rpc.scheduler_server as scheduler_server
             self.server_thread = threading.Thread(
                 target=scheduler_server.serve,
                 args=(self,))
@@ -168,7 +168,7 @@ class Scheduler:
                                                  worker_id)
         # TODO: Add worker_id and num_epochs.
         print("Executing job_id %d with command %s..." % (job_id, self._commands[job_id]))
-        self._stub(job_id, self._commands[job_id])
+        self._stub(job_id, self._commands[job_id], num_epochs)
         return job_id, worker_id, num_epochs
 
     def _schedule_callback(self, job_id, worker_id, num_epochs=1):
