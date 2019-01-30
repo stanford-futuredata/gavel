@@ -41,7 +41,9 @@ class Dispatcher:
                                      stderr=subprocess.STDOUT,
                                      shell=True)
     print(output)
-    worker_client.notify_scheduler(job.job_id(), self.worker_id)
+    print("Notifying scheduler...")
+    worker_client.notify_scheduler(job.job_id(), self._worker_id)
+    print("Done notifying scheduler...")
 
   def dispatch_job(self, job):
     self._thread_pool.apply_async(self.launch_job, (job,))

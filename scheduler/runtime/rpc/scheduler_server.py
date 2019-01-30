@@ -18,11 +18,13 @@ _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
 class SchedulerServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
   def __init__(self, queue=None):
+    print("In server constructor...")
     self._queue = queue
 
   def Done(self, request, context):
+    print("In Done...")
     if self._queue is not None:
-        self._queue.add(request.worker_id)
+      self._queue.add(request.worker_id)
     return common_pb2.Empty()
 
 
@@ -32,6 +34,7 @@ def serve(queue):
                                                        server)
   server.add_insecure_port('[::]:50051')
   server.start()
+  print("Started the server...")
   try:
     while True:
       time.sleep(_ONE_DAY_IN_SECONDS)

@@ -13,10 +13,13 @@ import worker_to_scheduler_pb2_grpc as w2s_pb2_grpc
 import enums_pb2
 
 def notify_scheduler(job_id, worker_id):
+  print("Trying to setup an insecure_channel...")
   with grpc.insecure_channel('localhost:50051') as channel:
     stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
     
     # Send a Done message.
+    print("Trying to send notify scheduler to scheduler...")
     request = w2s_pb2.DoneRequest(job_id=job_id, worker_id=worker_id)
     response = stub.Done(request)
+    print("Done and got response...")
     print('Notified scheduler of completion of %s on %s' % (job_id, worker_id))

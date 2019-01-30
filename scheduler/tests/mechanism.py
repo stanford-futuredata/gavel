@@ -7,12 +7,10 @@ class TestPolicy:
     def get_allocation(self, throughputs):
         (m, n) = throughputs.shape
         return np.full((m, n), 1.0 / n)
-
-class TestStub:
-    def run_application(self, command, job_id, worker_id,
-                        num_epochs):
-        print("Running application_%d on %s for %d epochs: %s" %
-            (job_id, worker_id, num_epochs, command))
+    
+def stub(job_id, command):
+    print("Running application_%d: %s" %
+          (job_id, command))
 
 def get_num_epochs_to_run(job_id, worker_id):
     return 1
@@ -21,7 +19,7 @@ def test():
     worker_ids = ["v100"]
     num_applications = 10
     run_so_far = {}
-    s = scheduler.Scheduler(worker_ids, TestPolicy(), TestStub(),
+    s = scheduler.Scheduler(worker_ids, TestPolicy(), stub,
                             get_num_epochs_to_run)
     for j in range(num_applications):
         s.add_new_job({worker_id: 10 for worker_id in worker_ids},
