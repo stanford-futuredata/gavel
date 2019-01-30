@@ -1,10 +1,13 @@
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'rpc_stubs'))
+
 from concurrent import futures
 import time
 import logging
 from multiprocessing.pool import ThreadPool
-import Queue
 import subprocess
-import threading
 
 import grpc
 
