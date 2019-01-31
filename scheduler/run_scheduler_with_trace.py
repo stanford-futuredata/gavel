@@ -14,26 +14,38 @@ def get_num_epochs_to_run(job_id, worker_id):
     return 1
 
 def read_trace(trace_filename):
-    commands = []
+    commands_and_num_epochs = []
     with open(trace_filename, 'r') as f:
-       for command in f.read().strip().split('\n'):
-           commands.append(command)
-    return commands
+       for command_and_num_epochs in f.read().strip().split('\n'):
+           [command, num_epochs] = command_and_num_epochs.split('\t')
+           num_epochs = int(num_epochs)
+           commands_and_num_epochs.append((command, num_epochs))
+    return commands_and_num_epochs
 
 def main(trace_filename):
     worker_ids = [1]
     for worker_id in worker_ids:
         scheduler_client.register_worker(worker_id)
-    run_so_far = {}
+    num_epochs_left = {}
     s = scheduler.Scheduler(worker_ids, TestPolicy(), scheduler_client.run,
                             get_num_epochs_to_run, run_server=True)
-    for command in read_trace(trace_filename):
-        s.add_new_job({worker_id: 10 for worker_id in worker_ids},
-                      command)
-    for i in range(100):  # Some arbitrary number.
+    for (command, num_epochs) in read_trace(trace_filename):
+        job_id = s.add_new_job({worker_id: 10 for worker_id in worker_ids},
+                               command)
+        num_epochs_left[job_id] = num_epochs
+
+    to_delete = None
+    while len(num_epochs_left) > 0:
         job_id, worker_id, num_epochs = s._schedule()
-        # TODO: Do something here.
-    print()
+        if job_id is None: return
+        num_epochs_left[job_id] -= num_epochs
+        if to_delete is not None:
+            del num_epochs_left[to_delete]
+            s.remove_old_job(job_id)
+            to_delete = None
+        if num_epochs_left[job_id] == 0:
+            to_delete = job_id
+        print("Number of epochs left:", num_epochs_left)
 
 
 if __name__ == '__main__':

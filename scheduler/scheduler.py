@@ -107,8 +107,9 @@ class Scheduler:
             for i in range(len(self._index[worker_id])):
                 if self._index[worker_id][i][2] == old_job_id:
                     break
-            self._index[worker_id].pop(i)
-            heapq.heapify(self._index[worker_id])
+            if len(self._index[worker_id]) > 0:
+                self._index[worker_id].pop(i)
+                heapq.heapify(self._index[worker_id])
 
     def _add_to_index_and_update(self, new_job_id):
         # Re-sort keys given that all fractions have decreased but one.
@@ -159,17 +160,18 @@ class Scheduler:
 
         # Get the job_id for this worker_id with minimum
         # fraction_run/fraction_allocated.
-        [_, _, job_id] = self._index[worker_id][0]
-        self._remove_from_index_and_update(job_id)
+        if len(self._index[worker_id]) > 0:
+            [_, _, job_id] = self._index[worker_id][0]
+            self._remove_from_index_and_update(job_id)
 
-        # Number of epochs to run the application on needs to be
-        # determined.
-        num_epochs = self._get_num_epochs_to_run(job_id,
-                                                 worker_id)
-        # TODO: Add worker_id and num_epochs.
-        print("Executing job_id %d with command %s..." % (job_id, self._commands[job_id]))
-        self._stub(job_id, self._commands[job_id], num_epochs)
-        return job_id, worker_id, num_epochs
+            # Number of epochs to run the application on needs to be
+            # determined.
+            num_epochs = self._get_num_epochs_to_run(job_id,
+                                                     worker_id)
+            # TODO: Add worker_id.
+            self._stub(job_id, self._commands[job_id], num_epochs)
+            return job_id, worker_id, num_epochs
+        return None, None, None
 
     def _schedule_callback(self, job_id, worker_id, num_epochs=1):
         # Now, we can update the data structures to reflect the
