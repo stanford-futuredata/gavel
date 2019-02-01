@@ -99,6 +99,8 @@ class Scheduler:
         del self._commands[job_id]
         del self._throughputs[job_id]
         del self._run_so_far[job_id]
+        if len(self._throughputs) == 0:
+            return
         self._allocation = self._get_allocation()
         self._remove_from_index_and_update(job_id)
 
