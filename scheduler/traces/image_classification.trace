@@ -1,0 +1,1 @@
+cd ~/gpusched/workloads/tensorflow/image_classification && python tf_cnn_benchmarks.py --num_gpus=1 --batch_size=64 --num_epochs=1 --model=resnet50 --data_dir=/home/keshavsanthanam/data/imagenet --allow_growth	15
