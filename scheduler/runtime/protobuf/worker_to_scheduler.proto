@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+import "common.proto";
+import "enums.proto";
+
+service WorkerToScheduler {
+  // Indicates to the scheduler that a job has completed
+  rpc Done (DoneRequest) returns (Empty);
+}
+
+message DoneRequest {
+  uint64 worker_id = 1;
+  uint64 job_id = 2;
+}
