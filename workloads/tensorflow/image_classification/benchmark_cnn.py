@@ -636,8 +636,6 @@ flags.DEFINE_integer('max_ckpts_to_keep', 5,
 flags.DEFINE_string('train_dir', None,
                     'Path to session checkpoints. Pass None to disable saving '
                     'checkpoint at the end.')
-flags.DEFINE_string('checkpoint_dir', None,
-                    'Path to checkpoint dir (alias for train_dir)')
 flags.DEFINE_string('eval_dir', '/tmp/tf_cnn_benchmarks/eval',
                     'Directory where to write eval event logs.')
 flags.DEFINE_string('backbone_model_path', None,
@@ -1057,10 +1055,6 @@ def make_params_from_flags():
   # flags.param_specs.
   flag_values = {name: getattr(absl_flags.FLAGS, name)
                  for name in flags.param_specs.keys()}
-  if flag_values['checkpoint_dir']:
-    if flag_values['train_dir']:
-      raise ValueError('Cannot specify checkpoint_dir and train_dir')
-    flag_values['train_dir'] = flag_values['checkpoint_dir']
   return Params(**flag_values)
 
 
@@ -1865,7 +1859,7 @@ class BenchmarkCNN(object):
         result = self._run_eval()
     else:
       result = self._benchmark_train()
-    log_fn('end:' + str(datetime.datetime.now()))
+    log_fn('end:' + str(datetime.datetime.now())) 
     return result
 
   def _run_eval(self):
@@ -2204,7 +2198,6 @@ class BenchmarkCNN(object):
           max_to_keep=self.params.max_ckpts_to_keep)
     else:
       saver = None
-
     ready_for_local_init_op = None
     if self.job_name and not (self.single_session or
                               self.distributed_collective):
@@ -2273,12 +2266,6 @@ class BenchmarkCNN(object):
         master=target,
         config=create_config_proto(self.params),
         start_standard_services=start_standard_services) as sess:
-      if saver is not None:
-        try:
-          global_step = load_checkpoint(saver, sess, self.params.train_dir)
-        except CheckpointNotFoundException as e:
-          print('Could not load from checkpoint:', e)
-
       # Anything that can potentially raise an OutOfRangeError with 'sess' MUST
       # be under this try block. The managed_session() context manager silently
       # ignores OutOfRangeError, so we must catch them and wrap them with
