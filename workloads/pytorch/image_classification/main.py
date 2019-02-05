@@ -179,11 +179,11 @@ def main():
             train_sampler.set_epoch(epoch)
         adjust_learning_rate(optimizer, epoch)
 
-        if args.num_minibatches is not None:
-            break
-
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch)
+
+        if args.num_minibatches is not None:
+            break
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion)
