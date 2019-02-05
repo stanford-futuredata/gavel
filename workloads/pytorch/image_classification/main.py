@@ -33,6 +33,8 @@ parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
                     help='number of total epochs to run')
+parser.add_argument('--num_minibatches', default=None, type=int,
+                    help='number of minibatches to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -177,6 +179,9 @@ def main():
             train_sampler.set_epoch(epoch)
         adjust_learning_rate(optimizer, epoch)
 
+        if args.num_minibatches is not None:
+            break
+
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch)
 
@@ -206,6 +211,9 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
     end = time.time()
     for i, (input, target) in enumerate(train_loader):
+        if args.num_minibatches is not None and i > args.num_minibatches:
+            return
+
         # measure data loading time
         data_time.update(time.time() - end)
 
