@@ -45,8 +45,10 @@ parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
-parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                    help='path to latest checkpoint (default: none)')
+parser.add_argument('--initial_checkpoint_filename', default=None, type=str,
+                    help='path to initial checkpoint (default: none)')
+parser.add_argument('--final_checkpoint_filename', default=None, type=str,
+                    help='path to final checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
@@ -116,19 +118,19 @@ def main():
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
-    # optionally resume from a checkpoint
-    if args.resume:
-        if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume)
+    # optionally load an initial checkpoint
+    if args.initial_checkpoint_filename is not None:
+        if os.path.isfile(args.initial_checkpoint_filename):
+            print("=> loading checkpoint '{}'".format(args.initial_checkpoint_filename))
+            checkpoint = torch.load(args.initial_checkpoint_filename)
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.resume, checkpoint['epoch']))
+                  .format(args.initial_checkpoint_filename, checkpoint['epoch']))
         else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
+            print("=> no checkpoint found at '{}'".format(args.initial_checkpoint_filename))
 
     cudnn.benchmark = True
 
@@ -182,15 +184,14 @@ def main():
         acc1 = validate(val_loader, model, criterion)
 
         # remember best acc@1 and save checkpoint
-        is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
-        save_checkpoint({
-            'epoch': epoch + 1,
-            'arch': args.arch,
-            'state_dict': model.state_dict(),
-            'best_acc1': best_acc1,
-            'optimizer' : optimizer.state_dict(),
-        }, is_best)
+    save_checkpoint({
+        'epoch': epoch + 1,
+        'arch': args.arch,
+        'state_dict': model.state_dict(),
+        'best_acc1': best_acc1,
+        'optimizer' : optimizer.state_dict(),
+    }, args.final_checkpoint_filename)
 
 
 def train(train_loader, model, criterion, optimizer, epoch):
@@ -287,10 +288,9 @@ def validate(val_loader, model, criterion):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-    torch.save(state, filename)
-    if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+def save_checkpoint(state, checkpoint_filename):
+    if checkpoint_filename is not None:
+        torch.save(state, checkpoint_filename)
 
 
 class AverageMeter(object):
