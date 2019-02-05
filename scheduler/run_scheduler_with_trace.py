@@ -34,19 +34,20 @@ def main(trace_filename):
                                command)
         num_epochs_left[job_id] = num_epochs
 
-    to_delete = None
     import time
     start = time.time()
+    job_id, worker_id, num_epochs = None, None, None
     while len(num_epochs_left) > 0:
+        old_job_id, old_worker_id, old_num_epochs = \
+            job_id, worker_id, num_epochs
         job_id, worker_id, num_epochs = s._schedule()
-        if job_id is None: break
-        num_epochs_left[job_id] -= num_epochs
-        if to_delete is not None:
-            del num_epochs_left[to_delete]
-            s.remove_old_job(job_id)
-            to_delete = None
-        if num_epochs_left[job_id] == 0:
-            to_delete = job_id
+        if old_job_id in num_epochs_left:
+            num_epochs_left[old_job_id] -= old_num_epochs
+            if num_epochs_left[old_job_id] == 0:
+                del num_epochs_left[old_job_id]
+                s.remove_old_job(old_job_id)
+        if job_id is None:
+            break
         print("Number of epochs left:", num_epochs_left)
     print("Total time taken: %.2f seconds" % (time.time() - start))
 
