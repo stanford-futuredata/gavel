@@ -14,5 +14,3 @@ enum JobStatus {
     SUCCEEDED = 3;
     FAILED = 4;
 }
-
-
