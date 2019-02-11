@@ -1,21 +1,14 @@
 syntax = "proto3";
 
 import "common.proto";
-import "enums.proto";
 
 service SchedulerToWorker {
-  // Register worker.
-  rpc RegisterWorker (RegisterWorkerRequest) returns (Empty) {}
-  // Starts a job on worker.
-  rpc Run (RunRequest) returns (Empty) {}
-}
-
-message RegisterWorkerRequest {
-  uint64 worker_id = 1;
+    // Starts a job on worker.
+    rpc Run (RunRequest) returns (Empty) {}
 }
 
 message RunRequest {
-  uint64 job_id = 1;
-  string command = 2;
-  uint64 num_epochs = 3;
+    uint64 job_id = 1;
+    string command = 2;
+    uint64 num_epochs = 3;
 }

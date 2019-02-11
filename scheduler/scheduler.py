@@ -5,21 +5,27 @@ import threading
 import threadsafe_queue
 
 class Scheduler:
-    def __init__(self, worker_ids, policy, stub, get_num_epochs_to_run,
-                 run_server=False):
+    def __init__(self, policy, get_num_epochs_to_run, run_server=False):
         # List of worker IDs.
-        self._worker_ids = worker_ids
+        self._worker_ids = []#worker_ids
+        # List of devices.
+        self._devices = {}
         # Policy instance.
         self._policy = policy
-        # Worker stub instance.
-        self._stub = stub
+        # RPC clients.
+        self._scheduler_rpc_clients = {}
         # get_num_epochs_to_run function pointer.
         self._get_num_epochs_to_run = get_num_epochs_to_run
-
+        # Next worker_id to assign.
+        self._worker_id_counter = 0
+        # Lock to ensure worker_id assignment is thread-safe.
+        self._worker_id_counter_lock = threading.Lock()
         # List of available worker IDs.
         self._available_worker_ids = threadsafe_queue.Queue()
+        """
         for worker_id in worker_ids:
             self._available_worker_ids.add(worker_id)
+        """
         # Throughputs for all current incomplete applications.
         self._throughputs = {}
         # Allocations for all current incomplete applications.
@@ -30,20 +36,29 @@ class Scheduler:
         self._commands = {}
         # priority_queue for each worker_id.
         self._index = {}
+        """
         for worker_id in worker_ids:
             self._index[worker_id] = []
+        """
 
         if run_server:
             import runtime.rpc.scheduler_server as scheduler_server
+            port = 50051
+            callbacks = {
+                    'RegisterWorker': self._register_worker,
+                    'SendHeartbeat': self._handle_heartbeat,
+                    'Done': self._job_complete,
+                    }
             self.server_thread = threading.Thread(
                 target=scheduler_server.serve,
-                args=(self,))
+                args=(port, callbacks,))
             self.server_thread.daemon = True
             self.server_thread.start()
 
         self._last_job_id_assigned = 0
 
     def _get_allocation(self):
+        # TODO: Add additional indexing level for device_id
         def flatten(d):
             job_ids = list(d.keys())
             worker_ids = list(d[job_ids[0]].keys())
@@ -51,7 +66,8 @@ class Scheduler:
             for job_id in job_ids:
                 m_row = []
                 for worker_id in worker_ids:
-                    m_row.append(d[job_id][worker_id])
+                    for device_id in devices[worker_id]:
+                        m_row.append(d[job_id][worker_id])
                 m.append(m_row)
             return np.array(m), (job_ids, worker_ids)
 
@@ -69,7 +85,16 @@ class Scheduler:
             flattened_throughputs)
         return unflatten(flattened_allocation, index)
 
-    def add_new_job(self, throughputs, command):
+    def compute_throughputs(command):
+        throughputs = {}
+        for worker_id in self._worker_ids:
+            #TODO: Add additional indexing level for device_id
+            #TODO: compute throughput
+            throughputs[worker_id] = 10
+
+        return throughputs
+
+    def add_new_job(self, command):
         # Application is a collection of throughputs for each
         # worker_id. (right now, not considering app packing)
 
@@ -82,13 +107,14 @@ class Scheduler:
         job_id = self._last_job_id_assigned
         self._commands[job_id] = command
         self._last_job_id_assigned += 1
-        self._throughputs[job_id] = throughputs
+        self._throughputs[job_id] = compute_throughputs(command)
         self._allocation = self._get_allocation()
         self._run_so_far[job_id] = {}
         for worker_id in self._worker_ids:
             self._run_so_far[job_id][worker_id] = 0
-            # Entries in the index are sorted by fraction_run/fraction_allocated,
-            # then number of epochs run, then job_id.
+            # Entries in the index are sorted by
+            # fraction_run/fraction_allocated, then number of
+            # epochs run, then job_id.
             heapq.heappush(self._index[worker_id],
                            [0.0, 0, job_id])
         return job_id
@@ -140,6 +166,23 @@ class Scheduler:
                 self._index[worker_id][i][1] = self._run_so_far[job_id][worker_id]
             heapq.heapify(self._index[worker_id])
 
+    def _register_worker(self, devices):
+        worker_id = self._assign_new_worker_id()
+        self._devices[worker_id] = devices
+        self._add_available_worker_id(worker_id)
+        # TODO: Recompute throughputs and allocation
+        return (worker_id, None)
+
+    def _handle_heartbeat(self):
+        #TODO
+        pass
+
+    def _assign_new_worker_id(self):
+        with self._worker_id_counter_lock:
+            worker_id = self._worker_id_counter
+            self._worker_id_counter += 1
+        return worker_id
+
     def _get_available_worker_id(self):
         return self._available_worker_ids.remove()
 
@@ -175,7 +218,7 @@ class Scheduler:
             return job_id, worker_id, num_epochs
         return None, None, None
 
-    def _schedule_callback(self, job_id, worker_id, num_epochs=1):
+    def _job_complete(self, job_id, worker_id, num_epochs=1):
         # Now, we can update the data structures to reflect the
         # fact that active_application run on a particular worker_id
         # for a certain num_epochs.
