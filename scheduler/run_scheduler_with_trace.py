@@ -23,24 +23,20 @@ def read_trace(trace_filename):
     return commands_and_num_epochs
 
 def main(trace_filename):
-    """
-    worker_ids = [1]
-    for worker_id in worker_ids:
-        scheduler_client.register_worker(worker_id)
     num_epochs_left = {}
-    s = scheduler.Scheduler(worker_ids, TestPolicy(), scheduler_client.run,
-                            get_num_epochs_to_run, run_server=True)
-    """
     s = scheduler.Scheduler(TestPolicy(), get_num_epochs_to_run,
                             run_server=True)
     #TODO: Convert the following code to work with asynchronous worker
     #      registration
     for (command, num_epochs) in read_trace(trace_filename):
-        job_id = s.add_new_job({worker_id: 10 for worker_id in worker_ids},
-                               command)
+        job_id = s.add_new_job(command)
         num_epochs_left[job_id] = num_epochs
 
     import time
+    while s.num_workers() < 1:
+        print('Waiting for worker to register with scheduler...')
+        time.sleep(5)
+
     start = time.time()
     job_id, worker_id, num_epochs = None, None, None
     while len(num_epochs_left) > 0:

@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from multiprocessing.pool import ThreadPool
 import subprocess
 
@@ -14,7 +16,10 @@ class Dispatcher:
               "Num_epochs: %d, Output:" % (job.job_id(),
                                            job.command(),
                                            job.num_epochs()), output)
-        worker_rpc_client.notify_scheduler(job.job_id)
+        try:
+            self._worker_rpc_client.notify_scheduler(job.job_id())
+        except Exception as e:
+            print(e)
 
     def dispatch_job(self, job):
         self._thread_pool.apply_async(self.launch_job, (job,))

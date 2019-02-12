@@ -12,6 +12,7 @@ class WorkerRpcClient:
   
     def __init__(self, server_ip_addr, port):
         self._server_loc = '%s:%d' % (server_ip_addr, port)
+        #TODO: Get list of devices
         self._worker_id = self.register_worker([])
 
     def _to_device_proto(self, device):
@@ -21,16 +22,18 @@ class WorkerRpcClient:
         device_protos = [self.to_device_proto(device) for device in devices]
         request = w2s_pb2.RegisterWorkerRequest(devices=device_protos)
         with grpc.insecure_channel(self._server_loc) as channel:
-            self._stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
-            response = self._stub.RegisterWorker(request)
+            stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
+            response = stub.RegisterWorker(request)
             print(response.worker_id)
         return None
 
+    def send_heartbeat(self, jobs):
+        #TODO
+        pass
+
     def notify_scheduler(self, job_id):
         # Send a Done message.
-        print("Trying to send notify scheduler to scheduler...")
         request = w2s_pb2.DoneRequest(job_id=job_id, worker_id=self._worker_id)
-        response = self._stub.Done(request)
-        print("Done and got response...")
-        print('Notified scheduler of completion of %s on %s' % (job_id,
-                                                                self._worker_id))
+        with grpc.insecure_channel(self._server_loc) as channel:
+            stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
+            response = stub.Done(request)
