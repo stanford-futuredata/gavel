@@ -20,7 +20,7 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
         self._callbacks = callbacks
 
     def Run(self, request, context):
-        self.callbacks['Run'](job.Job(request))
+        self._callbacks['Run'](job.Job(request))
         return common_pb2.Empty()
 
 def serve(port, callbacks):
