@@ -68,7 +68,36 @@ class Scheduler:
 
            NOTE: self._scheduler_lock must be held when calling this function.
         """
-        job_ids = list(self._throughputs.keys())
+	def flatten(d):
+            job_ids = list(d.keys())
+            worker_ids = list(d[job_ids[0]].keys())
+            if len(job_ids) == 0 or len(worker_ids) == 0:
+                return None, None
+            m = []
+            for job_id in job_ids:
+                m_row = []
+                for worker_id in worker_ids:
+                    m_row.append(d[job_id][worker_id])
+                m.append(m_row)
+            return np.array(m), (job_ids, worker_ids)
+
+        def unflatten(m, index):
+            (job_ids, worker_ids) = index
+            d = {}
+            for i in range(len(job_ids)):
+                d[job_ids[i]] = {}
+                for j in range(len(worker_ids)):
+                    d[job_ids[i]][worker_ids[j]] = m[i][j]
+            return d
+
+        flattened_throughputs, index = flatten(self._throughputs)
+        if flattened_throughputs is None:
+            return None
+        flattened_allocation = self._policy.get_allocation(
+            flattened_throughputs)
+        return unflatten(flattened_allocation, index)
+        """
+	job_ids = list(self._throughputs.keys())
         worker_ids = list(self._throughputs[job_ids[0]].keys())
 
         m = len(job_ids)
@@ -96,6 +125,7 @@ class Scheduler:
                 unflattened_allocations[job_id][worker_id] = \
                         allocations[i][j]
         return unflattened_allocations
+        """
 
     def _compute_throughput(self, command, worker_id):
         # TODO: compute throughput
@@ -119,8 +149,11 @@ class Scheduler:
             self._run_so_far[job_id] = {}
             self._throughputs[job_id] = {}
             for worker_id in self._worker_ids:
+                self._run_so_far[job_id][worker_id] = 0
                 self._throughputs[job_id][worker_id] = \
                         self._compute_throughput(command, worker_id)
+                heapq.heappush(self._index[worker_id],
+                [0.0, 0, job_id])
             self._allocation = self._get_allocation()
         return job_id
 
@@ -204,13 +237,14 @@ class Scheduler:
                         self._compute_throughput(self._commands[job_id],
                                                  worker_id)
                 # TODO: Move this outside the loop?
-                self._allocation = self._get_allocation()
                 # Entries in the index are sorted by
                 # fraction_run/fraction_allocated, then number of
                 # epochs run, then job_id.
                 heapq.heappush(self._index[worker_id],
                 [0.0, 0, job_id])
+            self._allocation = self._get_allocation()
         self._update_index()
+        # TODO: handle errors
         return (worker_id, None)
 
     def _handle_heartbeat(self):
@@ -241,25 +275,24 @@ class Scheduler:
             # fraction_run/fraction_allocated.
             if len(self._index[worker_id]) == 0:
                 return None, None, None
-            else:
-                [_, _, job_id] = self._index[worker_id][0]
+
+        [_, _, job_id] = self._index[worker_id][0]
 
         self._remove_from_index_and_update(job_id)
 
         with self._scheduler_lock:
             print('Allocation:', str(self._get_allocation()))
 
-        # Number of epochs to run the application on needs to be
-        # determined.
-        num_epochs = self._get_num_epochs_to_run(job_id,
-                                                 worker_id)
+            # Number of epochs to run the application on needs to be
+            # determined.
+            num_epochs = self._get_num_epochs_to_run(job_id, worker_id)
 
-        # Dispatch the job to a worker.
-        self._worker_connections[worker_id].run(job_id,
-                                                self._commands[job_id],
-                                                num_epochs)
+            # Dispatch the job to a worker.
+            self._worker_connections[worker_id].run(job_id,
+                                                    self._commands[job_id],
+                                                    num_epochs)
 
-        return job_id, worker_id, num_epochs
+            return job_id, worker_id, num_epochs
 
     def _job_complete(self, job_id, worker_id, num_epochs=1):
         # Now, we can update the data structures to reflect the
