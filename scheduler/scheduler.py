@@ -96,36 +96,6 @@ class Scheduler:
         flattened_allocation = self._policy.get_allocation(
             flattened_throughputs)
         return unflatten(flattened_allocation, index)
-        """
-	job_ids = list(self._throughputs.keys())
-        worker_ids = list(self._throughputs[job_ids[0]].keys())
-
-        m = len(job_ids)
-        n = len(worker_ids)
-        if m == 0 or n == 0:
-            return None
-        flattened_throughputs = np.zeros((m, n), dtype=float)
-        unflattened_allocations = {}
-
-        for i, job_id in enumerate(job_ids):
-            for j, worker_id in enumerate(worker_ids):
-                if (job_id not in self._throughputs
-                    or worker_id not in self._throughputs[job_id]):
-                    print('No throughput for job %d on worker %d' % (job_id,
-                                                                     worker_id))
-                    flattened_throughputs[i][j] = 0.0
-                else:
-                    flattened_throughputs[i][j] = \
-                            self._throughputs[job_id][worker_id]
-        allocations = self._policy.get_allocation(flattened_throughputs)
-        for i, job_id in enumerate(job_ids):
-            for j, worker_id in enumerate(worker_ids):
-                if job_id not in unflattened_allocations:
-                    unflattened_allocations[job_id] = {}
-                unflattened_allocations[job_id][worker_id] = \
-                        allocations[i][j]
-        return unflattened_allocations
-        """
 
     def _compute_throughput(self, command, worker_id):
         # TODO: compute throughput
@@ -224,6 +194,7 @@ class Scheduler:
     def _register_worker(self, devices):
         with self._scheduler_lock:
             worker_id = self._worker_id_counter
+            self._worker_ids.append(worker_id)
             self._worker_id_counter += 1
             self._devices[worker_id] = devices
             self._index[worker_id] = []
@@ -240,8 +211,7 @@ class Scheduler:
                 # Entries in the index are sorted by
                 # fraction_run/fraction_allocated, then number of
                 # epochs run, then job_id.
-                heapq.heappush(self._index[worker_id],
-                [0.0, 0, job_id])
+                heapq.heappush(self._index[worker_id], [0.0, 0, job_id])
             self._allocation = self._get_allocation()
         self._update_index()
         # TODO: handle errors
