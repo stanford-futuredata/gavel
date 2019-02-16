@@ -68,10 +68,12 @@ class Scheduler:
 
            NOTE: self._scheduler_lock must be held when calling this function.
         """
-	def flatten(d):
+        def flatten(d):
             job_ids = list(d.keys())
+            if len(job_ids) == 0:
+                return None, None
             worker_ids = list(d[job_ids[0]].keys())
-            if len(job_ids) == 0 or len(worker_ids) == 0:
+            if len(worker_ids) == 0:
                 return None, None
             m = []
             for job_id in job_ids:
