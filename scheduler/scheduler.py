@@ -195,7 +195,7 @@ class Scheduler:
         self._add_to_index(new_job_id)
         self._update_index()
 
-    def _register_worker(self, devices):
+    def _register_worker(self, ip_addr, port, devices):
         with self._scheduler_lock:
             worker_id = self._worker_id_counter
             self._worker_ids.append(worker_id)
@@ -205,7 +205,7 @@ class Scheduler:
             self._add_available_worker_id(worker_id)
             # TODO: Parameterize SchedulerRpcClient arguments
             self._worker_connections[worker_id] = \
-                    scheduler_client.SchedulerRpcClient('localhost', 50052)
+                    scheduler_client.SchedulerRpcClient(ip_addr, port)
             for job_id in self._run_so_far:
                 self._run_so_far[job_id][worker_id] = 0
                 self._throughputs[job_id][worker_id] = \

@@ -23,7 +23,10 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
         devices = []
         for device_proto in request.devices:
             devices.append(self._device_proto_to_device(device_proto))
-        (worker_id, error) = self._callbacks['RegisterWorker'](devices=devices)
+        (worker_id, error) = self._callbacks['RegisterWorker'](
+                ip_addr=request.ip_addr,
+                port=request.port,
+                devices=devices)
         if error is None:
             return w2s_pb2.RegisterWorkerResponse(worker_id=worker_id)
         else:

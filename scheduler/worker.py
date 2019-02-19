@@ -1,4 +1,5 @@
 import argparse
+import socket
 import threading
 
 from runtime.rpc import dispatcher
@@ -9,8 +10,11 @@ WORKER_PORT = 50052
 
 class Worker:
     def __init__(self, sched_ip_addr, sched_port):
-        self._worker_rpc_client = worker_client.WorkerRpcClient(sched_ip_addr,
-                                                                sched_port)
+        self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
+        self._worker_port = WORKER_PORT
+        self._worker_rpc_client = worker_client.WorkerRpcClient(
+                self._worker_ip_addr, self._worker_port,
+                sched_ip_addr, sched_port)
         self._dispatcher = dispatcher.Dispatcher(self._worker_rpc_client)
         callbacks = {
                 'Run': self._dispatch,
