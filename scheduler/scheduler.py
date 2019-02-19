@@ -6,6 +6,8 @@ import threadsafe_queue
 
 from runtime.rpc import scheduler_client
 
+SCHEDULER_PORT = 50051
+
 class Scheduler:
     def __init__(self, policy, get_num_epochs_to_run, run_server=False):
         # List of worker IDs.
@@ -44,7 +46,7 @@ class Scheduler:
 
         if run_server:
             import runtime.rpc.scheduler_server as scheduler_server
-            port = 50051
+            port = SCHEDULER_PORT
             callbacks = {
                 'RegisterWorker': self._register_worker,
                 'SendHeartbeat': self._handle_heartbeat,

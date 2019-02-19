@@ -1,20 +1,23 @@
+import argparse
 import threading
 
 from runtime.rpc import dispatcher
 from runtime.rpc import worker_client
 from runtime.rpc import worker_server
 
+WORKER_PORT = 50052
+
 class Worker:
-    def __init__(self, port):
-        self._worker_rpc_client = worker_client.WorkerRpcClient("localhost",
-                                                                50051)
+    def __init__(self, sched_ip_addr, sched_port):
+        self._worker_rpc_client = worker_client.WorkerRpcClient(sched_ip_addr,
+                                                                sched_port)
         self._dispatcher = dispatcher.Dispatcher(self._worker_rpc_client)
         callbacks = {
                 'Run': self._dispatch,
             }
         self._server_thread = threading.Thread(
                 target=worker_server.serve,
-                args=(port, callbacks,))
+                args=(WORKER_PORT, callbacks,))
         self._server_thread.daemon = True
         self._server_thread.start()
 
@@ -31,5 +34,13 @@ class Worker:
 
 #TODO: Move this to a separate driver?
 if __name__=='__main__':
-    worker = Worker(50052)
+    parser = argparse.ArgumentParser(description='Run a worker process')
+    parser.add_argument('-i', '--ip_addr', type=str, required=True,
+                        help='IP address for scheduler server')
+    parser.add_argument('-p', '--port', type=int, default=50051,
+                        help='Port number for scheduler server')
+    args = parser.parse_args()
+    opt_dict = vars(args)
+
+    worker = Worker(opt_dict['ip_addr'], opt_dict['port'])
     worker.join()
