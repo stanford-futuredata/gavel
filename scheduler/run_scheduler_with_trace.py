@@ -5,6 +5,8 @@ import numpy as np
 import runtime.rpc.scheduler_client as scheduler_client
 import scheduler
 
+_ONE_DAY_IN_SECONDS = 60 * 60 * 24
+
 class TestPolicy:
     def get_allocation(self, throughputs):
         (m, n) = throughputs.shape
@@ -33,7 +35,7 @@ def main(trace_filename):
         num_epochs_left[job_id] = num_epochs
 
     import time
-    while s.num_workers() < 1:
+    while s.num_workers() < 2:
         print('Waiting for worker to register with scheduler...')
         time.sleep(5)
 
@@ -52,6 +54,11 @@ def main(trace_filename):
             break
         print("Number of epochs left:", num_epochs_left)
     print("Total time taken: %.2f seconds" % (time.time() - start))
+    try:
+        while True:
+            time.sleep(_ONE_DAY_IN_SECONDS)
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

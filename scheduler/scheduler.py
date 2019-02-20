@@ -255,8 +255,6 @@ class Scheduler:
         self._remove_from_index_and_update(job_id)
 
         with self._scheduler_lock:
-            print('Allocation:', str(self._get_allocation()))
-
             # Number of epochs to run the application on needs to be
             # determined.
             num_epochs = self._get_num_epochs_to_run(job_id, worker_id)
