@@ -15,7 +15,14 @@ class Worker:
         self._worker_rpc_client = worker_client.WorkerRpcClient(
                 self._worker_ip_addr, self._worker_port,
                 sched_ip_addr, sched_port)
-        self._dispatcher = dispatcher.Dispatcher(self._worker_rpc_client)
+        self._devices = [] # TODO: get devices
+        self._worker_id, error = \
+            self._worker_rpc_client.register_worker(self._devices)
+        if error:
+          pass # TODO: handle error
+        self._dispatcher = dispatcher.Dispatcher(self._worker_id,
+                                                 self._worker_rpc_client)
+
         callbacks = {
                 'Run': self._dispatch,
             }
