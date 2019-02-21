@@ -1,6 +1,7 @@
 import argparse
 import grpc
 import numpy as np
+import time
 
 import runtime.rpc.scheduler_client as scheduler_client
 import scheduler
@@ -24,20 +25,13 @@ def read_trace(trace_filename):
            commands_and_num_epochs.append((command, num_epochs))
     return commands_and_num_epochs
 
-def main(trace_filename):
+def main(trace_filename, min_workers):
     num_epochs_left = {}
     s = scheduler.Scheduler(TestPolicy(), get_num_epochs_to_run,
-                            run_server=True)
-    #TODO: Convert the following code to work with asynchronous worker
-    #      registration
+                            min_workers=min_workers)
     for (command, num_epochs) in read_trace(trace_filename):
         job_id = s.add_new_job(command)
         num_epochs_left[job_id] = num_epochs
-
-    import time
-    while s.num_workers() < 2:
-        print('Waiting for worker to register with scheduler...')
-        time.sleep(5)
 
     start = time.time()
     job_id, worker_id, num_epochs = None, None, None
@@ -66,6 +60,9 @@ if __name__ == '__main__':
     )
     parser.add_argument('-t', "--trace_filename", type=str, required=True,
                         help="Trace filename")
+    parser.add_argument('-m', "--min_workers", type=int, default=None,
+                        help="Minimum number of workers to wait for before " \
+                             "scheduling jobs")
     args = parser.parse_args()
 
-    main(args.trace_filename)
+    main(args.trace_filename, args.min_workers)
