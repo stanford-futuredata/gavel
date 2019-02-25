@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import heapq
 import numpy as np
 from preconditions import preconditions
@@ -25,6 +27,8 @@ class Scheduler:
         self._get_num_epochs_to_run = get_num_epochs_to_run
         # Minimum number of workers to wait for before scheduling any jobs.
         self._min_workers = 1 if min_workers is None else min_workers
+        # Next job_id to assign.
+        self._job_id_counter = 0
         # Next worker_id to assign.
         self._worker_id_counter = 0
         # Lock to ensure worker_id assignment is thread-safe.
@@ -35,6 +39,8 @@ class Scheduler:
         self._throughputs = {}
         # Allocations for all current incomplete applications.
         self._allocation = {}
+        # The total number of epochs to run each job for.
+        self._total_epochs = {}
         # Epochs run on each worker_id, for all current incomplete applications.
         self._run_so_far = {}
         # Commands to run for all current incomplete applications.
@@ -44,26 +50,35 @@ class Scheduler:
 
         port = SCHEDULER_PORT
         callbacks = {
-            'RegisterWorker': self._register_worker,
-            'SendHeartbeat': self._handle_heartbeat,
-            'Done': self._job_complete,
+            'RegisterWorker': self._register_worker_callback,
+            'SendHeartbeat': self._send_heartbeat_callback,
+            'Done': self._done_callback,
             }
         self.server_thread = threading.Thread(
             target=scheduler_server.serve,
-            args=(port, callbacks,))
+            args=(port, callbacks))
         self.server_thread.daemon = True
         self.server_thread.start()
 
-        self._job_id_counter = 0
+        self.scheduler_thread = threading.Thread(
+                target=self._schedule,
+                args=())
+        self.scheduler_thread.daemon = True
+        self.scheduler_thread.start()
+
 
     def num_workers(self):
         with self._scheduler_lock:
             num_workers = len(self._worker_connections)
         return num_workers
 
+    def all_jobs_complete(self):
+        with self._scheduler_lock:
+            return len(self._run_so_far) == 0
+
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_allocation(self):
-        # Computes the cluster allocation.
+        # Computes the allocation.
         # self._scheduler_lock must be held when calling this function.
         def flatten(d):
             job_ids = list(d.keys())
@@ -101,7 +116,7 @@ class Scheduler:
         # TODO: add parameter for device_id?
         return 10
 
-    def add_new_job(self, command):
+    def add_new_job(self, command, total_epochs):
         # Application is a collection of throughputs for each
         # worker_id. (right now, not considering app packing)
 
@@ -116,6 +131,7 @@ class Scheduler:
             self._job_id_counter += 1
             self._commands[job_id] = command
             self._run_so_far[job_id] = {}
+            self._total_epochs[job_id] = total_epochs
             self._throughputs[job_id] = {}
             for worker_id in self._worker_ids:
                 self._run_so_far[job_id][worker_id] = 0
@@ -126,16 +142,21 @@ class Scheduler:
             self._allocation = self._get_allocation()
         return job_id
 
+    @preconditions(lambda self: self._scheduler_lock.locked())
+    def _remove_old_job(self, job_id):
+        del self._commands[job_id]
+        del self._throughputs[job_id]
+        del self._run_so_far[job_id]
+        del self._total_epochs[job_id]
+        if len(self._throughputs) > 0:
+            self._allocation = self._get_allocation()
+        self._remove_from_index_and_update(job_id)
+
     def remove_old_job(self, job_id):
         # Public-facing API call to remove a completed job, updates
         # the internal allocation of workers to jobs.
         with self._scheduler_lock:
-            del self._commands[job_id]
-            del self._throughputs[job_id]
-            del self._run_so_far[job_id]
-            if len(self._throughputs) > 0:
-                self._allocation = self._get_allocation()
-            self._remove_from_index_and_update(job_id)
+            self._remove_old_job(job_id)
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _remove_from_index_and_update(self, old_job_id):
@@ -144,10 +165,10 @@ class Scheduler:
         for worker_id in self._worker_ids:
             for i in range(len(self._index[worker_id])):
                 if self._index[worker_id][i][2] == old_job_id:
-                    break
-            if len(self._index[worker_id]) > 0:
-                self._index[worker_id].pop(i)
-                heapq.heapify(self._index[worker_id])
+                    if len(self._index[worker_id]) > 0:
+                        self._index[worker_id].pop(i)
+                        heapq.heapify(self._index[worker_id])
+                    return
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _add_to_index(self, new_job_id):
@@ -182,16 +203,26 @@ class Scheduler:
                 if tot_epochs_run[job_id] == 0:
                     fractions[job_id][worker_id] = 0.0
                 else:
-                    fractions[job_id][worker_id] = \
-                        self._run_so_far[job_id][worker_id] / tot_epochs_run[job_id]
+                    fraction = self._run_so_far[job_id][worker_id] / \
+                            tot_epochs_run[job_id]
+                    fractions[job_id][worker_id] = fraction
             for i in range(len(self._index[worker_id])):
                 [_, _, job_id] = self._index[worker_id][i]
                 self._index[worker_id][i][0] = fractions[job_id][worker_id] / \
                     self._allocation[job_id][worker_id]
-                self._index[worker_id][i][1] = self._run_so_far[job_id][worker_id]
+                self._index[worker_id][i][1] = \
+                        self._run_so_far[job_id][worker_id]
             heapq.heapify(self._index[worker_id])
 
-    def _register_worker(self, ip_addr, port, devices):
+    @preconditions(lambda self: self._scheduler_lock.locked())
+    def _get_total_epochs_run(self, job_id):
+        assert(job_id in self._run_so_far)
+        total_epochs_run = 0
+        for worker_id in self._run_so_far[job_id]:
+            total_epochs_run += self._run_so_far[job_id][worker_id]
+        return total_epochs_run
+
+    def _register_worker_callback(self, ip_addr, port, devices):
         with self._scheduler_lock:
             worker_id = self._worker_id_counter
             self._worker_ids.append(worker_id)
@@ -215,7 +246,7 @@ class Scheduler:
             self._update_index()
         return worker_id
 
-    def _handle_heartbeat(self):
+    def _send_heartbeat_callback(self):
         #TODO
         pass
 
@@ -237,39 +268,44 @@ class Scheduler:
         # a heap of all currently inactive applications for each
         # worker, sorted by fraction_run/fraction_allocated ratio.
 
-        assert self._min_workers is not None and self._min_workers >= 1
-        while self.num_workers() < self._min_workers:
-            time.sleep(SLEEP_SECONDS)
+        while True:
+            assert self._min_workers is not None and self._min_workers >= 1
+            # TODO: change to condition variable?
+            while self.num_workers() < self._min_workers:
+                time.sleep(SLEEP_SECONDS)
 
-        worker_id = self._get_available_worker_id()
+            worker_id = self._get_available_worker_id()
 
-        with self._scheduler_lock:
-            # Get the job_id for this worker_id with minimum
-            # fraction_run/fraction_allocated.
-            if len(self._index[worker_id]) == 0:
-                return None, None, None
+            with self._scheduler_lock:
+                # Get the job_id for this worker_id with minimum
+                # fraction_run/fraction_allocated.
+                if len(self._index[worker_id]) == 0:
+                    return
 
-            [_, _, job_id] = self._index[worker_id][0]
+                [_, _, job_id] = self._index[worker_id][0]
 
-            self._remove_from_index_and_update(job_id)
+                self._remove_from_index_and_update(job_id)
 
-            # Number of epochs to run the application on needs to be
-            # determined.
-            num_epochs = self._get_num_epochs_to_run(job_id, worker_id)
+                # Number of epochs to run the application on needs to be
+                # determined.
+                num_epochs = self._get_num_epochs_to_run(job_id, worker_id)
 
-            # Dispatch the job to a worker.
-            self._worker_connections[worker_id].run(job_id,
-                                                    self._commands[job_id],
-                                                    num_epochs)
+                # Dispatch the job to a worker.
+                self._worker_connections[worker_id].run(job_id,
+                                                        self._commands[job_id],
+                                                        num_epochs)
 
-            return job_id, worker_id, num_epochs
-
-    def _job_complete(self, job_id, worker_id, num_epochs=1):
+    def _done_callback(self, job_id, worker_id, num_epochs=1):
         # Now, we can update the data structures to reflect the
         # fact that active_application run on a particular worker_id
         # for a certain num_epochs.
-        self._add_available_worker_id(worker_id)
         with self._scheduler_lock:
             self._run_so_far[job_id][worker_id] += num_epochs
-            self._add_to_index(job_id)
+            print(self._run_so_far) # NOTE: for debug purposes
+            if self._get_total_epochs_run(job_id) < self._total_epochs[job_id]:
+                self._add_to_index(job_id)
+            else:
+                self._remove_old_job(job_id)
             self._update_index()
+        self._add_available_worker_id(worker_id)
+

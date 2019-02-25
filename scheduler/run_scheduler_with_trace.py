@@ -6,8 +6,6 @@ import time
 import runtime.rpc.scheduler_client as scheduler_client
 import scheduler
 
-_ONE_DAY_IN_SECONDS = 60 * 60 * 24
-
 class TestPolicy:
     def get_allocation(self, throughputs):
         (m, n) = throughputs.shape
@@ -25,34 +23,18 @@ def read_trace(trace_filename):
            commands_and_num_epochs.append((command, num_epochs))
     return commands_and_num_epochs
 
-def main(trace_filename, min_workers):
+def main(trace_filename, min_workers, sleep_seconds):
     num_epochs_left = {}
     s = scheduler.Scheduler(TestPolicy(), get_num_epochs_to_run,
                             min_workers=min_workers)
-    for (command, num_epochs) in read_trace(trace_filename):
-        job_id = s.add_new_job(command)
-        num_epochs_left[job_id] = num_epochs
-
     start = time.time()
-    job_id, worker_id, num_epochs = None, None, None
-    while len(num_epochs_left) > 0:
-        old_job_id, old_worker_id, old_num_epochs = \
-            job_id, worker_id, num_epochs
-        job_id, worker_id, num_epochs = s._schedule()
-        if old_job_id in num_epochs_left:
-            num_epochs_left[old_job_id] -= old_num_epochs
-            if num_epochs_left[old_job_id] == 0:
-                del num_epochs_left[old_job_id]
-                s.remove_old_job(old_job_id)
-        if job_id is None:
-            break
-        print("Number of epochs left:", num_epochs_left)
+    for (command, num_epochs) in read_trace(trace_filename):
+        job_id = s.add_new_job(command, num_epochs)
+
+    while not s.all_jobs_complete():
+        time.sleep(sleep_seconds)
+
     print("Total time taken: %.2f seconds" % (time.time() - start))
-    try:
-        while True:
-            time.sleep(_ONE_DAY_IN_SECONDS)
-    except KeyboardInterrupt:
-        pass
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -63,6 +45,9 @@ if __name__ == '__main__':
     parser.add_argument('-m', "--min_workers", type=int, default=None,
                         help="Minimum number of workers to wait for before " \
                              "scheduling jobs")
+    parser.add_argument('-s', "--sleep_seconds", type=int, default=10,
+                        help="Number of seconds to sleep when waiting for all" \
+                             "jobs to complete")
     args = parser.parse_args()
 
-    main(args.trace_filename, args.min_workers)
+    main(args.trace_filename, args.min_workers, args.sleep_seconds)

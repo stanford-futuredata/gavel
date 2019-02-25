@@ -24,15 +24,15 @@ class Worker:
                                                  self._worker_rpc_client)
 
         callbacks = {
-                'Run': self._dispatch,
-            }
+            'Run': self._run_callback,
+        }
         self._server_thread = threading.Thread(
                 target=worker_server.serve,
                 args=(WORKER_PORT, callbacks,))
         self._server_thread.daemon = True
         self._server_thread.start()
 
-    def _dispatch(self, job):
+    def _run_callback(self, job):
         self._dispatcher.dispatch_job(job)
 
     def join(self):
