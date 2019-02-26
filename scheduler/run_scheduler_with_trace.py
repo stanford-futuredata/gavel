@@ -29,9 +29,9 @@ def main(trace_filename, min_workers, sleep_seconds):
                             min_workers=min_workers)
     start = time.time()
     for (command, num_epochs) in read_trace(trace_filename):
-        job_id = s.add_new_job(command, num_epochs)
+        job_id = s.add_job(command, num_epochs)
 
-    while not s.all_jobs_complete():
+    while s.num_jobs() > 0:
         time.sleep(sleep_seconds)
 
     print("Total time taken: %.2f seconds" % (time.time() - start))
