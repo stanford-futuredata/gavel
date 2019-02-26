@@ -302,7 +302,7 @@ class Scheduler:
 
         for job_id in self._run_so_far:
             fractions[job_id] = {}
-            tot_epochs_run[job_id] = self._get_total_epochs_run[job_id]
+            tot_epochs_run[job_id] = self._get_total_epochs_run(job_id)
 
         for worker_id in self._worker_ids:
             for job_id in self._run_so_far:
