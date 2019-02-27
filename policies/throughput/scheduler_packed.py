@@ -58,25 +58,21 @@ def solve_ks_with_packing(problem, throughput_masks):
     Kalai-Smorodinsky bargaining solution, similar to DRF).
     """
     a = problem.a
-    shape = a.shape
-    a = a.flatten(order='F')
     x = cp.Variable(a.shape)
-    all_a_masked = []
+    throughputs = []
     for throughput_mask in throughput_masks:
         throughput_mask = np.array(throughput_mask)
-        a_masked = np.multiply(throughput_mask.flatten(order='F'), a)
-        all_a_masked.append(a_masked)
-    all_a_masked = np.array(all_a_masked)
-    objective = cp.Maximize(cp.min(cp.matmul(all_a_masked, x)))
+        a_masked = np.multiply(throughput_mask, a)
+        throughputs.append(cp.sum(cp.multiply(a_masked, x)))
+    objective = cp.Maximize(cp.minimum(*throughputs))
     constraints = [
         x >= 0,
-        cp.sum(cp.reshape(x, shape), axis=0) == 1,
+        cp.sum(x, axis=0) == 1,
     ]
     cvxprob = cp.Problem(objective, constraints)
     result = cvxprob.solve()
     assert cvxprob.status == "optimal"
-    x_sol = np.reshape(x.value, shape, order='F')
-    return Solution(x_sol)
+    return Solution(x.value)
 
 
 def explore_problem(a, throughput_masks, num_users):
