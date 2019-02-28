@@ -43,6 +43,8 @@ class Scheduler:
         self._total_epochs = {}
         # Epochs run on each worker_id, for all current incomplete applications.
         self._run_so_far = {}
+        # Time run so far on each worker_id, for all current incomplete applications.
+        self._time_run_so_far = {}
         # Commands to run for all current incomplete applications.
         self._commands = {}
         # priority_queue for each worker_id.
@@ -61,8 +63,8 @@ class Scheduler:
         self.server_thread.start()
 
         self.scheduler_thread = threading.Thread(
-                target=self._schedule,
-                args=())
+            target=self._schedule,
+            args=())
         self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
 
@@ -87,14 +89,16 @@ class Scheduler:
             self._job_id_counter += 1
             self._commands[job_id] = command
             self._run_so_far[job_id] = {}
+            self._time_run_so_far[job_id] = {}
             self._total_epochs[job_id] = total_epochs
             self._throughputs[job_id] = {}
             for worker_id in self._worker_ids:
                 self._run_so_far[job_id][worker_id] = 0
+                self._time_run_so_far[job_id][worker_id] = 0.0
                 self._throughputs[job_id][worker_id] = \
-                        self._compute_throughput(command, worker_id)
+                    self._compute_throughput(command, worker_id)
                 heapq.heappush(self._index[worker_id],
-                [0.0, 0, job_id])
+                               [0.0, 0, job_id])
             self._allocation = self._get_allocation()
         return job_id
 
@@ -175,8 +179,8 @@ class Scheduler:
 
             {0: {0: 0.25, 1: 0.25}}
 
-            indicates that job 0 should run 25% of its iterations on
-            worker 0 and 75% of its iterations on worker 1.
+            indicates that for 25% of the time, worker 0 should run job 0,
+            and for 25% of the time, worker 1 should run job 0.
         """
 
         def flatten(d):
@@ -235,6 +239,7 @@ class Scheduler:
         del self._commands[job_id]
         del self._throughputs[job_id]
         del self._run_so_far[job_id]
+        del self._time_run_so_far[job_id]
         del self._total_epochs[job_id]
         if len(self._throughputs) > 0:
             self._allocation = self._get_allocation()
@@ -298,19 +303,19 @@ class Scheduler:
         fractions = {}
 
         # Stores the total number of epochs run for each job.
-        tot_epochs_run = {}
+        tot_time_run = {}
 
-        for job_id in self._run_so_far:
+        for job_id in self._time_run_so_far:
             fractions[job_id] = {}
-            tot_epochs_run[job_id] = self._get_total_epochs_run(job_id)
+            tot_time_run[job_id] = self._get_total_time_run(job_id)
 
         for worker_id in self._worker_ids:
             for job_id in self._run_so_far:
-                if tot_epochs_run[job_id] == 0:
+                if tot_time_run[job_id] == 0:
                     fractions[job_id][worker_id] = 0.0
                 else:
-                    fraction = self._run_so_far[job_id][worker_id] / \
-                            tot_epochs_run[job_id]
+                    fraction = self._run_time_so_far[job_id][worker_id] / \
+                        tot_time_run[job_id]
                     fractions[job_id][worker_id] = fraction
             for i in range(len(self._index[worker_id])):
                 [_, _, job_id] = self._index[worker_id][i]
@@ -329,6 +334,16 @@ class Scheduler:
         for worker_id in self._run_so_far[job_id]:
             total_epochs_run += self._run_so_far[job_id][worker_id]
         return total_epochs_run
+
+
+    @preconditions(lambda self: self._scheduler_lock.locked())
+    def _get_total_time_run(self, job_id):
+        # TODO: change to exception
+        assert(job_id in self._time_run_so_far)
+        total_time_run = 0.0
+        for worker_id in self._time_run_so_far[job_id]:
+            total_time_run += self._time_run_so_far[job_id][worker_id]
+        return total_time_run
 
 
     def _register_worker_callback(self, ip_addr, port, devices):
@@ -378,7 +393,7 @@ class Scheduler:
         pass
 
 
-    def _done_callback(self, job_id, worker_id, num_epochs=1):
+    def _done_callback(self, job_id, worker_id, execution_time, num_epochs=1):
         """Handles completion of a scheduled job.
 
         Updates the running total of completed epochs. Removes the job from
@@ -394,6 +409,7 @@ class Scheduler:
         with self._scheduler_lock:
             self._run_so_far[job_id][worker_id] += num_epochs
             print(self._run_so_far) # NOTE: for debug purposes
+            self._time_run_so_far[job_id][worker_id] += execution_time
             if self._get_total_epochs_run(job_id) < self._total_epochs[job_id]:
                 self._add_to_index(job_id)
             else:

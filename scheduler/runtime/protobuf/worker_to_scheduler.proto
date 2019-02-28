@@ -40,4 +40,5 @@ message Heartbeat {
 message DoneRequest {
     uint64 worker_id = 1;
     uint64 job_id = 2;
+    double execution_time = 3;
 }
