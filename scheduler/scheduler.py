@@ -273,16 +273,16 @@ class Scheduler:
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _remove_from_index_and_update(self, old_job_id):
+    def _remove_from_index_and_update(self, job_id):
         # Computes the cluster allocation.
         # self._scheduler_lock must be held when calling this function.
         for worker_id in self._worker_ids:
             for i in range(len(self._index[worker_id])):
-                if self._index[worker_id][i][2] == old_job_id:
+                if self._index[worker_id][i][2] == job_id:
                     if len(self._index[worker_id]) > 0:
                         self._index[worker_id].pop(i)
                         heapq.heapify(self._index[worker_id])
-                    return
+                    break
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -396,7 +396,8 @@ class Scheduler:
     def _done_callback(self, job_id, worker_id, execution_time, num_epochs=1):
         """Handles completion of a scheduled job.
 
-        Updates the running total of completed epochs. Removes the job from
+        Updates the running total of completed epochs and time spent on each
+        worker, for every currently active application. Removes the job from
         the scheduler if the job has finished all its requested epochs. Adds
         the worker back to the list of available workers.
 
@@ -408,11 +409,11 @@ class Scheduler:
 
         with self._scheduler_lock:
             self._run_so_far[job_id][worker_id] += num_epochs
+            self._time_run_so_far[job_id][worker_id] += execution_time
             print("Job ID: %d, Worker ID: %d" % (job_id, worker_id))
             print(self._run_so_far) # NOTE: for debug purposes
             print(self._time_run_so_far) # NOTE: for debug purposes
             print()
-            self._time_run_so_far[job_id][worker_id] += execution_time
             if self._get_total_epochs_run(job_id) < self._total_epochs[job_id]:
                 self._add_to_index(job_id)
             else:
