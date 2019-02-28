@@ -25,8 +25,8 @@ class Worker:
             'Run': self._run_callback,
         }
         self._server_thread = threading.Thread(
-                target=worker_server.serve,
-                args=(worker_port, callbacks,))
+            target=worker_server.serve,
+            args=(worker_port, callbacks,))
         self._server_thread.daemon = True
         self._server_thread.start()
 

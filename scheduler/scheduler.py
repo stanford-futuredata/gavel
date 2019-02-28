@@ -55,7 +55,7 @@ class Scheduler:
             'RegisterWorker': self._register_worker_callback,
             'SendHeartbeat': self._send_heartbeat_callback,
             'Done': self._done_callback,
-            }
+        }
         self.server_thread = threading.Thread(
             target=scheduler_server.serve,
             args=(port, callbacks))
@@ -323,7 +323,7 @@ class Scheduler:
                 self._index[worker_id][i][0] = fractions[worker_id][job_id] / \
                     self._allocation[job_id][worker_id]
                 self._index[worker_id][i][1] = \
-                        self._run_so_far[job_id][worker_id]
+                    self._run_so_far[job_id][worker_id]
             heapq.heapify(self._index[worker_id])
 
 
@@ -377,8 +377,8 @@ class Scheduler:
                 self._run_so_far[job_id][worker_id] = 0
                 self._time_run_so_far[job_id][worker_id] = 0.0
                 self._throughputs[job_id][worker_id] = \
-                        self._compute_throughput(self._commands[job_id],
-                                                 worker_id)
+                    self._compute_throughput(self._commands[job_id],
+                                             worker_id)
                 # Entries in the index are sorted by
                 # fraction_run/fraction_allocated, then number of
                 # epochs run, then job_id.
