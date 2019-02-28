@@ -177,7 +177,7 @@ class Scheduler:
             A 2-level dict indexed by job_id and then worker_id. For
             example,
 
-            {0: {0: 0.25, 1: 0.25}}
+            {0: {0: 0.25, 1: 0.25}, 1: {0: 0.75, 1: 0.75}}
 
             indicates that for 25% of the time, worker 0 should run job 0,
             and for 25% of the time, worker 1 should run job 0.
@@ -299,27 +299,28 @@ class Scheduler:
             job_id: The job_id to add to the workers' indexes.
         """
 
-        # Stores the fraction of epochs run so far for each job on each worker.
+        # Stores the fraction of time spent running a job for each worker.
         fractions = {}
 
-        # Stores the total number of epochs run for each job.
+        # Stores the total amount of time run on each worker among currently
+        # running jobs.
         tot_time_run = {}
 
-        for job_id in self._time_run_so_far:
-            fractions[job_id] = {}
-            tot_time_run[job_id] = self._get_total_time_run(job_id)
+        for worker_id in self._worker_ids:
+            fractions[worker_id] = {}
+            tot_time_run[worker_id] = self._get_total_time_run(worker_id)
 
         for worker_id in self._worker_ids:
             for job_id in self._time_run_so_far:
-                if tot_time_run[job_id] == 0:
-                    fractions[job_id][worker_id] = 0.0
+                if tot_time_run[worker_id] == 0.0:
+                    fractions[worker_id][job_id] = 0.0
                 else:
                     fraction = self._time_run_so_far[job_id][worker_id] / \
-                        tot_time_run[job_id]
-                    fractions[job_id][worker_id] = fraction
+                        tot_time_run[worker_id]
+                    fractions[worker_id][job_id] = fraction
             for i in range(len(self._index[worker_id])):
                 [_, _, job_id] = self._index[worker_id][i]
-                self._index[worker_id][i][0] = fractions[job_id][worker_id] / \
+                self._index[worker_id][i][0] = fractions[worker_id][job_id] / \
                     self._allocation[job_id][worker_id]
                 self._index[worker_id][i][1] = \
                         self._run_so_far[job_id][worker_id]
@@ -337,11 +338,9 @@ class Scheduler:
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _get_total_time_run(self, job_id):
-        # TODO: change to exception
-        assert(job_id in self._time_run_so_far)
+    def _get_total_time_run(self, worker_id):
         total_time_run = 0.0
-        for worker_id in self._time_run_so_far[job_id]:
+        for job_id in self._time_run_so_far:
             total_time_run += self._time_run_so_far[job_id][worker_id]
         return total_time_run
 
@@ -409,7 +408,7 @@ class Scheduler:
 
         with self._scheduler_lock:
             self._run_so_far[job_id][worker_id] += num_epochs
-            print(self._allocation) # NOTE: for debug purposes
+            print("Job ID: %d, Worker ID: %d" % (job_id, worker_id))
             print(self._run_so_far) # NOTE: for debug purposes
             print(self._time_run_so_far) # NOTE: for debug purposes
             print()
