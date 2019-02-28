@@ -310,11 +310,11 @@ class Scheduler:
             tot_time_run[job_id] = self._get_total_time_run(job_id)
 
         for worker_id in self._worker_ids:
-            for job_id in self._run_so_far:
+            for job_id in self._time_run_so_far:
                 if tot_time_run[job_id] == 0:
                     fractions[job_id][worker_id] = 0.0
                 else:
-                    fraction = self._run_time_so_far[job_id][worker_id] / \
+                    fraction = self._time_run_so_far[job_id][worker_id] / \
                         tot_time_run[job_id]
                     fractions[job_id][worker_id] = fraction
             for i in range(len(self._index[worker_id])):
@@ -376,6 +376,7 @@ class Scheduler:
                     scheduler_client.SchedulerRpcClient(ip_addr, port)
             for job_id in self._run_so_far:
                 self._run_so_far[job_id][worker_id] = 0
+                self._time_run_so_far[job_id][worker_id] = 0.0
                 self._throughputs[job_id][worker_id] = \
                         self._compute_throughput(self._commands[job_id],
                                                  worker_id)
@@ -408,7 +409,10 @@ class Scheduler:
 
         with self._scheduler_lock:
             self._run_so_far[job_id][worker_id] += num_epochs
+            print(self._allocation) # NOTE: for debug purposes
             print(self._run_so_far) # NOTE: for debug purposes
+            print(self._time_run_so_far) # NOTE: for debug purposes
+            print()
             self._time_run_so_far[job_id][worker_id] += execution_time
             if self._get_total_epochs_run(job_id) < self._total_epochs[job_id]:
                 self._add_to_index(job_id)
