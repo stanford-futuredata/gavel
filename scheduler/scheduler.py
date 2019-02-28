@@ -177,10 +177,10 @@ class Scheduler:
             A 2-level dict indexed by job_id and then worker_id. For
             example,
 
-            {0: {0: 0.25, 1: 0.25}, 1: {0: 0.75, 1: 0.75}}
+            {0: {0: 0.25, 1: 0.95}, 1: {0: 0.75, 1: 0.05}}
 
             indicates that for 25% of the time, worker 0 should run job 0,
-            and for 25% of the time, worker 1 should run job 0.
+            and for 95% of the time, worker 1 should run job 0.
         """
 
         def flatten(d):
