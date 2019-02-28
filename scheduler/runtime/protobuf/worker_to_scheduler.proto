@@ -4,11 +4,40 @@ import "common.proto";
 import "enums.proto";
 
 service WorkerToScheduler {
-  // Indicates to the scheduler that a job has completed
-  rpc Done (DoneRequest) returns (Empty);
+    // Registers the worker with the scheduler
+    rpc RegisterWorker (RegisterWorkerRequest) returns (RegisterWorkerResponse);
+
+    // Heartbeat indicating worker status
+    rpc SendHeartbeat (Heartbeat) returns (Empty);
+
+    // Indicates to the scheduler that a job has completed
+    rpc Done (DoneRequest) returns (Empty);
+}
+
+message RegisterWorkerRequest {
+    message Device {
+        uint32 device_id = 1;
+        DeviceType device_type = 2;
+        float available_memory = 3;
+        }
+    string ip_addr = 1;
+    uint32 port = 2;
+    repeated Device devices = 3;
+}
+
+message RegisterWorkerResponse {
+    oneof status {
+        uint64 worker_id = 1;
+        string error_message = 2;
+    }
+}
+
+message Heartbeat {
+    uint64 worker_id = 1;
+    repeated JobState job_state = 2;
 }
 
 message DoneRequest {
-  uint64 worker_id = 1;
-  uint64 job_id = 2;
+    uint64 worker_id = 1;
+    uint64 job_id = 2;
 }

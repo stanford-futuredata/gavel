@@ -1,6 +1,7 @@
 import argparse
 import grpc
 import numpy as np
+import time
 
 import runtime.rpc.scheduler_client as scheduler_client
 import scheduler
@@ -22,35 +23,18 @@ def read_trace(trace_filename):
            commands_and_num_epochs.append((command, num_epochs))
     return commands_and_num_epochs
 
-def main(trace_filename):
-    worker_ids = [1]
-    for worker_id in worker_ids:
-        scheduler_client.register_worker(worker_id)
+def main(trace_filename, min_workers, sleep_seconds):
     num_epochs_left = {}
-    s = scheduler.Scheduler(worker_ids, TestPolicy(), scheduler_client.run,
-                            get_num_epochs_to_run, run_server=True)
-    for (command, num_epochs) in read_trace(trace_filename):
-        job_id = s.add_new_job({worker_id: 10 for worker_id in worker_ids},
-                               command)
-        num_epochs_left[job_id] = num_epochs
-
-    import time
+    s = scheduler.Scheduler(TestPolicy(), get_num_epochs_to_run,
+                            min_workers=min_workers)
     start = time.time()
-    job_id, worker_id, num_epochs = None, None, None
-    while len(num_epochs_left) > 0:
-        old_job_id, old_worker_id, old_num_epochs = \
-            job_id, worker_id, num_epochs
-        job_id, worker_id, num_epochs = s._schedule()
-        if old_job_id in num_epochs_left:
-            num_epochs_left[old_job_id] -= old_num_epochs
-            if num_epochs_left[old_job_id] == 0:
-                del num_epochs_left[old_job_id]
-                s.remove_old_job(old_job_id)
-        if job_id is None:
-            break
-        print("Number of epochs left:", num_epochs_left)
-    print("Total time taken: %.2f seconds" % (time.time() - start))
+    for (command, num_epochs) in read_trace(trace_filename):
+        job_id = s.add_job(command, num_epochs)
 
+    while s.num_jobs() > 0:
+        time.sleep(sleep_seconds)
+
+    print("Total time taken: %.2f seconds" % (time.time() - start))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -58,6 +42,12 @@ if __name__ == '__main__':
     )
     parser.add_argument('-t', "--trace_filename", type=str, required=True,
                         help="Trace filename")
+    parser.add_argument('-m', "--min_workers", type=int, default=None,
+                        help="Minimum number of workers to wait for before " \
+                             "scheduling jobs")
+    parser.add_argument('-s', "--sleep_seconds", type=int, default=10,
+                        help="Number of seconds to sleep when waiting for all" \
+                             "jobs to complete")
     args = parser.parse_args()
 
-    main(args.trace_filename)
+    main(args.trace_filename, args.min_workers, args.sleep_seconds)

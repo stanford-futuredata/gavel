@@ -1,3 +1,10 @@
 syntax = "proto3";
 
+import "enums.proto";
+
 message Empty {}
+
+message JobState {
+  uint32 job_id = 1;
+  JobStatus status = 2; 
+}
