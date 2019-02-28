@@ -29,9 +29,9 @@ class WorkerRpcClient:
         attempts = 0
         device_protos = [self.to_device_proto(device) for device in devices]
         request = w2s_pb2.RegisterWorkerRequest(
-                    ip_addr=self._worker_ip_addr,
-                    port=self._worker_port,
-                    devices=device_protos)
+            ip_addr=self._worker_ip_addr,
+            port=self._worker_port,
+            devices=device_protos)
         with grpc.insecure_channel(self._sched_loc) as channel:
             while attempts < MAX_ATTEMPTS:
                 stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
@@ -49,9 +49,10 @@ class WorkerRpcClient:
         #TODO
         pass
 
-    def notify_scheduler(self, job_id, worker_id):
+    def notify_scheduler(self, job_id, worker_id, execution_time):
         # Send a Done message.
-        request = w2s_pb2.DoneRequest(job_id=job_id, worker_id=worker_id)
+        request = w2s_pb2.DoneRequest(job_id=job_id, worker_id=worker_id,
+                                      execution_time=execution_time)
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
             response = stub.Done(request)

@@ -40,7 +40,7 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
 
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
-        done_callback(request.job_id, request.worker_id)
+        done_callback(request.job_id, request.worker_id, request.execution_time)
         return common_pb2.Empty()
 
 def serve(port, callbacks):

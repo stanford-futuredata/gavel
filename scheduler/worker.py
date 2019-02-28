@@ -6,12 +6,10 @@ from runtime.rpc import dispatcher
 from runtime.rpc import worker_client
 from runtime.rpc import worker_server
 
-WORKER_PORT = 50052
-
 class Worker:
-    def __init__(self, sched_ip_addr, sched_port):
+    def __init__(self, sched_ip_addr, sched_port, worker_port):
         self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
-        self._worker_port = WORKER_PORT
+        self._worker_port = worker_port
         self._worker_rpc_client = worker_client.WorkerRpcClient(
                 self._worker_ip_addr, self._worker_port,
                 sched_ip_addr, sched_port)
@@ -27,8 +25,8 @@ class Worker:
             'Run': self._run_callback,
         }
         self._server_thread = threading.Thread(
-                target=worker_server.serve,
-                args=(WORKER_PORT, callbacks,))
+            target=worker_server.serve,
+            args=(worker_port, callbacks,))
         self._server_thread.daemon = True
         self._server_thread.start()
 
@@ -48,10 +46,12 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run a worker process')
     parser.add_argument('-i', '--ip_addr', type=str, required=True,
                         help='IP address for scheduler server')
-    parser.add_argument('-p', '--port', type=int, default=50051,
+    parser.add_argument('-p', '--sched_port', type=int, default=50051,
                         help='Port number for scheduler server')
+    parser.add_argument('--worker_port', type=int, default=50052,
+                        help='Port number for worker server')
     args = parser.parse_args()
     opt_dict = vars(args)
 
-    worker = Worker(opt_dict['ip_addr'], opt_dict['port'])
+    worker = Worker(opt_dict['ip_addr'], opt_dict['sched_port'], opt_dict['worker_port'])
     worker.join()
