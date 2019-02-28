@@ -9,7 +9,7 @@ import scheduler
 class TestPolicy:
     def get_allocation(self, throughputs):
         (m, n) = throughputs.shape
-        return np.full((m, n), 1.0 / n)
+        return np.full((m, n), 1.0 / m)
 
 def get_num_epochs_to_run(job_id, worker_id):
     return 1
