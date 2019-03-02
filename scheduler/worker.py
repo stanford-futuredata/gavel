@@ -30,8 +30,9 @@ class Worker:
         self._server_thread.daemon = True
         self._server_thread.start()
 
-    def _run_callback(self, job):
-        self._dispatcher.dispatch_job(job)
+    def _run_callback(self, jobs):
+        for job in jobs:
+            self._dispatcher.dispatch_job(job)
 
     def join(self):
         try:

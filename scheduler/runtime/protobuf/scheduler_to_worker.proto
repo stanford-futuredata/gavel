@@ -7,8 +7,12 @@ service SchedulerToWorker {
     rpc Run (RunRequest) returns (Empty) {}
 }
 
-message RunRequest {
+message JobDescription {
     uint64 job_id = 1;
     string command = 2;
     uint64 num_epochs = 3;
+}
+
+message RunRequest {
+    repeated JobDescription job_descriptions = 1;
 }

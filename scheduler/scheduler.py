@@ -160,9 +160,9 @@ class Scheduler:
                 [_, _, job_id] = self._index[worker_id][0]
                 self._remove_from_index_and_update(job_id)
                 num_epochs = self._get_num_epochs_to_run(job_id, worker_id)
-                self._worker_connections[worker_id].run(job_id,
-                                                        self._commands[job_id],
-                                                        num_epochs)
+                self._worker_connections[worker_id].run([(job_id,
+                                                          self._commands[job_id],
+                                                          num_epochs)])
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
