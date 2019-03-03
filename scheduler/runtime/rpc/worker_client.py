@@ -13,7 +13,9 @@ SLEEP_SECONDS = 5
 class WorkerRpcClient:
     """Worker client for sending RPC requests to a scheduler server."""
   
-    def __init__(self, worker_ip_addr, worker_port, sched_ip_addr, sched_port):
+    def __init__(self, worker_type, worker_ip_addr, worker_port,
+                 sched_ip_addr, sched_port):
+        self._worker_type = worker_type
         self._worker_ip_addr = worker_ip_addr
         self._worker_port = worker_port
         self._sched_ip_addr = sched_ip_addr
@@ -29,6 +31,7 @@ class WorkerRpcClient:
         attempts = 0
         device_protos = [self.to_device_proto(device) for device in devices]
         request = w2s_pb2.RegisterWorkerRequest(
+            worker_type=self._worker_type,
             ip_addr=self._worker_ip_addr,
             port=self._worker_port,
             devices=device_protos)

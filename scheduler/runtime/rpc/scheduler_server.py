@@ -26,7 +26,9 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
             devices.append(self._device_proto_to_device(device_proto))
         register_worker_callback = self._callbacks['RegisterWorker']
         try:
-            worker_id = register_worker_callback(request.ip_addr, request.port,
+            worker_id = register_worker_callback(request.worker_type,
+                                                 request.ip_addr,
+                                                 request.port,
                                                  devices)
             return w2s_pb2.RegisterWorkerResponse(worker_id=worker_id)
         except Exception as e:

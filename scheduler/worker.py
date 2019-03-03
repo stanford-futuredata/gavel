@@ -7,12 +7,13 @@ from runtime.rpc import worker_client
 from runtime.rpc import worker_server
 
 class Worker:
-    def __init__(self, sched_ip_addr, sched_port, worker_port):
+    def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port):
+        self._worker_type = worker_type
         self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
         self._worker_port = worker_port
         self._worker_rpc_client = worker_client.WorkerRpcClient(
-                self._worker_ip_addr, self._worker_port,
-                sched_ip_addr, sched_port)
+                self._worker_type, self._worker_ip_addr,
+                self._worker_port, sched_ip_addr, sched_port)
         self._devices = [] # TODO: get devices
         self._worker_id, error = \
             self._worker_rpc_client.register_worker(self._devices)
@@ -45,6 +46,8 @@ class Worker:
 #TODO: Move this to a separate driver?
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run a worker process')
+    parser.add_argument('-t', '--worker_type', type=str, required=True,
+                        help='Worker type')
     parser.add_argument('-i', '--ip_addr', type=str, required=True,
                         help='IP address for scheduler server')
     parser.add_argument('-p', '--sched_port', type=int, default=50051,
@@ -54,5 +57,6 @@ if __name__=='__main__':
     args = parser.parse_args()
     opt_dict = vars(args)
 
-    worker = Worker(opt_dict['ip_addr'], opt_dict['sched_port'], opt_dict['worker_port'])
+    worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
+                    opt_dict['sched_port'], opt_dict['worker_port'])
     worker.join()

@@ -17,6 +17,8 @@ class Scheduler:
     def __init__(self, policy, get_num_epochs_to_run, min_workers=None):
         # List of worker IDs.
         self._worker_ids = []
+        # Mapping of worker ID to worker type.
+        self._worker_types = {}
         # List of devices.
         self._devices = {}
         # Policy instance.
@@ -345,7 +347,7 @@ class Scheduler:
         return total_time_run
 
 
-    def _register_worker_callback(self, ip_addr, port, devices):
+    def _register_worker_callback(self, worker_type, ip_addr, port, devices):
         """Registers a worker with the scheduler.
 
         Initializes state for a new worker and assigns it an id.
@@ -366,6 +368,7 @@ class Scheduler:
 
         with self._scheduler_lock:
             worker_id = self._worker_id_counter
+            self._worker_types[worker_id] = worker_type
             self._worker_ids.append(worker_id)
             self._worker_id_counter += 1
             self._devices[worker_id] = devices
