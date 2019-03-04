@@ -98,12 +98,19 @@ class Scheduler:
             self._throughputs[job_id] = {}
             for worker_type in self._worker_types:
                 self._epochs_run_so_far[job_id][worker_type] = 0
-                self._time_run_so_far[job_id][worker_type] = 0.0
                 self._throughputs[job_id][worker_type] = \
                     self._compute_throughput(command, worker_type)
                 heapq.heappush(self._index[worker_type],
                                [0.0, 0, job_id])
+
+            # Reset _time_run_so_far so that new jobs don't get unrestricted
+            # access to resources.
+            for job_id in self._time_run_so_far:
+                for worker_type in self._worker_types:
+                    self._time_run_so_far[job_id][worker_type] = 0.0
+
             self._allocation = self._get_allocation()
+            self._update_index()
         return job_id
 
 
@@ -246,9 +253,17 @@ class Scheduler:
         del self._epochs_run_so_far[job_id]
         del self._time_run_so_far[job_id]
         del self._total_epochs[job_id]
+        self._remove_from_index_and_update(job_id)
+
+        # Reset _time_run_so_far so that all jobs receive new fair allocation
+        # from here on out.
+        for job_id in self._time_run_so_far:
+            for worker_type in self._worker_types:
+                self._time_run_so_far[job_id][worker_type] = 0.0
+
         if len(self._throughputs) > 0:
             self._allocation = self._get_allocation()
-        self._remove_from_index_and_update(job_id)
+        self._update_index()
 
 
     def _get_available_worker_id(self):
@@ -275,6 +290,7 @@ class Scheduler:
 
         for worker_type in self._worker_types:
             self._index[worker_type].append([0.0, 0, job_id])
+        self._update_index()
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -381,7 +397,6 @@ class Scheduler:
                 self._index[worker_type] = []
                 for job_id in self._epochs_run_so_far:
                     self._epochs_run_so_far[job_id][worker_type] = 0
-                    self._time_run_so_far[job_id][worker_type] = 0.0
                     self._throughputs[job_id][worker_type] = \
                         self._compute_throughput(self._commands[job_id],
                                                  worker_type)
@@ -389,6 +404,12 @@ class Scheduler:
                     # fraction_run/fraction_allocated, then number of
                     # epochs run, then job_id.
                     heapq.heappush(self._index[worker_type], [0.0, 0, job_id])
+
+                # Reset _time_run_so_far so that all jobs receive new fair
+                # allocation from here on out.
+                for job_id in self._time_run_so_far:
+                    for worker_type in self._worker_types:
+                        self._time_run_so_far[job_id][worker_type] = 0.0
 
             self._add_available_worker_id(worker_id)
             self._worker_connections[worker_id] = \
@@ -427,9 +448,10 @@ class Scheduler:
             print("[{job_id: {worker_type: epochs}}]", self._epochs_run_so_far) # NOTE: for debug purposes
             print("[{job_id: {worker_type: time}}]", self._time_run_so_far) # NOTE: for debug purposes
             print()
+
             if self._get_total_epochs_run(job_id) < self._total_epochs[job_id]:
                 self._add_to_index(job_id)
             else:
                 self._remove_job(job_id)
-            self._update_index()
+
         self._add_available_worker_id(worker_id)
