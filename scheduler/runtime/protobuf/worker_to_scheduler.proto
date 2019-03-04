@@ -20,9 +20,10 @@ message RegisterWorkerRequest {
         DeviceType device_type = 2;
         float available_memory = 3;
         }
-    string ip_addr = 1;
-    uint32 port = 2;
-    repeated Device devices = 3;
+    string worker_type = 1;
+    string ip_addr = 2;
+    uint32 port = 3;
+    repeated Device devices = 4;
 }
 
 message RegisterWorkerResponse {

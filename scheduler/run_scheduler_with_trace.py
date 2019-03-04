@@ -11,7 +11,7 @@ class TestPolicy:
         (m, n) = throughputs.shape
         return np.full((m, n), 1.0 / m)
 
-def get_num_epochs_to_run(job_id, worker_id):
+def get_num_epochs_to_run(job_id, worker_type):
     return 1
 
 def read_trace(trace_filename):

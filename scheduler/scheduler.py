@@ -17,6 +17,10 @@ class Scheduler:
     def __init__(self, policy, get_num_epochs_to_run, min_workers=None):
         # List of worker IDs.
         self._worker_ids = []
+        # List of worker types.
+        self._worker_types = set()
+        # Mapping of worker ID to worker type.
+        self._worker_id_to_worker_type_mapping = {}
         # List of devices.
         self._devices = {}
         # Policy instance.
@@ -92,12 +96,12 @@ class Scheduler:
             self._time_run_so_far[job_id] = {}
             self._total_epochs[job_id] = total_epochs
             self._throughputs[job_id] = {}
-            for worker_id in self._worker_ids:
-                self._epochs_run_so_far[job_id][worker_id] = 0
-                self._time_run_so_far[job_id][worker_id] = 0.0
-                self._throughputs[job_id][worker_id] = \
-                    self._compute_throughput(command, worker_id)
-                heapq.heappush(self._index[worker_id],
+            for worker_type in self._worker_types:
+                self._epochs_run_so_far[job_id][worker_type] = 0
+                self._time_run_so_far[job_id][worker_type] = 0.0
+                self._throughputs[job_id][worker_type] = \
+                    self._compute_throughput(command, worker_type)
+                heapq.heappush(self._index[worker_type],
                                [0.0, 0, job_id])
             self._allocation = self._get_allocation()
         return job_id
@@ -139,9 +143,9 @@ class Scheduler:
         fraction_run/fraction_allocated ratio).
 
         Scheduler holds two internal data structures,
-        {(application, worker_id): num_epochs_run_on_worker}
-        & {(application, worker_id): allocation_fraction}.
-        As an algorithmic optimization, might be good to maintain
+        {(application, worker_type): time_run_on_worker}
+        & {(application, worker_type): allocation_fraction}.
+        As an algorithmic optimization, the scheduler maintains
         a heap of all currently inactive applications for each
         worker, sorted by fraction_run/fraction_allocated ratio.
         """
@@ -154,12 +158,13 @@ class Scheduler:
         while True:
             worker_id = self._get_available_worker_id()
             with self._scheduler_lock:
-                if len(self._index[worker_id]) == 0:
+                worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+                if len(self._index[worker_type]) == 0:
                     # NOTE: do we need to add the worker_id back here?
                     continue
-                [_, _, job_id] = self._index[worker_id][0]
+                [_, _, job_id] = self._index[worker_type][0]
                 self._remove_from_index_and_update(job_id)
-                num_epochs = self._get_num_epochs_to_run(job_id, worker_id)
+                num_epochs = self._get_num_epochs_to_run(job_id, worker_type)
                 self._worker_connections[worker_id].run([(job_id,
                                                           self._commands[job_id],
                                                           num_epochs)])
@@ -174,13 +179,13 @@ class Scheduler:
         when calling this function.
 
         Returns:
-            A 2-level dict indexed by job_id and then worker_id. For
+            A 2-level dict indexed by job_id and then worker_type. For
             example,
 
-            {0: {0: 0.25, 1: 0.95}, 1: {0: 0.75, 1: 0.05}}
+            {0: {"v100": 0.25, "p100": 0.95}, 1: {"v100": 0.75, "p100": 0.05}}
 
-            indicates that for 25% of the time, worker 0 should run job 0,
-            and for 95% of the time, worker 1 should run job 0.
+            indicates that for 25% of the time, worker type 'v100' should run job 0,
+            and for 95% of the time, worker type 'p100' should run job 0.
         """
 
         def flatten(d):
@@ -189,26 +194,26 @@ class Scheduler:
             job_ids = list(d.keys())
             if len(job_ids) == 0:
                 return None, None
-            worker_ids = list(d[job_ids[0]].keys())
-            if len(worker_ids) == 0:
+            worker_types = list(d[job_ids[0]].keys())
+            if len(worker_types) == 0:
                 return None, None
             m = []
             for job_id in job_ids:
                 m_row = []
-                for worker_id in worker_ids:
-                    m_row.append(d[job_id][worker_id])
+                for worker_type in worker_types:
+                    m_row.append(d[job_id][worker_type])
                 m.append(m_row)
-            return np.array(m), (job_ids, worker_ids)
+            return np.array(m), (job_ids, worker_types)
 
         def unflatten(m, index):
             """Converts a NumPy array to a 2-level dict."""
 
-            (job_ids, worker_ids) = index
+            (job_ids, worker_types) = index
             d = {}
             for i in range(len(job_ids)):
                 d[job_ids[i]] = {}
-                for j in range(len(worker_ids)):
-                    d[job_ids[i]][worker_ids[j]] = m[i][j]
+                for j in range(len(worker_types)):
+                    d[job_ids[i]][worker_types[j]] = m[i][j]
             return d
 
         flattened_throughputs, index = flatten(self._throughputs)
@@ -219,7 +224,7 @@ class Scheduler:
         return unflatten(flattened_allocation, index)
 
 
-    def _compute_throughput(self, command, worker_id):
+    def _compute_throughput(self, command, worker_type):
         # TODO: compute throughput
         # TODO: add parameter for device_id?
         return 10
@@ -268,20 +273,20 @@ class Scheduler:
             job_id: The job_id to add to the workers' indexes.
         """
 
-        for worker_id in self._worker_ids:
-            self._index[worker_id].append([0.0, 0, job_id])
+        for worker_type in self._worker_types:
+            self._index[worker_type].append([0.0, 0, job_id])
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _remove_from_index_and_update(self, job_id):
         # Computes the cluster allocation.
         # self._scheduler_lock must be held when calling this function.
-        for worker_id in self._worker_ids:
-            for i in range(len(self._index[worker_id])):
-                if self._index[worker_id][i][2] == job_id:
-                    if len(self._index[worker_id]) > 0:
-                        self._index[worker_id].pop(i)
-                        heapq.heapify(self._index[worker_id])
+        for worker_type in self._worker_types:
+            for i in range(len(self._index[worker_type])):
+                if self._index[worker_type][i][2] == job_id:
+                    if len(self._index[worker_type]) > 0:
+                        self._index[worker_type].pop(i)
+                        heapq.heapify(self._index[worker_type])
                     break
 
 
@@ -306,25 +311,25 @@ class Scheduler:
         # running jobs.
         tot_time_run = {}
 
-        for worker_id in self._worker_ids:
-            fractions[worker_id] = {}
-            tot_time_run[worker_id] = self._get_total_time_run(worker_id)
+        for worker_type in self._worker_types:
+            fractions[worker_type] = {}
+            tot_time_run[worker_type] = self._get_total_time_run(worker_type)
 
-        for worker_id in self._worker_ids:
+        for worker_type in self._worker_types:
             for job_id in self._time_run_so_far:
-                if tot_time_run[worker_id] == 0.0:
-                    fractions[worker_id][job_id] = 0.0
+                if tot_time_run[worker_type] == 0.0:
+                    fractions[worker_type][job_id] = 0.0
                 else:
-                    fraction = self._time_run_so_far[job_id][worker_id] / \
-                        tot_time_run[worker_id]
-                    fractions[worker_id][job_id] = fraction
-            for i in range(len(self._index[worker_id])):
-                [_, _, job_id] = self._index[worker_id][i]
-                self._index[worker_id][i][0] = fractions[worker_id][job_id] / \
-                    self._allocation[job_id][worker_id]
-                self._index[worker_id][i][1] = \
-                    self._epochs_run_so_far[job_id][worker_id]
-            heapq.heapify(self._index[worker_id])
+                    fraction = self._time_run_so_far[job_id][worker_type] / \
+                        tot_time_run[worker_type]
+                    fractions[worker_type][job_id] = fraction
+            for i in range(len(self._index[worker_type])):
+                [_, _, job_id] = self._index[worker_type][i]
+                self._index[worker_type][i][0] = fractions[worker_type][job_id] / \
+                    self._allocation[job_id][worker_type]
+                self._index[worker_type][i][1] = \
+                    self._epochs_run_so_far[job_id][worker_type]
+            heapq.heapify(self._index[worker_type])
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -332,20 +337,20 @@ class Scheduler:
         # TODO: change to exception
         assert(job_id in self._epochs_run_so_far)
         total_epochs_run = 0
-        for worker_id in self._epochs_run_so_far[job_id]:
-            total_epochs_run += self._epochs_run_so_far[job_id][worker_id]
+        for worker_type in self._epochs_run_so_far[job_id]:
+            total_epochs_run += self._epochs_run_so_far[job_id][worker_type]
         return total_epochs_run
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _get_total_time_run(self, worker_id):
+    def _get_total_time_run(self, worker_type):
         total_time_run = 0.0
         for job_id in self._time_run_so_far:
-            total_time_run += self._time_run_so_far[job_id][worker_id]
+            total_time_run += self._time_run_so_far[job_id][worker_type]
         return total_time_run
 
 
-    def _register_worker_callback(self, ip_addr, port, devices):
+    def _register_worker_callback(self, worker_type, ip_addr, port, devices):
         """Registers a worker with the scheduler.
 
         Initializes state for a new worker and assigns it an id.
@@ -368,23 +373,30 @@ class Scheduler:
             worker_id = self._worker_id_counter
             self._worker_ids.append(worker_id)
             self._worker_id_counter += 1
+            self._worker_types.add(worker_type)
+            self._worker_id_to_worker_type_mapping[worker_id] = worker_type
             self._devices[worker_id] = devices
-            self._index[worker_id] = []
+
+            if worker_type not in self._index:
+                self._index[worker_type] = []
+                for job_id in self._epochs_run_so_far:
+                    self._epochs_run_so_far[job_id][worker_type] = 0
+                    self._time_run_so_far[job_id][worker_type] = 0.0
+                    self._throughputs[job_id][worker_type] = \
+                        self._compute_throughput(self._commands[job_id],
+                                                 worker_type)
+                    # Entries in the index are sorted by
+                    # fraction_run/fraction_allocated, then number of
+                    # epochs run, then job_id.
+                    heapq.heappush(self._index[worker_type], [0.0, 0, job_id])
+
             self._add_available_worker_id(worker_id)
             self._worker_connections[worker_id] = \
                     scheduler_client.SchedulerRpcClient(ip_addr, port)
-            for job_id in self._epochs_run_so_far:
-                self._epochs_run_so_far[job_id][worker_id] = 0
-                self._time_run_so_far[job_id][worker_id] = 0.0
-                self._throughputs[job_id][worker_id] = \
-                    self._compute_throughput(self._commands[job_id],
-                                             worker_id)
-                # Entries in the index are sorted by
-                # fraction_run/fraction_allocated, then number of
-                # epochs run, then job_id.
-                heapq.heappush(self._index[worker_id], [0.0, 0, job_id])
+
             self._allocation = self._get_allocation()
             self._update_index()
+
         return worker_id
 
 
@@ -408,11 +420,12 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
-            self._epochs_run_so_far[job_id][worker_id] += num_epochs
-            self._time_run_so_far[job_id][worker_id] += execution_time
+            worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+            self._epochs_run_so_far[job_id][worker_type] += num_epochs
+            self._time_run_so_far[job_id][worker_type] += execution_time
             print("[Completed] Job ID: %d, Worker ID: %d" % (job_id, worker_id))
-            print("[{job_id: {worker_id: epochs}}]", self._epochs_run_so_far) # NOTE: for debug purposes
-            print("[{job_id: {worker_id: time}}]", self._time_run_so_far) # NOTE: for debug purposes
+            print("[{job_id: {worker_type: epochs}}]", self._epochs_run_so_far) # NOTE: for debug purposes
+            print("[{job_id: {worker_type: time}}]", self._time_run_so_far) # NOTE: for debug purposes
             print()
             if self._get_total_epochs_run(job_id) < self._total_epochs[job_id]:
                 self._add_to_index(job_id)
