@@ -10,7 +10,7 @@ service SchedulerToWorker {
 message JobDescription {
     uint64 job_id = 1;
     string command = 2;
-    uint64 num_epochs = 3;
+    uint64 num_steps = 3;
 }
 
 message RunRequest {

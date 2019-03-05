@@ -14,7 +14,7 @@ SLEEP_SECONDS = 2
 
 class Scheduler:
 
-    def __init__(self, policy, get_num_epochs_to_run, min_workers=None):
+    def __init__(self, policy, get_num_steps_to_run, min_workers=None):
         # List of worker IDs.
         self._worker_ids = []
         # List of worker types.
@@ -27,8 +27,8 @@ class Scheduler:
         self._policy = policy
         # RPC clients.
         self._worker_connections = {}
-        # get_num_epochs_to_run function pointer.
-        self._get_num_epochs_to_run = get_num_epochs_to_run
+        # get_num_steps_to_run function pointer.
+        self._get_num_steps_to_run = get_num_steps_to_run
         # Minimum number of workers to wait for before scheduling any jobs.
         self._min_workers = 1 if min_workers is None else min_workers
         # Next job_id to assign.
@@ -184,10 +184,10 @@ class Scheduler:
                     continue
                 [_, _, job_id] = self._per_worker_job_queue[worker_type][0]
                 self._remove_from_queue(job_id)
-                num_epochs = self._get_num_epochs_to_run(job_id, worker_type)
+                num_steps = self._get_num_steps_to_run(job_id, worker_type)
                 self._worker_connections[worker_id].run([(job_id,
                                                           self._commands[job_id],
-                                                          num_epochs)])
+                                                          num_steps)])
 
     """
     ======================================================================
@@ -439,7 +439,7 @@ class Scheduler:
         pass
 
 
-    def _done_callback(self, job_id, worker_id, execution_time, num_epochs=1):
+    def _done_callback(self, job_id, worker_id, execution_time, num_steps=1):
         """Handles completion of a scheduled job.
 
         Updates the running total of completed epochs and time spent on each
@@ -450,13 +450,13 @@ class Scheduler:
         Args:
             job_id: The id of the completed job.
             worker_id: The id of the worker where the job was completed.
-            num_epochs: The number of epochs the job ran for.
+            num_steps: The number of epochs the job ran for.
         """
 
         to_remove = None
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-            self._epochs_run_so_far[job_id][worker_type] += num_epochs
+            self._epochs_run_so_far[job_id][worker_type] += num_steps
             self._time_run_so_far[job_id][worker_type] += execution_time
             print("[Completed] Job ID: %d, Worker ID: %d" % (job_id, worker_id))
             # NOTE: for debug purposes.

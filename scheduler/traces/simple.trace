@@ -1,3 +1,4 @@
-sleep 1; echo "Hello World 1!"	20
-sleep 2; echo "Hello World 2!"	20
-sleep 3; echo "Hello World 3!"	20
+60	sleep 1; echo "Hello World 1!"	20
+0	sleep 2; echo "Hello World 2!"	20
+0	sleep 3; echo "Hello World 3!"	20
+30	sleep 4; echo "Hello World 4!"	5
