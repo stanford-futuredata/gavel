@@ -49,6 +49,8 @@ class Scheduler:
         self._epochs_run_so_far = {}
         # Time run so far on each worker_id, for all current incomplete applications.
         self._time_run_so_far = {}
+        # Number of jobs to compute fair share.
+        self._num_jobs = 0
         # Commands to run for all current incomplete applications.
         self._commands = {}
         # Priority queue for each worker_type.
@@ -267,9 +269,19 @@ class Scheduler:
 
         Requires self._scheduler_lock to be held when calling this function.
         """
-        for job_id in self._time_run_so_far:
-            for worker_type in self._worker_types:
-                self._time_run_so_far[job_id][worker_type] = 0.0
+
+        total_time_run_per_worker_type = {}
+        for worker_type in self._worker_types:
+            total_time_run_per_worker_type[worker_type] = self._get_total_time_run(worker_type)
+
+        for worker_type in self._worker_types:
+            for job_id in self._time_run_so_far:
+                if self._num_jobs == 0 or worker_type not in self._time_run_so_far[job_id]:
+                    self._time_run_so_far[job_id][worker_type] = 0.0
+                else:
+                    self._time_run_so_far[job_id][worker_type] -= (
+                        total_time_run_per_worker_type[worker_type] / self._num_jobs)
+        self._num_jobs = len(self._time_run_so_far)
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -375,7 +387,8 @@ class Scheduler:
 
         total_time_run = 0.0
         for job_id in self._time_run_so_far:
-            total_time_run += self._time_run_so_far[job_id][worker_type]
+            if worker_type in self._time_run_so_far[job_id]:
+                total_time_run += self._time_run_so_far[job_id][worker_type]
         return total_time_run
 
     """
