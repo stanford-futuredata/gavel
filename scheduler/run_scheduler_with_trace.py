@@ -18,18 +18,23 @@ def read_trace(trace_filename):
     commands_and_num_epochs = []
     with open(trace_filename, 'r') as f:
        for command_and_num_epochs in f.read().strip().split('\n'):
-           [command, num_epochs] = command_and_num_epochs.split('\t')
+           [timestamp, command, num_epochs] = command_and_num_epochs.split('\t')
+           timestamp = int(timestamp)
            num_epochs = int(num_epochs)
-           commands_and_num_epochs.append((command, num_epochs))
+           commands_and_num_epochs.append((timestamp, command, num_epochs))
+    commands_and_num_epochs.sort(key=lambda x: x[0])
     return commands_and_num_epochs
 
 def main(trace_filename, min_workers, sleep_seconds):
-    num_epochs_left = {}
+    prev_timestamp = None
     s = scheduler.Scheduler(TestPolicy(), get_num_epochs_to_run,
                             min_workers=min_workers)
     start = time.time()
-    for (command, num_epochs) in read_trace(trace_filename):
+    for (timestamp, command, num_epochs) in read_trace(trace_filename):
+        if prev_timestamp is not None:
+            time.sleep(timestamp - prev_timestamp)
         job_id = s.add_job(command, num_epochs)
+        prev_timestamp = timestamp
 
     while s.num_jobs() > 0:
         time.sleep(sleep_seconds)
