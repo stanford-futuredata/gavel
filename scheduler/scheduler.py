@@ -51,8 +51,8 @@ class Scheduler:
         self._time_run_so_far = {}
         # Commands to run for all current incomplete applications.
         self._commands = {}
-        # priority_queue for each worker_id.
-        self._index = {}
+        # Priority queue for each worker_type.
+        self._per_worker_job_queue = {}
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -72,13 +72,18 @@ class Scheduler:
         self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
 
+    """
+    ======================================================================
+       Public-facing scheduler methods.
+    ======================================================================
+    """
 
     def add_job(self, command, total_epochs):
         """Adds a new job to the scheduler.
 
         Enables users to schedule a new job. Updates the internal
         allocation of workers to jobs. An allocation is of the form
-        {job: <fraction of allocations on different workers.>}.
+        {job: <fraction of allocations on different workers>}.
 
         Args:
             command: The command to execute.
@@ -100,17 +105,10 @@ class Scheduler:
                 self._epochs_run_so_far[job_id][worker_type] = 0
                 self._throughputs[job_id][worker_type] = \
                     self._compute_throughput(command, worker_type)
-                heapq.heappush(self._index[worker_type],
-                               [0.0, 0, job_id])
 
-            # Reset _time_run_so_far so that new jobs don't get unrestricted
-            # access to resources.
-            for job_id in self._time_run_so_far:
-                for worker_type in self._worker_types:
-                    self._time_run_so_far[job_id][worker_type] = 0.0
-
+            self._reset_time_run_so_far()
+            self._add_to_queue(job_id)
             self._allocation = self._get_allocation()
-            self._update_index()
         return job_id
 
 
@@ -121,11 +119,20 @@ class Scheduler:
         the internal allocation of workers to jobs.
 
         Args:
-            job_id: The id of the job to remove.
+            job_id: The job_id of the job to remove.
         """
 
         with self._scheduler_lock:
-            self._remove_job(job_id)
+            del self._commands[job_id]
+            del self._epochs_run_so_far[job_id]
+            del self._time_run_so_far[job_id]
+            del self._total_epochs[job_id]
+            del self._throughputs[job_id]
+
+            self._reset_time_run_so_far()
+            self._remove_from_queue(job_id)
+            if len(self._throughputs) > 0:
+                self._allocation = self._get_allocation()
 
 
     def num_workers(self):
@@ -141,6 +148,11 @@ class Scheduler:
         with self._scheduler_lock:
             return len(self._epochs_run_so_far)
 
+    """
+    ======================================================================
+       Scheduler's main _schedule() method.
+    ======================================================================
+    """
 
     def _schedule(self):
         """Schedules jobs on workers.
@@ -157,25 +169,31 @@ class Scheduler:
         worker, sorted by fraction_run/fraction_allocated ratio.
         """
 
-        # TODO: change to exception
+        # TODO: change to exception.
         assert self._min_workers is not None and self._min_workers >= 1
         while self.num_workers() < self._min_workers:
             time.sleep(SLEEP_SECONDS)
 
         while True:
-            worker_id = self._get_available_worker_id()
+            worker_id = self._remove_available_worker_id()
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-                if len(self._index[worker_type]) == 0:
+                self._update_queue()
+                if len(self._per_worker_job_queue[worker_type]) == 0:
                     # NOTE: do we need to add the worker_id back here?
                     continue
-                [_, _, job_id] = self._index[worker_type][0]
-                self._remove_from_index_and_update(job_id)
+                [_, _, job_id] = self._per_worker_job_queue[worker_type][0]
+                self._remove_from_queue(job_id)
                 num_epochs = self._get_num_epochs_to_run(job_id, worker_type)
                 self._worker_connections[worker_id].run([(job_id,
                                                           self._commands[job_id],
                                                           num_epochs)])
 
+    """
+    ======================================================================
+       Helper methods to compute each user's fair allocation.
+    ======================================================================
+    """
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_allocation(self):
@@ -232,92 +250,71 @@ class Scheduler:
 
 
     def _compute_throughput(self, command, worker_type):
-        # TODO: compute throughput
+        # TODO: compute throughput.
         # TODO: add parameter for device_id?
         return 10
 
+    """
+    ======================================================================
+       Methods to update the scheduler's internal data structures.
+    ======================================================================
+    """
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _remove_job(self, job_id):
-        """Removes internal state associated with a job.
+    def _reset_time_run_so_far(self):
+        """Reset _time_run_so_far so that all jobs receive new fair allocation
+        from here on out.
 
-        Internal implementation for removing a job.
         Requires self._scheduler_lock to be held when calling this function.
-
-       Args:
-           job_id: The id of the job to remove.
-       """
-
-        del self._commands[job_id]
-        del self._throughputs[job_id]
-        del self._epochs_run_so_far[job_id]
-        del self._time_run_so_far[job_id]
-        del self._total_epochs[job_id]
-        self._remove_from_index_and_update(job_id)
-
-        # Reset _time_run_so_far so that all jobs receive new fair allocation
-        # from here on out.
+        """
         for job_id in self._time_run_so_far:
             for worker_type in self._worker_types:
                 self._time_run_so_far[job_id][worker_type] = 0.0
 
-        if len(self._throughputs) > 0:
-            self._allocation = self._get_allocation()
-        self._update_index()
-
-
-    def _get_available_worker_id(self):
-        """Returns the worker_id of the next available worker."""
-
-        return self._available_worker_ids.remove()
-
-
-    def _add_available_worker_id(self, worker_id):
-        """Adds a worker_id to the list of available workers."""
-
-        self._available_worker_ids.add(worker_id)
-
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _add_to_index(self, job_id):
-        """Adds a job_id to each worker.
+    def _add_to_queue(self, job_id):
+        """Adds a job_id to each worker's queue.
 
-       Requires self._scheduler_lock to be held when calling this function.
+        Requires self._scheduler_lock to be held when calling this function.
 
         Args:
-            job_id: The job_id to add to the workers' indexes.
+            job_id: The job_id to add to the workers' queues.
         """
 
         for worker_type in self._worker_types:
-            self._index[worker_type].append([0.0, 0, job_id])
-        self._update_index()
+            self._per_worker_job_queue[worker_type].append([0.0, 0, job_id])
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _remove_from_index_and_update(self, job_id):
-        # Computes the cluster allocation.
-        # self._scheduler_lock must be held when calling this function.
+    def _remove_from_queue(self, job_id):
+        """Removes a job_id from each worker's queue.
+
+        Requires self._scheduler_lock to be held when calling this function.
+
+        Args:
+           job_id: The job_id to remove from the workers' queues.
+        """
         for worker_type in self._worker_types:
-            for i in range(len(self._index[worker_type])):
-                if self._index[worker_type][i][2] == job_id:
-                    if len(self._index[worker_type]) > 0:
-                        self._index[worker_type].pop(i)
-                        heapq.heapify(self._index[worker_type])
+            for i in range(len(self._per_worker_job_queue[worker_type])):
+                if self._per_worker_job_queue[worker_type][i][2] == job_id:
+                    if len(self._per_worker_job_queue[worker_type]) > 0:
+                        self._per_worker_job_queue[worker_type].pop(i)
                     break
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _update_index(self):
-        """Updates the index of each worker.
+    def _update_queue(self):
+        """Updates each per-worker queue.
 
-        Re-sorts the index of each worker to compute the next job to run.
+        Re-sorts the queue of each worker to compute the next job to run.
         For a given worker w_i, the next job to be scheduled will be the job
         that has so far received the smallest fraction of its computed
         fair allocation.
         Requires self._scheduler_lock to be held when calling this function.
 
         Args:
-            job_id: The job_id to add to the workers' indexes.
+            job_id: The job_id to add to the workers' queues.
         """
 
         # Stores the fraction of time spent running a job for each worker.
@@ -339,17 +336,31 @@ class Scheduler:
                     fraction = self._time_run_so_far[job_id][worker_type] / \
                         tot_time_run[worker_type]
                     fractions[worker_type][job_id] = fraction
-            for i in range(len(self._index[worker_type])):
-                [_, _, job_id] = self._index[worker_type][i]
-                self._index[worker_type][i][0] = fractions[worker_type][job_id] / \
+            for i in range(len(self._per_worker_job_queue[worker_type])):
+                [_, _, job_id] = self._per_worker_job_queue[worker_type][i]
+                self._per_worker_job_queue[worker_type][i][0] = fractions[worker_type][job_id] / \
                     self._allocation[job_id][worker_type]
-                self._index[worker_type][i][1] = \
+                self._per_worker_job_queue[worker_type][i][1] = \
                     self._epochs_run_so_far[job_id][worker_type]
-            heapq.heapify(self._index[worker_type])
+            heapq.heapify(self._per_worker_job_queue[worker_type])
+
+
+    def _add_available_worker_id(self, worker_id):
+        """Adds a worker_id to the list of available workers."""
+
+        self._available_worker_ids.add(worker_id)
+
+
+    def _remove_available_worker_id(self):
+        """Returns the worker_id of the next available worker."""
+
+        return self._available_worker_ids.remove()
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_total_epochs_run(self, job_id):
+        """Returns the total number of epochs run for the job with passed-in job_id."""
+
         # TODO: change to exception
         assert(job_id in self._epochs_run_so_far)
         total_epochs_run = 0
@@ -360,11 +371,18 @@ class Scheduler:
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_total_time_run(self, worker_type):
+        """Returns the total time run on the passed-in worker_type since the last reset."""
+
         total_time_run = 0.0
         for job_id in self._time_run_so_far:
             total_time_run += self._time_run_so_far[job_id][worker_type]
         return total_time_run
 
+    """
+    ======================================================================
+       Callback methods called by workers.
+    ======================================================================
+    """
 
     def _register_worker_callback(self, worker_type, ip_addr, port, devices):
         """Registers a worker with the scheduler.
@@ -393,36 +411,31 @@ class Scheduler:
             self._worker_id_to_worker_type_mapping[worker_id] = worker_type
             self._devices[worker_id] = devices
 
-            if worker_type not in self._index:
-                self._index[worker_type] = []
+            if worker_type not in self._per_worker_job_queue:
+                self._per_worker_job_queue[worker_type] = []
                 for job_id in self._epochs_run_so_far:
                     self._epochs_run_so_far[job_id][worker_type] = 0
                     self._throughputs[job_id][worker_type] = \
                         self._compute_throughput(self._commands[job_id],
                                                  worker_type)
-                    # Entries in the index are sorted by
+                    # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
                     # epochs run, then job_id.
-                    heapq.heappush(self._index[worker_type], [0.0, 0, job_id])
+                    heapq.heappush(self._per_worker_job_queue[worker_type], [0.0, 0, job_id])
 
-                # Reset _time_run_so_far so that all jobs receive new fair
-                # allocation from here on out.
-                for job_id in self._time_run_so_far:
-                    for worker_type in self._worker_types:
-                        self._time_run_so_far[job_id][worker_type] = 0.0
+                self._reset_time_run_so_far()
 
             self._add_available_worker_id(worker_id)
             self._worker_connections[worker_id] = \
-                    scheduler_client.SchedulerRpcClient(ip_addr, port)
+                scheduler_client.SchedulerRpcClient(ip_addr, port)
 
             self._allocation = self._get_allocation()
-            self._update_index()
 
         return worker_id
 
 
     def _send_heartbeat_callback(self):
-        #TODO
+        # TODO.
         pass
 
 
@@ -440,18 +453,22 @@ class Scheduler:
             num_epochs: The number of epochs the job ran for.
         """
 
+        to_remove = None
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             self._epochs_run_so_far[job_id][worker_type] += num_epochs
             self._time_run_so_far[job_id][worker_type] += execution_time
             print("[Completed] Job ID: %d, Worker ID: %d" % (job_id, worker_id))
-            print("[{job_id: {worker_type: epochs}}]", self._epochs_run_so_far) # NOTE: for debug purposes
-            print("[{job_id: {worker_type: time}}]", self._time_run_so_far) # NOTE: for debug purposes
+            # NOTE: for debug purposes.
+            print("[{job_id: {worker_type: epochs}}]", self._epochs_run_so_far)
+            print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
             print()
 
             if self._get_total_epochs_run(job_id) < self._total_epochs[job_id]:
-                self._add_to_index(job_id)
+                self._add_to_queue(job_id)
             else:
-                self._remove_job(job_id)
+                to_remove = job_id
 
+        if to_remove is not None:
+            self.remove_job(job_id)
         self._add_available_worker_id(worker_id)
