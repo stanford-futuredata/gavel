@@ -17,9 +17,9 @@ class SchedulerRpcClient:
             stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
 
             request = s2w_pb2.RunRequest()
-            for (job_id, command, num_epochs) in job_descriptions:
+            for (job_id, command, num_steps) in job_descriptions:
                 job_description = request.job_descriptions.add()
                 job_description.job_id = job_id
                 job_description.command = command
-                job_description.num_epochs = num_epochs
+                job_description.num_steps = num_steps
             response = stub.Run(request)

@@ -18,10 +18,10 @@ class Dispatcher:
                                          shell=True).strip()
         execution_time = time.time() - start_time
         print("Job ID: %d, Command: '%s', "
-              "Num_epochs: %d, Execution time: %.3f seconds, "
+              "Num_steps: %d, Execution time: %.3f seconds, "
               "Output:" % (job.job_id(),
                            job.command(),
-                           job.num_epochs(),
+                           job.num_steps(),
                            execution_time), output)
         # TODO: add error handling
         self._worker_rpc_client.notify_scheduler(job.job_id(),
