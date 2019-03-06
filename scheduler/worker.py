@@ -1,5 +1,6 @@
 import argparse
 import socket
+import sys
 import threading
 
 from runtime.rpc import dispatcher
@@ -24,24 +25,24 @@ class Worker:
 
         callbacks = {
             'Run': self._run_callback,
+            'Shutdown': self._shutdown_callback,
         }
         self._server_thread = threading.Thread(
             target=worker_server.serve,
             args=(worker_port, callbacks,))
         self._server_thread.daemon = True
         self._server_thread.start()
+        self._server_thread.join()
 
     def _run_callback(self, jobs):
         for job in jobs:
             self._dispatcher.dispatch_job(job)
 
+    def _shutdown_callback(self):
+        self._dispatcher.shutdown()
+
     def join(self):
-        try:
-            while True:
-                import time
-                time.sleep(60 * 60 * 24)
-        except KeyboardInterrupt:
-            return
+        self._server_thread.join()
 
 #TODO: Move this to a separate driver?
 if __name__=='__main__':
@@ -59,4 +60,3 @@ if __name__=='__main__':
 
     worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
                     opt_dict['sched_port'], opt_dict['worker_port'])
-    worker.join()

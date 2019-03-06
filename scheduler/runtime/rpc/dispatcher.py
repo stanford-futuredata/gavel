@@ -30,3 +30,6 @@ class Dispatcher:
 
     def dispatch_job(self, job):
         self._thread_pool.apply_async(self.launch_job, (job,))
+
+    def shutdown(self):
+        self._thread_pool.terminate()

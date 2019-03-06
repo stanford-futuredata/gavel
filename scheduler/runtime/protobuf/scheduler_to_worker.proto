@@ -5,6 +5,8 @@ import "common.proto";
 service SchedulerToWorker {
     // Starts a job on worker.
     rpc Run (RunRequest) returns (Empty) {}
+    // Shuts down the worker.
+    rpc Shutdown (Empty) returns (Empty) {}
 }
 
 message JobDescription {
