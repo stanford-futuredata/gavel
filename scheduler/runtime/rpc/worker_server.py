@@ -35,7 +35,7 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
         shutdown_callback = self._callbacks['Shutdown']
         shutdown_callback()
 
-        # Indiicate that the worker server has received a shutdown RPC.
+        # Indicate to the worker server that a shutdown RPC has been received.
         self._condition.acquire()
         self._condition.notify()
         self._condition.release()
@@ -51,7 +51,7 @@ def serve(port, callbacks):
     server.add_insecure_port('[::]:%d' % (port))
     server.start()
 
-    # Wait for worker server to receive shutdown RPC from scheduler.
+    # Wait for worker server to receive a shutdown RPC from scheduler.
     condition.acquire()
     condition.wait()
     condition.release()
