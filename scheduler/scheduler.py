@@ -3,6 +3,7 @@ from __future__ import print_function
 import heapq
 import numpy as np
 from preconditions import preconditions
+import sys
 import threading
 import time
 
@@ -147,6 +148,16 @@ class Scheduler:
 
         with self._scheduler_lock:
             return len(self._epochs_run_so_far)
+
+
+    def shutdown(self):
+        """Sends a shutdown signal to every worker and ends the scheduler."""
+        with self._scheduler_lock:
+            for worker_id in self._worker_connections:
+                self._worker_connections[worker_id].shutdown()
+        # TODO: Any other cleanup?
+        sys.exit()
+
 
     """
     ======================================================================
@@ -338,7 +349,8 @@ class Scheduler:
                     fractions[worker_type][job_id] = fraction
             for i in range(len(self._per_worker_job_queue[worker_type])):
                 [_, _, job_id] = self._per_worker_job_queue[worker_type][i]
-                self._per_worker_job_queue[worker_type][i][0] = fractions[worker_type][job_id] / \
+                self._per_worker_job_queue[worker_type][i][0] = \
+                        fractions[worker_type][job_id] / \
                     self._allocation[job_id][worker_type]
                 self._per_worker_job_queue[worker_type][i][1] = \
                     self._epochs_run_so_far[job_id][worker_type]
@@ -421,7 +433,8 @@ class Scheduler:
                     # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
                     # epochs run, then job_id.
-                    heapq.heappush(self._per_worker_job_queue[worker_type], [0.0, 0, job_id])
+                    heapq.heappush(self._per_worker_job_queue[worker_type],
+                                   [0.0, 0, job_id])
 
                 self._reset_time_run_so_far()
 

@@ -5,6 +5,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../rpc_stubs'))
 
 import scheduler_to_worker_pb2 as s2w_pb2
 import scheduler_to_worker_pb2_grpc as s2w_pb2_grpc
+import common_pb2 
 
 class SchedulerRpcClient:
     """Scheduler client for sending RPC requests to a worker server."""
@@ -23,3 +24,9 @@ class SchedulerRpcClient:
                 job_description.command = command
                 job_description.num_epochs = num_epochs
             response = stub.Run(request)
+
+
+    def shutdown(self):
+        with grpc.insecure_channel(self._server_loc) as channel:
+            stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
+            stub.Shutdown(common_pb2.Empty())
