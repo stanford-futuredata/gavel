@@ -15,7 +15,11 @@ SLEEP_SECONDS = 2
 
 class Scheduler:
 
-    def __init__(self, policy, get_num_steps_to_run, min_workers=None):
+    def __init__(self, policy, get_num_steps_to_run, min_workers=None,
+                 emulate=False):
+        # Emulate flag.
+        self._emulate = emulate
+
         # List of worker IDs.
         self._worker_ids = []
         # List of worker types.
@@ -185,7 +189,7 @@ class Scheduler:
             time.sleep(SLEEP_SECONDS)
 
         while True:
-            _, worker_id = self._remove_available_worker_id()
+            timestamp, worker_id = self._remove_available_worker_id()
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
@@ -195,9 +199,17 @@ class Scheduler:
                 [_, _, job_id] = self._per_worker_type_job_queue[worker_type][0]
                 self._remove_from_queue(job_id)
                 num_steps = self._get_num_steps_to_run(job_id, worker_type)
-                self._worker_connections[worker_id].run([(job_id,
-                                                          self._jobs[job_id].command(),
-                                                          num_steps)])
+                if not self._emulate:
+                    self._worker_connections[worker_id].run([(job_id,
+                                                              self._jobs[job_id].command(),
+                                                              num_steps)])
+            # Can only call _done_callback with lock released.
+            if self._emulate:
+                duration = self._jobs[job_id].duration
+                assert duration is not None
+                self._done_callback(job_id, worker_id,
+                                    self._jobs[job_id].duration,
+                                    timestamp=timestamp+duration)
 
     """
     ======================================================================
@@ -365,10 +377,10 @@ class Scheduler:
             heapq.heapify(self._per_worker_type_job_queue[worker_type])
 
 
-    def _add_available_worker_id(self, worker_id):
+    def _add_available_worker_id(self, worker_id, timestamp):
         """Adds a worker_id to the list of available workers."""
 
-        self._available_worker_ids.add(time.time(), worker_id)
+        self._available_worker_ids.add(timestamp, worker_id)
 
 
     def _remove_available_worker_id(self):
@@ -447,9 +459,16 @@ class Scheduler:
 
                 self._reset_time_run_so_far()
 
-            self._add_available_worker_id(worker_id)
-            self._worker_connections[worker_id] = \
-                scheduler_client.SchedulerRpcClient(ip_addr, port)
+            if self._emulate:
+                # For now, assume that all workers are added at timestamp 0 in emulation mode.
+                timestamp = 0
+            else:
+                timestamp = time.time()
+            self._add_available_worker_id(worker_id, timestamp)
+
+            if not self._emulate:
+                self._worker_connections[worker_id] = \
+                    scheduler_client.SchedulerRpcClient(ip_addr, port)
 
             self._allocation = self._get_allocation()
 
@@ -461,7 +480,8 @@ class Scheduler:
         pass
 
 
-    def _done_callback(self, job_id, worker_id, execution_time, num_steps=1):
+    def _done_callback(self, job_id, worker_id, execution_time, num_steps=1,
+                       timestamp=None):
         """Handles completion of a scheduled job.
 
         Updates the running total of completed steps and time spent on each
@@ -493,4 +513,6 @@ class Scheduler:
 
         if to_remove is not None:
             self.remove_job(job_id)
-        self._add_available_worker_id(worker_id)
+        if timestamp is None:
+            timestamp = time.time()
+        self._add_available_worker_id(worker_id, timestamp)
