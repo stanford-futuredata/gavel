@@ -53,7 +53,8 @@ def main(trace_filename, min_workers, sleep_seconds, emulate):
     while s.num_jobs() > 0:
         time.sleep(sleep_seconds)
 
-    print("Total time taken: %.2f seconds" % (time.time() - start))
+    if not emulate:
+        print("Total time taken: %.2f seconds" % (time.time() - start))
     s.shutdown()
 
 if __name__ == '__main__':
@@ -65,7 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', "--min_workers", type=int, default=None,
                         help="Minimum number of workers to wait for before " \
                              "scheduling jobs")
-    parser.add_argument('-s', "--sleep_seconds", type=int, default=10,
+    parser.add_argument('-s', "--sleep_seconds", type=float, default=0.1,
                         help="Number of seconds to sleep when waiting for all" \
                              "jobs to complete")
     parser.add_argument('--emulate', action='store_true',

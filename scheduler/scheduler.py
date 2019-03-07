@@ -19,6 +19,7 @@ class Scheduler:
                  emulate=False):
         # Emulate flag.
         self._emulate = emulate
+        self._timestamp = 0
 
         # List of worker IDs.
         self._worker_ids = []
@@ -158,6 +159,8 @@ class Scheduler:
     def shutdown(self):
         """Sends a shutdown signal to every worker and ends the scheduler."""
         with self._scheduler_lock:
+            if self._emulate:
+                print("Total time taken: %.2f timeunits" % self._timestamp)
             for worker_id in self._worker_connections:
                 self._worker_connections[worker_id].shutdown()
         # TODO: Any other cleanup?
@@ -192,7 +195,6 @@ class Scheduler:
 
         while True:
             timestamp, worker_id = self._remove_available_worker_id()
-            print("Timestamp %d" % timestamp)
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
@@ -213,6 +215,7 @@ class Scheduler:
                 self._done_callback(job_id, worker_id,
                                     duration,
                                     timestamp=timestamp+duration)
+                self._timestamp = max(self._timestamp, timestamp+duration)
 
     """
     ======================================================================
