@@ -48,9 +48,11 @@ def main(trace_filename, min_workers, sleep_seconds, emulate):
             if prev_timestamp is not None:
                 time.sleep(timestamp - prev_timestamp)
             prev_timestamp = timestamp
-        job_id = s.add_job(job)
+            job_id = s.add_job(job)
+        else:
+            s.add_to_event_queue(s.add_job, [job], timestamp)
 
-    while s.num_jobs() > 0:
+    while not s.is_done():
         time.sleep(sleep_seconds)
 
     if not emulate:

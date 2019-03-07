@@ -19,7 +19,9 @@ class Scheduler:
                  emulate=False):
         # Emulate flag.
         self._emulate = emulate
+        # Datastructures to faithfully emulate.
         self._timestamp = 0
+        self._event_queue = []
 
         # List of worker IDs.
         self._worker_ids = []
@@ -79,6 +81,32 @@ class Scheduler:
             args=())
         self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
+
+    """
+    ======================================================================
+       Methods for emulation.
+    ======================================================================
+    """
+
+    def add_to_event_queue(self, func, args, timestamp):
+        """Add passed-in func to the event queue with the passed-in timestamp.
+
+        Used in emulation mode to queue add_job and register_worker events."""
+        with self._scheduler_lock:
+            self._event_queue.append((timestamp, func, args))
+            self._event_queue.sort(key=lambda x: x[0])
+
+    def execute_from_event_queue(self, timestamp):
+        """Execute all events that have a timestamp lower than the current timestamp."""
+        keep_going = True
+        while keep_going:
+            with self._scheduler_lock:
+                keep_going = (len(self._event_queue) > 0 and
+                              timestamp >= self._event_queue[0][0])
+                if keep_going:
+                    (timestamp, func, args) = self._event_queue.pop(0)
+            if keep_going:
+                func(*args)
 
     """
     ======================================================================
@@ -149,11 +177,10 @@ class Scheduler:
             return self._num_workers
 
 
-    def num_jobs(self):
-        """Returns the number of jobs the scheduler is currently managing."""
-
+    def is_done(self):
+        """Returns whether the scheduler is done with all of its assigned work."""
         with self._scheduler_lock:
-            return len(self._steps_run_so_far)
+            return len(self._event_queue) == 0 and len(self._steps_run_so_far) == 0
 
 
     def shutdown(self):
@@ -195,6 +222,7 @@ class Scheduler:
 
         while True:
             timestamp, worker_id = self._remove_available_worker_id()
+            self.execute_from_event_queue(timestamp)
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
