@@ -8,7 +8,8 @@ from runtime.rpc import worker_client
 from runtime.rpc import worker_server
 
 class Worker:
-    def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port):
+    def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port,
+                 emulate):
         self._worker_type = worker_type
         self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
         self._worker_port = worker_port
@@ -21,7 +22,8 @@ class Worker:
         if error:
           pass # TODO: handle error
         self._dispatcher = dispatcher.Dispatcher(self._worker_id,
-                                                 self._worker_rpc_client)
+                                                 self._worker_rpc_client,
+                                                 emulate=emulate)
 
         callbacks = {
             'Run': self._run_callback,
@@ -55,8 +57,11 @@ if __name__=='__main__':
                         help='Port number for scheduler server')
     parser.add_argument('--worker_port', type=int, default=50052,
                         help='Port number for worker server')
+    parser.add_argument('--emulate', action='store_true',
+                        help='Run worker in emulation mode (scheduler should be in emulation mode as well')
     args = parser.parse_args()
     opt_dict = vars(args)
 
     worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
-                    opt_dict['sched_port'], opt_dict['worker_port'])
+                    opt_dict['sched_port'], opt_dict['worker_port'],
+                    opt_dict['emulate'])

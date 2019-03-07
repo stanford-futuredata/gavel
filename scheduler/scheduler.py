@@ -44,18 +44,16 @@ class Scheduler:
         self._throughputs = {}
         # Allocations for all current incomplete applications.
         self._allocation = {}
-        # The total number of epochs to run each job for.
-        self._total_epochs = {}
         # Epochs run on each worker_id, for all current incomplete applications.
-        self._epochs_run_so_far = {}
+        self._steps_run_so_far = {}
         # Time run so far on each worker_id, for all current incomplete applications.
         self._time_run_so_far = {}
         # Number of jobs to compute fair share.
         self._num_jobs = 0
         # Commands to run for all current incomplete applications.
-        self._commands = {}
+        self._jobs = {}
         # Priority queue for each worker_type.
-        self._per_worker_job_queue = {}
+        self._per_worker_type_job_queue = {}
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -81,7 +79,7 @@ class Scheduler:
     ======================================================================
     """
 
-    def add_job(self, command, total_epochs):
+    def add_job(self, job):
         """Adds a new job to the scheduler.
 
         Enables users to schedule a new job. Updates the internal
@@ -90,7 +88,7 @@ class Scheduler:
 
         Args:
             command: The command to execute.
-            total_epochs: The total number of epochs to run the command for.
+            total_steps: The total number of steps to run the command for.
 
         Returns:
             The job_id of the newly added job.
@@ -99,15 +97,15 @@ class Scheduler:
         with self._scheduler_lock:
             job_id = self._job_id_counter
             self._job_id_counter += 1
-            self._commands[job_id] = command
-            self._epochs_run_so_far[job_id] = {}
+            job._job_id = job_id
+            self._jobs[job_id] = job
+            self._steps_run_so_far[job_id] = {}
             self._time_run_so_far[job_id] = {}
-            self._total_epochs[job_id] = total_epochs
             self._throughputs[job_id] = {}
             for worker_type in self._worker_types:
-                self._epochs_run_so_far[job_id][worker_type] = 0
+                self._steps_run_so_far[job_id][worker_type] = 0
                 self._throughputs[job_id][worker_type] = \
-                    self._compute_throughput(command, worker_type)
+                    self._compute_throughput(job, worker_type)
 
             self._reset_time_run_so_far()
             self._add_to_queue(job_id)
@@ -126,10 +124,9 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
-            del self._commands[job_id]
-            del self._epochs_run_so_far[job_id]
+            del self._jobs[job_id]
+            del self._steps_run_so_far[job_id]
             del self._time_run_so_far[job_id]
-            del self._total_epochs[job_id]
             del self._throughputs[job_id]
 
             self._reset_time_run_so_far()
@@ -149,7 +146,7 @@ class Scheduler:
         """Returns the number of jobs the scheduler is currently managing."""
 
         with self._scheduler_lock:
-            return len(self._epochs_run_so_far)
+            return len(self._steps_run_so_far)
 
 
     def shutdown(self):
@@ -192,14 +189,14 @@ class Scheduler:
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
-                if len(self._per_worker_job_queue[worker_type]) == 0:
+                if len(self._per_worker_type_job_queue[worker_type]) == 0:
                     # NOTE: do we need to add the worker_id back here?
                     continue
-                [_, _, job_id] = self._per_worker_job_queue[worker_type][0]
+                [_, _, job_id] = self._per_worker_type_job_queue[worker_type][0]
                 self._remove_from_queue(job_id)
                 num_steps = self._get_num_steps_to_run(job_id, worker_type)
                 self._worker_connections[worker_id].run([(job_id,
-                                                          self._commands[job_id],
+                                                          self._jobs[job_id].command(),
                                                           num_steps)])
 
     """
@@ -262,7 +259,7 @@ class Scheduler:
         return unflatten(flattened_allocation, index)
 
 
-    def _compute_throughput(self, command, worker_type):
+    def _compute_throughput(self, job, worker_type):
         # TODO: compute throughput.
         # TODO: add parameter for device_id?
         return 10
@@ -306,7 +303,7 @@ class Scheduler:
         """
 
         for worker_type in self._worker_types:
-            self._per_worker_job_queue[worker_type].append([0.0, 0, job_id])
+            self._per_worker_type_job_queue[worker_type].append([0.0, 0, job_id])
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -319,10 +316,10 @@ class Scheduler:
            job_id: The job_id to remove from the workers' queues.
         """
         for worker_type in self._worker_types:
-            for i in range(len(self._per_worker_job_queue[worker_type])):
-                if self._per_worker_job_queue[worker_type][i][2] == job_id:
-                    if len(self._per_worker_job_queue[worker_type]) > 0:
-                        self._per_worker_job_queue[worker_type].pop(i)
+            for i in range(len(self._per_worker_type_job_queue[worker_type])):
+                if self._per_worker_type_job_queue[worker_type][i][2] == job_id:
+                    if len(self._per_worker_type_job_queue[worker_type]) > 0:
+                        self._per_worker_type_job_queue[worker_type].pop(i)
                     break
 
 
@@ -359,14 +356,13 @@ class Scheduler:
                     fraction = self._time_run_so_far[job_id][worker_type] / \
                         tot_time_run[worker_type]
                     fractions[worker_type][job_id] = fraction
-            for i in range(len(self._per_worker_job_queue[worker_type])):
-                [_, _, job_id] = self._per_worker_job_queue[worker_type][i]
-                self._per_worker_job_queue[worker_type][i][0] = \
-                        fractions[worker_type][job_id] / \
+            for i in range(len(self._per_worker_type_job_queue[worker_type])):
+                [_, _, job_id] = self._per_worker_type_job_queue[worker_type][i]
+                self._per_worker_type_job_queue[worker_type][i][0] = fractions[worker_type][job_id] / \
                     self._allocation[job_id][worker_type]
-                self._per_worker_job_queue[worker_type][i][1] = \
-                    self._epochs_run_so_far[job_id][worker_type]
-            heapq.heapify(self._per_worker_job_queue[worker_type])
+                self._per_worker_type_job_queue[worker_type][i][1] = \
+                    self._steps_run_so_far[job_id][worker_type]
+            heapq.heapify(self._per_worker_type_job_queue[worker_type])
 
 
     def _add_available_worker_id(self, worker_id):
@@ -382,15 +378,15 @@ class Scheduler:
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _get_total_epochs_run(self, job_id):
-        """Returns the total number of epochs run for the job with passed-in job_id."""
+    def _get_total_steps_run(self, job_id):
+        """Returns the total number of steps run for the job with passed-in job_id."""
 
         # TODO: change to exception
-        assert(job_id in self._epochs_run_so_far)
-        total_epochs_run = 0
-        for worker_type in self._epochs_run_so_far[job_id]:
-            total_epochs_run += self._epochs_run_so_far[job_id][worker_type]
-        return total_epochs_run
+        assert(job_id in self._steps_run_so_far)
+        total_steps_run = 0
+        for worker_type in self._steps_run_so_far[job_id]:
+            total_steps_run += self._steps_run_so_far[job_id][worker_type]
+        return total_steps_run
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -436,17 +432,17 @@ class Scheduler:
             self._worker_id_to_worker_type_mapping[worker_id] = worker_type
             self._devices[worker_id] = devices
 
-            if worker_type not in self._per_worker_job_queue:
-                self._per_worker_job_queue[worker_type] = []
-                for job_id in self._epochs_run_so_far:
-                    self._epochs_run_so_far[job_id][worker_type] = 0
+            if worker_type not in self._per_worker_type_job_queue:
+                self._per_worker_type_job_queue[worker_type] = []
+                for job_id in self._steps_run_so_far:
+                    self._steps_run_so_far[job_id][worker_type] = 0
                     self._throughputs[job_id][worker_type] = \
-                        self._compute_throughput(self._commands[job_id],
+                        self._compute_throughput(self._jobs[job_id],
                                                  worker_type)
                     # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
-                    # epochs run, then job_id.
-                    heapq.heappush(self._per_worker_job_queue[worker_type],
+                    # steps run, then job_id.
+                    heapq.heappush(self._per_worker_type_job_queue[worker_type],
                                    [0.0, 0, job_id])
 
                 self._reset_time_run_so_far()
@@ -468,29 +464,29 @@ class Scheduler:
     def _done_callback(self, job_id, worker_id, execution_time, num_steps=1):
         """Handles completion of a scheduled job.
 
-        Updates the running total of completed epochs and time spent on each
+        Updates the running total of completed steps and time spent on each
         worker, for every currently active application. Removes the job from
-        the scheduler if the job has finished all its requested epochs. Adds
+        the scheduler if the job has finished all its requested steps. Adds
         the worker back to the list of available workers.
 
         Args:
             job_id: The id of the completed job.
             worker_id: The id of the worker where the job was completed.
-            num_steps: The number of epochs the job ran for.
+            num_steps: The number of steps the job ran for.
         """
 
         to_remove = None
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-            self._epochs_run_so_far[job_id][worker_type] += num_steps
+            self._steps_run_so_far[job_id][worker_type] += num_steps
             self._time_run_so_far[job_id][worker_type] += execution_time
             print("[Completed] Job ID: %d, Worker ID: %d" % (job_id, worker_id))
             # NOTE: for debug purposes.
-            print("[{job_id: {worker_type: epochs}}]", self._epochs_run_so_far)
+            print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)
             print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
             print()
 
-            if self._get_total_epochs_run(job_id) < self._total_epochs[job_id]:
+            if self._get_total_steps_run(job_id) < self._jobs[job_id].num_steps():
                 self._add_to_queue(job_id)
             else:
                 to_remove = job_id

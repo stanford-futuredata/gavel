@@ -3,6 +3,7 @@ import grpc
 import numpy as np
 import time
 
+import job
 import runtime.rpc.scheduler_client as scheduler_client
 import scheduler
 
@@ -15,27 +16,29 @@ def get_num_steps_to_run(job_id, worker_type):
     return 1
 
 def read_trace(trace_filename):
-    commands_and_num_steps = []
+    jobs = []
     # Trace file is expected to be in the following format:
     # <timestamp at which job is enqueued> <tab> <command> <tab> <number of times to run command>.
     with open(trace_filename, 'r') as f:
-       for command_and_num_steps in f.read().strip().split('\n'):
-           [timestamp, command, num_steps] = command_and_num_steps.split('\t')
+       for line in f.read().strip().split('\n'):
+           [timestamp, command, num_steps] = line.split('\t')
+           job_id = None
+           duration = None
            timestamp = int(timestamp)
            num_steps = int(num_steps)
-           commands_and_num_steps.append((timestamp, command, num_steps))
-    commands_and_num_steps.sort(key=lambda x: x[0])
-    return commands_and_num_steps
+           jobs.append((timestamp, job.Job(job_id,command, num_steps, duration)))
+    jobs.sort(key=lambda x: x[0])
+    return jobs
 
 def main(trace_filename, min_workers, sleep_seconds):
     prev_timestamp = None
     s = scheduler.Scheduler(TestPolicy(), get_num_steps_to_run,
                             min_workers=min_workers)
     start = time.time()
-    for (timestamp, command, num_steps) in read_trace(trace_filename):
+    for (timestamp, job) in read_trace(trace_filename):
         if prev_timestamp is not None:
             time.sleep(timestamp - prev_timestamp)
-        job_id = s.add_job(command, num_steps)
+        job_id = s.add_job(job)
         prev_timestamp = timestamp
 
     while s.num_jobs() > 0:
