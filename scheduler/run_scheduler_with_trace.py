@@ -43,9 +43,9 @@ def main(trace_filename, min_workers, sleep_seconds):
 
     while s.num_jobs() > 0:
         time.sleep(sleep_seconds)
-    s.shutdown()
 
     print("Total time taken: %.2f seconds" % (time.time() - start))
+    s.shutdown()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

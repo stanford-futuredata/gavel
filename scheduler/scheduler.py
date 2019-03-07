@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 
-import threadsafe_queue
+import priority_queue
 from runtime.rpc import scheduler_server, scheduler_client
 
 SCHEDULER_PORT = 50051
@@ -39,7 +39,7 @@ class Scheduler:
         # Lock to ensure worker_id assignment is thread-safe.
         self._scheduler_lock = threading.Lock()
         # List of available worker IDs.
-        self._available_worker_ids = threadsafe_queue.Queue()
+        self._available_worker_ids = priority_queue.Queue()
         # Throughputs for all current incomplete applications.
         self._throughputs = {}
         # Allocations for all current incomplete applications.
@@ -185,7 +185,7 @@ class Scheduler:
             time.sleep(SLEEP_SECONDS)
 
         while True:
-            worker_id = self._remove_available_worker_id()
+            _, worker_id = self._remove_available_worker_id()
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
@@ -368,7 +368,7 @@ class Scheduler:
     def _add_available_worker_id(self, worker_id):
         """Adds a worker_id to the list of available workers."""
 
-        self._available_worker_ids.add(worker_id)
+        self._available_worker_ids.add(time.time(), worker_id)
 
 
     def _remove_available_worker_id(self):

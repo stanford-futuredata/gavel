@@ -8,9 +8,10 @@ class Queue:
         self.queue = []
         self.cv = threading.Condition()
 
-    def add(self, item):
+    def add(self, key, item):
         self.cv.acquire()
-        self.queue.append(item)
+        self.queue.append((key, item))
+        self.queue.sort(key=lambda x: x[0])
         self.cv.notify()
         self.cv.release()
 
@@ -18,6 +19,6 @@ class Queue:
         self.cv.acquire()
         while len(self.queue) == 0:
             self.cv.wait()
-        item = self.queue.pop(0)
+        key, item = self.queue.pop(0)
         self.cv.release()
-        return item
+        return key, item
