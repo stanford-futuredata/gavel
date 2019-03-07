@@ -31,6 +31,7 @@ class Scheduler:
         # Policy instance.
         self._policy = policy
         # RPC clients.
+        self._num_workers = 0
         self._worker_connections = {}
         # get_num_steps_to_run function pointer.
         self._get_num_steps_to_run = get_num_steps_to_run
@@ -65,11 +66,12 @@ class Scheduler:
             'SendHeartbeat': self._send_heartbeat_callback,
             'Done': self._done_callback,
         }
-        self.server_thread = threading.Thread(
-            target=scheduler_server.serve,
-            args=(port, callbacks))
-        self.server_thread.daemon = True
-        self.server_thread.start()
+        if not self._emulate:
+            self.server_thread = threading.Thread(
+                target=scheduler_server.serve,
+                args=(port, callbacks))
+            self.server_thread.daemon = True
+            self.server_thread.start()
 
         self.scheduler_thread = threading.Thread(
             target=self._schedule,
@@ -143,7 +145,7 @@ class Scheduler:
         """Returns the number of workers the scheduler is connected to."""
 
         with self._scheduler_lock:
-            return len(self._worker_connections)
+            return self._num_workers
 
 
     def num_jobs(self):
@@ -190,6 +192,7 @@ class Scheduler:
 
         while True:
             timestamp, worker_id = self._remove_available_worker_id()
+            print("Timestamp %d" % timestamp)
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
@@ -205,10 +208,10 @@ class Scheduler:
                                                               num_steps)])
             # Can only call _done_callback with lock released.
             if self._emulate:
-                duration = self._jobs[job_id].duration
+                duration = self._jobs[job_id].duration()
                 assert duration is not None
                 self._done_callback(job_id, worker_id,
-                                    self._jobs[job_id].duration,
+                                    duration,
                                     timestamp=timestamp+duration)
 
     """
@@ -466,6 +469,7 @@ class Scheduler:
                 timestamp = time.time()
             self._add_available_worker_id(worker_id, timestamp)
 
+            self._num_workers += 1
             if not self._emulate:
                 self._worker_connections[worker_id] = \
                     scheduler_client.SchedulerRpcClient(ip_addr, port)
