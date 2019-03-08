@@ -15,8 +15,7 @@ SLEEP_SECONDS = 2
 
 class Scheduler:
 
-    def __init__(self, policy, get_num_steps_to_run, min_workers=None,
-                 emulate=False):
+    def __init__(self, policy, get_num_steps_to_run, emulate=False):
         # Emulate flag.
         self._emulate = emulate
 
@@ -43,8 +42,6 @@ class Scheduler:
         self._worker_connections = {}
         # get_num_steps_to_run function pointer.
         self._get_num_steps_to_run = get_num_steps_to_run
-        # Minimum number of workers to wait for before scheduling any jobs.
-        self._min_workers = 1 if min_workers is None else min_workers
         # Next job_id to assign.
         self._job_id_counter = 0
         # Next worker_id to assign.
@@ -109,9 +106,12 @@ class Scheduler:
 
         while True:
             with self._scheduler_lock:
-                if (len(self._event_queue) <= 0 or
-                    timestamp < self._event_queue[0][0]):
-                    return
+                if len(self._event_queue) == 0:
+                    return timestamp
+                # If passed-in timestamp is before the first timestamp in the event queue,
+                # and no jobs are scheduled to run.
+                if timestamp < self._event_queue[0][0] and len(self._steps_run_so_far) > 0:
+                    return timestamp
                 (timestamp, func, args) = self._event_queue.pop(0)
             func(*args)
 
@@ -222,22 +222,15 @@ class Scheduler:
         worker, sorted by fraction_run/fraction_allocated ratio.
         """
 
-        # TODO: change to exception.
-        assert self._min_workers is not None and self._min_workers >= 1
-        while self.num_workers() < self._min_workers:
-            time.sleep(SLEEP_SECONDS)
-
         while True:
             timestamp, worker_id = self._remove_available_worker_id()
             if self._emulate:
-                self.execute_from_event_queue(timestamp)
+                timestamp = self.execute_from_event_queue(timestamp)
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
                 if len(self._per_worker_type_job_queue[worker_type]) == 0:
-                    if self._emulate:
-                        timestamp += 1
-                    else:
+                    if not self._emulate:
                         timestamp = time.time()
                     self._add_available_worker_id(worker_id, timestamp)
                     continue

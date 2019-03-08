@@ -32,13 +32,13 @@ def read_trace(trace_filename):
     timestamps_and_jobs.sort(key=lambda x: x[0])
     return timestamps_and_jobs
 
-def main(trace_filename, min_workers, sleep_seconds, emulate):
+def main(trace_filename, num_workers, sleep_seconds, emulate):
     prev_timestamp = None
     s = scheduler.Scheduler(TestPolicy(), get_num_steps_to_run,
-                            min_workers=min_workers, emulate=emulate)
+                            emulate=emulate)
 
     if emulate:
-        for i in range(min_workers):
+        for i in range(num_workers):
             s._register_worker_callback(
                 worker_type="dummy_worker",
                 ip_addr=None, port=None,
@@ -67,9 +67,8 @@ if __name__ == '__main__':
     )
     parser.add_argument('-t', "--trace_filename", type=str, required=True,
                         help="Trace filename")
-    parser.add_argument('-m', "--min_workers", type=int, default=None,
-                        help="Minimum number of workers to wait for before " \
-                             "scheduling jobs")
+    parser.add_argument('-n', "--num_workers", type=int, default=None,
+                        help="Number of workers to use for scheduling jobs (in emulation mode)")
     parser.add_argument('-s', "--sleep_seconds", type=float, default=0.1,
                         help="Number of seconds to sleep when waiting for all" \
                              "jobs to complete")
@@ -77,5 +76,5 @@ if __name__ == '__main__':
                         help="Emulate execution of jobs")
     args = parser.parse_args()
 
-    main(args.trace_filename, args.min_workers, args.sleep_seconds,
+    main(args.trace_filename, args.num_workers, args.sleep_seconds,
          args.emulate)
