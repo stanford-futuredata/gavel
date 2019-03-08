@@ -16,19 +16,21 @@ def get_num_steps_to_run(job_id, worker_type):
     return 1
 
 def read_trace(trace_filename):
-    jobs = []
+    timestamps_and_jobs = []
     # Trace file is expected to be in the following format:
     # <timestamp at which job is enqueued> <tab> <command> <tab> <duration> <tab> <number of times to run command>.
     with open(trace_filename, 'r') as f:
        for line in f.read().strip().split('\n'):
-           [timestamp, command, duration, num_steps] = line.split('\t')
-           job_id = None
-           duration = float(duration)
-           timestamp = int(timestamp)
-           num_steps = int(num_steps)
-           jobs.append((timestamp, job.Job(job_id,command, num_steps, duration)))
-    jobs.sort(key=lambda x: x[0])
-    return jobs
+            [timestamp, command, duration, num_steps] = line.split('\t')
+            job_id = None
+            duration = float(duration)
+            timestamp = int(timestamp)
+            num_steps = int(num_steps)
+            timestamps_and_jobs.append(
+                (timestamp,
+                 job.Job(job_id,command, num_steps, duration)))
+    timestamps_and_jobs.sort(key=lambda x: x[0])
+    return timestamps_and_jobs
 
 def main(trace_filename, min_workers, sleep_seconds, emulate):
     prev_timestamp = None

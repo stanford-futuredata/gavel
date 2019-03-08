@@ -93,25 +93,27 @@ class Scheduler:
     ======================================================================
     """
 
+    @preconditions(lambda self: self._emulate)
     def add_to_event_queue(self, func, args, timestamp):
-        """Add passed-in func to the event queue with the passed-in timestamp.
+        """Adds passed-in func to the event queue with the passed-in timestamp.
 
         Used in emulation mode to queue add_job and register_worker events."""
+
         with self._scheduler_lock:
             self._event_queue.append((timestamp, func, args))
             self._event_queue.sort(key=lambda x: x[0])
 
+    @preconditions(lambda self: self._emulate)
     def execute_from_event_queue(self, timestamp):
-        """Execute all events that have a timestamp lower than the current timestamp."""
-        keep_going = True
-        while keep_going:
+        """Executes all events that have a timestamp lower than the current timestamp."""
+
+        while True:
             with self._scheduler_lock:
-                keep_going = (len(self._event_queue) > 0 and
-                              timestamp >= self._event_queue[0][0])
-                if keep_going:
-                    (timestamp, func, args) = self._event_queue.pop(0)
-            if keep_going:
-                func(*args)
+                if (len(self._event_queue) <= 0 or
+                    timestamp < self._event_queue[0][0]):
+                    return
+                (timestamp, func, args) = self._event_queue.pop(0)
+            func(*args)
 
     """
     ======================================================================
@@ -227,7 +229,8 @@ class Scheduler:
 
         while True:
             timestamp, worker_id = self._remove_available_worker_id()
-            self.execute_from_event_queue(timestamp)
+            if self._emulate:
+                self.execute_from_event_queue(timestamp)
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
@@ -248,7 +251,9 @@ class Scheduler:
                                                               num_steps)])
             # Can only call _done_callback with lock released.
             if self._emulate:
+                # When emulating, directly call _done_callback since there's no worker.
                 duration = self._jobs[job_id].duration()
+                # TODO: change to exception.
                 assert duration is not None
                 self._done_callback(job_id, worker_id,
                                     duration,
