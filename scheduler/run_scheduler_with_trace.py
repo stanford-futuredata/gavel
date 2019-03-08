@@ -3,6 +3,7 @@ import grpc
 import numpy as np
 import time
 
+import job
 import runtime.rpc.scheduler_client as scheduler_client
 import scheduler
 
@@ -15,34 +16,50 @@ def get_num_steps_to_run(job_id, worker_type):
     return 1
 
 def read_trace(trace_filename):
-    commands_and_num_steps = []
+    timestamps_and_jobs = []
     # Trace file is expected to be in the following format:
-    # <timestamp at which job is enqueued> <tab> <command> <tab> <number of times to run command>.
+    # <timestamp at which job is enqueued> <tab> <command> <tab> <duration> <tab> <number of times to run command>.
     with open(trace_filename, 'r') as f:
-       for command_and_num_steps in f.read().strip().split('\n'):
-           [timestamp, command, num_steps] = command_and_num_steps.split('\t')
-           timestamp = int(timestamp)
-           num_steps = int(num_steps)
-           commands_and_num_steps.append((timestamp, command, num_steps))
-    commands_and_num_steps.sort(key=lambda x: x[0])
-    return commands_and_num_steps
+       for line in f.read().strip().split('\n'):
+            [timestamp, command, duration, num_steps] = line.split('\t')
+            job_id = None
+            duration = float(duration)
+            timestamp = int(timestamp)
+            num_steps = int(num_steps)
+            timestamps_and_jobs.append(
+                (timestamp,
+                 job.Job(job_id,command, num_steps, duration)))
+    timestamps_and_jobs.sort(key=lambda x: x[0])
+    return timestamps_and_jobs
 
-def main(trace_filename, min_workers, sleep_seconds):
+def main(trace_filename, num_workers, sleep_seconds, emulate):
     prev_timestamp = None
     s = scheduler.Scheduler(TestPolicy(), get_num_steps_to_run,
-                            min_workers=min_workers)
+                            emulate=emulate)
+
+    if emulate:
+        for i in range(num_workers):
+            s._register_worker_callback(
+                worker_type="dummy_worker",
+                ip_addr=None, port=None,
+                devices=None)
+
     start = time.time()
-    for (timestamp, command, num_steps) in read_trace(trace_filename):
-        if prev_timestamp is not None:
-            time.sleep(timestamp - prev_timestamp)
-        job_id = s.add_job(command, num_steps)
-        prev_timestamp = timestamp
+    for (timestamp, job) in read_trace(trace_filename):
+        if not emulate:
+            if prev_timestamp is not None:
+                time.sleep(timestamp - prev_timestamp)
+            prev_timestamp = timestamp
+            job_id = s.add_job(job)
+        else:
+            s.add_to_event_queue(s.add_job, [job], timestamp)
 
-    while s.num_jobs() > 0:
+    while not s.is_done():
         time.sleep(sleep_seconds)
-    s.shutdown()
 
-    print("Total time taken: %.2f seconds" % (time.time() - start))
+    if not emulate:
+        print("Total time taken: %.2f seconds" % (time.time() - start))
+    s.shutdown()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -50,12 +67,14 @@ if __name__ == '__main__':
     )
     parser.add_argument('-t', "--trace_filename", type=str, required=True,
                         help="Trace filename")
-    parser.add_argument('-m', "--min_workers", type=int, default=None,
-                        help="Minimum number of workers to wait for before " \
-                             "scheduling jobs")
-    parser.add_argument('-s', "--sleep_seconds", type=int, default=10,
+    parser.add_argument('-n', "--num_workers", type=int, default=None,
+                        help="Number of workers to use for scheduling jobs (in emulation mode)")
+    parser.add_argument('-s', "--sleep_seconds", type=float, default=0.1,
                         help="Number of seconds to sleep when waiting for all" \
                              "jobs to complete")
+    parser.add_argument('--emulate', action='store_true',
+                        help="Emulate execution of jobs")
     args = parser.parse_args()
 
-    main(args.trace_filename, args.min_workers, args.sleep_seconds)
+    main(args.trace_filename, args.num_workers, args.sleep_seconds,
+         args.emulate)

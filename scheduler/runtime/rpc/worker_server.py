@@ -13,7 +13,7 @@ import scheduler_to_worker_pb2_grpc as s2w_pb2_grpc
 import common_pb2
 import enums_pb2
 
-from .job import Job
+import job
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
@@ -25,7 +25,7 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
     def Run(self, request, context):
         jobs = []
         for job_description in request.job_descriptions:
-            jobs.append(Job(job_description))
+            jobs.append(job.Job.from_proto(job_description))
         run_callback = self._callbacks['Run']
         run_callback(jobs)
         return common_pb2.Empty()
