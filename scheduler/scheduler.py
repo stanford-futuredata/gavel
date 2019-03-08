@@ -19,8 +19,13 @@ class Scheduler:
                  emulate=False):
         # Emulate flag.
         self._emulate = emulate
+
         # Datastructures to faithfully emulate.
+        # Latest emulated timestamp.
         self._timestamp = 0
+        # Last processed timestamp for each job_id.
+        self._per_job_timestamps = {}
+        # Queue of events that need to be processed at specific timestamps.
         self._event_queue = []
 
         # List of worker IDs.
@@ -227,9 +232,14 @@ class Scheduler:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
                 if len(self._per_worker_type_job_queue[worker_type]) == 0:
-                    # NOTE: do we need to add the worker_id back here?
+                    if self._emulate:
+                        timestamp += 1
+                    else:
+                        timestamp = time.time()
+                    self._add_available_worker_id(worker_id, timestamp)
                     continue
                 [_, _, job_id] = self._per_worker_type_job_queue[worker_type][0]
+                timestamp = max(timestamp, self._per_job_timestamps.get(job_id, 0))
                 self._remove_from_queue(job_id)
                 num_steps = self._get_num_steps_to_run(job_id, worker_type)
                 if not self._emulate:
@@ -244,6 +254,7 @@ class Scheduler:
                                     duration,
                                     timestamp=timestamp+duration)
                 self._timestamp = max(self._timestamp, timestamp+duration)
+                self._per_job_timestamps[job_id] = timestamp + duration
 
     """
     ======================================================================
