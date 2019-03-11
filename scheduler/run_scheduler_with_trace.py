@@ -1,4 +1,5 @@
 import argparse
+import cvxpy as cp
 import grpc
 import numpy as np
 import time
@@ -7,10 +8,23 @@ import job
 import runtime.rpc.scheduler_client as scheduler_client
 import scheduler
 
-class TestPolicy:
+class IsolatedPolicy:
     def get_allocation(self, throughputs):
         (m, n) = throughputs.shape
         return np.full((m, n), 1.0 / m)
+
+class KSPolicy:
+    def get_allocation(self, throughputs):
+        x = cp.Variable(throughputs.shape)
+        objective = cp.Maximize(cp.min(cp.sum(cp.multiply(throughputs, x), axis=1)))
+        constraints = [
+            x >= 0,
+            cp.sum(x, axis=0) == 1,
+        ]
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve()
+        assert cvxprob.status == "optimal"
+        return x.value
 
 def get_num_steps_to_run(job_id, worker_type):
     return 1
@@ -33,10 +47,17 @@ def read_trace(trace_filename):
     timestamps_and_jobs.sort(key=lambda x: x[0])
     return timestamps_and_jobs
 
-def main(trace_filename, worker_types, num_workers, normalizing_worker_type,
-         sleep_seconds, emulate, throughputs_directory):
+def main(trace_filename, policy_name, worker_types, num_workers,
+         normalizing_worker_type, sleep_seconds, emulate, throughputs_directory):
     prev_timestamp = None
-    s = scheduler.Scheduler(TestPolicy(), get_num_steps_to_run,
+    policy = None
+    if policy_name == "isolated":
+        policy = IsolatedPolicy()
+    elif policy_name == "ks":
+        policy = KSPolicy()
+    else:
+        raise Exception("Unknown policy!")
+    s = scheduler.Scheduler(policy, get_num_steps_to_run,
                             emulate=emulate,
                             normalizing_worker_type=normalizing_worker_type,
                             throughputs_directory=throughputs_directory)
@@ -74,6 +95,8 @@ if __name__ == '__main__':
     )
     parser.add_argument('-t', "--trace_filename", type=str, required=True,
                         help="Trace filename")
+    parser.add_argument("--policy_name", type=str, default="isolated",
+                        help="Policy to use: isolated|ks")
     parser.add_argument('-w', "--worker_types", type=str, nargs='+',
                         help="Worker types")
     parser.add_argument('-n', "--num_workers", type=int, default=None,
@@ -93,6 +116,6 @@ if __name__ == '__main__':
         assert args.num_workers is None, \
             "num_workers shouldn't be specified when worker_types is specified"
         args.num_workers = len(args.worker_types)
-    main(args.trace_filename, args.worker_types, args.num_workers,
+    main(args.trace_filename, args.policy_name, args.worker_types, args.num_workers,
          args.normalizing_worker_type, args.sleep_seconds, args.emulate,
          args.throughputs_directory)
