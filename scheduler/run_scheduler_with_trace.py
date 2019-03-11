@@ -33,11 +33,13 @@ def read_trace(trace_filename):
     timestamps_and_jobs.sort(key=lambda x: x[0])
     return timestamps_and_jobs
 
-def main(trace_filename, worker_types, num_workers, sleep_seconds, emulate,
-         throughputs_directory):
+def main(trace_filename, worker_types, num_workers, normalizing_worker_type,
+         sleep_seconds, emulate, throughputs_directory):
     prev_timestamp = None
     s = scheduler.Scheduler(TestPolicy(), get_num_steps_to_run,
-                            emulate=emulate, throughputs_directory=throughputs_directory)
+                            emulate=emulate,
+                            normalizing_worker_type=normalizing_worker_type,
+                            throughputs_directory=throughputs_directory)
 
     if emulate:
         for i in range(num_workers):
@@ -76,6 +78,8 @@ if __name__ == '__main__':
                         help="Worker types")
     parser.add_argument('-n', "--num_workers", type=int, default=None,
                         help="Number of workers to use for scheduling jobs (in emulation mode)")
+    parser.add_argument("--normalizing_worker_type", type=str, default=None,
+                        help="Normalize durations with respect to this worker_type")
     parser.add_argument('-s', "--sleep_seconds", type=float, default=0.1,
                         help="Number of seconds to sleep when waiting for all" \
                              "jobs to complete")
@@ -86,7 +90,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.worker_types is not None:
-        assert args.num_workers is None, "num_workers shouldn't be specified when worker_types is specified"
+        assert args.num_workers is None, \
+            "num_workers shouldn't be specified when worker_types is specified"
         args.num_workers = len(args.worker_types)
     main(args.trace_filename, args.worker_types, args.num_workers,
-         args.sleep_seconds, args.emulate, args.throughputs_directory)
+         args.normalizing_worker_type, args.sleep_seconds, args.emulate,
+         args.throughputs_directory)

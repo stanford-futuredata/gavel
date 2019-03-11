@@ -17,7 +17,7 @@ SLEEP_SECONDS = 2
 class Scheduler:
 
     def __init__(self, policy, get_num_steps_to_run, emulate=False,
-                 throughputs_directory=None):
+                 normalizing_worker_type=None, throughputs_directory=None):
         # Emulate flag.
         self._emulate = emulate
 
@@ -66,6 +66,8 @@ class Scheduler:
         self._jobs = {}
         # Priority queue for each worker_type.
         self._per_worker_type_job_queue = {}
+        # Normalizing worker type.
+        self.normalizing_worker_type = normalizing_worker_type
         # Throughputs for all job types (pre-measured).
         if throughputs_directory is not None:
             self._all_throughputs = utils.read_all_throughputs(
@@ -254,6 +256,10 @@ class Scheduler:
             if self._emulate:
                 # When emulating, directly call _done_callback since there's no worker.
                 duration = self._jobs[job_id].duration()
+                if self.normalizing_worker_type is not None:
+                    normalizing_factor = self._throughputs[job_id][worker_type] / \
+                        self._throughputs[job_id][self.normalizing_worker_type]
+                    duration /= normalizing_factor
                 # TODO: change to exception.
                 assert duration is not None
                 self._done_callback(job_id, worker_id,
