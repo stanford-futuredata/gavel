@@ -24,7 +24,8 @@ class Scheduler:
         # Datastructures to faithfully emulate.
         # Latest emulated timestamp.
         self._timestamp = 0
-        # Last processed timestamp for each job_id.
+        # Start and last processed timestamp for each job_id.
+        self._per_job_start_timestamps = {}
         self._per_job_timestamps = {}
         # Queue of events that need to be processed at specific timestamps.
         self._event_queue = []
@@ -162,6 +163,7 @@ class Scheduler:
             self._reset_time_run_so_far()
             self._add_to_queue(job_id)
             self._allocation = self._get_allocation()
+            self._per_job_start_timestamps[job_id] = self._timestamp
         return job_id
 
 
@@ -176,6 +178,10 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
+            print("Job %d:\n\tStart timestamp: %.2f\n\tEnd timestamp: %.2f\n\n" % (
+                job_id,
+                self._per_job_start_timestamps[job_id],
+                self._per_job_timestamps[job_id]))
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._time_run_so_far[job_id]
