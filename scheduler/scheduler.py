@@ -163,7 +163,10 @@ class Scheduler:
             self._reset_time_run_so_far()
             self._add_to_queue(job_id)
             self._allocation = self._get_allocation()
-            self._per_job_start_timestamps[job_id] = self._timestamp
+            if self._emulate:
+                self._per_job_start_timestamps[job_id] = self._timestamp
+            else:
+                self._per_job_start_timestamps[job_id] = time.time()
         return job_id
 
 
@@ -178,10 +181,13 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
-            print("Job %d:\n\tStart timestamp: %.2f\n\tEnd timestamp: %.2f\n\n" % (
+            duration = self._per_job_timestamps[job_id] - self._per_job_start_timestamps[job_id]
+            print("Job %d completed\n\tStart timestamp: %.2f\n\tEnd timestamp: %.2f\nDuration: %.2f %s\n" % (
                 job_id,
                 self._per_job_start_timestamps[job_id],
-                self._per_job_timestamps[job_id]))
+                self._per_job_timestamps[job_id],
+                duration,
+                "timeunits" if self._emulate else "seconds"))
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._time_run_so_far[job_id]
@@ -331,7 +337,9 @@ class Scheduler:
             return None
         flattened_allocation = self._policy.get_allocation(
             flattened_throughputs)
-        return unflatten(flattened_allocation, index)
+        unflattened_allocation = unflatten(flattened_allocation, index)
+        print("New allocation\n\t%s\n" % unflattened_allocation)
+        return unflattened_allocation
 
 
     def _compute_throughput(self, job, worker_type):
@@ -569,6 +577,7 @@ class Scheduler:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             self._steps_run_so_far[job_id][worker_type] += num_steps
             self._time_run_so_far[job_id][worker_type] += execution_time
+            self._per_job_timestamps[job_id] = time.time()
             print("[Completed] Job ID: %d, Worker ID: %d" % (job_id, worker_id))
             # NOTE: for debug purposes.
             print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)
