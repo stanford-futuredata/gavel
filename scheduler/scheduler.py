@@ -9,13 +9,15 @@ import time
 
 import priority_queue
 from runtime.rpc import scheduler_server, scheduler_client
+import utils
 
 SCHEDULER_PORT = 50051
 SLEEP_SECONDS = 2
 
 class Scheduler:
 
-    def __init__(self, policy, get_num_steps_to_run, emulate=False):
+    def __init__(self, policy, get_num_steps_to_run, emulate=False,
+                 throughputs_directory=None):
         # Emulate flag.
         self._emulate = emulate
 
@@ -64,6 +66,12 @@ class Scheduler:
         self._jobs = {}
         # Priority queue for each worker_type.
         self._per_worker_type_job_queue = {}
+        # Throughputs for all job types (pre-measured).
+        if throughputs_directory is not None:
+            self._all_throughputs = utils.read_all_throughputs(
+                throughputs_directory)
+        else:
+            self._all_throughputs = {}
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -315,6 +323,11 @@ class Scheduler:
 
 
     def _compute_throughput(self, job, worker_type):
+        job_type = job.job_type()
+        job_type = tuple([job_type])
+        if job_type in self._all_throughputs and worker_type in self._all_throughputs[job_type]:
+            throughput = self._all_throughputs[job_type][worker_type]
+            return throughput[0]
         # TODO: compute throughput.
         # TODO: add parameter for device_id?
         return 10

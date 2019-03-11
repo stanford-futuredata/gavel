@@ -1,6 +1,7 @@
 class Job:
-    def __init__(self, job_id, command, num_steps, duration):
+    def __init__(self, job_id, job_type, command, num_steps, duration):
         self._job_id = job_id
+        self._job_type = job_type
         self._command = command
         self._num_steps = num_steps
         self._duration = duration
@@ -10,11 +11,14 @@ class Job:
         duration = None
         if job_proto.has_duration:
             duration = job_proto.duration
-        return Job(job_proto.job_id, job_proto.command,
+        return Job(job_proto.job_id, job_proto.job_type, job_proto.command,
                    job_proto.num_steps, duration) 
 
     def job_id(self):
         return self._job_id
+
+    def job_type(self):
+        return self._job_type
 
     def command(self):
         return self._command

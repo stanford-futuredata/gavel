@@ -11,10 +11,11 @@ service SchedulerToWorker {
 
 message JobDescription {
     uint64 job_id = 1;
-    string command = 2;
-    uint64 num_steps = 3;
-    bool has_duration = 4;
-    uint64 duration = 5;
+    string job_type = 2;
+    string command = 3;
+    uint64 num_steps = 4;
+    bool has_duration = 5;
+    uint64 duration = 6;
 }
 
 message RunRequest {
