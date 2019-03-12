@@ -27,6 +27,8 @@ class Scheduler:
         # Start and last processed timestamp for each job_id.
         self._per_job_start_timestamps = {}
         self._per_job_timestamps = {}
+        # Job completion times.
+        self._job_completion_times = {}
         # Queue of events that need to be processed at specific timestamps.
         self._event_queue = []
 
@@ -181,13 +183,17 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
-            duration = self._per_job_timestamps[job_id] - self._per_job_start_timestamps[job_id]
-            print("Job %d completed\n\tStart timestamp: %.2f\n\tEnd timestamp: %.2f\nDuration: %.2f %s\n" % (
-                job_id,
-                self._per_job_start_timestamps[job_id],
-                self._per_job_timestamps[job_id],
-                duration,
-                "timeunits" if self._emulate else "seconds"))
+            duration = self._per_job_timestamps[job_id] - \
+                self._per_job_start_timestamps[job_id]
+            self._job_completion_times[job_id] = duration
+            print("Job %d completed\n\tStart timestamp: %.2f\n\t"
+                  "End timestamp: %.2f\nDuration: %.2f %s\n" % (
+                      job_id,
+                      self._per_job_start_timestamps[job_id],
+                      self._per_job_timestamps[job_id],
+                      duration,
+                      "timeunits" if self._emulate else "seconds")
+                  )
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._time_run_so_far[job_id]
@@ -217,6 +223,12 @@ class Scheduler:
         with self._scheduler_lock:
             if self._emulate:
                 print("Total time taken: %.2f timeunits" % self._timestamp)
+            print("Job completion times:\n\t%s" % self._job_completion_times)
+            average_job_completion_time = sum(self._job_completion_times.values()) / \
+                len(self._job_completion_times)
+            unit = "timeunits" if self._emulate else "seconds"
+            print("Average job completion time: %.3f %s" % (average_job_completion_time,
+                                                            unit))
             for worker_id in self._worker_connections:
                 self._worker_connections[worker_id].shutdown()
         # TODO: Any other cleanup?
@@ -577,7 +589,8 @@ class Scheduler:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             self._steps_run_so_far[job_id][worker_type] += num_steps
             self._time_run_so_far[job_id][worker_type] += execution_time
-            self._per_job_timestamps[job_id] = time.time()
+            if not self._emulate:
+                self._per_job_timestamps[job_id] = time.time()
             print("[Completed] Job ID: %d, Worker ID: %d" % (job_id, worker_id))
             # NOTE: for debug purposes.
             print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)
