@@ -99,6 +99,7 @@ if __name__ == '__main__':
                         help="Directory with throughput measurements")
     args = parser.parse_args()
 
+    args.normalizing_worker_type = None
     if args.worker_types is not None:
         assert args.num_workers is None, \
             "num_workers shouldn't be specified when worker_types is specified"
