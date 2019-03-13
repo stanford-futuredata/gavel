@@ -83,6 +83,9 @@ def main(trace_filename, policy_name, worker_types, num_workers,
         else:
             s.add_to_event_queue(s.add_job, [job], timestamp)
 
+    if emulate:
+        s.start_scheduling_thread()
+
     while not s.is_done():
         time.sleep(sleep_seconds)
 

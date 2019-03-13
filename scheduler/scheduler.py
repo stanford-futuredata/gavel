@@ -91,6 +91,10 @@ class Scheduler:
             self.server_thread.daemon = True
             self.server_thread.start()
 
+            self.start_scheduling_thread()
+
+
+    def start_scheduling_thread(self):
         self.scheduler_thread = threading.Thread(
             target=self._schedule,
             args=())
@@ -272,7 +276,6 @@ class Scheduler:
 
                 # Get available worker_id with the highest priority for this particular job_id.
                 highest_priority, worker_id_with_highest_priority = self._get_highest_priority(job_id)
-                print(priority, highest_priority, worker_id, worker_id_with_highest_priority)
                 if priority > highest_priority:  # Lower is better.
                     timestamp_with_highest_priority, worker_id_with_highest_priority = \
                         self._remove_available_worker_id(worker_id=worker_id_with_highest_priority)
