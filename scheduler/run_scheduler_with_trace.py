@@ -19,12 +19,13 @@ class KSPolicy:
         objective = cp.Maximize(cp.min(cp.sum(cp.multiply(throughputs, x), axis=1)))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) == 1,
+            cp.sum(x, axis=0) <= 1,
+            cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve()
         assert cvxprob.status == "optimal"
-        return x.value
+        return x.value.clip(min=1e-5)
 
 def get_num_steps_to_run(job_id, worker_type):
     return 1
@@ -101,8 +102,6 @@ if __name__ == '__main__':
                         help="Worker types")
     parser.add_argument('-n', "--num_workers", type=int, default=None,
                         help="Number of workers to use for scheduling jobs (in emulation mode)")
-    parser.add_argument("--normalizing_worker_type", type=str, default=None,
-                        help="Normalize durations with respect to this worker_type")
     parser.add_argument('-s', "--sleep_seconds", type=float, default=0.1,
                         help="Number of seconds to sleep when waiting for all" \
                              "jobs to complete")
@@ -116,6 +115,7 @@ if __name__ == '__main__':
         assert args.num_workers is None, \
             "num_workers shouldn't be specified when worker_types is specified"
         args.num_workers = len(args.worker_types)
+        args.normalizing_worker_type = args.worker_types[0]
     main(args.trace_filename, args.policy_name, args.worker_types, args.num_workers,
          args.normalizing_worker_type, args.sleep_seconds, args.emulate,
          args.throughputs_directory)

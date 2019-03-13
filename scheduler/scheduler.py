@@ -67,7 +67,7 @@ class Scheduler:
         self._num_jobs = 0
         # Commands to run for all current incomplete applications.
         self._jobs = {}
-        # Priority queue for each worker_type.
+        # Priority queues for each worker_type.
         self._per_worker_type_job_queue = {}
         # Normalizing worker type.
         self.normalizing_worker_type = normalizing_worker_type
@@ -268,7 +268,21 @@ class Scheduler:
                         timestamp = time.time()
                     self._add_available_worker_id(worker_id, timestamp)
                     continue
-                [_, _, job_id] = self._per_worker_type_job_queue[worker_type][0]
+                [priority, _, job_id] = self._per_worker_type_job_queue[worker_type][0]
+
+                # Get available worker_id with the highest priority for this particular job_id.
+                highest_priority, worker_id_with_highest_priority = self._get_highest_priority(job_id)
+                print(priority, highest_priority, worker_id, worker_id_with_highest_priority)
+                if priority > highest_priority:  # Lower is better.
+                    timestamp_with_highest_priority, worker_id_with_highest_priority = \
+                        self._remove_available_worker_id(worker_id=worker_id_with_highest_priority)
+                    # If removal succeeded.
+                    if worker_id_with_highest_priority is not None:
+                        self._add_available_worker_id(worker_id, timestamp)
+                        worker_id = worker_id_with_highest_priority
+                        timestamp = timestamp_with_highest_priority
+                        worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+
                 timestamp = max(timestamp, self._per_job_timestamps.get(job_id, 0))
                 self._remove_from_queue(job_id)
                 num_steps = self._get_num_steps_to_run(job_id, worker_type)
@@ -471,10 +485,32 @@ class Scheduler:
         self._available_worker_ids.add(timestamp, worker_id)
 
 
-    def _remove_available_worker_id(self):
+    def _remove_available_worker_id(self, worker_id=None):
         """Returns the worker_id of the next available worker."""
 
-        return self._available_worker_ids.remove()
+        if worker_id is None:
+            return self._available_worker_ids.remove()
+        else:
+            return self._available_worker_ids.remove_item(worker_id)
+
+
+    @preconditions(lambda self: self._scheduler_lock.locked())
+    def _get_highest_priority(self, job_id):
+        priorities = []
+        for timestamp, worker_id in self._available_worker_ids.queue:
+            if timestamp > self._per_job_timestamps.get(job_id, 0):
+                continue
+            worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+            for i in range(len(self._per_worker_type_job_queue[worker_type])):
+                if self._per_worker_type_job_queue[worker_type][i][2] == job_id:
+                    priorities.append((self._per_worker_type_job_queue[worker_type][i][0],
+                                       worker_id, worker_type))
+        priorities.sort(key=lambda x: x[0])
+        if len(priorities) == 0:
+            return float("inf"), None
+        priority = priorities[0][0]
+        worker_id = priorities[0][1]
+        return priority, worker_id
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
