@@ -333,40 +333,8 @@ class Scheduler:
             and for 95% of the time, worker type 'p100' should run job 0.
         """
 
-        def flatten(d):
-            """Converts a 2-level dict to a NumPy array."""
-
-            job_ids = list(d.keys())
-            if len(job_ids) == 0:
-                return None, None
-            worker_types = list(d[job_ids[0]].keys())
-            if len(worker_types) == 0:
-                return None, None
-            m = []
-            for job_id in job_ids:
-                m_row = []
-                for worker_type in worker_types:
-                    m_row.append(d[job_id][worker_type])
-                m.append(m_row)
-            return np.array(m), (job_ids, worker_types)
-
-        def unflatten(m, index):
-            """Converts a NumPy array to a 2-level dict."""
-
-            (job_ids, worker_types) = index
-            d = {}
-            for i in range(len(job_ids)):
-                d[job_ids[i]] = {}
-                for j in range(len(worker_types)):
-                    d[job_ids[i]][worker_types[j]] = m[i][j]
-            return d
-
-        flattened_throughputs, index = flatten(self._throughputs)
-        if flattened_throughputs is None:
-            return None
-        flattened_allocation = self._policy.get_allocation(
-            flattened_throughputs)
-        unflattened_allocation = unflatten(flattened_allocation, index)
+        unflattened_allocation = self._policy.get_allocation(
+            self._throughputs)
         print("New allocation\n\t%s\n" % unflattened_allocation)
         return unflattened_allocation
 
@@ -475,8 +443,11 @@ class Scheduler:
                     fractions[worker_type][job_id] = fraction
             for i in range(len(self._per_worker_type_job_queue[worker_type])):
                 [_, _, job_id] = self._per_worker_type_job_queue[worker_type][i]
-                self._per_worker_type_job_queue[worker_type][i][0] = fractions[worker_type][job_id] / \
-                    self._allocation[job_id][worker_type]
+                if self._allocation[job_id][worker_type] == 0.0:
+                    self._per_worker_type_job_queue[worker_type][i][0] = float("inf")
+                else:
+                    self._per_worker_type_job_queue[worker_type][i][0] = fractions[worker_type][job_id] / \
+                        self._allocation[job_id][worker_type]
                 self._per_worker_type_job_queue[worker_type][i][1] = \
                     self._steps_run_so_far[job_id][worker_type]
             heapq.heapify(self._per_worker_type_job_queue[worker_type])
