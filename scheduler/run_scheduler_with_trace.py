@@ -11,7 +11,7 @@ import scheduler
 class IsolatedPolicy:
     def get_allocation(self, throughputs):
         (m, n) = throughputs.shape
-        return np.full((m, n), 1.0 / m)
+        return np.full((m, n), 1.0 / (m * n))
 
 class KSPolicy:
     def get_allocation(self, throughputs):
@@ -26,6 +26,16 @@ class KSPolicy:
         result = cvxprob.solve()
         assert cvxprob.status == "optimal"
         return x.value.clip(min=1e-5)
+
+class KSPolicyNormalized(KSPolicy):
+    def get_allocation(self, throughputs):
+        print(throughputs)
+        (m, n) = throughputs.shape
+        scale = 1.0 / throughputs.sum(axis=1)
+        print(scale)
+        throughputs = throughputs * scale.reshape(m, 1)
+        print(throughputs)
+        return super().get_allocation(throughputs)
 
 def get_num_steps_to_run(job_id, worker_type):
     return 1
@@ -56,6 +66,8 @@ def main(trace_filename, policy_name, worker_types, num_workers,
         policy = IsolatedPolicy()
     elif policy_name == "ks":
         policy = KSPolicy()
+    elif policy_name == "ks_normalized":
+        policy = KSPolicyNormalized()
     else:
         raise Exception("Unknown policy!")
     s = scheduler.Scheduler(policy, get_num_steps_to_run,
@@ -100,7 +112,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', "--trace_filename", type=str, required=True,
                         help="Trace filename")
     parser.add_argument("--policy_name", type=str, default="isolated",
-                        help="Policy to use: isolated|ks")
+                        help="Policy to use: isolated|ks|ks_normalized")
     parser.add_argument('-w', "--worker_types", type=str, nargs='+',
                         help="Worker types")
     parser.add_argument('-n', "--num_workers", type=int, default=None,
