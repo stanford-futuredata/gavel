@@ -26,7 +26,7 @@ class Scheduler:
         self._timestamp = 0
         # Start and last processed timestamp for each job_id.
         self._per_job_start_timestamps = {}
-        self._per_job_timestamps = {}
+        self._per_job_latest_timestamps = {}
         # Job completion times.
         self._job_completion_times = {}
         # Queue of events that need to be processed at specific timestamps.
@@ -187,14 +187,14 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
-            duration = self._per_job_timestamps[job_id] - \
+            duration = self._per_job_latest_timestamps[job_id] - \
                 self._per_job_start_timestamps[job_id]
             self._job_completion_times[job_id] = duration
             print("Job %d completed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n" % (
                       job_id,
                       self._per_job_start_timestamps[job_id],
-                      self._per_job_timestamps[job_id],
+                      self._per_job_latest_timestamps[job_id],
                       duration,
                       "timeunits" if self._emulate else "seconds")
                   )
@@ -286,7 +286,7 @@ class Scheduler:
                         timestamp = timestamp_with_highest_priority
                         worker_type = self._worker_id_to_worker_type_mapping[worker_id]
 
-                timestamp = max(timestamp, self._per_job_timestamps.get(job_id, 0))
+                timestamp = max(timestamp, self._per_job_latest_timestamps.get(job_id, 0))
                 self._remove_from_queue(job_id)
                 num_steps = self._get_num_steps_to_run(job_id, worker_type)
                 if not self._emulate:
@@ -307,7 +307,7 @@ class Scheduler:
                                     duration,
                                     timestamp=timestamp+duration)
                 self._timestamp = max(self._timestamp, timestamp+duration)
-                self._per_job_timestamps[job_id] = timestamp + duration
+                self._per_job_latest_timestamps[job_id] = timestamp + duration
 
     """
     ======================================================================
@@ -472,7 +472,7 @@ class Scheduler:
     def _get_highest_priority(self, job_id):
         priorities = []
         for timestamp, worker_id in self._available_worker_ids.queue:
-            if timestamp > self._per_job_timestamps.get(job_id, 0):
+            if timestamp > self._per_job_latest_timestamps.get(job_id, 0):
                 continue
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             for i in range(len(self._per_worker_type_job_queue[worker_type])):
@@ -600,7 +600,7 @@ class Scheduler:
             self._steps_run_so_far[job_id][worker_type] += num_steps
             self._time_run_so_far[job_id][worker_type] += execution_time
             if not self._emulate:
-                self._per_job_timestamps[job_id] = time.time()
+                self._per_job_latest_timestamps[job_id] = time.time()
             print("[Completed] Job ID: %d, Worker ID: %d" % (job_id, worker_id))
             # NOTE: for debug purposes.
             print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)

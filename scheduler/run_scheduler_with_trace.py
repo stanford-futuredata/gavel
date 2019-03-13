@@ -203,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument("--policy_name", type=str, default="isolated",
                         help="Policy to use: fifo|isolated|ks|ks_normalized")
     parser.add_argument('-w', "--worker_types", type=str, nargs='+',
-                        help="Worker types")
+                        help="Worker types: [k80|p100|v100]+")
     parser.add_argument('-n', "--num_workers", type=int, default=None,
                         help="Number of workers to use for scheduling jobs (in emulation mode)")
     parser.add_argument('-s', "--sleep_seconds", type=float, default=0.1,
