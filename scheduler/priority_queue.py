@@ -22,3 +22,15 @@ class Queue:
         key, item = self.queue.pop(0)
         self.cv.release()
         return key, item
+
+    def remove_item(self, item_to_remove):
+        self.cv.acquire()
+        while len(self.queue) == 0:
+            self.cv.wait()
+        for i in range(len(self.queue)):
+            if self.queue[i][1] == item_to_remove:
+                key, item = self.queue.pop(i)
+                self.cv.release()
+                return key, item
+        self.cv.release()
+        return None, None
