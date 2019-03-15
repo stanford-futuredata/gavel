@@ -56,7 +56,7 @@ def main(trace_filename, policy_name, worker_types, num_workers,
             s._register_worker_callback(
                 worker_type=worker_type,
                 ip_addr=None, port=None,
-                devices=None)
+                devices=None, timestamp=0)
 
     start = time.time()
     for (timestamp, job) in read_trace(trace_filename):

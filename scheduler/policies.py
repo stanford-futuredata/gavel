@@ -52,7 +52,7 @@ class KSPolicy(Policy):
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve()
         assert cvxprob.status == "optimal"
-        return x.value.clip(min=1e-5)
+        return x.value.clip(min=0.0)
 
     def get_allocation(self, unflattened_throughputs):
         throughputs, index = super().flatten(unflattened_throughputs)

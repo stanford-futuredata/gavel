@@ -24,6 +24,7 @@ class Scheduler:
         # Datastructures to faithfully emulate.
         # Latest emulated timestamp.
         self._timestamp = 0
+        self._reset_timestamp = 0
         # Start and last processed timestamp for each job_id.
         self._per_job_start_timestamps = {}
         self._per_job_latest_timestamps = {}
@@ -124,13 +125,13 @@ class Scheduler:
         while True:
             with self._scheduler_lock:
                 if len(self._event_queue) == 0:
-                    return timestamp
+                    return
                 # If passed-in timestamp is before the first timestamp in the event queue,
                 # and no jobs are scheduled to run.
                 if timestamp < self._event_queue[0][0] and len(self._steps_run_so_far) > 0:
-                    return timestamp
-                (timestamp, func, args) = self._event_queue.pop(0)
-            func(*args)
+                    return
+                (_, func, args) = self._event_queue.pop(0)
+            func(*args, timestamp=timestamp)
 
     """
     ======================================================================
@@ -138,7 +139,7 @@ class Scheduler:
     ======================================================================
     """
 
-    def add_job(self, job):
+    def add_job(self, job, timestamp=None):
         """Adds a new job to the scheduler.
 
         Enables users to schedule a new job. Updates the internal
@@ -154,6 +155,12 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
+            if self._emulate:
+                assert timestamp is not None
+            else:
+                timestamp = time.time()
+            self._compute_kl_divergence(timestamp)
+
             job_id = self._job_id_counter
             self._job_id_counter += 1
             job._job_id = job_id
@@ -166,7 +173,7 @@ class Scheduler:
                 self._throughputs[job_id][worker_type] = \
                     self._compute_throughput(job, worker_type)
 
-            self._reset_time_run_so_far()
+            self._reset_time_run_so_far(timestamp)
             self._add_to_queue(job_id)
             self._allocation = self._get_allocation()
             if self._emulate:
@@ -176,7 +183,7 @@ class Scheduler:
         return job_id
 
 
-    def remove_job(self, job_id):
+    def remove_job(self, job_id, timestamp=None):
         """Removes a job from the scheduler.
 
         Enables users to remove a previously scheduled job. Updates
@@ -198,12 +205,19 @@ class Scheduler:
                       duration,
                       "timeunits" if self._emulate else "seconds")
                   )
+
+            if self._emulate:
+                assert timestamp is not None
+            else:
+                timestamp = time.time()
+            self._compute_kl_divergence(timestamp)
+            self._reset_time_run_so_far(timestamp)
+
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._time_run_so_far[job_id]
             del self._throughputs[job_id]
 
-            self._reset_time_run_so_far()
             self._remove_from_queue(job_id)
             if len(self._throughputs) > 0:
                 self._allocation = self._get_allocation()
@@ -263,7 +277,7 @@ class Scheduler:
         while True:
             timestamp, worker_id = self._remove_available_worker_id()
             if self._emulate:
-                timestamp = self.execute_from_event_queue(timestamp)
+                self.execute_from_event_queue(timestamp)
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
@@ -273,6 +287,36 @@ class Scheduler:
                     self._add_available_worker_id(worker_id, timestamp)
                     continue
                 [priority, _, job_id] = self._per_worker_type_job_queue[worker_type][0]
+
+                # If the highest priority job involves waiting, pick an earlier job
+                # with reasonably high priority.
+                latest_timestamp = self._per_job_latest_timestamps.get(job_id, 0)
+                if timestamp < latest_timestamp:
+                    found_jobs = []
+                    sorted_queue = sorted(self._per_worker_type_job_queue[worker_type])
+                    for i in range(1, len(sorted_queue)):
+                        [ready_priority, _, ready_job_id] = sorted_queue[i]
+                        latest_ready_timestamp = self._per_job_latest_timestamps.get(
+                            ready_job_id, 0)
+                        if latest_timestamp > latest_ready_timestamp:
+                            found_jobs.append((latest_ready_timestamp, ready_priority, ready_job_id))
+                            break
+                    found_jobs.sort()
+                    if len(found_jobs) > 0:
+                        (_, ready_priority, ready_job_id) = found_jobs[0]
+                        if ready_priority < (3 * priority):
+                            priority = ready_priority
+                            job_id = ready_job_id
+
+                if self._allocation[job_id][worker_type] == 0.0:
+                    if not self._emulate:
+                        timestamp = time.time()
+                    all_timestamps = self._available_worker_ids.get_unique_keys_sorted()
+                    if self._emulate:
+                        if len(all_timestamps) > 1:
+                            timestamp = all_timestamps[1]
+                    self._add_available_worker_id(worker_id, timestamp+0.1)
+                    continue
 
                 # Get available worker_id with the highest priority for this particular job_id.
                 highest_priority, worker_id_with_highest_priority = self._get_highest_priority(job_id)
@@ -293,6 +337,7 @@ class Scheduler:
                     self._worker_connections[worker_id].run([(job_id,
                                                               self._jobs[job_id].command(),
                                                               num_steps)])
+
             # Can only call _done_callback with lock released.
             if self._emulate:
                 # When emulating, directly call _done_callback since there's no worker.
@@ -303,11 +348,12 @@ class Scheduler:
                     duration /= normalizing_factor
                 # TODO: change to exception.
                 assert duration is not None
+                print("[Job ID: %d, Worker ID: %d [%s]] Start: %d, End: %d" % (
+                    job_id, worker_id, worker_type, timestamp, timestamp+duration))
                 self._done_callback(job_id, worker_id,
                                     duration,
                                     timestamp=timestamp+duration)
                 self._timestamp = max(self._timestamp, timestamp+duration)
-                self._per_job_latest_timestamps[job_id] = timestamp + duration
 
     """
     ======================================================================
@@ -356,25 +402,53 @@ class Scheduler:
     """
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _reset_time_run_so_far(self):
+    def _compute_kl_divergence(self, timestamp):
+
+        if self._allocation is None:
+            return
+
+        time_since_last_reset = timestamp - self._reset_timestamp
+
+        time_run_so_far_fraction = {}
+        for job_id in self._time_run_so_far:
+            time_run_so_far_fraction[job_id] = {}
+            for worker_type in self._time_run_so_far[job_id]:
+                if time_since_last_reset == 0:
+                    time_run_so_far_fraction[job_id][worker_type] = \
+                        1.0 / len(self._time_run_so_far[job_id])
+                else:
+                    time_run_so_far_fraction[job_id][worker_type] = \
+                        (self._time_run_so_far[job_id][worker_type] /
+                            time_since_last_reset)
+
+        for worker_type in self._worker_types:
+            allocation_distribution = []
+            time_run_distribution = []
+            for job_id in time_run_so_far_fraction:
+                if (job_id not in self._allocation or
+                    worker_type not in self._allocation[job_id]):
+                    continue
+                if worker_type not in time_run_so_far_fraction[job_id]:
+                    continue
+                allocation_distribution.append(
+                    self._allocation[job_id][worker_type])
+                time_run_distribution.append(
+                    time_run_so_far_fraction[job_id][worker_type])
+
+
+    @preconditions(lambda self: self._scheduler_lock.locked())
+    def _reset_time_run_so_far(self, timestamp):
         """Reset _time_run_so_far so that all jobs receive new fair allocation
         from here on out.
 
         Requires self._scheduler_lock to be held when calling this function.
         """
 
-        total_time_run_per_worker_type = {}
-        for worker_type in self._worker_types:
-            total_time_run_per_worker_type[worker_type] = self._get_total_time_run(worker_type)
-
         for worker_type in self._worker_types:
             for job_id in self._time_run_so_far:
-                if self._num_jobs == 0 or worker_type not in self._time_run_so_far[job_id]:
-                    self._time_run_so_far[job_id][worker_type] = 0.0
-                else:
-                    self._time_run_so_far[job_id][worker_type] -= (
-                        total_time_run_per_worker_type[worker_type] / self._num_jobs)
+                self._time_run_so_far[job_id][worker_type] = 0.0
         self._num_jobs = len(self._time_run_so_far)
+        self._reset_timestamp = timestamp
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -436,7 +510,7 @@ class Scheduler:
         for worker_type in self._worker_types:
             for job_id in self._time_run_so_far:
                 if tot_time_run[worker_type] == 0.0:
-                    fractions[worker_type][job_id] = 0.0
+                    fractions[worker_type][job_id] = 1.0 / len(self._worker_types)
                 else:
                     fraction = self._time_run_so_far[job_id][worker_type] / \
                         tot_time_run[worker_type]
@@ -466,6 +540,11 @@ class Scheduler:
             return self._available_worker_ids.remove()
         else:
             return self._available_worker_ids.remove_item(worker_id)
+
+    def _update_available_worker_id_keys(self, new_timestamp):
+        """Updates the timestamp field in the list of available workers."""
+
+        self._available_worker_ids.update_key(new_timestamp)
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -515,7 +594,8 @@ class Scheduler:
     ======================================================================
     """
 
-    def _register_worker_callback(self, worker_type, ip_addr, port, devices):
+    def _register_worker_callback(self, worker_type, ip_addr, port, devices,
+                                  timestamp=None):
         """Registers a worker with the scheduler.
 
         Initializes state for a new worker and assigns it an id.
@@ -555,7 +635,12 @@ class Scheduler:
                     heapq.heappush(self._per_worker_type_job_queue[worker_type],
                                    [0.0, 0, job_id])
 
-                self._reset_time_run_so_far()
+                if self._emulate:
+                    assert(timestamp is not None)
+                else:
+                    timestamp = time.time()
+                self._compute_kl_divergence(timestamp)
+                self._reset_time_run_so_far(timestamp)
 
             if self._emulate:
                 # For now, assume that all workers are added at timestamp 0 in emulation mode.
@@ -601,6 +686,8 @@ class Scheduler:
             self._time_run_so_far[job_id][worker_type] += execution_time
             if not self._emulate:
                 self._per_job_latest_timestamps[job_id] = time.time()
+            else:
+                self._per_job_latest_timestamps[job_id] = timestamp
             print("[Completed] Job ID: %d, Worker ID: %d" % (job_id, worker_id))
             # NOTE: for debug purposes.
             print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)
@@ -612,8 +699,13 @@ class Scheduler:
             else:
                 to_remove = job_id
 
+            if timestamp is None:
+                timestamp = time.time()
+            self._add_available_worker_id(worker_id, timestamp)
+
+            if len(self._per_job_latest_timestamps) > 0:
+                self._update_available_worker_id_keys(
+                    min(self._per_job_latest_timestamps.values()))
+
         if to_remove is not None:
-            self.remove_job(job_id)
-        if timestamp is None:
-            timestamp = time.time()
-        self._add_available_worker_id(worker_id, timestamp)
+            self.remove_job(job_id, timestamp=timestamp)
