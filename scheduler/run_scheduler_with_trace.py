@@ -41,6 +41,8 @@ def main(trace_filename, policy_name, worker_types, num_workers,
         policy = policies.KSPolicyNormalized()
     elif policy_name == "fifo":
         policy = policies.FIFOPolicy()
+    elif policy_name == "max_throughput":
+        policy = policies.MaximumThroughputPolicy()
     else:
         raise Exception("Unknown policy!")
     s = scheduler.Scheduler(policy, get_num_steps_to_run,

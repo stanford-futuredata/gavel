@@ -177,7 +177,7 @@ class Scheduler:
             self._add_to_queue(job_id)
             self._allocation = self._get_allocation()
             if self._emulate:
-                self._per_job_start_timestamps[job_id] = self._timestamp
+                self._per_job_start_timestamps[job_id] = timestamp
             else:
                 self._per_job_start_timestamps[job_id] = time.time()
         return job_id
@@ -196,7 +196,8 @@ class Scheduler:
         with self._scheduler_lock:
             duration = self._per_job_latest_timestamps[job_id] - \
                 self._per_job_start_timestamps[job_id]
-            self._job_completion_times[job_id] = duration
+            self._job_completion_times[job_id] = (duration,
+                                                  self._jobs[job_id].duration())
             print("Job %d completed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n" % (
                       job_id,
@@ -242,7 +243,8 @@ class Scheduler:
             if self._emulate:
                 print("Total time taken: %.2f timeunits" % self._timestamp)
             print("Job completion times:\n\t%s" % self._job_completion_times)
-            average_job_completion_time = sum(self._job_completion_times.values()) / \
+            average_job_completion_time = \
+                sum([x[0] for x in self._job_completion_times.values()]) / \
                 len(self._job_completion_times)
             unit = "timeunits" if self._emulate else "seconds"
             print("Average job completion time: %.3f %s" % (average_job_completion_time,

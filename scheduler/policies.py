@@ -40,6 +40,23 @@ class IsolatedPolicy(Policy):
         return super().unflatten(np.full((m, n), 1.0 / (m * n)), index)
 
 
+class MaximumThroughputPolicy(Policy):
+    def get_allocation(self, unflattened_throughputs):
+        throughputs, index = super().flatten(unflattened_throughputs)
+        if throughputs is None: return None
+        x = cp.Variable(throughputs.shape)
+        objective = cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs, x), axis=1)))
+        constraints = [
+            x >= 0,
+            cp.sum(x, axis=0) <= 1,
+            cp.sum(x, axis=1) <= 1,
+        ]
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve()
+        assert cvxprob.status == "optimal"
+        return super().unflatten(x.value.clip(min=0.0), index)
+
+
 class KSPolicy(Policy):
     def get_allocation_flattened(self, throughputs):
         x = cp.Variable(throughputs.shape)

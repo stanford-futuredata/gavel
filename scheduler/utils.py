@@ -1,7 +1,7 @@
 import os
 
 
-def read_all_throughputs(directory_name, worker_types=["k80", "p100", "v100"]):
+def read_all_throughputs(directory_name, worker_types=["k80", "p100", "v100", "v100_1_22"]):
     all_throughputs = {}
 
     directory = os.fsencode(directory_name)

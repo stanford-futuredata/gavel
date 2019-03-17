@@ -4,13 +4,12 @@ import random
 
 
 models = [
-    ("alexnet", 1551, 90),
-    ("nmt", 3600, 20),
-    ("inception3", 5325, 90),
-    ("vgg16", 5887, 90),
-    ("vae", 3600, 20),
-    ("lm_large", 3600, 20),
-    ("resnet50", 3700, 90)
+    "vgg16",
+    "nmt",
+    "inception3",
+    "vae",
+    "resnet50",
+    "lm_large",
 ]
 
 
@@ -22,13 +21,18 @@ def generate_trace(arrival_process, lam, trace_size):
         for inter_arrival_time in inter_arrival_times:
             arrival_times.append(arrival_times[-1] + inter_arrival_time)
     elif arrival_process == "constant":
-        arrival_times = [0.0] * trace_size
+        arrival_times = [0] * trace_size
     else:
         raise Exception("Invalid arrival process")
 
     for arrival_time in arrival_times:
         random_idx = random.randint(0, len(models)-1)
-        (model_name, duration, num_epochs) = models[random_idx]
+        model_name = models[random_idx]
+        duration = 10 ** random.uniform(0, 4)  # this is in minutes.
+        duration *= 60
+        # Split into 200 steps.
+        duration /= 200.
+        num_epochs = 200
         cmd = f"echo \"{model_name}\""
         print(f"{arrival_time}\t{model_name}\t{cmd}\t{duration}\t{num_epochs}")
 
