@@ -95,7 +95,7 @@ class KSPolicyWithPacking(Policy):
 
         job_id_combinations = list(d.keys())
         if len(job_id_combinations) == 0:
-            return None, None
+            return None, None, None
         worker_types = list(d[job_id_combinations[0]].keys())
         individual_job_ids = []
         for job_id_combination in job_id_combinations:
@@ -110,31 +110,40 @@ class KSPolicyWithPacking(Policy):
             normalizing_factors[individual_job_id] = normalizing_factor
 
         if len(worker_types) == 0:
-            return None, None
+            return None, None, None
         all_m = []
+        masks = []
         for individual_job_id in individual_job_ids:
             m = []
+            mask = []
             for job_id_combination in job_id_combinations:
                 m_row = []
+                mask_row = []
                 for worker_type in worker_types:
                     if job_id_combination in individual_job_ids:
                         if job_id_combination != individual_job_id:
                             m_row.append(0.0)
+                            mask_row.append(0.0)
                         else:
                             m_row.append(d[job_id_combination][worker_type])
+                            mask_row.append(1.0)
                     else:
                         job_id_combination_list = list(job_id_combination)
                         if individual_job_id not in job_id_combination_list:
                             m_row.append(0.0)
+                            mask_row.append(1.0)
                         else:
                             index = job_id_combination.index(individual_job_id)
                             throughputs = d[job_id_combination][worker_type]
                             m_row.append(d[job_id_combination][worker_type][index])
+                            mask_row.append(1.0)
                 m.append(m_row)
+                mask.append(mask_row)
             m = np.array(m)
             m /= normalizing_factors[individual_job_id]
             all_m.append(np.array(m))
-        return all_m, (job_id_combinations, individual_job_ids, worker_types)
+            masks.append(np.array(mask))
+        return all_m, masks, (job_id_combinations, individual_job_ids, worker_types)
 
     def unflatten(self, m, index):
         """Converts a NumPy array to a 2-level dict."""
@@ -148,7 +157,7 @@ class KSPolicyWithPacking(Policy):
         return d
 
     def get_allocation(self, unflattened_throughputs):
-        all_throughputs, index = self.flatten(unflattened_throughputs)
+        all_throughputs, masks, index = self.flatten(unflattened_throughputs)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         x = cp.Variable(all_throughputs[0].shape)
         objective_terms = []
@@ -160,13 +169,16 @@ class KSPolicyWithPacking(Policy):
             objective = cp.Maximize(cp.minimum(*objective_terms))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= 1,
+            cp.sum(x, axis=0) <= 1,  # One of these is redundant.
             cp.sum(x, axis=1) <= 1,
         ]
+        for mask in masks:
+            constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve()
-        assert cvxprob.status == "optimal"
-        return self.unflatten(x.value.clip(min=0.0),
+        x = x.value.clip(min=0.0)
+        x[x < 1e-2] = 0.0
+        return self.unflatten(x,
                               index)
 
 class FIFOPolicy(Policy):
