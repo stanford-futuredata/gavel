@@ -17,7 +17,8 @@ SLEEP_SECONDS = 2
 class Scheduler:
 
     def __init__(self, policy, get_num_steps_to_run, emulate=False,
-                 normalizing_worker_type=None, throughputs_directory=None):
+                 normalizing_worker_type=None, throughputs_directory=None,
+                 job_packing=False):
         # Emulate flag.
         self._emulate = emulate
 
@@ -43,6 +44,7 @@ class Scheduler:
         self._devices = {}
         # Policy instance.
         self._policy = policy
+        self._job_packing = job_packing
         # RPC clients.
         self._num_workers = 0
         self._worker_connections = {}
@@ -159,7 +161,6 @@ class Scheduler:
                 assert timestamp is not None
             else:
                 timestamp = time.time()
-            self._compute_kl_divergence(timestamp)
 
             job_id = self._job_id_counter
             self._job_id_counter += 1
@@ -172,6 +173,14 @@ class Scheduler:
                 self._steps_run_so_far[job_id][worker_type] = 0
                 self._throughputs[job_id][worker_type] = \
                     self._compute_throughput(job, worker_type)
+                if self._job_packing:
+                    for other_job_id in self._jobs:
+                        if other_job_id != job_id:
+                            other_job = self._jobs[other_job_id]
+                            if (job_id, other_job_id) not in self._throughputs:
+                                self._throughputs[(job_id, other_job_id)] = {}
+                            self._throughputs[(job_id, other_job_id)][worker_type] = \
+                                self._compute_throughput([job, other_job], worker_type)
 
             self._reset_time_run_so_far(timestamp)
             self._add_to_queue(job_id)
@@ -211,13 +220,20 @@ class Scheduler:
                 assert timestamp is not None
             else:
                 timestamp = time.time()
-            self._compute_kl_divergence(timestamp)
             self._reset_time_run_so_far(timestamp)
 
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._time_run_so_far[job_id]
             del self._throughputs[job_id]
+            if self._job_packing:
+                to_delete = []
+                for job_combinations in self._throughputs:
+                    if isinstance(job_combinations, tuple):
+                        if job_id in job_combinations:
+                            to_delete.append(job_combinations)
+                for job_combinations in to_delete:
+                    del self._throughputs[job_combinations]
 
             self._remove_from_queue(job_id)
             if len(self._throughputs) > 0:
@@ -310,6 +326,8 @@ class Scheduler:
                             priority = ready_priority
                             job_id = ready_job_id
 
+                # If the chosen job has an allocation of zero, return the worker to
+                # the available worker pool.
                 if self._allocation[job_id][worker_type] == 0.0:
                     if not self._emulate:
                         timestamp = time.time()
@@ -387,12 +405,27 @@ class Scheduler:
         return unflattened_allocation
 
 
-    def _compute_throughput(self, job, worker_type):
-        job_type = job.job_type()
-        job_type = tuple([job_type])
-        if job_type in self._all_throughputs and worker_type in self._all_throughputs[job_type]:
-            throughput = self._all_throughputs[job_type][worker_type]
-            return throughput[0]
+    def _compute_throughput(self, jobs, worker_type, other_jobs=None):
+        import itertools
+        if not isinstance(jobs, list):
+            job = jobs
+            job_type = job.job_type()
+            job_type = tuple([job_type])
+            if job_type in self._all_throughputs and worker_type in self._all_throughputs[job_type]:
+                throughput = self._all_throughputs[job_type][worker_type]
+                return throughput[0]
+        else:
+            job_types = []
+            for job in jobs:
+                job_types.append(job.job_type())
+            for permutation in itertools.permutations(job_types):
+                permutation = tuple(permutation)
+                if permutation in self._all_throughputs and worker_type in self._all_throughputs[permutation]:
+                    throughputs = self._all_throughputs[permutation][worker_type]
+                    throughputs_dict = {}
+                    for elem, throughput in zip(permutation, throughputs):
+                        throughputs_dict[elem] = throughput
+                    return tuple([throughputs_dict[elem] for elem in job_types])
         # TODO: compute throughput.
         # TODO: add parameter for device_id?
         return 10
@@ -641,7 +674,6 @@ class Scheduler:
                     assert(timestamp is not None)
                 else:
                     timestamp = time.time()
-                self._compute_kl_divergence(timestamp)
                 self._reset_time_run_so_far(timestamp)
 
             if self._emulate:

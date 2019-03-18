@@ -39,6 +39,8 @@ def main(trace_filename, policy_name, worker_types, num_workers,
         policy = policies.KSPolicy()
     elif policy_name == "ks_normalized":
         policy = policies.KSPolicyNormalized()
+    elif policy_name == "ks_packed":
+        policy = policies.KSPolicyWithPacking()
     elif policy_name == "fifo":
         policy = policies.FIFOPolicy()
     elif policy_name == "max_throughput":
@@ -48,7 +50,8 @@ def main(trace_filename, policy_name, worker_types, num_workers,
     s = scheduler.Scheduler(policy, get_num_steps_to_run,
                             emulate=emulate,
                             normalizing_worker_type=normalizing_worker_type,
-                            throughputs_directory=throughputs_directory)
+                            throughputs_directory=throughputs_directory,
+                            job_packing=(policy_name == "ks_packed"))
 
     if emulate:
         for i in range(num_workers):
