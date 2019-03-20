@@ -51,9 +51,9 @@ if __name__=='__main__':
                         help='Worker type')
     parser.add_argument('-i', '--ip_addr', type=str, required=True,
                         help='IP address for scheduler server')
-    parser.add_argument('-p', '--sched_port', type=int, default=50051,
+    parser.add_argument('-p', '--sched_port', type=int, default=50060,
                         help='Port number for scheduler server')
-    parser.add_argument('--worker_port', type=int, default=50052,
+    parser.add_argument('--worker_port', type=int, default=50061,
                         help='Port number for worker server')
     args = parser.parse_args()
     opt_dict = vars(args)
