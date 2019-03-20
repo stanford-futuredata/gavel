@@ -25,7 +25,6 @@ class Scheduler:
         # Datastructures to faithfully emulate.
         # Latest emulated timestamp.
         self._timestamp = 0
-        self._reset_timestamp = 0
         # Start and last processed timestamp for each job_id.
         self._per_job_start_timestamps = {}
         self._per_job_latest_timestamps = {}
@@ -80,6 +79,8 @@ class Scheduler:
                 throughputs_directory)
         else:
             self._all_throughputs = {}
+        # Verbose flag.
+        self._verbose = False
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -174,18 +175,7 @@ class Scheduler:
                 self._throughputs[job_id][worker_type] = \
                     self._compute_throughput(job, worker_type)
                 if self._job_packing:
-                    # TODO: Refactor into another method, and call in add_worker() method.
-                    for other_job_id in self._jobs:
-                        if other_job_id != job_id:
-                            other_job = self._jobs[other_job_id]
-                            if (job_id, other_job_id) not in self._throughputs:
-                                self._throughputs[(job_id, other_job_id)] = {}
-                                self._steps_run_so_far[(job_id, other_job_id)] = {}
-                                self._time_run_so_far[(job_id, other_job_id)] = {}
-                            self._throughputs[(job_id, other_job_id)][worker_type] = \
-                                self._compute_throughput([job, other_job], worker_type)
-                            self._steps_run_so_far[(job_id, other_job_id)][worker_type] = 0
-
+                    self._population_job_combination_metadata(job_id, worker_type)
 
             self._reset_time_run_so_far(timestamp)
             self._add_to_queue(job_id)
@@ -439,8 +429,26 @@ class Scheduler:
 
         unflattened_allocation = self._policy.get_allocation(
             self._throughputs)
-        print("New allocation\n\t%s\n" % unflattened_allocation)
+        if self._verbose:
+            print("New allocation\n\t%s\n" % unflattened_allocation)
         return unflattened_allocation
+
+
+    @preconditions(lambda self: self._scheduler_lock.locked())
+    def _population_job_combination_metadata(self, job_id, worker_type):
+        """Populate metadata for job combinations involving passed-in job_id."""
+
+        job = self._jobs[job_id]
+        for other_job_id in self._jobs:
+            if other_job_id != job_id:
+                other_job = self._jobs[other_job_id]
+                if (job_id, other_job_id) not in self._throughputs:
+                    self._throughputs[(job_id, other_job_id)] = {}
+                    self._steps_run_so_far[(job_id, other_job_id)] = {}
+                    self._time_run_so_far[(job_id, other_job_id)] = {}
+                self._throughputs[(job_id, other_job_id)][worker_type] = \
+                    self._compute_throughput([job, other_job], worker_type)
+                self._steps_run_so_far[(job_id, other_job_id)][worker_type] = 0
 
 
     def _compute_throughput(self, jobs, worker_type, other_jobs=None):
@@ -474,40 +482,6 @@ class Scheduler:
     ======================================================================
     """
 
-    @preconditions(lambda self: self._scheduler_lock.locked())
-    def _compute_kl_divergence(self, timestamp):
-
-        if self._allocation is None:
-            return
-
-        time_since_last_reset = timestamp - self._reset_timestamp
-
-        time_run_so_far_fraction = {}
-        for job_id in self._time_run_so_far:
-            time_run_so_far_fraction[job_id] = {}
-            for worker_type in self._time_run_so_far[job_id]:
-                if time_since_last_reset == 0:
-                    time_run_so_far_fraction[job_id][worker_type] = \
-                        1.0 / len(self._time_run_so_far[job_id])
-                else:
-                    time_run_so_far_fraction[job_id][worker_type] = \
-                        (self._time_run_so_far[job_id][worker_type] /
-                            time_since_last_reset)
-
-        for worker_type in self._worker_types:
-            allocation_distribution = []
-            time_run_distribution = []
-            for job_id in time_run_so_far_fraction:
-                if (job_id not in self._allocation or
-                    worker_type not in self._allocation[job_id]):
-                    continue
-                if worker_type not in time_run_so_far_fraction[job_id]:
-                    continue
-                allocation_distribution.append(
-                    self._allocation[job_id][worker_type])
-                time_run_distribution.append(
-                    time_run_so_far_fraction[job_id][worker_type])
-
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _reset_time_run_so_far(self, timestamp):
@@ -521,7 +495,6 @@ class Scheduler:
             for job_id_combination in self._time_run_so_far:
                 self._time_run_so_far[job_id_combination][worker_type] = 0.0
         self._num_jobs = len(self._time_run_so_far)
-        self._reset_timestamp = timestamp
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -715,11 +688,15 @@ class Scheduler:
 
             if worker_type not in self._per_worker_type_job_queue:
                 self._per_worker_type_job_queue[worker_type] = []
-                for job_id in self._steps_run_so_far:
+                for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._throughputs[job_id][worker_type] = \
                         self._compute_throughput(self._jobs[job_id],
                                                  worker_type)
+
+                    if self._job_packing:
+                        self._population_job_combination_metadata(job_id, worker_type)
+
                     # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
                     # steps run, then job_id.
@@ -785,9 +762,10 @@ class Scheduler:
                     self._per_job_latest_timestamps[job_id] = timestamp
             print("[Completed] Job ID: %s, Worker ID: %d" % (job_id_combination, worker_id))
             # NOTE: for debug purposes.
-            print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)
-            print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
-            print()
+            if self._verbose:
+                print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)
+                print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
+                print()
 
             for job_id in job_id_combination:
                 if self._get_total_steps_run(job_id) < self._jobs[job_id].num_steps():

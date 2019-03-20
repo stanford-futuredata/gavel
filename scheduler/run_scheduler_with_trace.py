@@ -37,8 +37,6 @@ def main(trace_filename, policy_name, worker_types, num_workers,
         policy = policies.IsolatedPolicy()
     elif policy_name == "ks":
         policy = policies.KSPolicy()
-    elif policy_name == "ks_normalized":
-        policy = policies.KSPolicyNormalized()
     elif policy_name == "ks_packed":
         policy = policies.KSPolicyWithPacking()
     elif policy_name == "fifo":
@@ -90,7 +88,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', "--trace_filename", type=str, required=True,
                         help="Trace filename")
     parser.add_argument("--policy_name", type=str, default="isolated",
-                        help="Policy to use: fifo|isolated|ks|ks_normalized")
+                        help="Policy to use: fifo|isolated|ks|ks_packed|max_throughput")
     parser.add_argument('-w', "--worker_types", type=str, nargs='+',
                         help="Worker types: [k80|p100|v100]+")
     parser.add_argument('-n', "--num_workers", type=int, default=None,

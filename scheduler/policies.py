@@ -33,6 +33,7 @@ class Policy:
 
 
 class IsolatedPolicy(Policy):
+
     def get_allocation(self, unflattened_throughputs):
         throughputs, index = super().flatten(unflattened_throughputs)
         if throughputs is None: return None
@@ -41,6 +42,7 @@ class IsolatedPolicy(Policy):
 
 
 class MaximumThroughputPolicy(Policy):
+
     def get_allocation(self, unflattened_throughputs):
         throughputs, index = super().flatten(unflattened_throughputs)
         if throughputs is None: return None
@@ -58,7 +60,14 @@ class MaximumThroughputPolicy(Policy):
 
 
 class KSPolicy(Policy):
-    def get_allocation_flattened(self, throughputs):
+
+    def get_allocation(self, unflattened_throughputs):
+        throughputs, index = super().flatten(unflattened_throughputs)
+        if throughputs is None: return None
+        (m, n) = throughputs.shape
+        scale = 1.0 / throughputs.sum(axis=1)
+        throughputs = throughputs * scale.reshape(m, 1)
+
         x = cp.Variable(throughputs.shape)
         objective = cp.Maximize(cp.min(cp.sum(cp.multiply(throughputs, x), axis=1)))
         constraints = [
@@ -69,29 +78,25 @@ class KSPolicy(Policy):
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve()
         assert cvxprob.status == "optimal"
-        return x.value.clip(min=0.0)
 
-    def get_allocation(self, unflattened_throughputs):
-        throughputs, index = super().flatten(unflattened_throughputs)
-        if throughputs is None: return None
-        return super().unflatten(self.get_allocation_flattened(throughputs),
-                                 index)
+        return super().unflatten(x.value.clip(min=0.0), index)
 
-
-class KSPolicyNormalized(KSPolicy):
-    def get_allocation(self, unflattened_throughputs):
-        throughputs, index = super().flatten(unflattened_throughputs)
-        if throughputs is None: return None
-        (m, n) = throughputs.shape
-        scale = 1.0 / throughputs.sum(axis=1)
-        throughputs = throughputs * scale.reshape(m, 1)
-        return super().unflatten(super().get_allocation_flattened(throughputs),
-                                 index)
 
 class KSPolicyWithPacking(Policy):
 
     def flatten(self, d):
-        """Converts a 2-level dict to a NumPy array."""
+        """
+        Converts a 2-level dict to a NumPy array.
+
+        Job ID combinations in the input dict are either a tuple or an integer.
+        If a tuple, represents a combination run on a GPU concurrently.
+        If an integer, represents a single job / application run on the
+        GPU.
+
+        Returns a list of each user's normalized throughput matrix, a list
+        of masks (used for normalization in the linear program), and an
+        index to reconstruct the allocation as a dict.
+        """
 
         job_id_combinations = list(d.keys())
         if len(job_id_combinations) == 0:
@@ -102,6 +107,9 @@ class KSPolicyWithPacking(Policy):
             if not isinstance(job_id_combination, tuple):
                 individual_job_ids.append(job_id_combination)
 
+        # Compute normalizing factor for each individual job, this normalizing
+        # factor will be used to normalize throughputs for the same job in job
+        # combinations as well.
         normalizing_factors = {}
         for individual_job_id in individual_job_ids:
             normalizing_factor = 0.0
@@ -111,15 +119,22 @@ class KSPolicyWithPacking(Policy):
 
         if len(worker_types) == 0:
             return None, None, None
+
         all_m = []
         masks = []
+        # Compute the throughput matrix and mask for each individual job.
         for individual_job_id in individual_job_ids:
             m = []
             mask = []
+            # Each throughput matrix and mask has dimension
+            # (num_app_combinations x num_worker_types).
             for job_id_combination in job_id_combinations:
                 m_row = []
                 mask_row = []
                 for worker_type in worker_types:
+                    # If job ID of interest is not in this job_id_combination,
+                    # mask and throughput should be 0.
+                    # Otherwise, use the right throughput from the input dict.
                     if job_id_combination in individual_job_ids:
                         if job_id_combination != individual_job_id:
                             m_row.append(0.0)
@@ -133,15 +148,15 @@ class KSPolicyWithPacking(Policy):
                             m_row.append(0.0)
                             mask_row.append(1.0)
                         else:
+                            # Find the index of the job of interest in the job
+                            # combination tuple.
                             index = job_id_combination.index(individual_job_id)
                             throughputs = d[job_id_combination][worker_type]
                             m_row.append(d[job_id_combination][worker_type][index])
                             mask_row.append(1.0)
                 m.append(m_row)
                 mask.append(mask_row)
-            m = np.array(m)
-            m /= normalizing_factors[individual_job_id]
-            all_m.append(np.array(m))
+            all_m.append(np.array(m) / normalizing_factors[individual_job_id])  # Normalize.
             masks.append(np.array(mask))
         return all_m, masks, (job_id_combinations, individual_job_ids, worker_types)
 
@@ -203,11 +218,14 @@ class FIFOPolicy(Policy):
                     job_id_to_schedule = self._queue.pop(0)
                     self._allocation[job_id_to_schedule] = worker_id
 
+        # worker_ids_seen keeps track of all workers that have been assigned
+        # jobs.
         worker_ids_seen = set()
         for job_id in self._allocation:
             worker_id = self._allocation[job_id]
             worker_ids_seen.add(worker_id)
 
+        # Try to allocation all queued job IDs on available workers.
         job_ids = list(throughputs.keys())
         if len(job_ids) > 0:
             job_id = job_ids[0]
@@ -217,6 +235,7 @@ class FIFOPolicy(Policy):
                         job_id_to_schedule = self._queue.pop(0)
                         self._allocation[job_id_to_schedule] = worker_id
 
+        # Construct output allocation.
         allocation = {}
         for job_id in throughputs:
             allocation[job_id] = {}
