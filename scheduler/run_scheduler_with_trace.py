@@ -17,6 +17,7 @@ def read_trace(trace_filename):
     # <timestamp at which job is enqueued> <tab> <job_type> <tab> <command> <tab> <duration> <tab> <number of times to run command>.
     with open(trace_filename, 'r') as f:
         for line in f.read().strip().split('\n'):
+            print(line)
             [timestamp, job_type, command, duration, num_steps] = line.split('\t')
             job_id = None
             job_type = job_type
@@ -30,7 +31,8 @@ def read_trace(trace_filename):
     return timestamps_and_jobs
 
 def main(trace_filename, policy_name, worker_types, num_workers,
-         normalizing_worker_type, sleep_seconds, emulate, throughputs_directory):
+         normalizing_worker_type, sleep_seconds, emulate,
+         logfile, throughputs_directory):
     prev_timestamp = None
     policy = None
     if policy_name == "isolated":
@@ -79,7 +81,7 @@ def main(trace_filename, policy_name, worker_types, num_workers,
 
     if not emulate:
         print("Total time taken: %.2f seconds" % (time.time() - start))
-    s.shutdown()
+    s.shutdown(logfile)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -96,6 +98,8 @@ if __name__ == '__main__':
     parser.add_argument('-s', "--sleep_seconds", type=float, default=0.1,
                         help="Number of seconds to sleep when waiting for all" \
                              "jobs to complete")
+    parser.add_argument('-l', "--logfile", type=str, default=None,
+                        help="Log file to write final output to")
     parser.add_argument('--emulate', action='store_true',
                         help="Emulate execution of jobs")
     parser.add_argument("--throughputs_directory", type=str, default=None,
@@ -108,6 +112,6 @@ if __name__ == '__main__':
             "num_workers shouldn't be specified when worker_types is specified"
         args.num_workers = len(args.worker_types)
         args.normalizing_worker_type = args.worker_types[0]
-    main(args.trace_filename, args.policy_name, args.worker_types, args.num_workers,
-         args.normalizing_worker_type, args.sleep_seconds, args.emulate,
-         args.throughputs_directory)
+    main(args.trace_filename, args.policy_name, args.worker_types,
+         args.num_workers, args.normalizing_worker_type, args.sleep_seconds,
+         args.emulate, args.logfile, args.throughputs_directory)

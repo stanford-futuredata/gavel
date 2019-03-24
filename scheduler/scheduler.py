@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import heapq
 import numpy as np
+import os
 from preconditions import preconditions
 import sys
 import threading
@@ -255,20 +256,32 @@ class Scheduler:
             return len(self._event_queue) == 0 and len(self._steps_run_so_far) == 0
 
 
-    def shutdown(self):
+    def shutdown(self, logfile=None):
         """Sends a shutdown signal to every worker and ends the scheduler."""
+        output = []
         with self._scheduler_lock:
             if self._emulate:
-                print("Total time taken: %.2f timeunits" % self._timestamp)
-            print("Job completion times:\n\t%s" % self._job_completion_times)
+                output.append("Total time taken: %.2f timeunits" % self._timestamp)
+            output.append("Job completion times:\n\t%s" % self._job_completion_times)
             average_job_completion_time = \
                 sum([x[0] for x in self._job_completion_times.values()]) / \
                 len(self._job_completion_times)
             unit = "timeunits" if self._emulate else "seconds"
-            print("Average job completion time: %.3f %s" % (average_job_completion_time,
-                                                            unit))
+            output.append("Average job completion time: %.3f %s" % (average_job_completion_time,
+                                                                    unit))
             for worker_id in self._worker_connections:
                 self._worker_connections[worker_id].shutdown()
+        if logfile is None:
+            for line in output:
+                print(line)
+        else:
+            if logfile[0] != '/':
+                path = os.path.join(os.getcwd(), logfile)
+            else:
+                path = logfile
+            with open(path, 'w') as f:
+                for line in output:
+                    f.write(line)
         # TODO: Any other cleanup?
         sys.exit()
 
