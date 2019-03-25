@@ -17,6 +17,80 @@ SLEEP_SECONDS = 2
 
 class Scheduler:
 
+    class JobQueueEntry(object):
+
+        def __init__(self, priority, steps_run, job_id):
+            self._priority = priority
+            self._steps_run = steps_run
+            self._job_id = job_id
+
+        @property
+        def priority(self):
+            return self._priority
+
+        @priority.setter
+        def priority(self, priority):
+            self._priority = priority
+
+        @property
+        def steps_run(self):
+            return self._steps_run
+
+        @steps_run.setter
+        def steps_run(self, steps_run):
+            self._steps_run = steps_run
+
+        @property
+        def job_id(self):
+            return self._job_id
+
+        def __lt__(self, other):
+            if self._priority != other._priority:
+                return self._priority < other._priority
+            elif self._steps_run != other._steps_run:
+                return self._steps_run < other.steps_run
+            else:
+                return self._job_id < other.job_id
+
+        def __eq__(self, other):
+            return (self._priority == other_.priority
+                    and self._steps_run == other._steps_run
+                    and self._job_id == other._job_id)
+
+    class JobQueue:
+
+        def __init__(self):
+            self._queue = []
+
+        def __getitem__(self, index):
+            return self._queue[index]
+
+        def add_job(self, priority, steps_run, job_id, heappush=False):
+            entry = Scheduler.JobQueueEntry(priority, steps_run, job_id)
+            if heappush:
+                heapq.heappush(self._queue, entry)
+            else:
+                self._queue.append(entry)
+
+        def pop(self, i):
+            self._queue.pop(i)
+
+        def heapify(self):
+            heapq.heapify(self._queue)
+
+        def update_entry(self, i, priority=None, steps_run=None):
+            if priority is not None:
+                self._queue[i].priority = priority
+
+            if steps_run is not None:
+                self._queue[i].steps_run = steps_run
+
+        def size(self):
+            return len(self._queue)
+
+        def get_sorted_queue(self):
+            return sorted(self._queue)
+
     def __init__(self, policy, get_num_steps_to_run, emulate=False,
                  normalizing_worker_type=None, throughputs_directory=None,
                  job_packing=False):
@@ -314,7 +388,7 @@ class Scheduler:
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
-                if len(self._per_worker_type_job_queue[worker_type]) == 0:
+                if self._per_worker_type_job_queue[worker_type].size() == 0:
                     if not self._emulate:
                         timestamp = time.time()
                     self._add_available_worker_id(worker_id, timestamp)
@@ -323,8 +397,9 @@ class Scheduler:
                 # TODO: Change job_id_combination to be a tuple always.
                 # job_id_combination is a tuple if multiple applications running;
                 # otherwise just an integer.
-                [priority, _, job_id_combination] = \
-                    self._per_worker_type_job_queue[worker_type][0]
+                queued_job = self._per_worker_type_job_queue[worker_type][0]
+                job_id_combination = queued_job.job_id
+                priority = queued_job.priority
                 if len(job_id_combination) == 1:
                     job_id_combination = job_id_combination[0]
 
@@ -340,9 +415,11 @@ class Scheduler:
                         job_id_combination, 0)
                 if timestamp < latest_timestamp:
                     found_jobs = []
-                    sorted_queue = sorted(self._per_worker_type_job_queue[worker_type])
+                    sorted_queue = self._per_worker_type_job_queue[worker_queue].get_sorted_queue()
                     for i in range(1, len(sorted_queue)):
-                        [ready_priority, _, ready_job_id_combination] = sorted_queue[i]
+                        ready_job = sorted_queue[i]
+                        ready_job_id_combination = ready_job.job_id
+                        ready_priority = ready_job.priority
                         latest_ready_timestamp = 0
                         for ready_job_id in ready_job_id_combination:
                             latest_ready_timestamp = max(
@@ -549,12 +626,13 @@ class Scheduler:
         """
 
         for worker_type in self._worker_types:
-            self._per_worker_type_job_queue[worker_type].append([0.0, 0, (job_id,)])
+            self._per_worker_type_job_queue[worker_type].add_job(0.0, 0,
+                                                                 (job_id,))
             for job_id_combination in self._throughputs:
                 if isinstance(job_id_combination, tuple):
                     if job_id in job_id_combination:
-                        self._per_worker_type_job_queue[worker_type].append(
-                            [0.0, 0.0, job_id_combination])
+                        self._per_worker_type_job_queue[worker_type].add_job(
+                            0.0, 0.0, job_id_combination)
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -569,10 +647,11 @@ class Scheduler:
         for worker_type in self._worker_types:
             while True:
                 found = False
-                for i in range(len(self._per_worker_type_job_queue[worker_type])):
-                    job_id_combination = self._per_worker_type_job_queue[worker_type][i][2]
+                for i in range(self._per_worker_type_job_queue[worker_type].size()):
+                    queued_job = self._per_worker_type_job_queue[worker_type][i]
+                    job_id_combination = queued_job.job_id
                     if job_id in job_id_combination:
-                        if len(self._per_worker_type_job_queue[worker_type]) > 0:
+                        if self._per_worker_type_job_queue[worker_type].size() > 0:
                             self._per_worker_type_job_queue[worker_type].pop(i)
                             found = True
                         break
@@ -613,18 +692,21 @@ class Scheduler:
                     fraction = self._time_run_so_far[job_id][worker_type] / \
                         tot_time_run[worker_type]
                     fractions[worker_type][job_id] = fraction
-            for i in range(len(self._per_worker_type_job_queue[worker_type])):
-                [_, _, job_id] = self._per_worker_type_job_queue[worker_type][i]
+            for i in range(self._per_worker_type_job_queue[worker_type].size()):
+                queued_job = self._per_worker_type_job_queue[worker_type][i]
+                job_id = queued_job.job_id
                 if len(job_id) == 1:
                     job_id = job_id[0]
                 if self._allocation[job_id][worker_type] == 0.0:
-                    self._per_worker_type_job_queue[worker_type][i][0] = float("inf")
+                    self._per_worker_type_job_queue[worker_type].update_entry(
+                            i, priority=float("inf"))
                 else:
-                    self._per_worker_type_job_queue[worker_type][i][0] = fractions[worker_type][job_id] / \
-                        self._allocation[job_id][worker_type]
-                self._per_worker_type_job_queue[worker_type][i][1] = \
-                    self._steps_run_so_far[job_id][worker_type]
-            heapq.heapify(self._per_worker_type_job_queue[worker_type])
+                    new_priority = fractions[worker_type][job_id] /\
+                            self._allocation[job_id][worker_type]
+                    steps_run = self._steps_run_so_far[job_id][worker_type]
+                    self._per_worker_type_job_queue[worker_type].update_entry(
+                            i, priority=new_priority, steps_run=steps_run)
+            self._per_worker_type_job_queue[worker_type].heapify()
 
 
     def _add_available_worker_id(self, worker_id, timestamp):
@@ -654,10 +736,11 @@ class Scheduler:
             if timestamp > self._per_job_latest_timestamps.get(job_id, 0):
                 continue
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-            for i in range(len(self._per_worker_type_job_queue[worker_type])):
-                if self._per_worker_type_job_queue[worker_type][i][2] == job_id:
-                    priorities.append((self._per_worker_type_job_queue[worker_type][i][0],
-                                       worker_id, worker_type))
+            for i in range(self._per_worker_type_job_queue[worker_type].size()):
+                if self._per_worker_type_job_queue[worker_type][i].job_id == job_id:
+                    queued_job = self._per_worker_type_job_queue[worker_type][i]
+                    priorities.append((queued_job.priority, worker_id,
+                                       worker_type))
         priorities.sort(key=lambda x: x[0])
         if len(priorities) == 0:
             return float("inf"), None
@@ -727,7 +810,7 @@ class Scheduler:
             self._devices[worker_id] = devices
 
             if worker_type not in self._per_worker_type_job_queue:
-                self._per_worker_type_job_queue[worker_type] = []
+                self._per_worker_type_job_queue[worker_type] = self.JobQueue()
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._throughputs[job_id][worker_type] = \
@@ -740,8 +823,8 @@ class Scheduler:
                     # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
                     # steps run, then job_id.
-                    heapq.heappush(self._per_worker_type_job_queue[worker_type],
-                                   [0.0, 0, (job_id,)])
+                    self._per_worker_type_job_queue[worker_type].add_job(
+                            0.0, 0, (job_id,), heappush=True)
 
                 if self._emulate:
                     assert(timestamp is not None)
