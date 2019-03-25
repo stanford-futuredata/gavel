@@ -281,7 +281,7 @@ class Scheduler:
                 path = logfile
             with open(path, 'w') as f:
                 for line in output:
-                    f.write(line)
+                    f.write(line + '\n')
         # TODO: Any other cleanup?
         sys.exit()
 
