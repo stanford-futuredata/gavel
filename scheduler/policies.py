@@ -98,14 +98,14 @@ class KSPolicyWithPacking(Policy):
         index to reconstruct the allocation as a dict.
         """
 
-        job_id_combinations = list(d.keys())
-        if len(job_id_combinations) == 0:
+        job_ids = list(d.keys())
+        if len(job_ids) == 0:
             return None, None, None
-        worker_types = list(d[job_id_combinations[0]].keys())
+        worker_types = list(d[job_ids[0]].keys())
         individual_job_ids = []
-        for job_id_combination in job_id_combinations:
-            if not isinstance(job_id_combination, tuple):
-                individual_job_ids.append(job_id_combination)
+        for job_id in job_ids:
+            for individual_job_id in job_id.singletons():
+                individual_job_ids.append(individual_job_id)
 
         # Compute normalizing factor for each individual job, this normalizing
         # factor will be used to normalize throughputs for the same job in job
@@ -128,37 +128,36 @@ class KSPolicyWithPacking(Policy):
             mask = []
             # Each throughput matrix and mask has dimension
             # (num_app_combinations x num_worker_types).
-            for job_id_combination in job_id_combinations:
+            for job_id in job_ids:
                 m_row = []
                 mask_row = []
                 for worker_type in worker_types:
                     # If job ID of interest is not in this job_id_combination,
                     # mask and throughput should be 0.
                     # Otherwise, use the right throughput from the input dict.
-                    if job_id_combination in individual_job_ids:
-                        if job_id_combination != individual_job_id:
+                    if job_id in individual_job_ids:
+                        if job_id != individual_job_id:
                             m_row.append(0.0)
                             mask_row.append(0.0)
                         else:
-                            m_row.append(d[job_id_combination][worker_type])
+                            m_row.append(d[job_id][worker_type])
                             mask_row.append(1.0)
                     else:
-                        job_id_combination_list = list(job_id_combination)
-                        if individual_job_id not in job_id_combination_list:
+                        if not individual_job_id.overlaps_with(job_id):
                             m_row.append(0.0)
                             mask_row.append(1.0)
                         else:
                             # Find the index of the job of interest in the job
                             # combination tuple.
-                            index = job_id_combination.index(individual_job_id)
-                            throughputs = d[job_id_combination][worker_type]
-                            m_row.append(d[job_id_combination][worker_type][index])
+                            index = job_id.as_tuple().index(individual_job_id[0])
+                            throughputs = d[job_id][worker_type]
+                            m_row.append(d[job_id][worker_type][index])
                             mask_row.append(1.0)
                 m.append(m_row)
                 mask.append(mask_row)
             all_m.append(np.array(m) / normalizing_factors[individual_job_id])  # Normalize.
             masks.append(np.array(mask))
-        return all_m, masks, (job_id_combinations, individual_job_ids, worker_types)
+        return all_m, masks, (job_ids, individual_job_ids, worker_types)
 
     def unflatten(self, m, index):
         """Converts a NumPy array to a 2-level dict."""

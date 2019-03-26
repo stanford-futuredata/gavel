@@ -32,10 +32,14 @@ class Scheduler:
                 raise ValueError('Attempting to access invalid JobIdPair '
                                  'index %d' % index)
         def __lt__(self, other):
-            if self[0] == other[0]:
+            if self[0] != other[0]:
+                return self[0] < other[0]
+            elif self[1] is None and self[0] is None:
+                return False
+            elif self[1] is not None and other[1] is not None:
                 return self[1] < other[1]
             else:
-                return self[0] < other[0]
+                return self[1] is None
 
         def __eq__(self, other):
             return self[0] == other[0] and self[1] == other[1]
@@ -53,7 +57,7 @@ class Scheduler:
             job_id_0 = self[1 - index_0]
             job_id_1 = other[1 - index_1]
 
-            return JobIdPair(job_id_0, job_id_1)
+            return Scheduler.JobIdPair(job_id_0, job_id_1)
 
         def __sub__(self, other):
             if self == other:
@@ -64,9 +68,9 @@ class Scheduler:
                                  'job id pair and a single job id')
             assert(other[1] is None)
             if self[0] == other[0]:
-                return JobIdPair(self[1], None)
+                return Scheduler.JobIdPair(self[1], None)
             elif self[1] == other[0]:
-                return JobIdPair(self[0], None)
+                return Scheduler.JobIdPair(self[0], None)
             else:
                 return None
 
@@ -92,7 +96,8 @@ class Scheduler:
             if self[1] is None:
                 return (self,)
             else:
-                return (JobIdPair(self[0], None), JobIdPair(self[1], None))
+                return (Scheduler.JobIdPair(self[0], None),
+                        Scheduler.JobIdPair(self[1], None))
 
     class JobQueueEntry(object):
 
@@ -645,7 +650,8 @@ class Scheduler:
             job = jobs
             job_type = job.job_type()
             job_type = tuple([job_type])
-            if job_type in self._all_throughputs and worker_type in self._all_throughputs[job_type]:
+            if (job_type in self._all_throughputs and
+                worker_type in self._all_throughputs[job_type]):
                 throughput = self._all_throughputs[job_type][worker_type]
                 return throughput[0]
         else:
@@ -654,15 +660,15 @@ class Scheduler:
                 job_types.append(job.job_type())
             for permutation in itertools.permutations(job_types):
                 permutation = tuple(permutation)
-                if permutation in self._all_throughputs and worker_type in self._all_throughputs[permutation]:
+                if (permutation in self._all_throughputs and
+                    worker_type in self._all_throughputs[permutation]):
                     throughputs = self._all_throughputs[permutation][worker_type]
                     throughputs_dict = {}
                     for elem, throughput in zip(permutation, throughputs):
                         throughputs_dict[elem] = throughput
                     return tuple([throughputs_dict[elem] for elem in job_types])
-        # TODO: compute throughput.
-        # TODO: add parameter for device_id?
-        return 10
+        raise ValueError('Error computing throughput for job(s) - '
+                         'Did you specify a throughputs directory?')
 
     """
     ======================================================================
@@ -947,7 +953,7 @@ class Scheduler:
                     self._per_job_latest_timestamps[single_job_id] = timestamp
                 else:
                     self._per_job_latest_timestamps[single_job_id] = time.time()
-            print("[Completed] Job ID: %s, Worker ID: %d" % (job_id[0],
+            print("[Completed] Job ID: %s, Worker ID: %d" % (job_id,
                                                              worker_id))
             # NOTE: for debug purposes.
             if self._verbose:
