@@ -20,6 +20,10 @@ class Scheduler:
     class JobIdPair():
 
         def __init__(self, job0, job1):
+            if job0 is None and job1 is None:
+                raise ValueError('Cannot form JobIdPair with both ids None')
+            elif job0 is None and job1 is not None:
+                raise ValueError('First job id in a JobIdPair cannot be None')
             self._job0 = job0
             self._job1 = job1
 
@@ -49,15 +53,15 @@ class Scheduler:
 
         def __add__(self, other):
             try:
-                index_0 = self.as_tuple().index(None)
-                index_1 = other.as_tuple().index(None)
+                index0 = self.as_tuple().index(None)
+                index1 = other.as_tuple().index(None)
             except ValueError:
                 raise ValueError('Can only merge two single job ids')
 
-            job_id_0 = self[1 - index_0]
-            job_id_1 = other[1 - index_1]
+            job_id0 = self[1 - index0]
+            job_id1 = other[1 - index1]
 
-            return Scheduler.JobIdPair(job_id_0, job_id_1)
+            return Scheduler.JobIdPair(job_id0, job_id1)
 
         def __sub__(self, other):
             if self == other:
@@ -221,7 +225,8 @@ class Scheduler:
         self._allocation = {}
         # Epochs run on each worker_id, for all current incomplete applications.
         self._steps_run_so_far = {}
-        # Time run so far on each worker_id, for all current incomplete applications.
+        # Time run so far on each worker_id, for all current incomplete
+        # applications.
         self._time_run_so_far = {}
         # Number of jobs to compute fair share.
         self._num_jobs = 0
@@ -281,15 +286,16 @@ class Scheduler:
 
     @preconditions(lambda self: self._emulate)
     def execute_from_event_queue(self, timestamp):
-        """Executes all events that have a timestamp lower than the current timestamp."""
+        """Executes all events with timestamps lower than the current timestamp."""
 
         while True:
             with self._scheduler_lock:
                 if len(self._event_queue) == 0:
                     return
-                # If passed-in timestamp is before the first timestamp in the event queue,
-                # and no jobs are scheduled to run.
-                if timestamp < self._event_queue[0][0] and len(self._steps_run_so_far) > 0:
+                # If passed-in timestamp is before the first timestamp in the,
+                # event queue and no jobs are scheduled to run.
+                if (timestamp < self._event_queue[0][0] and
+                    len(self._steps_run_so_far) > 0):
                     return
                 (_, func, args) = self._event_queue.pop(0)
             func(*args, timestamp=timestamp)
@@ -333,8 +339,8 @@ class Scheduler:
                 self._throughputs[job_id][worker_type] = \
                     self._compute_throughput(job, worker_type)
                 if self._job_packing:
-                    self._population_job_combination_metadata(job_id,
-                                                              worker_type)
+                    self._populate_job_combination_metadata(job_id,
+                                                            worker_type)
 
             self._reset_time_run_so_far(timestamp)
             self._add_to_queue(job_id)
@@ -411,9 +417,10 @@ class Scheduler:
 
 
     def is_done(self):
-        """Returns whether the scheduler is done with all of its assigned work."""
+        """Returns whether the scheduler is done with all its assigned work."""
         with self._scheduler_lock:
-            return len(self._event_queue) == 0 and len(self._steps_run_so_far) == 0
+            return (len(self._event_queue) == 0 and
+                    len(self._steps_run_so_far) == 0)
 
 
     def shutdown(self, logfile=None):
@@ -421,14 +428,16 @@ class Scheduler:
         output = []
         with self._scheduler_lock:
             if self._emulate:
-                output.append("Total time taken: %.2f timeunits" % self._timestamp)
-            output.append("Job completion times:\n\t%s" % self._job_completion_times)
+                output.append("Total time taken: "
+                              "%.2f timeunits" % self._timestamp)
+            output.append("Job completion times:"
+                          "\n\t%s" % self._job_completion_times)
             average_job_completion_time = \
                 sum([x[0] for x in self._job_completion_times.values()]) / \
                 len(self._job_completion_times)
             unit = "timeunits" if self._emulate else "seconds"
-            output.append("Average job completion time: %.3f %s" % (average_job_completion_time,
-                                                                    unit))
+            output.append("Average job completion time: "
+                          "%.3f %s" % (average_job_completion_time, unit))
             for worker_id in self._worker_connections:
                 self._worker_connections[worker_id].shutdown()
         if logfile is None:
@@ -484,16 +493,12 @@ class Scheduler:
                 job_id = queued_job.job_id
                 priority = queued_job.priority
 
-                # If the highest priority job involves waiting, pick an earlier job
-                # with reasonably high priority.
+                # If the highest priority job involves waiting, pick an earlier
+                # job with reasonably high priority.
                 latest_timestamp = 0
-                if job_id.is_pair():
-                    for single_job_id in job_id.singletons():
-                        latest_timestamp = max(latest_timestamp,
-                                               self._per_job_latest_timestamps.get(single_job_id, 0))
-                else:
-                    latest_timestamp = self._per_job_latest_timestamps.get(
-                        job_id, 0)
+                for single_job_id in job_id.singletons():
+                    latest_timestamp = max(latest_timestamp,
+                                           self._per_job_latest_timestamps.get(single_job_id, 0))
                 if timestamp < latest_timestamp:
                     found_jobs = []
                     sorted_queue = self._per_worker_type_job_queue[worker_queue].get_sorted_queue()
@@ -503,30 +508,31 @@ class Scheduler:
                         ready_priority = ready_job.priority
                         latest_ready_timestamp = 0
                         for single_ready_job_id in ready_job_id.singletons():
-                            latest_ready_timestamp = max(
-                                latest_ready_timestamp,
-                                self._per_job_latest_timestamps.get(single_ready_job_id, 0))
+                            latest_ready_timestamp = max(latest_ready_timestamp,
+                                                        self._per_job_latest_timestamps.get(single_ready_job_id, 0))
                         if latest_timestamp > latest_ready_timestamp:
-                            found_jobs.append((latest_ready_timestamp, ready_priority,
-                                               ready_job_id))
+                            found_jobs.append((latest_ready_timestamp,
+                                               ready_priority, ready_job_id))
                             break
                     # Sort by the timestamp when ready.
                     found_jobs.sort()
                     if len(found_jobs) > 0:
-                        # Swap jobs, so that the next job scheduled is available faster.
+                        # Swap jobs, so that the next job scheduled is available
+                        # faster.
                         (_, ready_priority, ready_job_id) = found_jobs[0]
-                        # Pick a job_combination with up to 3x higher priority if
-                        # the job_combination can be scheduled earlier.
+                        # Pick a job_combination with up to 3x higher priority
+                        # if the job_combination can be scheduled earlier.
                         if ready_priority < (3 * priority):
                             priority = ready_priority
                             job_id = ready_job_id
 
-                # If the chosen job has an allocation of zero, return the worker to
-                # the available worker pool.
+                # If the chosen job has an allocation of zero, return the worker
+                # to the available worker pool.
                 if self._allocation[job_id][worker_type] == 0.0:
                     if not self._emulate:
                         timestamp = time.time()
-                    all_timestamps = self._available_worker_ids.get_unique_keys_sorted()
+                    all_timestamps = \
+                            self._available_worker_ids.get_unique_keys_sorted()
                     if self._emulate:
                         if len(all_timestamps) > 1:
                             timestamp = all_timestamps[1]
@@ -566,7 +572,8 @@ class Scheduler:
 
             # Can only call _done_callback with lock released.
             if self._emulate:
-                # When emulating, directly call _done_callback since there's no worker.
+                # When emulating, directly call _done_callback since there's
+                # no worker.
                 if not job_id.is_pair():
                     throughputs = (self._throughputs[job_id][worker_type],)
                 else:
@@ -615,8 +622,8 @@ class Scheduler:
 
             {0: {"v100": 0.25, "p100": 0.95}, 1: {"v100": 0.75, "p100": 0.05}}
 
-            indicates that for 25% of the time, worker type 'v100' should run job 0,
-            and for 95% of the time, worker type 'p100' should run job 0.
+            indicates that for 25% of the time, worker type 'v100' should run,
+            job 0 and for 95% of the time, worker type 'p100' should run job 0.
         """
 
         unflattened_allocation = self._policy.get_allocation(
@@ -627,7 +634,7 @@ class Scheduler:
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _population_job_combination_metadata(self, job_id, worker_type):
+    def _populate_job_combination_metadata(self, job_id, worker_type):
         """Populate metadata for job combinations involving passed-in job_id."""
 
         job = self._jobs[job_id]
@@ -762,11 +769,11 @@ class Scheduler:
         for worker_type in self._worker_types:
             for job_id in self._time_run_so_far:
                 if tot_time_run[worker_type] == 0.0:
-                    fractions[worker_type][job_id] = 1.0 / len(self._worker_types)
+                    fraction = 1.0 / len(self._worker_types)
                 else:
                     fraction = self._time_run_so_far[job_id][worker_type] / \
                         tot_time_run[worker_type]
-                    fractions[worker_type][job_id] = fraction
+                fractions[worker_type][job_id] = fraction
             for i in range(self._per_worker_type_job_queue[worker_type].size()):
                 queued_job = self._per_worker_type_job_queue[worker_type][i]
                 job_id = queued_job.job_id
@@ -824,7 +831,7 @@ class Scheduler:
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_total_steps_run(self, job_id):
-        """Returns the total number of steps run for the job with passed-in job_id."""
+        """Returns the total number of steps run for job with id job_id."""
 
         # TODO: change to exception
         assert(job_id in self._steps_run_so_far)
@@ -834,13 +841,14 @@ class Scheduler:
         for other_job_id in self._steps_run_so_far:
             if other_job_id.is_pair() and other_job_id.overlaps_with(job_id):
                 for worker_type in self._steps_run_so_far[other_job_id]:
-                    total_steps_run += self._steps_run_so_far[other_job_id][worker_type]
+                    total_steps_run += \
+                            self._steps_run_so_far[other_job_id][worker_type]
         return total_steps_run
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_total_time_run(self, worker_type):
-        """Returns the total time run on the passed-in worker_type since the last reset."""
+        """Returns the total time run on worker_type since the last reset."""
 
         total_time_run = 0.0
         for job_id in self._time_run_so_far:
@@ -891,8 +899,8 @@ class Scheduler:
                                                  worker_type)
 
                     if self._job_packing:
-                        self._population_job_combination_metadata(job_id,
-                                                                  worker_type)
+                        self._populate_job_combination_metadata(job_id,
+                                                                worker_type)
 
                     # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
@@ -907,7 +915,8 @@ class Scheduler:
                 self._reset_time_run_so_far(timestamp)
 
             if self._emulate:
-                # For now, assume that all workers are added at timestamp 0 in emulation mode.
+                # For now, assume that all workers are added at timestamp 0 in
+                # emulation mode.
                 timestamp = 0
             else:
                 timestamp = time.time()
@@ -957,7 +966,8 @@ class Scheduler:
                                                              worker_id))
             # NOTE: for debug purposes.
             if self._verbose:
-                print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)
+                print("[{job_id: {worker_type: steps}}]",
+                      self._steps_run_so_far)
                 print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
                 print()
 
