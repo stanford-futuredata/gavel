@@ -52,16 +52,10 @@ class Scheduler:
             return hash(self.as_tuple())
 
         def __add__(self, other):
-            try:
-                index0 = self.as_tuple().index(None)
-                index1 = other.as_tuple().index(None)
-            except ValueError:
+            if self.is_pair() or other.is_pair():
                 raise ValueError('Can only merge two single job ids')
 
-            job_id0 = self[1 - index0]
-            job_id1 = other[1 - index1]
-
-            return Scheduler.JobIdPair(job_id0, job_id1)
+            return Scheduler.JobIdPair(self[0], other[0])
 
         def __sub__(self, other):
             if self == other:
@@ -292,7 +286,7 @@ class Scheduler:
             with self._scheduler_lock:
                 if len(self._event_queue) == 0:
                     return
-                # If passed-in timestamp is before the first timestamp in the,
+                # If passed-in timestamp is before the first timestamp in the
                 # event queue and no jobs are scheduled to run.
                 if (timestamp < self._event_queue[0][0] and
                     len(self._steps_run_so_far) > 0):
@@ -509,7 +503,7 @@ class Scheduler:
                         latest_ready_timestamp = 0
                         for single_ready_job_id in ready_job_id.singletons():
                             latest_ready_timestamp = max(latest_ready_timestamp,
-                                                        self._per_job_latest_timestamps.get(single_ready_job_id, 0))
+                                                         self._per_job_latest_timestamps.get(single_ready_job_id, 0))
                         if latest_timestamp > latest_ready_timestamp:
                             found_jobs.append((latest_ready_timestamp,
                                                ready_priority, ready_job_id))
