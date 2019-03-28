@@ -51,27 +51,6 @@ class Scheduler:
         def __hash__(self):
             return hash(self.as_tuple())
 
-        def __add__(self, other):
-            if self.is_pair() or other.is_pair():
-                raise ValueError('Can only merge two single job ids')
-
-            return Scheduler.JobIdPair(self[0], other[0])
-
-        def __sub__(self, other):
-            if self == other:
-                raise ValueError('Cannot take the difference between two equal '
-                                 'job ids')
-            elif not self.is_pair() or other.is_pair():
-                raise ValueError('Can only take difference between a '
-                                 'job id pair and a single job id')
-            assert(other[1] is None)
-            if self[0] == other[0]:
-                return Scheduler.JobIdPair(self[1], None)
-            elif self[1] == other[0]:
-                return Scheduler.JobIdPair(self[0], None)
-            else:
-                return None
-
         def __repr__(self):
             if self[1] is None:
                 return '%d' % (self[0])
@@ -82,10 +61,11 @@ class Scheduler:
             return (self._job0, self._job1)
 
         def overlaps_with(self, other):
-            return ((self[0] is not None and self[0] == other[0]) or
-                    (self[0] is not None and self[0] == other[1]) or
-                    (self[1] is not None and self[1] == other[0]) or
-                    (self[1] is not None and self[1] == other[1]))
+            if self.is_pair():
+                raise ValueError('Can only call overlaps_with on a '
+                                 'single job id')
+            return ((other[0] is not None and self[0] == other[0]) or
+                    (other[1] is not None and self[0] == other[1]))
 
         def is_pair(self):
             return self._job0 is not None and self._job1 is not None
@@ -386,13 +366,13 @@ class Scheduler:
                 for other_job_id in self._throughputs:
                     if (other_job_id.is_pair() and
                         job_id.overlaps_with(other_job_id)):
-                        only_other_job_id = other_job_id - job_id
-                        if only_other_job_id is None:
-                            continue
+                        for only_other_job_id in other_job_id.singletons():
+                            if only_other_job_id != job_id:
+                                break
                         for worker_type in self._worker_types:
                             self._steps_run_so_far[only_other_job_id][worker_type] += \
                                     self._steps_run_so_far[other_job_id][worker_type]
-                            to_delete.append(other_job_id)
+                        to_delete.append(other_job_id)
                 for other_job_id in to_delete:
                     del self._throughputs[other_job_id]
                     del self._steps_run_so_far[other_job_id]
@@ -635,7 +615,7 @@ class Scheduler:
         for other_job_id in self._jobs:
             if other_job_id != job_id:
                 other_job = self._jobs[other_job_id]
-                merged_job_id = job_id + other_job_id
+                merged_job_id = self.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
                     self._throughputs[merged_job_id] = {}
                     self._steps_run_so_far[merged_job_id] = {}
@@ -833,7 +813,7 @@ class Scheduler:
         for worker_type in self._steps_run_so_far[job_id]:
             total_steps_run += self._steps_run_so_far[job_id][worker_type]
         for other_job_id in self._steps_run_so_far:
-            if other_job_id.is_pair() and other_job_id.overlaps_with(job_id):
+            if other_job_id.is_pair() and job_id.overlaps_with(other_job_id):
                 for worker_type in self._steps_run_so_far[other_job_id]:
                     total_steps_run += \
                             self._steps_run_so_far[other_job_id][worker_type]

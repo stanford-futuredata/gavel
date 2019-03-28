@@ -106,8 +106,8 @@ class KSPolicyWithPacking(Policy):
         worker_types = list(d[job_ids[0]].keys())
         single_job_ids = []
         for job_id in job_ids:
-            for single_job_id in job_id.singletons():
-                single_job_ids.append(single_job_id)
+            if not job_id.is_pair():
+                single_job_ids.append(job_id)
 
         # Compute normalizing factor for each individual job, this normalizing
         # factor will be used to normalize throughputs for the same job in job
