@@ -17,6 +17,161 @@ SLEEP_SECONDS = 2
 
 class Scheduler:
 
+    class JobIdPair():
+
+        def __init__(self, job0, job1):
+            if job0 is None and job1 is None:
+                raise ValueError('Cannot form JobIdPair with both ids None')
+            elif job0 is None and job1 is not None:
+                raise ValueError('First job id in a JobIdPair cannot be None')
+            self._job0 = job0
+            self._job1 = job1
+
+        def __getitem__(self, index):
+            if index == 0:
+                return self._job0
+            elif index == 1:
+                return self._job1
+            else:
+                raise ValueError('Attempting to access invalid JobIdPair '
+                                 'index %d' % index)
+        def __lt__(self, other):
+            if self[0] != other[0]:
+                return self[0] < other[0]
+            elif self[1] is None and self[0] is None:
+                return False
+            elif self[1] is not None and other[1] is not None:
+                return self[1] < other[1]
+            else:
+                return self[1] is None
+
+        def __eq__(self, other):
+            return self[0] == other[0] and self[1] == other[1]
+
+        def __hash__(self):
+            return hash(self.as_tuple())
+
+        def __add__(self, other):
+            if self.is_pair() or other.is_pair():
+                raise ValueError('Can only merge two single job ids')
+
+            return Scheduler.JobIdPair(self[0], other[0])
+
+        def __sub__(self, other):
+            if self == other:
+                raise ValueError('Cannot take the difference between two equal '
+                                 'job ids')
+            elif not self.is_pair() or other.is_pair():
+                raise ValueError('Can only take difference between a '
+                                 'job id pair and a single job id')
+            assert(other[1] is None)
+            if self[0] == other[0]:
+                return Scheduler.JobIdPair(self[1], None)
+            elif self[1] == other[0]:
+                return Scheduler.JobIdPair(self[0], None)
+            else:
+                return None
+
+        def __repr__(self):
+            if self[1] is None:
+                return '%d' % (self[0])
+            else:
+                return ('(%d, %d)' % (self[0], self[1]))
+
+        def as_tuple(self):
+            return (self._job0, self._job1)
+
+        def overlaps_with(self, other):
+            return ((self[0] is not None and self[0] == other[0]) or
+                    (self[0] is not None and self[0] == other[1]) or
+                    (self[1] is not None and self[1] == other[0]) or
+                    (self[1] is not None and self[1] == other[1]))
+
+        def is_pair(self):
+            return self._job0 is not None and self._job1 is not None
+
+        def singletons(self):
+            if self[1] is None:
+                return (self,)
+            else:
+                return (Scheduler.JobIdPair(self[0], None),
+                        Scheduler.JobIdPair(self[1], None))
+
+    class JobQueueEntry(object):
+
+        def __init__(self, priority, steps_run, job_id):
+            self._priority = priority
+            self._steps_run = steps_run
+            self._job_id = job_id
+
+        @property
+        def priority(self):
+            return self._priority
+
+        @priority.setter
+        def priority(self, priority):
+            self._priority = priority
+
+        @property
+        def steps_run(self):
+            return self._steps_run
+
+        @steps_run.setter
+        def steps_run(self, steps_run):
+            self._steps_run = steps_run
+
+        @property
+        def job_id(self):
+            return self._job_id
+
+        def __lt__(self, other):
+            if self._priority != other._priority:
+                return self._priority < other._priority
+            elif self._steps_run != other._steps_run:
+                return self._steps_run < other.steps_run
+            else:
+                return self._job_id < other.job_id
+
+        def __eq__(self, other):
+            return (self._priority == other_.priority
+                    and self._steps_run == other._steps_run
+                    and self._job_id == other._job_id)
+
+    class JobQueue:
+
+        def __init__(self):
+            self._queue = []
+
+        def __getitem__(self, index):
+            return self._queue[index]
+
+        def add_job(self, priority, steps_run, job_id, heappush=False):
+            entry = Scheduler.JobQueueEntry(priority, steps_run, job_id)
+            if heappush:
+                heapq.heappush(self._queue, entry)
+            else:
+                self._queue.append(entry)
+
+        def pop(self, i):
+            self._queue.pop(i)
+
+        def heapify(self):
+            heapq.heapify(self._queue)
+
+        def update_entry(self, i, priority=None, steps_run=None):
+            if priority is not None:
+                self._queue[i].priority = priority
+
+            if steps_run is not None:
+                self._queue[i].steps_run = steps_run
+
+        def size(self):
+            return len(self._queue)
+
+        def get_sorted_queue(self):
+            return sorted(self._queue)
+
+
     def __init__(self, policy, get_num_steps_to_run, emulate=False,
                  normalizing_worker_type=None, throughputs_directory=None,
                  job_packing=False):
@@ -64,7 +219,8 @@ class Scheduler:
         self._allocation = {}
         # Epochs run on each worker_id, for all current incomplete applications.
         self._steps_run_so_far = {}
-        # Time run so far on each worker_id, for all current incomplete applications.
+        # Time run so far on each worker_id, for all current incomplete
+        # applications.
         self._time_run_so_far = {}
         # Number of jobs to compute fair share.
         self._num_jobs = 0
@@ -124,15 +280,16 @@ class Scheduler:
 
     @preconditions(lambda self: self._emulate)
     def execute_from_event_queue(self, timestamp):
-        """Executes all events that have a timestamp lower than the current timestamp."""
+        """Executes all events with timestamps lower than the current timestamp."""
 
         while True:
             with self._scheduler_lock:
                 if len(self._event_queue) == 0:
                     return
-                # If passed-in timestamp is before the first timestamp in the event queue,
-                # and no jobs are scheduled to run.
-                if timestamp < self._event_queue[0][0] and len(self._steps_run_so_far) > 0:
+                # If passed-in timestamp is before the first timestamp in the
+                # event queue and no jobs are scheduled to run.
+                if (timestamp < self._event_queue[0][0] and
+                    len(self._steps_run_so_far) > 0):
                     return
                 (_, func, args) = self._event_queue.pop(0)
             func(*args, timestamp=timestamp)
@@ -164,7 +321,7 @@ class Scheduler:
             else:
                 timestamp = time.time()
 
-            job_id = self._job_id_counter
+            job_id = self.JobIdPair(self._job_id_counter, None)
             self._job_id_counter += 1
             job._job_id = job_id
             self._jobs[job_id] = job
@@ -176,7 +333,8 @@ class Scheduler:
                 self._throughputs[job_id][worker_type] = \
                     self._compute_throughput(job, worker_type)
                 if self._job_packing:
-                    self._population_job_combination_metadata(job_id, worker_type)
+                    self._populate_job_combination_metadata(job_id,
+                                                            worker_type)
 
             self._reset_time_run_so_far(timestamp)
             self._add_to_queue(job_id)
@@ -198,6 +356,7 @@ class Scheduler:
             job_id: The job_id of the job to remove.
         """
 
+        job_id = self.JobIdPair(job_id, None)
         with self._scheduler_lock:
             duration = self._per_job_latest_timestamps[job_id] - \
                 self._per_job_start_timestamps[job_id]
@@ -205,7 +364,7 @@ class Scheduler:
                                                   self._jobs[job_id].duration())
             print("Job %d completed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n" % (
-                      job_id,
+                      job_id[0],
                       self._per_job_start_timestamps[job_id],
                       self._per_job_latest_timestamps[job_id],
                       duration,
@@ -224,19 +383,20 @@ class Scheduler:
             del self._throughputs[job_id]
             if self._job_packing:
                 to_delete = []
-                for job_id_combination in self._throughputs:
-                    if isinstance(job_id_combination, tuple):
-                        if job_id in job_id_combination:
-                            for other_job_id in job_id_combination:
-                                if other_job_id != job_id:
-                                    for worker_type in self._worker_types:
-                                        self._steps_run_so_far[other_job_id][worker_type] +=\
-                                            self._steps_run_so_far[job_id_combination][worker_type]
-                            to_delete.append(job_id_combination)
-                for job_id_combination in to_delete:
-                    del self._throughputs[job_id_combination]
-                    del self._steps_run_so_far[job_id_combination]
-                    del self._time_run_so_far[job_id_combination]
+                for other_job_id in self._throughputs:
+                    if (other_job_id.is_pair() and
+                        job_id.overlaps_with(other_job_id)):
+                        only_other_job_id = other_job_id - job_id
+                        if only_other_job_id is None:
+                            continue
+                        for worker_type in self._worker_types:
+                            self._steps_run_so_far[only_other_job_id][worker_type] += \
+                                    self._steps_run_so_far[other_job_id][worker_type]
+                            to_delete.append(other_job_id)
+                for other_job_id in to_delete:
+                    del self._throughputs[other_job_id]
+                    del self._steps_run_so_far[other_job_id]
+                    del self._time_run_so_far[other_job_id]
 
             self._remove_from_queue(job_id)
             if len(self._throughputs) > 0:
@@ -251,9 +411,10 @@ class Scheduler:
 
 
     def is_done(self):
-        """Returns whether the scheduler is done with all of its assigned work."""
+        """Returns whether the scheduler is done with all its assigned work."""
         with self._scheduler_lock:
-            return len(self._event_queue) == 0 and len(self._steps_run_so_far) == 0
+            return (len(self._event_queue) == 0 and
+                    len(self._steps_run_so_far) == 0)
 
 
     def shutdown(self, logfile=None):
@@ -261,14 +422,16 @@ class Scheduler:
         output = []
         with self._scheduler_lock:
             if self._emulate:
-                output.append("Total time taken: %.2f timeunits" % self._timestamp)
-            output.append("Job completion times:\n\t%s" % self._job_completion_times)
+                output.append("Total time taken: "
+                              "%.2f timeunits" % self._timestamp)
+            output.append("Job completion times:"
+                          "\n\t%s" % self._job_completion_times)
             average_job_completion_time = \
                 sum([x[0] for x in self._job_completion_times.values()]) / \
                 len(self._job_completion_times)
             unit = "timeunits" if self._emulate else "seconds"
-            output.append("Average job completion time: %.3f %s" % (average_job_completion_time,
-                                                                    unit))
+            output.append("Average job completion time: "
+                          "%.3f %s" % (average_job_completion_time, unit))
             for worker_id in self._worker_connections:
                 self._worker_connections[worker_id].shutdown()
         if logfile is None:
@@ -314,63 +477,56 @@ class Scheduler:
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
-                if len(self._per_worker_type_job_queue[worker_type]) == 0:
+                if self._per_worker_type_job_queue[worker_type].size() == 0:
                     if not self._emulate:
                         timestamp = time.time()
                     self._add_available_worker_id(worker_id, timestamp)
                     continue
 
-                # TODO: Change job_id_combination to be a tuple always.
-                # job_id_combination is a tuple if multiple applications running;
-                # otherwise just an integer.
-                [priority, _, job_id_combination] = \
-                    self._per_worker_type_job_queue[worker_type][0]
-                if len(job_id_combination) == 1:
-                    job_id_combination = job_id_combination[0]
+                queued_job = self._per_worker_type_job_queue[worker_type][0]
+                job_id = queued_job.job_id
+                priority = queued_job.priority
 
-                # If the highest priority job involves waiting, pick an earlier job
-                # with reasonably high priority.
+                # If the highest priority job involves waiting, pick an earlier
+                # job with reasonably high priority.
                 latest_timestamp = 0
-                if isinstance(job_id_combination, tuple):
-                    for job_id in job_id_combination:
-                        latest_timestamp = max(latest_timestamp,
-                                               self._per_job_latest_timestamps.get(job_id, 0))
-                else:
-                    latest_timestamp = self._per_job_latest_timestamps.get(
-                        job_id_combination, 0)
+                for single_job_id in job_id.singletons():
+                    latest_timestamp = max(latest_timestamp,
+                                           self._per_job_latest_timestamps.get(single_job_id, 0))
                 if timestamp < latest_timestamp:
                     found_jobs = []
-                    sorted_queue = sorted(self._per_worker_type_job_queue[worker_type])
+                    sorted_queue = self._per_worker_type_job_queue[worker_queue].get_sorted_queue()
                     for i in range(1, len(sorted_queue)):
-                        [ready_priority, _, ready_job_id_combination] = sorted_queue[i]
+                        ready_job = sorted_queue[i]
+                        ready_job_id = ready_job.job_id
+                        ready_priority = ready_job.priority
                         latest_ready_timestamp = 0
-                        for ready_job_id in ready_job_id_combination:
-                            latest_ready_timestamp = max(
-                                latest_ready_timestamp,
-                                self._per_job_latest_timestamps.get(ready_job_id, 0))
+                        for single_ready_job_id in ready_job_id.singletons():
+                            latest_ready_timestamp = max(latest_ready_timestamp,
+                                                         self._per_job_latest_timestamps.get(single_ready_job_id, 0))
                         if latest_timestamp > latest_ready_timestamp:
-                            found_jobs.append((latest_ready_timestamp, ready_priority,
-                                               ready_job_id_combination))
+                            found_jobs.append((latest_ready_timestamp,
+                                               ready_priority, ready_job_id))
                             break
                     # Sort by the timestamp when ready.
                     found_jobs.sort()
                     if len(found_jobs) > 0:
-                        # Swap jobs, so that the next job scheduled is available faster.
-                        (_, ready_priority, ready_job_id_combination) = found_jobs[0]
-                        # Pick a job_combination with up to 3x higher priority if
-                        # the job_combination can be scheduled earlier.
+                        # Swap jobs, so that the next job scheduled is available
+                        # faster.
+                        (_, ready_priority, ready_job_id) = found_jobs[0]
+                        # Pick a job_combination with up to 3x higher priority
+                        # if the job_combination can be scheduled earlier.
                         if ready_priority < (3 * priority):
                             priority = ready_priority
-                            job_id_combination = ready_job_id_combination
-                            if len(job_id_combination) == 1:
-                                job_id_combination = job_id_combination[0]
+                            job_id = ready_job_id
 
-                # If the chosen job has an allocation of zero, return the worker to
-                # the available worker pool.
-                if self._allocation[job_id_combination][worker_type] == 0.0:
+                # If the chosen job has an allocation of zero, return the worker
+                # to the available worker pool.
+                if self._allocation[job_id][worker_type] == 0.0:
                     if not self._emulate:
                         timestamp = time.time()
-                    all_timestamps = self._available_worker_ids.get_unique_keys_sorted()
+                    all_timestamps = \
+                            self._available_worker_ids.get_unique_keys_sorted()
                     if self._emulate:
                         if len(all_timestamps) > 1:
                             timestamp = all_timestamps[1]
@@ -380,7 +536,7 @@ class Scheduler:
 
                 # Get available worker_id with the highest priority for this particular job_id.
                 highest_priority, worker_id_with_highest_priority = \
-                    self._get_highest_priority(job_id_combination)
+                    self._get_highest_priority(job_id)
                 if priority > highest_priority:  # Lower is better.
                     timestamp_with_highest_priority, worker_id_with_highest_priority = \
                         self._remove_available_worker_id(worker_id=worker_id_with_highest_priority)
@@ -391,55 +547,51 @@ class Scheduler:
                         timestamp = timestamp_with_highest_priority
                         worker_type = self._worker_id_to_worker_type_mapping[worker_id]
 
-                if isinstance(job_id_combination, tuple):
-                    for job_id in job_id_combination:
-                        timestamp = max(
-                            timestamp, self._per_job_latest_timestamps.get(job_id, 0))
-                        self._remove_from_queue(job_id)
-                else:
-                    timestamp = max(
-                        timestamp,self._per_job_latest_timestamps.get(job_id_combination, 0))
-                    self._remove_from_queue(job_id_combination)
+                for single_job_id in job_id.singletons():
+                    timestamp = max(timestamp,
+                                    self._per_job_latest_timestamps.get(single_job_id, 0))
+                    self._remove_from_queue(single_job_id)
 
-                # Actually execute the scheduled job_id_combination on the right worker_id.
+                # Actually execute the scheduled job_id(s) on the right
+                # worker_id.
                 if not self._emulate:
-                    # TODO: Do something with job_id_combination.
-                    if isinstance(job_id_combination, tuple):
-                        for job_id in job_id_combination:
-                            num_steps = self._get_num_steps_to_run(job_id, worker_type)
-                            self._worker_connections[worker_id].run([(job_id,
-                                                                      self._jobs[job_id].command(),
-                                                                      num_steps)])
-                    else:
-                        num_steps = self._get_num_steps_to_run(job_id_combination,
+                    for single_job_id in job_id.singletons():
+                            num_steps = \
+                                    self._get_num_steps_to_run(single_job_id,
                                                                worker_type)
-                        self._worker_connections[worker_id].run([(job_id_combination,
-                                                                  self._jobs[job_id_combination].command(),
-                                                                  num_steps)])
+                            self._worker_connections[worker_id].run(
+                                    [(single_job_id[0],
+                                      self._jobs[single_job_id].command(),
+                                      num_steps)])
 
             # Can only call _done_callback with lock released.
             if self._emulate:
-                # When emulating, directly call _done_callback since there's no worker.
-                if not isinstance(job_id_combination, tuple):
-                    throughputs = (self._throughputs[job_id_combination][worker_type],)
-                    job_id_combination = (job_id_combination,)
+                # When emulating, directly call _done_callback since there's
+                # no worker.
+                if not job_id.is_pair():
+                    throughputs = (self._throughputs[job_id][worker_type],)
                 else:
-                    throughputs = self._throughputs[job_id_combination][worker_type]
+                    throughputs = self._throughputs[job_id][worker_type]
                 durations = []
-                for job_id, throughput in zip(job_id_combination, throughputs):
-                    duration = self._jobs[job_id].duration()
-                    # TODO: change to exception.
+                for single_job_id, throughput in zip(job_id.singletons(),
+                                                     throughputs):
+                    duration = self._jobs[single_job_id].duration()
                     assert duration is not None
                     if self.normalizing_worker_type is not None:
                         normalizing_factor = throughput / \
-                            self._throughputs[job_id][self.normalizing_worker_type]
+                            self._throughputs[single_job_id][self.normalizing_worker_type]
                         duration /= normalizing_factor
                     durations.append(duration)
-                for (job_id, duration) in zip(job_id_combination, durations):
-                    print("[Job ID: %d, Worker ID: %d [%s]] Start: %d, End: %d" % (
-                        job_id, worker_id, worker_type, timestamp, timestamp+duration))
+                for (single_job_id, duration) in zip(job_id.singletons(),
+                                                     durations):
+                    print("[Job ID: %d, Worker ID: %d [%s]] "
+                          "Start: %d, End: %d" % (single_job_id[0],
+                                                  worker_id,
+                                                  worker_type,
+                                                  timestamp,
+                                                  timestamp+duration))
                 # TODO: Can do more fine-grained accounting for duration here.
-                self._done_callback(job_id_combination, worker_id,
+                self._done_callback(job_id, worker_id,
                                     max(durations),
                                     timestamp=timestamp+duration)
                 self._timestamp = max(self._timestamp, timestamp+max(durations))
@@ -464,8 +616,8 @@ class Scheduler:
 
             {0: {"v100": 0.25, "p100": 0.95}, 1: {"v100": 0.75, "p100": 0.05}}
 
-            indicates that for 25% of the time, worker type 'v100' should run job 0,
-            and for 95% of the time, worker type 'p100' should run job 0.
+            indicates that for 25% of the time, worker type 'v100' should run,
+            job 0 and for 95% of the time, worker type 'p100' should run job 0.
         """
 
         unflattened_allocation = self._policy.get_allocation(
@@ -476,20 +628,21 @@ class Scheduler:
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
-    def _population_job_combination_metadata(self, job_id, worker_type):
+    def _populate_job_combination_metadata(self, job_id, worker_type):
         """Populate metadata for job combinations involving passed-in job_id."""
 
         job = self._jobs[job_id]
         for other_job_id in self._jobs:
             if other_job_id != job_id:
                 other_job = self._jobs[other_job_id]
-                if (job_id, other_job_id) not in self._throughputs:
-                    self._throughputs[(job_id, other_job_id)] = {}
-                    self._steps_run_so_far[(job_id, other_job_id)] = {}
-                    self._time_run_so_far[(job_id, other_job_id)] = {}
-                self._throughputs[(job_id, other_job_id)][worker_type] = \
+                merged_job_id = job_id + other_job_id
+                if merged_job_id not in self._throughputs:
+                    self._throughputs[merged_job_id] = {}
+                    self._steps_run_so_far[merged_job_id] = {}
+                    self._time_run_so_far[merged_job_id] = {}
+                self._throughputs[merged_job_id][worker_type] = \
                     self._compute_throughput([job, other_job], worker_type)
-                self._steps_run_so_far[(job_id, other_job_id)][worker_type] = 0
+                self._steps_run_so_far[merged_job_id][worker_type] = 0
 
 
     def _compute_throughput(self, jobs, worker_type, other_jobs=None):
@@ -498,7 +651,8 @@ class Scheduler:
             job = jobs
             job_type = job.job_type()
             job_type = tuple([job_type])
-            if job_type in self._all_throughputs and worker_type in self._all_throughputs[job_type]:
+            if (job_type in self._all_throughputs and
+                worker_type in self._all_throughputs[job_type]):
                 throughput = self._all_throughputs[job_type][worker_type]
                 return throughput[0]
         else:
@@ -507,15 +661,15 @@ class Scheduler:
                 job_types.append(job.job_type())
             for permutation in itertools.permutations(job_types):
                 permutation = tuple(permutation)
-                if permutation in self._all_throughputs and worker_type in self._all_throughputs[permutation]:
+                if (permutation in self._all_throughputs and
+                    worker_type in self._all_throughputs[permutation]):
                     throughputs = self._all_throughputs[permutation][worker_type]
                     throughputs_dict = {}
                     for elem, throughput in zip(permutation, throughputs):
                         throughputs_dict[elem] = throughput
                     return tuple([throughputs_dict[elem] for elem in job_types])
-        # TODO: compute throughput.
-        # TODO: add parameter for device_id?
-        return 10
+        raise ValueError('Error computing throughput for job(s) - '
+                         'Did you specify a throughputs directory?')
 
     """
     ======================================================================
@@ -533,8 +687,8 @@ class Scheduler:
         """
 
         for worker_type in self._worker_types:
-            for job_id_combination in self._time_run_so_far:
-                self._time_run_so_far[job_id_combination][worker_type] = 0.0
+            for job_id in self._time_run_so_far:
+                self._time_run_so_far[job_id][worker_type] = 0.0
         self._num_jobs = len(self._time_run_so_far)
 
 
@@ -549,12 +703,13 @@ class Scheduler:
         """
 
         for worker_type in self._worker_types:
-            self._per_worker_type_job_queue[worker_type].append([0.0, 0, (job_id,)])
-            for job_id_combination in self._throughputs:
-                if isinstance(job_id_combination, tuple):
-                    if job_id in job_id_combination:
-                        self._per_worker_type_job_queue[worker_type].append(
-                            [0.0, 0.0, job_id_combination])
+            self._per_worker_type_job_queue[worker_type].add_job(0.0, 0,
+                                                                 job_id)
+            for other_job_id in self._throughputs:
+                if (other_job_id.is_pair() and
+                    job_id.overlaps_with(other_job_id)):
+                    self._per_worker_type_job_queue[worker_type].add_job(
+                                0.0, 0.0, other_job_id)
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
@@ -569,10 +724,10 @@ class Scheduler:
         for worker_type in self._worker_types:
             while True:
                 found = False
-                for i in range(len(self._per_worker_type_job_queue[worker_type])):
-                    job_id_combination = self._per_worker_type_job_queue[worker_type][i][2]
-                    if job_id in job_id_combination:
-                        if len(self._per_worker_type_job_queue[worker_type]) > 0:
+                for i in range(self._per_worker_type_job_queue[worker_type].size()):
+                    queued_job = self._per_worker_type_job_queue[worker_type][i]
+                    if job_id.overlaps_with(queued_job.job_id):
+                        if self._per_worker_type_job_queue[worker_type].size() > 0:
                             self._per_worker_type_job_queue[worker_type].pop(i)
                             found = True
                         break
@@ -608,23 +763,24 @@ class Scheduler:
         for worker_type in self._worker_types:
             for job_id in self._time_run_so_far:
                 if tot_time_run[worker_type] == 0.0:
-                    fractions[worker_type][job_id] = 1.0 / len(self._worker_types)
+                    fraction = 1.0 / len(self._worker_types)
                 else:
                     fraction = self._time_run_so_far[job_id][worker_type] / \
                         tot_time_run[worker_type]
-                    fractions[worker_type][job_id] = fraction
-            for i in range(len(self._per_worker_type_job_queue[worker_type])):
-                [_, _, job_id] = self._per_worker_type_job_queue[worker_type][i]
-                if len(job_id) == 1:
-                    job_id = job_id[0]
+                fractions[worker_type][job_id] = fraction
+            for i in range(self._per_worker_type_job_queue[worker_type].size()):
+                queued_job = self._per_worker_type_job_queue[worker_type][i]
+                job_id = queued_job.job_id
                 if self._allocation[job_id][worker_type] == 0.0:
-                    self._per_worker_type_job_queue[worker_type][i][0] = float("inf")
+                    self._per_worker_type_job_queue[worker_type].update_entry(
+                            i, priority=float("inf"))
                 else:
-                    self._per_worker_type_job_queue[worker_type][i][0] = fractions[worker_type][job_id] / \
-                        self._allocation[job_id][worker_type]
-                self._per_worker_type_job_queue[worker_type][i][1] = \
-                    self._steps_run_so_far[job_id][worker_type]
-            heapq.heapify(self._per_worker_type_job_queue[worker_type])
+                    new_priority = fractions[worker_type][job_id] /\
+                            self._allocation[job_id][worker_type]
+                    steps_run = self._steps_run_so_far[job_id][worker_type]
+                    self._per_worker_type_job_queue[worker_type].update_entry(
+                            i, priority=new_priority, steps_run=steps_run)
+            self._per_worker_type_job_queue[worker_type].heapify()
 
 
     def _add_available_worker_id(self, worker_id, timestamp):
@@ -654,10 +810,11 @@ class Scheduler:
             if timestamp > self._per_job_latest_timestamps.get(job_id, 0):
                 continue
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-            for i in range(len(self._per_worker_type_job_queue[worker_type])):
-                if self._per_worker_type_job_queue[worker_type][i][2] == job_id:
-                    priorities.append((self._per_worker_type_job_queue[worker_type][i][0],
-                                       worker_id, worker_type))
+            for i in range(self._per_worker_type_job_queue[worker_type].size()):
+                queued_job = self._per_worker_type_job_queue[worker_type][i]
+                if queued_job.job_id == job_id:
+                    priorities.append((queued_job.priority, worker_id,
+                                       worker_type))
         priorities.sort(key=lambda x: x[0])
         if len(priorities) == 0:
             return float("inf"), None
@@ -668,23 +825,24 @@ class Scheduler:
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_total_steps_run(self, job_id):
-        """Returns the total number of steps run for the job with passed-in job_id."""
+        """Returns the total number of steps run for job with id job_id."""
 
         # TODO: change to exception
         assert(job_id in self._steps_run_so_far)
         total_steps_run = 0
         for worker_type in self._steps_run_so_far[job_id]:
             total_steps_run += self._steps_run_so_far[job_id][worker_type]
-        for job_id_combination in self._steps_run_so_far:
-            if isinstance(job_id_combination, tuple) and job_id in job_id_combination:
-                for worker_type in self._steps_run_so_far[job_id_combination]:
-                    total_steps_run += self._steps_run_so_far[job_id_combination][worker_type]
+        for other_job_id in self._steps_run_so_far:
+            if other_job_id.is_pair() and other_job_id.overlaps_with(job_id):
+                for worker_type in self._steps_run_so_far[other_job_id]:
+                    total_steps_run += \
+                            self._steps_run_so_far[other_job_id][worker_type]
         return total_steps_run
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_total_time_run(self, worker_type):
-        """Returns the total time run on the passed-in worker_type since the last reset."""
+        """Returns the total time run on worker_type since the last reset."""
 
         total_time_run = 0.0
         for job_id in self._time_run_so_far:
@@ -727,7 +885,7 @@ class Scheduler:
             self._devices[worker_id] = devices
 
             if worker_type not in self._per_worker_type_job_queue:
-                self._per_worker_type_job_queue[worker_type] = []
+                self._per_worker_type_job_queue[worker_type] = self.JobQueue()
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._throughputs[job_id][worker_type] = \
@@ -735,13 +893,14 @@ class Scheduler:
                                                  worker_type)
 
                     if self._job_packing:
-                        self._population_job_combination_metadata(job_id, worker_type)
+                        self._populate_job_combination_metadata(job_id,
+                                                                worker_type)
 
                     # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
                     # steps run, then job_id.
-                    heapq.heappush(self._per_worker_type_job_queue[worker_type],
-                                   [0.0, 0, (job_id,)])
+                    self._per_worker_type_job_queue[worker_type].add_job(
+                            0.0, 0, job_id, heappush=True)
 
                 if self._emulate:
                     assert(timestamp is not None)
@@ -750,7 +909,8 @@ class Scheduler:
                 self._reset_time_run_so_far(timestamp)
 
             if self._emulate:
-                # For now, assume that all workers are added at timestamp 0 in emulation mode.
+                # For now, assume that all workers are added at timestamp 0 in
+                # emulation mode.
                 timestamp = 0
             else:
                 timestamp = time.time()
@@ -771,7 +931,7 @@ class Scheduler:
         pass
 
 
-    def _done_callback(self, job_id_combination, worker_id, execution_time, num_steps=1,
+    def _done_callback(self, job_id, worker_id, execution_time, num_steps=1,
                        timestamp=None):
         """Handles completion of a scheduled job.
 
@@ -789,32 +949,28 @@ class Scheduler:
         to_remove = []
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-            if not isinstance(job_id_combination, tuple):
-                job_id_combination = (job_id_combination,)
-            # TODO: Fix this, pretty messy!
-            if len(job_id_combination) == 1:
-                self._steps_run_so_far[job_id_combination[0]][worker_type] += num_steps
-                self._time_run_so_far[job_id_combination[0]][worker_type] += execution_time
-            else:
-                self._steps_run_so_far[job_id_combination][worker_type] += num_steps
-                self._time_run_so_far[job_id_combination][worker_type] += execution_time
-            for job_id in job_id_combination:
-                if not self._emulate:
-                    self._per_job_latest_timestamps[job_id] = time.time()
+            self._steps_run_so_far[job_id][worker_type] += num_steps
+            self._time_run_so_far[job_id][worker_type] += execution_time
+            for single_job_id in job_id.singletons():
+                if self._emulate:
+                    self._per_job_latest_timestamps[single_job_id] = timestamp
                 else:
-                    self._per_job_latest_timestamps[job_id] = timestamp
-            print("[Completed] Job ID: %s, Worker ID: %d" % (job_id_combination, worker_id))
+                    self._per_job_latest_timestamps[single_job_id] = time.time()
+            print("[Completed] Job ID: %s, Worker ID: %d" % (job_id,
+                                                             worker_id))
             # NOTE: for debug purposes.
             if self._verbose:
-                print("[{job_id: {worker_type: steps}}]", self._steps_run_so_far)
+                print("[{job_id: {worker_type: steps}}]",
+                      self._steps_run_so_far)
                 print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
                 print()
 
-            for job_id in job_id_combination:
-                if self._get_total_steps_run(job_id) < self._jobs[job_id].num_steps():
-                    self._add_to_queue(job_id)
+            for single_job_id in job_id.singletons():
+                if (self._get_total_steps_run(single_job_id) <
+                    self._jobs[single_job_id].num_steps()):
+                    self._add_to_queue(single_job_id)
                 else:
-                    to_remove.append(job_id)
+                    to_remove.append(single_job_id)
 
             if timestamp is None:
                 timestamp = time.time()
@@ -824,5 +980,5 @@ class Scheduler:
                 self._update_available_worker_id_keys(
                     min(self._per_job_latest_timestamps.values()))
 
-        for job_id in to_remove:
-            self.remove_job(job_id, timestamp=timestamp)
+        for single_job_id in to_remove:
+            self.remove_job(single_job_id[0], timestamp=timestamp)
