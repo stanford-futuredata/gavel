@@ -495,7 +495,7 @@ class Scheduler:
                                            self._per_job_latest_timestamps.get(single_job_id, 0))
                 if timestamp < latest_timestamp:
                     found_jobs = []
-                    sorted_queue = self._per_worker_type_job_queue[worker_queue].get_sorted_queue()
+                    sorted_queue = self._per_worker_type_job_queue[worker_type].get_sorted_queue()
                     for i in range(1, len(sorted_queue)):
                         ready_job = sorted_queue[i]
                         ready_job_id = ready_job.job_id
