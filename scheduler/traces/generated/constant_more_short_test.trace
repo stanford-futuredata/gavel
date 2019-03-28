@@ -1,0 +1,8 @@
+0	vgg16	echo "vgg16"	500	10
+0	vgg16	echo "vgg16"	500	10
+0	vgg16	echo "vgg16"	500	10
+0	vgg16	echo "vgg16"	500	10
+0	resnet50	echo "resnet50"	5000	50
+0	resnet50	echo "resnet50"	5000	50
+0	resnet50	echo "resnet50"	5000	50
+0	vgg16	echo "vgg16"	500	10
