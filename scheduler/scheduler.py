@@ -368,10 +368,9 @@ class Scheduler:
                         job_id.overlaps_with(other_job_id)):
                         for only_other_job_id in other_job_id.singletons():
                             if only_other_job_id != job_id:
-                                break
-                        for worker_type in self._worker_types:
-                            self._steps_run_so_far[only_other_job_id][worker_type] += \
-                                    self._steps_run_so_far[other_job_id][worker_type]
+                                for worker_type in self._worker_types:
+                                    self._steps_run_so_far[only_other_job_id][worker_type] += \
+                                            self._steps_run_so_far[other_job_id][worker_type]
                         to_delete.append(other_job_id)
                 for other_job_id in to_delete:
                     del self._throughputs[other_job_id]
