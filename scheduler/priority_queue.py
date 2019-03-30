@@ -34,3 +34,22 @@ class Queue:
                 return key, item
         self.cv.release()
         return None, None
+
+    def update_key(self, new_key):
+        self.cv.acquire()
+        for i in range(len(self.queue)):
+            (old_key, item) = self.queue[i]
+            self.queue[i] = (max(old_key, new_key), item)
+        self.queue.sort(key=lambda x: x[0])
+        self.cv.release()
+
+    def get_unique_keys_sorted(self):
+        self.cv.acquire()
+        last_key = None
+        keys = []
+        for (key, _) in self.queue:
+            if key != last_key:
+                keys.append(key)
+                last_key = key
+        self.cv.release()
+        return keys
