@@ -14,7 +14,7 @@ class Job:
         if job_proto.has_duration:
             duration = job_proto.duration
         return Job(job_proto.job_id, job_proto.job_type, job_proto.command,
-                   job_proto.num_steps, duration)
+                   job_proto.num_steps_arg, job_proto.total_steps, duration)
 
     @property
     def job_id(self):

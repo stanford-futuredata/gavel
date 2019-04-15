@@ -18,14 +18,14 @@ class Dispatcher:
                                          stderr=subprocess.STDOUT,
                                          shell=True).strip()
         execution_time = time.time() - start_time
-        print("Job ID: %d, Command: '%s', "
+        print("Job ID: %s, Command: '%s', "
               "Num_steps: %d, Execution time: %.3f seconds, "
-              "Output:" % (job.job_id(),
+              "Output:" % (job.job_id,
                            command,
-                           job.num_steps(),
+                           job.num_steps,
                            execution_time), output)
         # TODO: add error handling
-        self._worker_rpc_client.notify_scheduler(job.job_id(),
+        self._worker_rpc_client.notify_scheduler(job.job_id,
                                                  self._worker_id,
                                                  execution_time)
 

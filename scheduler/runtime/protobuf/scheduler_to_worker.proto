@@ -13,9 +13,10 @@ message JobDescription {
     uint64 job_id = 1;
     string job_type = 2;
     string command = 3;
-    uint64 num_steps = 4;
-    bool has_duration = 5;
-    uint64 duration = 6;
+    string num_steps_arg = 4;
+    uint64 num_steps = 5;
+    bool has_duration = 6;
+    uint64 duration = 7;
 }
 
 message RunRequest {

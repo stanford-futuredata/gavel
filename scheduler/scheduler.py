@@ -15,8 +15,8 @@ import utils
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
 DEFAULT_THROUGHPUT = 1
-DEFUALT_NUM_STEPS = 100    # Default number of steps in each iteration
-TIME_PER_ITERATION = 20 * 60    # Time in seconds each iteration should run for
+DEFAULT_NUM_STEPS = 100    # Default number of steps in each iteration
+TIME_PER_ITERATION = 5 * 60    # Time in seconds each iteration should run for
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average
 
 class Scheduler:
@@ -208,16 +208,16 @@ class Scheduler:
         # Priority queues for each worker_type.
         self._per_worker_type_job_queue = {}
         # Normalizing worker type.
-        self.normalizing_worker_type = normalizing_worker_type
+        #self.normalizing_worker_type = normalizing_worker_type
         # The number of steps to run of each job on each worker type
         # for each iteration.
         self._num_steps_per_iteration = {}
         # Throughputs for all job types (pre-measured).
-        if throughputs_directory is not None:
-            self._all_throughputs = utils.read_all_throughputs(
-                throughputs_directory)
-        else:
-            self._all_throughputs = {}
+        #if throughputs_directory is not None:
+        #    self._all_throughputs = utils.read_all_throughputs(
+        #        throughputs_directory)
+        #else:
+        self._all_throughputs = {}
         # Verbose flag.
         self._verbose = False
 
@@ -340,7 +340,7 @@ class Scheduler:
             duration = self._per_job_latest_timestamps[job_id] - \
                 self._per_job_start_timestamps[job_id]
             self._job_completion_times[job_id] = (duration,
-                                                  self._jobs[job_id].duration())
+                                                  self._jobs[job_id].duration)
             print("Job %d completed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n" % (
                       job_id[0],
@@ -522,7 +522,8 @@ class Scheduler:
                         num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
                         self._worker_connections[worker_id].run(
                                 [(single_job_id[0],
-                                  self._jobs[single_job_id].command(),
+                                  self._jobs[single_job_id].command,
+                                  self._jobs[single_job_id].num_steps_arg,
                                   num_steps)])
 
 
@@ -576,6 +577,11 @@ class Scheduler:
 
 
     def _compute_throughput(self, jobs, worker_type, other_jobs=None):
+        if isinstance(jobs, list):
+            return (DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0)
+        else:
+            return DEFAULT_THROUGHPUT
+        """
         import itertools
         if not isinstance(jobs, list):
             job = jobs
@@ -603,6 +609,7 @@ class Scheduler:
             return (DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0)
         raise ValueError('Error computing throughput for job(s) - '
                          'Did you specify a throughputs directory?')
+        """
 
     """
     ======================================================================
@@ -879,17 +886,26 @@ class Scheduler:
 
             # Adjust the job throughput using an exponential moving average
             # between the old value and the new measurement.
-            throughput = execution_time / num_steps
-            self._throughputs[job_id][worker_type] = EMA_ALPHA * throughput + \
-                (1 - EMA_ALPHA) * self._throughputs[job_id][worker_type]
+            old_throughput = self._throughputs[job_id][worker_type]
+            new_throughput = execution_time / num_steps
+            self._throughputs[job_id][worker_type] = \
+                    EMA_ALPHA * new_throughput + (1 - EMA_ALPHA) * old_throughput
+            print('Job %s throughput on worker type %s: %.3f -> %.3f' % (job_id, worker_type,
+                                                                         old_throughput,
+                                                                         self._throughputs[job_id][worker_type]))
 
             # Adjust the number of steps in each iteration such that the
             # new number of steps will more closely align with the
             # desired wall-clock time per iteration.
+            old_num_steps_per_iteration = self._num_steps_per_iteration[job_id][worker_type]
             self._num_steps_per_iteration[job_id][worker_type] *= \
                     TIME_PER_ITERATION / exeuction_time
             self._num_steps_per_iteration[job_id][worker_type] = \
                     max(1, int(self._num_steps_per_iteration[job_id][worker_type]))
+            print('Job %s steps per iteration on worker type %s: %d -> %d' % (job_id,
+                                                                              worker_type,
+                                                                              old_num_steps_per_iteration,
+                                                                              self._num_steps_per_iteration[job_id][worker_type]))
 
             for single_job_id in job_id.singletons():
                 self._per_job_latest_timestamps[single_job_id] = time.time()
