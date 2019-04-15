@@ -47,13 +47,20 @@ def main(args):
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
         current_time = datetime.datetime.now()
-        elapsed_seconds = (current_time - start_time).seconds 
+        elapsed_seconds = (current_time - start_time).seconds
         remaining_time = arrival_time - elapsed_seconds
         if remaining_time > 0:
             print('Waiting %d seconds before scheduling next job...' % (remaining_time))
             time.sleep(remaining_time)
         print('Scheduled job!')
         sched.add_job(job)
+
+    sleep_seconds = 30
+    while not sched.is_done():
+        time.sleep(sleep_seconds)
+
+    print("Total time taken: %d seconds" % (datetime.datetime.now() - start_time).seconds)
+    s.shutdown()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
