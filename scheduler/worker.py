@@ -16,12 +16,6 @@ class Worker:
                 self._worker_type, self._worker_ip_addr,
                 self._worker_port, sched_ip_addr, sched_port)
         self._devices = [] # TODO: get devices
-        self._worker_id, error = \
-            self._worker_rpc_client.register_worker(self._devices)
-        if error:
-          pass # TODO: handle error
-        self._dispatcher = dispatcher.Dispatcher(self._worker_id,
-                                                 self._worker_rpc_client)
 
         callbacks = {
             'Run': self._run_callback,
@@ -32,9 +26,17 @@ class Worker:
             args=(worker_port, callbacks,))
         self._server_thread.daemon = True
         self._server_thread.start()
+
+        self._worker_id, error = \
+            self._worker_rpc_client.register_worker(self._devices)
+        if error:
+            raise RuntimeError(error)
+        self._dispatcher = dispatcher.Dispatcher(self._worker_id,
+                                                 self._worker_rpc_client)
         self._server_thread.join()
 
     def _run_callback(self, jobs):
+        print('Run callback')
         for job in jobs:
             self._dispatcher.dispatch_job(job)
 

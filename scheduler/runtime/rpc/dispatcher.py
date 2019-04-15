@@ -12,8 +12,10 @@ class Dispatcher:
 
     def launch_job(self, job):
         # TODO: add error handling
+        print('Launching job!')
         start_time = time.time()
-        command = '%s %s %d' % (job.command, job.num_steps_arg, job.num_steps)
+        command = '%s %s %d' % (job.command, job.num_steps_arg, job.total_steps)
+        print('Running \"%s\"' % (command))
         output = subprocess.check_output(command,
                                          stderr=subprocess.STDOUT,
                                          shell=True).strip()
@@ -22,14 +24,16 @@ class Dispatcher:
               "Num_steps: %d, Execution time: %.3f seconds, "
               "Output:" % (job.job_id,
                            command,
-                           job.num_steps,
+                           job.total_steps,
                            execution_time), output)
         # TODO: add error handling
         self._worker_rpc_client.notify_scheduler(job.job_id,
                                                  self._worker_id,
-                                                 execution_time)
+                                                 execution_time,
+                                                 job.total_steps)
 
     def dispatch_job(self, job):
+        print('Dispatching job!')
         self._thread_pool.apply_async(self.launch_job, (job,))
 
     def shutdown(self):

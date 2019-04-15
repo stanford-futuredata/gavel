@@ -23,6 +23,7 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
         self._condition = condition
 
     def Run(self, request, context):
+        print('Received request!')
         jobs = []
         for job_description in request.job_descriptions:
             jobs.append(job.Job.from_proto(job_description))
@@ -48,6 +49,7 @@ def serve(port, callbacks):
     s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(
             WorkerServer(callbacks, condition), server)
 
+    print('Starting server at port %s' % (str(port)))
     server.add_insecure_port('[::]:%d' % (port))
     server.start()
 
