@@ -13,14 +13,15 @@ class Dispatcher:
     def launch_job(self, job):
         # TODO: add error handling
         start_time = time.time()
-        output = subprocess.check_output(job.command(),
+        command = '%s %s %d' % (job.command, job.num_steps_arg, job.num_steps)
+        output = subprocess.check_output(command,
                                          stderr=subprocess.STDOUT,
                                          shell=True).strip()
         execution_time = time.time() - start_time
         print("Job ID: %d, Command: '%s', "
               "Num_steps: %d, Execution time: %.3f seconds, "
               "Output:" % (job.job_id(),
-                           job.command(),
+                           command,
                            job.num_steps(),
                            execution_time), output)
         # TODO: add error handling

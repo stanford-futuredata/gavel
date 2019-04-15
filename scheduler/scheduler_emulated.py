@@ -15,8 +15,6 @@ import utils
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
 DEFAULT_THROUGHPUT = 1
-DEFUALT_NUM_STEPS = 100    # Default number of steps in each iteration
-TIME_PER_ITERATION = 20 * 60    # Time in seconds each iteration should run for
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average
 
 class Scheduler:
@@ -39,7 +37,7 @@ class Scheduler:
             else:
                 raise ValueError('Attempting to access invalid JobIdPair '
                                  'index %d' % index)
-
+        
         def __lt__(self, other):
             if self[0] != other[0]:
                 return self[0] < other[0]
@@ -157,7 +155,11 @@ class Scheduler:
             return sorted(self._queue)
 
 
-    def __init__(self, policy, job_packing=False):
+    def __init__(self, policy, get_num_steps_to_run, emulate=False,
+                 normalizing_worker_type=None, throughputs_directory=None,
+                 job_packing=False):
+        # Emulate flag.
+        self._emulate = emulate
 
         # Datastructures to faithfully emulate.
         # Latest emulated timestamp.
@@ -184,6 +186,8 @@ class Scheduler:
         # RPC clients.
         self._num_workers = 0
         self._worker_connections = {}
+        # get_num_steps_to_run function pointer.
+        self._get_num_steps_to_run = get_num_steps_to_run
         # Next job_id to assign.
         self._job_id_counter = 0
         # Next worker_id to assign.
@@ -209,9 +213,6 @@ class Scheduler:
         self._per_worker_type_job_queue = {}
         # Normalizing worker type.
         self.normalizing_worker_type = normalizing_worker_type
-        # The number of steps to run of each job on each worker type
-        # for each iteration.
-        self._num_steps_per_iteration = {}
         # Throughputs for all job types (pre-measured).
         if throughputs_directory is not None:
             self._all_throughputs = utils.read_all_throughputs(
@@ -227,14 +228,14 @@ class Scheduler:
             'SendHeartbeat': self._send_heartbeat_callback,
             'Done': self._done_callback,
         }
+        if not self._emulate:
+            self.server_thread = threading.Thread(
+                target=scheduler_server.serve,
+                args=(port, callbacks))
+            self.server_thread.daemon = True
+            self.server_thread.start()
 
-        self.server_thread = threading.Thread(
-            target=scheduler_server.serve,
-            args=(port, callbacks))
-        self.server_thread.daemon = True
-        self.server_thread.start()
-
-        self.start_scheduling_thread()
+            self.start_scheduling_thread()
 
 
     def start_scheduling_thread(self):
@@ -298,7 +299,10 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
-            timestamp = time.time()
+            if self._emulate:
+                assert timestamp is not None
+            else:
+                timestamp = time.time()
 
             job_id = self.JobIdPair(self._job_id_counter, None)
             self._job_id_counter += 1
@@ -307,7 +311,6 @@ class Scheduler:
             self._steps_run_so_far[job_id] = {}
             self._time_run_so_far[job_id] = {}
             self._throughputs[job_id] = {}
-            self._num_steps_per_iteration[job_id] = {}
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
                 self._throughputs[job_id][worker_type] = \
@@ -315,13 +318,14 @@ class Scheduler:
                 if self._job_packing:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
-                self._num_steps_per_iteration[job_id][worker_type] = \
-                        DEFAULT_NUM_STEPS
 
             self._reset_time_run_so_far(timestamp)
             self._add_to_queue(job_id)
             self._allocation = self._get_allocation()
-            self._per_job_start_timestamps[job_id] = time.time()
+            if self._emulate:
+                self._per_job_start_timestamps[job_id] = timestamp
+            else:
+                self._per_job_start_timestamps[job_id] = time.time()
         return job_id
 
 
@@ -346,10 +350,14 @@ class Scheduler:
                       job_id[0],
                       self._per_job_start_timestamps[job_id],
                       self._per_job_latest_timestamps[job_id],
-                      duration, "seconds")
+                      duration,
+                      "timeunits" if self._emulate else "seconds")
                   )
 
-            timestamp = time.time()
+            if self._emulate:
+                assert timestamp is not None
+            else:
+                timestamp = time.time()
             self._reset_time_run_so_far(timestamp)
 
             del self._jobs[job_id]
@@ -395,12 +403,15 @@ class Scheduler:
         """Sends a shutdown signal to every worker and ends the scheduler."""
         output = []
         with self._scheduler_lock:
+            if self._emulate:
+                output.append("Total time taken: "
+                              "%.2f timeunits" % self._timestamp)
             output.append("Job completion times:"
                           "\n\t%s" % self._job_completion_times)
             average_job_completion_time = \
                 sum([x[0] for x in self._job_completion_times.values()]) / \
                 len(self._job_completion_times)
-            unit = "seconds"
+            unit = "timeunits" if self._emulate else "seconds"
             output.append("Average job completion time: "
                           "%.3f %s" % (average_job_completion_time, unit))
             for worker_id in self._worker_connections:
@@ -443,11 +454,14 @@ class Scheduler:
 
         while True:
             timestamp, worker_id = self._remove_available_worker_id()
+            if self._emulate:
+                self.execute_from_event_queue(timestamp)
             with self._scheduler_lock:
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
                 self._update_queue()
                 if self._per_worker_type_job_queue[worker_type].size() == 0:
-                    timestamp = time.time()
+                    if not self._emulate:
+                        timestamp = time.time()
                     self._add_available_worker_id(worker_id, timestamp)
                     continue
 
@@ -491,9 +505,13 @@ class Scheduler:
                 # If the chosen job has an allocation of zero, return the worker
                 # to the available worker pool.
                 if self._allocation[job_id][worker_type] == 0.0:
-                    timestamp = time.time()
+                    if not self._emulate:
+                        timestamp = time.time()
                     all_timestamps = \
                             self._available_worker_ids.get_unique_keys_sorted()
+                    if self._emulate:
+                        if len(all_timestamps) > 1:
+                            timestamp = all_timestamps[1]
                     # Move worker_id to behind the second worker.
                     self._add_available_worker_id(worker_id, timestamp+0.1)
                     continue
@@ -518,13 +536,47 @@ class Scheduler:
 
                 # Actually execute the scheduled job_id(s) on the right
                 # worker_id.
-                for single_job_id in job_id.singletons():
-                        num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
-                        self._worker_connections[worker_id].run(
-                                [(single_job_id[0],
-                                  self._jobs[single_job_id].command(),
-                                  num_steps)])
+                if not self._emulate:
+                    for single_job_id in job_id.singletons():
+                            num_steps = \
+                                    self._get_num_steps_to_run(single_job_id,
+                                                               worker_type)
+                            self._worker_connections[worker_id].run(
+                                    [(single_job_id[0],
+                                      self._jobs[single_job_id].command(),
+                                      num_steps)])
 
+            # Can only call _done_callback with lock released.
+            if self._emulate:
+                # When emulating, directly call _done_callback since there's
+                # no worker.
+                if not job_id.is_pair():
+                    throughputs = (self._throughputs[job_id][worker_type],)
+                else:
+                    throughputs = self._throughputs[job_id][worker_type]
+                durations = []
+                for single_job_id, throughput in zip(job_id.singletons(),
+                                                     throughputs):
+                    duration = self._jobs[single_job_id].duration()
+                    assert duration is not None
+                    if self.normalizing_worker_type is not None:
+                        normalizing_factor = throughput / \
+                            self._throughputs[single_job_id][self.normalizing_worker_type]
+                        duration /= normalizing_factor
+                    durations.append(duration)
+                for (single_job_id, duration) in zip(job_id.singletons(),
+                                                     durations):
+                    print("[Job ID: %d, Worker ID: %d [%s]] "
+                          "Start: %d, End: %d" % (single_job_id[0],
+                                                  worker_id,
+                                                  worker_type,
+                                                  timestamp,
+                                                  timestamp+duration))
+                # TODO: Can do more fine-grained accounting for duration here.
+                self._done_callback(job_id, worker_id,
+                                    max(durations),
+                                    timestamp=timestamp+duration)
+                self._timestamp = max(self._timestamp, timestamp+max(durations))
 
     """
     ======================================================================
@@ -828,23 +880,31 @@ class Scheduler:
                     if self._job_packing:
                         self._populate_job_combination_metadata(job_id,
                                                                 worker_type)
-                    self._num_steps_per_iteration[job_id][worker_type] = \
-                            DEFAULT_NUM_STEPS
+
                     # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
                     # steps run, then job_id.
                     self._per_worker_type_job_queue[worker_type].add_job(
                             0.0, 0, job_id, heappush=True)
 
-                timestamp = time.time()
+                if self._emulate:
+                    assert(timestamp is not None)
+                else:
+                    timestamp = time.time()
                 self._reset_time_run_so_far(timestamp)
 
-            timestamp = time.time()
+            if self._emulate:
+                # For now, assume that all workers are added at timestamp 0 in
+                # emulation mode.
+                timestamp = 0
+            else:
+                timestamp = time.time()
             self._add_available_worker_id(worker_id, timestamp)
 
             self._num_workers += 1
-            self._worker_connections[worker_id] = \
-                scheduler_client.SchedulerRpcClient(ip_addr, port)
+            if not self._emulate:
+                self._worker_connections[worker_id] = \
+                    scheduler_client.SchedulerRpcClient(ip_addr, port)
 
             self._allocation = self._get_allocation()
 
@@ -876,23 +936,15 @@ class Scheduler:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             self._steps_run_so_far[job_id][worker_type] += num_steps
             self._time_run_so_far[job_id][worker_type] += execution_time
-
-            # Adjust the job throughput using an exponential moving average
-            # between the old value and the new measurement.
-            throughput = execution_time / num_steps
-            self._throughputs[job_id][worker_type] = EMA_ALPHA * throughput + \
-                (1 - EMA_ALPHA) * self._throughputs[job_id][worker_type]
-
-            # Adjust the number of steps in each iteration such that the
-            # new number of steps will more closely align with the
-            # desired wall-clock time per iteration.
-            self._num_steps_per_iteration[job_id][worker_type] *= \
-                    TIME_PER_ITERATION / exeuction_time
-            self._num_steps_per_iteration[job_id][worker_type] = \
-                    max(1, int(self._num_steps_per_iteration[job_id][worker_type]))
-
+            if not self._emulate:
+                throughput = execution_time / num_steps
+                self._throughputs[job_id][worker_type] = EMA_ALPHA * throughput + \
+                    (1 - EMA_ALPHA) * self._throughputs[job_id][worker_type]
             for single_job_id in job_id.singletons():
-                self._per_job_latest_timestamps[single_job_id] = time.time()
+                if self._emulate:
+                    self._per_job_latest_timestamps[single_job_id] = timestamp
+                else:
+                    self._per_job_latest_timestamps[single_job_id] = time.time()
             print("[Completed] Job ID: %s, Worker ID: %d" % (job_id,
                                                              worker_id))
             # NOTE: for debug purposes.
@@ -904,7 +956,7 @@ class Scheduler:
 
             for single_job_id in job_id.singletons():
                 if (self._get_total_steps_run(single_job_id) <
-                    self._jobs[single_job_id].total_steps):
+                    self._jobs[single_job_id].num_steps()):
                     self._add_to_queue(single_job_id)
                 else:
                     to_remove.append(single_job_id)
