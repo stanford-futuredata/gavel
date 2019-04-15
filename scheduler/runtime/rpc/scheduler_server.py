@@ -41,8 +41,12 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
         return common_pb2.Empty()
 
     def Done(self, request, context):
+        print('Received done message!')
         done_callback = self._callbacks['Done']
-        done_callback(request.job_id, request.worker_id, request.execution_time)
+        print('Calling done callback...')
+        done_callback(request.job_id, request.worker_id, request.execution_time,
+                      request.num_steps)
+        print('Finished calling done callback!')
         return common_pb2.Empty()
 
 def serve(port, callbacks):
