@@ -14,9 +14,9 @@ import utils
 
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
-DEFAULT_THROUGHPUT = 1
-DEFAULT_NUM_STEPS = 100    # Default number of steps in each iteration
-TIME_PER_ITERATION = 5 * 60    # Time in seconds each iteration should run for
+DEFAULT_THROUGHPUT = .1
+DEFAULT_NUM_STEPS = 10    # Default number of steps in each iteration
+TIME_PER_ITERATION = 1 * 60    # Time in seconds each iteration should run for
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average
 
 class Scheduler:
@@ -519,7 +519,9 @@ class Scheduler:
                 # Actually execute the scheduled job_id(s) on the right
                 # worker_id.
                 for single_job_id in job_id.singletons():
-                        num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
+                        num_steps = min(self._get_remaining_steps(single_job_id),
+                                        self._num_steps_per_iteration[single_job_id][worker_type])
+                        assert(num_steps > 0)
                         self._worker_connections[worker_id].run(
                                 [(single_job_id[0],
                                   self._jobs[single_job_id].command,
@@ -781,6 +783,11 @@ class Scheduler:
 
 
     @preconditions(lambda self: self._scheduler_lock.locked())
+    def _get_remaining_steps(self, job_id):
+        steps_run_so_far = self._get_total_steps_run(job_id)
+        return self._jobs[job_id].total_steps - steps_run_so_far
+
+    @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_total_time_run(self, worker_type):
         """Returns the total time run on worker_type since the last reset."""
 
@@ -879,6 +886,7 @@ class Scheduler:
             num_steps: The number of steps the job ran for.
         """
 
+        job_id = self.JobIdPair(job_id, None)
         to_remove = []
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
@@ -902,9 +910,9 @@ class Scheduler:
             # desired wall-clock time per iteration.
             old_num_steps_per_iteration = self._num_steps_per_iteration[job_id][worker_type]
             self._num_steps_per_iteration[job_id][worker_type] *= \
-                    TIME_PER_ITERATION / exeuction_time
+                    TIME_PER_ITERATION / execution_time
             self._num_steps_per_iteration[job_id][worker_type] = \
-                    max(1, int(self._num_steps_per_iteration[job_id][worker_type]))
+                    max(1, int(self._num_steps_per_iteration[job_id][worker_type])) 
             print('Job %s steps per iteration on worker type %s: %d -> %d' % (job_id,
                                                                               worker_type,
                                                                               old_num_steps_per_iteration,
