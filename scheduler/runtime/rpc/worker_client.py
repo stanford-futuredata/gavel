@@ -59,7 +59,7 @@ class WorkerRpcClient:
         print('Sending done request!')
         request = w2s_pb2.DoneRequest(job_id=job_id, worker_id=worker_id,
                                       execution_time=execution_time,
-                                      num_steps)
+                                      num_steps=num_steps)
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
             response = stub.Done(request)

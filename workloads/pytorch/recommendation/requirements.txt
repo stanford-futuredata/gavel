@@ -1,0 +1,13 @@
+torch
+numpy
+scipy
+annoy
+glog
+tqdm
+pandas
+sphinx
+sphinx-rtd-theme
+recommonmark
+twine
+setuptools
+wheel

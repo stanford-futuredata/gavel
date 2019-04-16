@@ -23,7 +23,6 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
         self._condition = condition
 
     def Run(self, request, context):
-        print('Received request!')
         jobs = []
         for job_description in request.job_descriptions:
             jobs.append(job.Job.from_proto(job_description))
