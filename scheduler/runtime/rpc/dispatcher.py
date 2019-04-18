@@ -24,6 +24,14 @@ class Dispatcher:
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,
                                   shell=True)
+            execution_time = time.time() - start_time
+            print("Job ID: %s, Command: '%s', "
+                  "Num_steps: %d, Execution time: %.3f seconds, "
+                  "Output:" % (str(job.job_id),
+                               command,
+                               job.total_steps,
+                               execution_time), proc.stdout.decode('utf-8'))
+
         except subprocess.CalledProcessError as e:
             print('Job %s failed with error code %d' % (str(job.job_id),
                                                         e.returncode))
@@ -33,17 +41,8 @@ class Dispatcher:
               print('Stdout: %s' % (e.stdout))
             if e.stderr is not None:
               print('Stderr: %s' % (e.stderr))
-            sys.stdout.flush()
-            # TODO: Send a "job failed" message to scheduler
-            return
+            execution_time = -1
 
-        execution_time = time.time() - start_time
-        print("Job ID: %s, Command: '%s', "
-              "Num_steps: %d, Execution time: %.3f seconds, "
-              "Output:" % (str(job.job_id),
-                           command,
-                           job.total_steps,
-                           execution_time), proc.stdout.decode('utf-8'))
         sys.stdout.flush()
         self._worker_rpc_client.notify_scheduler(job.job_id,
                                                  self._worker_id,

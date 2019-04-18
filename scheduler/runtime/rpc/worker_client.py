@@ -56,7 +56,6 @@ class WorkerRpcClient:
 
     def notify_scheduler(self, job_id, worker_id, execution_time, num_steps):
         # Send a Done message.
-        print('Sending done request!')
         request = w2s_pb2.DoneRequest(job_id=job_id, worker_id=worker_id,
                                       execution_time=execution_time,
                                       num_steps=num_steps)
