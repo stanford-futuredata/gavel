@@ -879,6 +879,7 @@ class Scheduler:
             self._add_available_worker_id(worker_id, timestamp)
 
             self._num_workers += 1
+            print('Creating RPC connection to worker at %s:%s' % (ip_addr, str(port)))
             self._worker_connections[worker_id] = \
                 scheduler_client.SchedulerRpcClient(ip_addr, port)
 
@@ -916,6 +917,8 @@ class Scheduler:
             self._cumulative_time_run_so_far[job_id][worker_type] += execution_time
             # Adjust the job throughput using an exponential moving average
             # between the old value and the new measurement.
+            import pdb
+            pdb.set_trace()
             old_throughput = self._throughputs[job_id][worker_type]
             new_throughput = execution_time / num_steps
             self._throughputs[job_id][worker_type] = \

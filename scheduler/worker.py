@@ -8,7 +8,9 @@ from runtime.rpc import worker_client
 from runtime.rpc import worker_server
 
 class Worker:
-    def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port):
+    def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port,
+                 gpu_id):
+        self._gpu_id = gpu_id
         self._worker_type = worker_type
         self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
         self._worker_port = worker_port
@@ -16,25 +18,40 @@ class Worker:
                 self._worker_type, self._worker_ip_addr,
                 self._worker_port, sched_ip_addr, sched_port)
         self._devices = [] # TODO: get devices
-        self._worker_id, error = \
-            self._worker_rpc_client.register_worker(self._devices)
-        if error:
-          pass # TODO: handle error
-        self._dispatcher = dispatcher.Dispatcher(self._worker_id,
-                                                 self._worker_rpc_client)
+
+        print('Starting server at port %d' % (worker_port))
 
         callbacks = {
             'Run': self._run_callback,
             'Shutdown': self._shutdown_callback,
         }
+        
         self._server_thread = threading.Thread(
             target=worker_server.serve,
             args=(worker_port, callbacks,))
         self._server_thread.daemon = True
         self._server_thread.start()
+
+        self._worker_id, error = \
+            self._worker_rpc_client.register_worker(self._devices)
+        if error:
+            raise RuntimeError(error)
+        
+        self._dispatcher = dispatcher.Dispatcher(self._worker_id,
+                                                 self._gpu_id,
+                                                 self._worker_rpc_client)
+        
         self._server_thread.join()
 
     def _run_callback(self, jobs):
+        # hack to prevent a job being dispatched before the dispatcher is set up
+        # TODO: fix this by sending a "I'm ready" message to scheduler
+        while True:
+            try:
+                self._dispatcher
+                break
+            except Exception as e:
+              continue
         for job in jobs:
             self._dispatcher.dispatch_job(job)
 
@@ -51,12 +68,15 @@ if __name__=='__main__':
                         help='Worker type')
     parser.add_argument('-i', '--ip_addr', type=str, required=True,
                         help='IP address for scheduler server')
-    parser.add_argument('-p', '--sched_port', type=int, default=50060,
+    parser.add_argument('-s', '--sched_port', type=int, default=50060,
                         help='Port number for scheduler server')
-    parser.add_argument('--worker_port', type=int, default=50061,
+    parser.add_argument('-w', '--worker_port', type=int, default=50061,
                         help='Port number for worker server')
+    parser.add_argument('-g', '--gpu_id', type=int, required=True,
+                        help='GPU ID')
     args = parser.parse_args()
     opt_dict = vars(args)
 
     worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
-                    opt_dict['sched_port'], opt_dict['worker_port'])
+                    opt_dict['sched_port'], opt_dict['worker_port'],
+                    opt_dict['gpu_id'])

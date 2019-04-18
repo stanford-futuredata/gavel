@@ -37,9 +37,11 @@ class WorkerRpcClient:
             devices=device_protos)
         with grpc.insecure_channel(self._sched_loc) as channel:
             while attempts < MAX_ATTEMPTS:
+                print('Trying to register worker... attempt %d' % (attempts+1))
                 stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
                 response = stub.RegisterWorker(request)
                 if response.HasField('worker_id'):
+                    print('Succesfully registered worker with id %d' % (response.worker_id))
                     return (response.worker_id, None)
                 elif attempts == MAX_ATTEMPTS:
                     assert(response.HasField('error'))
@@ -52,10 +54,12 @@ class WorkerRpcClient:
         #TODO
         pass
 
-    def notify_scheduler(self, job_id, worker_id, execution_time):
+    def notify_scheduler(self, job_id, worker_id, execution_time, num_steps):
         # Send a Done message.
+        print('Sending done request!')
         request = w2s_pb2.DoneRequest(job_id=job_id, worker_id=worker_id,
-                                      execution_time=execution_time)
+                                      execution_time=execution_time,
+                                      num_steps=num_steps)
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
             response = stub.Done(request)

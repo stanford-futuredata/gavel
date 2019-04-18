@@ -48,6 +48,7 @@ def serve(port, callbacks):
     s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(
             WorkerServer(callbacks, condition), server)
 
+    print('Starting server at port %s' % (str(port)))
     server.add_insecure_port('[::]:%d' % (port))
     server.start()
 
