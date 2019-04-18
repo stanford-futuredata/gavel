@@ -54,15 +54,15 @@ def main(args):
         if remaining_time > 0:
             time.sleep(remaining_time)
         job_id = sched.add_job(job)
-        print('%s] [Dispatched] Job ID: %s' % (str(datetime.datetime.now()),
-                                               str(job_id)))
+        print('%s] [Job dispatched] Job ID: %s' % (str(datetime.datetime.now()),
+                                                   str(job_id)))
 
     sleep_seconds = 30
-    while not sched.is_done():
+    while sched.pending_jobs():
         time.sleep(sleep_seconds)
 
     print("Total time taken: %d seconds" % (datetime.datetime.now() - start_time).seconds)
-    s.shutdown()
+    sched.shutdown()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
