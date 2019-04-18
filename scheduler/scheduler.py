@@ -19,6 +19,7 @@ DEFAULT_THROUGHPUT = .1
 DEFAULT_NUM_STEPS = 10    # Default number of steps in each iteration
 TIME_PER_ITERATION = 10 * 60    # Time in seconds each iteration should run for
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average
+MAX_FAILED_ATTEMPTS = 5
 
 class Scheduler:
 
@@ -215,6 +216,8 @@ class Scheduler:
         # The number of steps to run of each job on each worker type
         # for each iteration.
         self._num_steps_per_iteration = {}
+        # Number of failures per job.
+        self._num_failures_per_job = {}
         # Throughputs for all job types (pre-measured).
         #if throughputs_directory is not None:
         #    self._all_throughputs = utils.read_all_throughputs(
@@ -312,6 +315,7 @@ class Scheduler:
             self._cumulative_time_run_so_far[job_id] = {}
             self._throughputs[job_id] = {}
             self._num_steps_per_iteration[job_id] = {}
+            self._num_failures_per_job[job_id] = 0
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
                 self._throughputs[job_id][worker_type] = \
@@ -342,17 +346,21 @@ class Scheduler:
 
         job_id = self.JobIdPair(job_id, None)
         with self._scheduler_lock:
-            duration = self._per_job_latest_timestamps[job_id] - \
-                self._per_job_start_timestamps[job_id]
-            self._job_completion_times[job_id] = (duration,
-                                                  self._jobs[job_id].duration)
-            print("Job %d completed\n\tStart timestamp: %.2f\n\t"
-                  "End timestamp: %.2f\nDuration: %.2f %s\n" % (
-                      job_id[0],
-                      self._per_job_start_timestamps[job_id],
-                      self._per_job_latest_timestamps[job_id],
-                      duration, "seconds")
-                  )
+            try:
+                duration = self._per_job_latest_timestamps[job_id] - \
+                    self._per_job_start_timestamps[job_id]
+                self._job_completion_times[job_id] = \
+                        (duration, self._jobs[job_id].duration)
+                print("Job %d completed\n\tStart timestamp: %.2f\n\t"
+                      "End timestamp: %.2f\nDuration: %.2f %s\n" % (
+                          job_id[0],
+                          self._per_job_start_timestamps[job_id],
+                          self._per_job_latest_timestamps[job_id],
+                          duration, "seconds")
+                      )
+            except Exception as e:
+                # TODO: handle this case (no data in the data structures)
+                pass
 
             timestamp = time.time()
             self._reset_time_run_so_far(timestamp)
@@ -362,6 +370,7 @@ class Scheduler:
             del self._time_run_so_far[job_id]
             del self._cumulative_time_run_so_far[job_id]
             del self._throughputs[job_id]
+            del self._num_failures_per_job[job_id]
             if self._job_packing:
                 to_delete = []
                 for other_job_id in self._throughputs:
@@ -397,11 +406,17 @@ class Scheduler:
             return (len(self._event_queue) == 0 and
                     len(self._steps_run_so_far) == 0)
 
+    def pending_jobs(self):
+        """Returns whether there are any outstanding jobs to schedule."""
+        with self._scheduler_lock:
+            return len(self._jobs) > 0
 
     def shutdown(self, logfile=None):
         """Sends a shutdown signal to every worker and ends the scheduler."""
         output = []
         with self._scheduler_lock:
+            if len(self._job_completion_times) == 0:
+                return
             output.append("Job completion times:"
                           "\n\t%s" % self._job_completion_times)
             average_job_completion_time = \
@@ -424,7 +439,7 @@ class Scheduler:
                 for line in output:
                     f.write(line + '\n')
         # TODO: Any other cleanup?
-        sys.exit()
+        sys.exit(0)
 
 
     """
@@ -529,9 +544,9 @@ class Scheduler:
                         num_steps = min(self._get_remaining_steps(single_job_id),
                                         self._num_steps_per_iteration[single_job_id][worker_type])
                         assert(num_steps > 0)
-                        print("%s] [Scheduled] Job ID: %s, Worker ID: %d" % (str(datetime.datetime.now()),
-                                                                             job_id,
-                                                                             worker_id))
+                        print(('%s] [Micro-task scheduled] Job ID: %s, '
+                               'Worker ID: %d') % (str(datetime.datetime.now()),
+                                                   job_id, worker_id))
                         self._worker_connections[worker_id].run(
                                 [(single_job_id[0],
                                   self._jobs[single_job_id].command,
@@ -879,7 +894,6 @@ class Scheduler:
             self._add_available_worker_id(worker_id, timestamp)
 
             self._num_workers += 1
-            print('Creating RPC connection to worker at %s:%s' % (ip_addr, str(port)))
             self._worker_connections[worker_id] = \
                 scheduler_client.SchedulerRpcClient(ip_addr, port)
 
@@ -912,67 +926,86 @@ class Scheduler:
         to_remove = []
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-            self._steps_run_so_far[job_id][worker_type] += num_steps
-            self._time_run_so_far[job_id][worker_type] += execution_time
-            self._cumulative_time_run_so_far[job_id][worker_type] += execution_time
-            # Adjust the job throughput using an exponential moving average
-            # between the old value and the new measurement.
-            import pdb
-            pdb.set_trace()
-            old_throughput = self._throughputs[job_id][worker_type]
-            new_throughput = execution_time / num_steps
-            self._throughputs[job_id][worker_type] = \
-                    EMA_ALPHA * new_throughput + (1 - EMA_ALPHA) * old_throughput
-            print('[DEBUG] Job %s throughput on worker type %s: %.3f -> %.3f' % (job_id, worker_type,
-                                                                                 old_throughput,
-                                                                                 self._throughputs[job_id][worker_type]))
 
-            # Adjust the number of steps in each iteration such that the
-            # new number of steps will more closely align with the
-            # desired wall-clock time per iteration.
-            old_num_steps_per_iteration = self._num_steps_per_iteration[job_id][worker_type]
-            new_num_steps_per_iteration = old_num_steps_per_iteration * \
-                    TIME_PER_ITERATION / execution_time
-            new_num_steps_per_iteration = max(1, new_num_steps_per_iteration)
-            self._num_steps_per_iteration[job_id][worker_type] = \
-                    int(EMA_ALPHA * new_num_steps_per_iteration +
-                            (1 - EMA_ALPHA) * old_num_steps_per_iteration)
-            print('[DEBUG] Job %s steps per iteration on worker type %s: %d -> %d' % (job_id,
-                                                                                      worker_type,
-                                                                                      old_num_steps_per_iteration,
-                                                                                      self._num_steps_per_iteration[job_id][worker_type]))
-
-            for single_job_id in job_id.singletons():
-                self._per_job_latest_timestamps[single_job_id] = time.time()
-            print("%s] [Completed] Job ID: %s, Worker ID: %d" % (str(datetime.datetime.now()),
-                                                                 job_id,
-                                                                 worker_id))
-            # NOTE: for debug purposes.
-            if self._verbose:
-                print("[{job_id: {worker_type: steps}}]",
-                      self._steps_run_so_far)
-                print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
-                print()
-
-            for single_job_id in job_id.singletons():
-                if ((self._get_total_steps_run(single_job_id) <
-                     self._jobs[single_job_id].total_steps) and
-                    (self._jobs[single_job_id].duration is None or
-                     self._get_total_time_run_for_job(single_job_id) < \
-                             self._jobs[single_job_id].duration)):
-                    self._add_to_queue(single_job_id)
+            if execution_time < 0:
+                # Job failed
+                if timestamp is None:
+                    timestamp = time.time()
+                self._num_failures_per_job[job_id] += 1
+                print(('%s] [Micro-task failed] '
+                       'Job ID: %s') % (datetime.datetime.now(),
+                                        job_id))
+                if self._num_failures_per_job[job_id] >= MAX_FAILED_ATTEMPTS:
+                    print(('%s] [Job failed] '
+                           'Job ID: %s') % (datetime.datetime.now(), job_id))
+                    to_remove.append(job_id)
                 else:
-                    to_remove.append(single_job_id)
+                    self._add_to_queue(job_id)
+                self._add_available_worker_id(worker_id, timestamp)
+            else:
+                self._num_failures_per_job[job_id] = 0
+                self._steps_run_so_far[job_id][worker_type] += num_steps
+                self._time_run_so_far[job_id][worker_type] += execution_time
+                self._cumulative_time_run_so_far[job_id][worker_type] += execution_time
+                # Adjust the job throughput using an exponential moving average
+                # between the old value and the new measurement.
+                old_throughput = self._throughputs[job_id][worker_type]
+                new_throughput = execution_time / num_steps
+                self._throughputs[job_id][worker_type] = \
+                        EMA_ALPHA * new_throughput + (1 - EMA_ALPHA) * old_throughput
+                print(('[DEBUG] Job %s throughput on worker type %s: '
+                       '%.3f -> %.3f') % (job_id, worker_type, old_throughput,
+                                          self._throughputs[job_id][worker_type]))
 
-            if timestamp is None:
-                timestamp = time.time()
-            self._add_available_worker_id(worker_id, timestamp)
+                # Adjust the number of steps in each iteration such that the
+                # new number of steps will more closely align with the
+                # desired wall-clock time per iteration.
+                old_num_steps_per_iteration = \
+                        self._num_steps_per_iteration[job_id][worker_type]
+                new_num_steps_per_iteration = old_num_steps_per_iteration * \
+                        TIME_PER_ITERATION / execution_time
+                new_num_steps_per_iteration = \
+                        max(1, new_num_steps_per_iteration)
+                self._num_steps_per_iteration[job_id][worker_type] = \
+                        int(EMA_ALPHA * new_num_steps_per_iteration +
+                                (1 - EMA_ALPHA) * old_num_steps_per_iteration)
+                print(('[DEBUG] Job %s steps per iteration on worker type %s: '
+                       '%d -> %d') % (job_id, worker_type,
+                                      old_num_steps_per_iteration,
+                                      self._num_steps_per_iteration[job_id][worker_type]))
 
-            if len(self._per_job_latest_timestamps) > 0:
-                self._update_available_worker_id_keys(
-                    min(self._per_job_latest_timestamps.values()))
+                for single_job_id in job_id.singletons():
+                    self._per_job_latest_timestamps[single_job_id] = time.time()
+                print(('%s] [Micro-task succeeded] '
+                       'Job ID: %s, Worker ID: %d') % (str(datetime.datetime.now()),
+                                                       job_id, worker_id))
+                # NOTE: for debug purposes.
+                if self._verbose:
+                    print("[{job_id: {worker_type: steps}}]",
+                          self._steps_run_so_far)
+                    print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
+                    print()
+
+                for single_job_id in job_id.singletons():
+                    if ((self._get_total_steps_run(single_job_id) <
+                         self._jobs[single_job_id].total_steps) and
+                        (self._jobs[single_job_id].duration is None or
+                         self._get_total_time_run_for_job(single_job_id) < \
+                                 self._jobs[single_job_id].duration)):
+                        self._add_to_queue(single_job_id)
+                    else:
+                        print(('%s] [Job succeeded] '
+                               'Job ID: %s') % (str(datetime.datetime.now()),
+                                                single_job_id))
+                        to_remove.append(single_job_id)
+
+                if timestamp is None:
+                    timestamp = time.time()
+                self._add_available_worker_id(worker_id, timestamp)
+
+                if len(self._per_job_latest_timestamps) > 0:
+                    self._update_available_worker_id_keys(
+                        min(self._per_job_latest_timestamps.values()))
 
         for single_job_id in to_remove:
-            #print("%s] [Removed] Job ID: %s" % (str(datetime.datetime.now(),
-            #                                    single_job_id)))
             self.remove_job(single_job_id[0], timestamp=timestamp)

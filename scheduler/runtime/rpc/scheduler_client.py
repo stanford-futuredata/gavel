@@ -24,7 +24,6 @@ class SchedulerRpcClient:
                 job_description.command = command
                 job_description.num_steps_arg = num_steps_arg
                 job_description.num_steps = num_steps
-            print('Sending request!')
             response = stub.Run(request)
 
 
