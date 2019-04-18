@@ -2,6 +2,7 @@ import argparse
 import datetime
 import queue
 import time
+import datetime
 
 import job
 import policies
@@ -26,13 +27,14 @@ def parse_trace(trace_file):
     jobs = []
     with open(trace_file, 'r') as f:
         for line in f:
-            command, num_steps_arg, total_steps, arrival_time = line.split('\t')
+            command, num_steps_arg, total_steps, arrival_time, duration = \
+                    line.split('\t')
             jobs.append((job.Job(job_id=None,
                                 job_type=None,
                                 command=command,
                                 num_steps_arg=num_steps_arg,
                                 total_steps=int(total_steps),
-                                duration=None),
+                                duration=int(duration)),
                         int(arrival_time)))
     return jobs
 
@@ -50,10 +52,10 @@ def main(args):
         elapsed_seconds = (current_time - start_time).seconds
         remaining_time = arrival_time - elapsed_seconds
         if remaining_time > 0:
-            print('Waiting %d seconds before scheduling next job...' % (remaining_time))
             time.sleep(remaining_time)
-        print('Scheduled job!')
-        sched.add_job(job)
+        job_id = sched.add_job(job)
+        print('%s] [Dispatched] Job ID: %s' % (str(datetime.datetime.now()),
+                                               str(job_id)))
 
     sleep_seconds = 30
     while not sched.is_done():
