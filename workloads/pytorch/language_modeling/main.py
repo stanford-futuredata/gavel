@@ -206,7 +206,7 @@ best_val_loss = None
 try:
     cumulative_steps = 0
     if args.epochs is None:
-        args.epochs = int(math.ceil(args.steps / (train_data.size(0) - 1.0)))
+        args.epochs = args.steps
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
         cumulative_steps, done = train(cumulative_steps) 

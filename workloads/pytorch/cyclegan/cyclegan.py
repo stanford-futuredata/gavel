@@ -130,9 +130,7 @@ val_dataloader = DataLoader(
 )
 
 if opt.n_epochs is None:
-    opt.n_epochs = math.ceil(opt.n_steps / len(dataloader))
-elif opt.n_steps is None:
-    opt.n_steps = opt.n_epochs * len(dataloader)
+    opt.n_epochs = opt.n_steps
 
 # Learning rate update schedulers
 lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(

@@ -153,7 +153,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
 
     valid_accus = []
     if opt.epoch is None:
-        opt.epoch = int(math.ceil(opt.step / len(training_data)))
+        opt.epoch = opt.step
     cumulative_step = 0
     for epoch_i in range(opt.epoch):
         print('[ Epoch', epoch_i, ']')

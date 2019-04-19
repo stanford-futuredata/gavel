@@ -167,7 +167,7 @@ def test(epoch):
     """
 
 if args.num_epochs is None:
-    args.num_epochs = int(math.ceil(float(args.num_steps) / len(trainloader)))
+    args.num_epochs = args.num_steps
 cumulative_steps = 0
 for epoch in range(start_epoch, args.num_epochs):
     cumulative_steps, done = train(epoch, cumulative_steps)
