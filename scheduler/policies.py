@@ -3,6 +3,14 @@ import numpy as np
 
 
 class Policy:
+
+    def __init__(self):
+        self._name = None
+
+    @property
+    def name(self):
+        return self._name
+
     def flatten(self, d):
         """Converts a 2-level dict to a NumPy array."""
 
@@ -34,6 +42,9 @@ class Policy:
 
 class IsolatedPolicy(Policy):
 
+    def __init__(self):
+        self._name = 'Isolated'
+
     def get_allocation(self, unflattened_throughputs):
         throughputs, index = super().flatten(unflattened_throughputs)
         if throughputs is None: return None
@@ -42,6 +53,9 @@ class IsolatedPolicy(Policy):
 
 
 class MaximumThroughputPolicy(Policy):
+
+    def __init__(self):
+        self._name = 'MaximumThroughput'
 
     def get_allocation(self, unflattened_throughputs):
         throughputs, index = super().flatten(unflattened_throughputs)
@@ -61,6 +75,9 @@ class MaximumThroughputPolicy(Policy):
 
 
 class KSPolicy(Policy):
+
+    def __init__(self):
+        self._name = 'KS'
 
     def get_allocation(self, unflattened_throughputs):
         throughputs, index = super().flatten(unflattened_throughputs)
@@ -85,6 +102,9 @@ class KSPolicy(Policy):
 
 
 class KSPolicyWithPacking(Policy):
+
+    def __init__(self):
+        self._name = 'KS_Packing'
 
     def flatten(self, d):
         """
@@ -200,6 +220,7 @@ class KSPolicyWithPacking(Policy):
 
 class FIFOPolicy(Policy):
     def __init__(self):
+        self._name = 'FIFO'
         self._allocation = {}
         self._queue = []
 

@@ -15,9 +15,10 @@ import utils
 
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
-DEFAULT_THROUGHPUT = .1
-DEFAULT_NUM_STEPS = 10    # Default number of steps in each iteration
-TIME_PER_ITERATION = 10 * 60    # Time in seconds each iteration should run for
+INFINITY = float(1e9)
+DEFAULT_THROUGHPUT = INFINITY
+DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration
+TIME_PER_ITERATION = 20 * 60    # Time in seconds each iteration should run for
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average
 MAX_FAILED_ATTEMPTS = 5
 
@@ -323,8 +324,17 @@ class Scheduler:
                 if self._job_packing:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
-                self._num_steps_per_iteration[job_id][worker_type] = \
-                        DEFAULT_NUM_STEPS
+                if self._policy.name == 'FIFO':
+                    print(('[DEBUG] FIFO policy: running job %s for %d'
+                           ' iterations') % (job_id,
+                                             self._jobs[job_id].total_steps))
+                    self._num_steps_per_iteration[job_id][worker_type] = \
+                            self._jobs[job_id].total_steps
+                else:
+                    self._num_steps_per_iteration[job_id][worker_type] = \
+                            min(DEFAULT_NUM_STEPS,
+                                self._get_remaining_steps(job_id))
+
                 self._cumulative_time_run_so_far[job_id][worker_type] = 0.0
 
             self._reset_time_run_so_far(timestamp)
@@ -479,6 +489,7 @@ class Scheduler:
 
                 # If the highest priority job involves waiting, pick an earlier
                 # job with reasonably high priority.
+                """
                 latest_timestamp = 0
                 for single_job_id in job_id.singletons():
                     latest_timestamp = max(latest_timestamp,
@@ -510,6 +521,7 @@ class Scheduler:
                             priority = ready_priority
                             job_id = ready_job_id
 
+                """
                 # If the chosen job has an allocation of zero, return the worker
                 # to the available worker pool.
                 if self._allocation[job_id][worker_type] == 0.0:
@@ -537,12 +549,14 @@ class Scheduler:
                     timestamp = max(timestamp,
                                     self._per_job_latest_timestamps.get(single_job_id, 0))
                     self._remove_from_queue(single_job_id)
-
+                self._print_allocation()
                 # Actually execute the scheduled job_id(s) on the right
                 # worker_id.
                 for single_job_id in job_id.singletons():
-                        num_steps = min(self._get_remaining_steps(single_job_id),
-                                        self._num_steps_per_iteration[single_job_id][worker_type])
+                        self._num_steps_per_iteration[single_job_id][worker_type] = \
+                                min(self._num_steps_per_iteration[single_job_id][worker_type],
+                                    self._get_remaining_steps(single_job_id))
+                        num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
                         assert(num_steps > 0)
                         print(('%s] [Micro-task scheduled] Job ID: %s, '
                                'Worker ID: %d') % (str(datetime.datetime.now()),
@@ -559,6 +573,17 @@ class Scheduler:
        Helper methods to compute each user's fair allocation.
     ======================================================================
     """
+
+    @preconditions(lambda self: self._scheduler_lock.locked())
+    def _print_allocation(self):
+        """Prints the allocation."""
+        print('[DEBUG] Allocation:')
+        job_ids = sorted([job_id for job_id in self._allocation])
+        for job_id in job_ids:
+            line = 'Job %s: ' % (job_id)
+            for worker_type in self._allocation[job_id]:
+                line += '[%4s %.3f] ' % (worker_type, self._allocation[job_id][worker_type])
+            print(line)
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _get_allocation(self):
@@ -653,12 +678,23 @@ class Scheduler:
 
         Requires self._scheduler_lock to be held when calling this function.
         """
-
+        """
+        job_ids = sorted([job_id for job_id in self._time_run_so_far])
+        for job_id in job_ids:
+            time_line = '[DEBUG_ALLOCATION]\tJob %s time run so far:\t' % (job_id)
+            allocation_line = '[DEBUG_ALLOCATION]\tJob %s allocation:\t' % (job_id)
+            worker_types = \
+                    sorted([worker_type for worker_type in self._time_run_so_far[job_id]])
+            for worker_type in worker_types:
+                allocation_line += '[%4s %.3f]\t' % (worker_type, self._allocation[job_id][worker_type])
+                time_line += '[%4s %.3f]\t' % (worker_type, self._time_run_so_far[job_id][worker_type])
+            print(allocation_line)
+            print(time_line)
+        """
         for worker_type in self._worker_types:
             for job_id in self._time_run_so_far:
                 self._time_run_so_far[job_id][worker_type] = 0.0
         self._num_jobs = len(self._time_run_so_far)
-
 
     @preconditions(lambda self: self._scheduler_lock.locked())
     def _add_to_queue(self, job_id):
@@ -879,8 +915,16 @@ class Scheduler:
                     if self._job_packing:
                         self._populate_job_combination_metadata(job_id,
                                                                 worker_type)
-                    self._num_steps_per_iteration[job_id][worker_type] = \
-                            DEFAULT_NUM_STEPS
+                    if self._policy.name == 'FIFO':
+                        print(('[DEBUG] FIFO policy: running job %s for %d'
+                               ' iterations') % (job_id,
+                                                 self._jobs[job_id].total_steps))
+                        self._num_steps_per_iteration[job_id][worker_type] = \
+                                self._jobs[job_id].total_steps
+                    else:
+                        self._num_steps_per_iteration[job_id][worker_type] = \
+                                min(DEFAULT_NUM_STEPS,
+                                    self._get_remaining_steps(job_id))
                     # Entries in the queue are sorted by
                     # fraction_run/fraction_allocated, then number of
                     # steps run, then job_id.
@@ -950,9 +994,12 @@ class Scheduler:
                 # Adjust the job throughput using an exponential moving average
                 # between the old value and the new measurement.
                 old_throughput = self._throughputs[job_id][worker_type]
-                new_throughput = execution_time / num_steps
-                self._throughputs[job_id][worker_type] = \
-                        EMA_ALPHA * new_throughput + (1 - EMA_ALPHA) * old_throughput
+                new_throughput = num_steps / execution_time
+                if old_throughput == INFINITY:
+                    self._throughputs[job_id][worker_type] = new_throughput
+                else:
+                    self._throughputs[job_id][worker_type] = \
+                            EMA_ALPHA * new_throughput + (1 - EMA_ALPHA) * old_throughput
                 print(('[DEBUG] Job %s throughput on worker type %s: '
                        '%.3f -> %.3f') % (job_id, worker_type, old_throughput,
                                           self._throughputs[job_id][worker_type]))
@@ -969,6 +1016,9 @@ class Scheduler:
                 self._num_steps_per_iteration[job_id][worker_type] = \
                         int(EMA_ALPHA * new_num_steps_per_iteration +
                                 (1 - EMA_ALPHA) * old_num_steps_per_iteration)
+                self._num_steps_per_iteration[job_id][worker_type] = \
+                        min(self._get_remaining_steps(job_id),
+                            self._num_steps_per_iteration[job_id][worker_type])
                 print(('[DEBUG] Job %s steps per iteration on worker type %s: '
                        '%d -> %d') % (job_id, worker_type,
                                       old_num_steps_per_iteration,
