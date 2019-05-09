@@ -14,10 +14,10 @@ class Policy:
     def flatten(self, d):
         """Converts a 2-level dict to a NumPy array."""
 
-        job_id_pairs = list(d.keys())
+        job_id_pairs = sorted(list(d.keys()))
         if len(job_id_pairs) == 0:
             return None, None
-        worker_types = list(d[job_id_pairs[0]].keys())
+        worker_types = sorted(list(d[job_id_pairs[0]].keys()))
         if len(worker_types) == 0:
             return None, None
         m = []
@@ -91,7 +91,7 @@ class KSPolicy(Policy):
                                               axis=1)))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= 1,
+            cp.sum(x, axis=0) <= 4,
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
@@ -223,6 +223,11 @@ class FIFOPolicy(Policy):
         self._name = 'FIFO'
         self._allocation = {}
         self._queue = []
+        self._num_workers = {
+            'k80': 4,
+            'p100': 4,
+            'v100': 4,
+          }
 
     def get_allocation(self, throughputs):
         # New Job ID; put on queue to schedule.
@@ -235,37 +240,40 @@ class FIFOPolicy(Policy):
         job_ids = list(self._allocation.keys())
         for job_id in job_ids:
             if job_id not in throughputs:
-                worker_id = self._allocation[job_id]
+                worker_type = self._allocation[job_id]
                 del self._allocation[job_id]
                 if len(self._queue) > 0:
                     job_id_to_schedule = self._queue.pop(0)
-                    self._allocation[job_id_to_schedule] = worker_id
+                    self._allocation[job_id_to_schedule] = worker_type
 
-        # worker_ids_seen keeps track of all workers that have been assigned
+        # worker_types_seen keeps track of all workers that have been assigned
         # jobs.
-        worker_ids_seen = set()
+        worker_types_seen = {}#set()
         for job_id in self._allocation:
-            worker_id = self._allocation[job_id]
-            worker_ids_seen.add(worker_id)
+            worker_type = self._allocation[job_id]
+            if worker_type not in worker_types_seen:
+                worker_types_seen[worker_type] = 0
+            worker_types_seen[worker_type] += 1
 
         # Try to allocation all queued job IDs on available workers.
         job_ids = list(throughputs.keys())
         if len(job_ids) > 0:
             job_id = job_ids[0]
-            for worker_id in throughputs[job_id]:
-                if worker_id not in worker_ids_seen:
+            for worker_type in throughputs[job_id]:
+                if (worker_type not in worker_types_seen or
+                    worker_types_seen[worker_type] < self._num_workers[worker_type]):
                     if len(self._queue) > 0:
                         job_id_to_schedule = self._queue.pop(0)
-                        self._allocation[job_id_to_schedule] = worker_id
+                        self._allocation[job_id_to_schedule] = worker_type
 
         # Construct output allocation.
         allocation = {}
         for job_id in throughputs:
             allocation[job_id] = {}
-            for worker_id in throughputs[job_id]:
+            for worker_type in throughputs[job_id]:
                 if (job_id in self._allocation and
-                    self._allocation[job_id] == worker_id):
-                    allocation[job_id][worker_id] = 1.0
+                    self._allocation[job_id] == worker_type):
+                    allocation[job_id][worker_type] = 1.0
                 else:
-                    allocation[job_id][worker_id] = 0.0
+                    allocation[job_id][worker_type] = 0.0
         return allocation

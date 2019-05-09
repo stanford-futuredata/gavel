@@ -6,7 +6,7 @@ import datetime
 
 import job
 import policies
-import scheduler
+import emulator
 
 def get_policy(policy_name):
     if policy_name == "isolated":
@@ -25,44 +25,32 @@ def get_policy(policy_name):
 
 def parse_trace(trace_file):
     jobs = []
+    arrival_times = []
     with open(trace_file, 'r') as f:
         for line in f:
             job_type, command, num_steps_arg, total_steps, arrival_time = \
                     line.split('\t')
-            jobs.append((job.Job(job_id=None,
+            jobs.append(job.Job(job_id=None,
                                 job_type=job_type,
                                 command=command,
                                 num_steps_arg=num_steps_arg,
                                 total_steps=int(total_steps),
-                                duration=None),
-                        int(arrival_time)))
-    return jobs
+                                duration=None))
+            arrival_times.append(int(arrival_time))
+    return jobs, arrival_times
 
 def main(args):
-    jobs = parse_trace(args.trace_file)
-    job_queue = queue.Queue()
-    for job in jobs:
-        job_queue.put(job)
+    jobs, arrival_times = parse_trace(args.trace_file)
     policy = get_policy(args.policy)
-    sched = scheduler.Scheduler(policy, job_packing=False)
+    sched = emulator.Scheduler(policy, args.throughputs_file,
+                               job_packing=False)
     start_time = datetime.datetime.now()
-    while not job_queue.empty():
-        job, arrival_time = job_queue.get()
-        current_time = datetime.datetime.now()
-        elapsed_seconds = (current_time - start_time).seconds
-        remaining_time = arrival_time - elapsed_seconds
-        if remaining_time > 0:
-            time.sleep(remaining_time)
-        job_id = sched.add_job(job)
-        print('%s] [Job dispatched] Job ID: %s' % (str(datetime.datetime.now()),
-                                                   str(job_id)))
-
-    sleep_seconds = 30
-    while sched.pending_jobs():
-        time.sleep(sleep_seconds)
-
-    print("Total time taken: %d seconds" % (datetime.datetime.now() - start_time).seconds)
-    sched.shutdown()
+    cluster_spec = {
+          'k80': 4,
+          'p100': 4,
+          'v100': 4
+    }
+    sched.emulate(cluster_spec, arrival_times, jobs)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
@@ -72,4 +60,7 @@ if __name__=='__main__':
                         choices=['isolated', 'ks', 'ks_packed', 'fifo',
                                  'max_throughput'],
                         help='Scheduler policy')
+    parser.add_argument('-r', '--throughputs_file', type=str,
+                        default='throughputs.json',
+                        help='Throughputs file')
     main(parser.parse_args())

@@ -2,44 +2,45 @@ import argparse
 import numpy as np
 import random
 
-INITIAL_DELAY = 10
+INITIAL_DELAY = 0
 MAX_JOB_STEPS = 10000000
 
 random.seed(42)
+np.random.seed(42)
 
 jobs = [
-    ('resnet-50', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+    ('ResNet-50', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
       'image_classification/imagenet && python3 '
       'main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/'),
      '--num_minibatches'),
-    ('a3c', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && '
+    ('A3C', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && '
        'python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True'),
       '--max-steps'),
-    ('lm', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/language_modeling '
+    ('LM', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/language_modeling '
       '&& python main.py --cuda --data /home/keshavsanthanam/data/wikitext-2'),
       '--steps'),
-    ('recommendation', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+    ('Recommendation', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
       'recommendation/scripts/ml-20m && python3 train.py'), '-n'),
-    ('resnet-18', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+    ('ResNet-18', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
       'image_classification/cifar10 && python3 '
       'main.py --data_dir=/home/keshavsanthanam/data/cifar10'),
       '--num_steps'),
-    ('transformer', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/translation/ '
+    ('Transformer', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/translation/ '
       '&& python3 train.py -data /home/keshavsanthanam/data/translation/'
       'multi30k.atok.low.pt -proj_share_weight'), '-step'),
-    ('cyclegan', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/cyclegan '
+    ('CycleGAN', ('cd /home/keshavsanthanam/gpusched/workloads/pytorch/cyclegan '
       '&& python3 cyclegan.py --dataset_path /home/keshavsanthanam/data'
       '/monet2photo --decay_epoch 0'), '--n_steps'),
 ]
 
 throughputs = {
-        'resnet-50': 1.333386669,
-        'resnet-18': 46.45544922,
-        'cyclegan': 3.497604141,
-        'a3c': 6.035731531,
-        'transformer': 8.26514588,
-        'recommendation': 0.4535558781,
-        'lm': 0.7638835841,
+        'ResNet-50': 1.333386669,
+        'ResNet-18': 46.45544922,
+        'CycleGAN': 3.497604141,
+        'A3C': 6.035731531,
+        'Transformer': 8.26514588,
+        'Recommendation': 0.4535558781,
+        'LM': 0.7638835841,
 }
 
 """
@@ -66,9 +67,10 @@ def generate(lam, N, output_file):
             duration = 10 ** random.uniform(0, 2)  # this is in minutes.
             duration *= 60
             total_steps = int(duration * throughputs[job[0]])
-            'command\tnum_steps_arg\ttotal_steps\tarrival_time'
-            f.write('%s\t%s\t%d\t%d\n' % (job[1], job[2], total_steps,
-                                          arrival_time + INITIAL_DELAY))
+            # 'job_type\tcommand\tnum_steps_arg\ttotal_steps\tarrival_time'
+            f.write('%s\t%s\t%s\t%d\t%d\n' % (job[0], job[1], job[2],
+                                              total_steps,
+                                              arrival_time + INITIAL_DELAY))
 
 def main(args):
     generate(args.lam, args.num_jobs, args.output_file)

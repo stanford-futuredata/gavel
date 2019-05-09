@@ -1,3 +1,4 @@
+import json
 import os
 
 
@@ -33,3 +34,8 @@ def read_all_throughputs(directory_name, worker_types=["k80", "p100", "v100", "v
                             all_throughputs[job_types] = {}
                         all_throughputs[job_types][worker_type] = tuple(throughputs)
     return all_throughputs
+
+def read_all_throughputs_json(throughputs_file):
+    with open(throughputs_file, 'r') as f:
+        throughputs = json.load(f)
+    return throughputs
