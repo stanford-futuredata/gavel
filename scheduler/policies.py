@@ -18,7 +18,8 @@ class Policy:
         if len(job_id_pairs) == 0:
             return None, None
         worker_types = sorted(list(d[job_id_pairs[0]].keys()))
-        self._num_workers = [cluster_spec[worker_type] for worker_type in worker_types]
+        self._num_workers = \
+            [cluster_spec[worker_type] for worker_type in worker_types]
         if len(worker_types) == 0:
             return None, None
         m = []
@@ -46,8 +47,9 @@ class IsolatedPolicy(Policy):
     def __init__(self):
         self._name = 'Isolated'
 
-    def get_allocation(self, unflattened_throughputs):
-        throughputs, index = super().flatten(unflattened_throughputs)
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
         if throughputs is None: return None
         (m, n) = throughputs.shape
         return super().unflatten(np.full((m, n), 1.0 / (m * n)), index)
@@ -80,7 +82,7 @@ class KSPolicy(Policy):
     def __init__(self):
         self._name = 'KS'
 
-    def get_allocation(self, unflattened_throughputs, cluster_spec={'k80': 4, 'p100': 4, 'v100': 4}):
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None
@@ -93,7 +95,7 @@ class KSPolicy(Policy):
                                               axis=1)))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= 4,
+            cp.sum(x, axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
@@ -226,7 +228,7 @@ class FIFOPolicy(Policy):
         self._allocation = {}
         self._queue = []
 
-    def get_allocation(self, throughputs, cluster_spec={'k80': 4, 'p100': 4, 'v100': 4}):
+    def get_allocation(self, throughputs, cluster_spec):
         # New Job ID; put on queue to schedule.
         job_id = None
         for job_id in throughputs:

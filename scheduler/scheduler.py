@@ -185,7 +185,7 @@ class Scheduler:
         self._policy = policy
         self._job_packing = job_packing
         # RPC clients.
-        self._num_workers = 0
+        self._cluster_spec = 0
         self._worker_connections = {}
         # Next job_id to assign.
         self._job_id_counter = 0
@@ -406,8 +406,11 @@ class Scheduler:
     def num_workers(self):
         """Returns the number of workers the scheduler is connected to."""
 
+        num_workers = 0
         with self._scheduler_lock:
-            return self._num_workers
+            for worker_type in self._cluster_spec:
+                num_workers += self._cluster_spec[worker_type]
+            return num_workers
 
 
     def is_done(self):
@@ -604,7 +607,7 @@ class Scheduler:
         """
 
         unflattened_allocation = self._policy.get_allocation(
-            self._throughputs)
+            self._throughputs, self._cluster_spec)
         if self._verbose:
             print("New allocation\n\t%s\n" % unflattened_allocation)
         return unflattened_allocation
@@ -937,7 +940,9 @@ class Scheduler:
             timestamp = time.time()
             self._add_available_worker_id(worker_id, timestamp)
 
-            self._num_workers += 1
+            if worker_type not in self._cluster_spec:
+                self._cluster_spec[worker_type] = 0
+            self._cluster_spec[worker_type] += 1
             self._worker_connections[worker_id] = \
                 scheduler_client.SchedulerRpcClient(ip_addr, port)
 

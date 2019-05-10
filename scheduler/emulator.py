@@ -185,7 +185,7 @@ class Scheduler:
         self._policy = policy
         self._job_packing = job_packing
         # RPC clients.
-        self._num_workers = 0
+        self._cluster_spec = {}
         self._worker_connections = {}
         # Next job_id to assign.
         self._job_id_counter = 0
@@ -261,8 +261,9 @@ class Scheduler:
                 self._num_steps_per_iteration[job_id][worker_type] = \
                         self._jobs[job_id].total_steps
             else:
+                throughput = self._throughputs[job_id][worker_type]
                 self._num_steps_per_iteration[job_id][worker_type] = \
-                    self._throughputs[job_id][worker_type] * TIME_PER_ITERATION
+                    int(throughput * TIME_PER_ITERATION)
             self._cumulative_time_run_so_far[job_id][worker_type] = 0.0
 
         self._reset_time_run_so_far()
@@ -328,8 +329,11 @@ class Scheduler:
     def num_workers(self):
         """Returns the number of workers the scheduler is connected to."""
 
+        n = 0
         with self._scheduler_lock:
-            return self._num_workers
+            for worker_type in self._cluster_spec:
+                n += self._cluster_spec[worker_type]
+            return n
 
 
     def is_done(self):
@@ -479,15 +483,16 @@ class Scheduler:
                             self._get_remaining_steps(single_job_id))
                     num_steps = \
                         self._num_steps_per_iteration[single_job_id][worker_type]
-                    assert(num_steps > 0)
+                    if num_steps <= 0:
+                        raise ValueError('Num steps should be greater than 0, is %d' % (num_steps))
+                    print('Running job %s for %d steps' % (job_id, num_steps))
                     print(('%s] [Micro-task scheduled] Job ID: %s, '
-                           'Worker ID: %d') % (self._current_timestamp,
-                                               job_id, worker_id))
+                           'Worker type: %s') % (self._current_timestamp,
+                                                 job_id, worker_type))
 
                     finish_time = (self._current_timestamp +
                                    (num_steps /
-                                    self._throughputs[job_id][worker_type])
-                                   + random.random())
+                                    self._throughputs[job_id][worker_type]))
                     heapq.heappush(running_jobs, (finish_time, job_id,
                                                   worker_id, num_steps))
                     self._per_job_latest_timestamps[job_id] = \
@@ -526,8 +531,8 @@ class Scheduler:
             job 0 and for 95% of the time, worker type 'p100' should run job 0.
         """
 
-        unflattened_allocation = self._policy.get_allocation(
-            self._throughputs)
+        unflattened_allocation = self._policy.get_allocation(self._throughputs,
+                                                             self._cluster_spec)
         if self._verbose:
             print("New allocation\n\t%s\n" % unflattened_allocation)
         return unflattened_allocation
@@ -567,8 +572,8 @@ class Scheduler:
 
         Requires self._scheduler_lock to be held when calling this function.
         """
-        job_ids = sorted([job_id for job_id in self._time_run_so_far])
         """
+        job_ids = sorted([job_id for job_id in self._time_run_so_far])
         for job_id in job_ids:
             time_line = '[DEBUG_ALLOCATION]\tJob %s time run so far:\t' % (job_id)
             allocation_line = '[DEBUG_ALLOCATION]\tJob %s allocation:\t' % (job_id)
@@ -710,8 +715,6 @@ class Scheduler:
         """Returns the total number of steps run for job with id job_id."""
 
         # TODO: change to exception
-        if job_id not in self._steps_run_so_far:
-            print('Job id %s not in self._steps_run_so_far' % (job_id))
         assert(job_id in self._steps_run_so_far)
         total_steps_run = 0
         for worker_type in self._steps_run_so_far[job_id]:
@@ -804,7 +807,9 @@ class Scheduler:
 
         self._reset_time_run_so_far()
         self._add_available_worker_id(worker_id)
-        self._num_workers += 1
+        if worker_type not in self._cluster_spec:
+            self._cluster_spec[worker_type] = 0
+        self._cluster_spec[worker_type] += 1
         self._allocation = self._get_allocation()
 
         return worker_id
@@ -840,8 +845,8 @@ class Scheduler:
             self._per_job_latest_timestamps[single_job_id] = \
                 self._current_timestamp
             print(('%s] [Micro-task succeeded] '
-                   'Job ID: %s, Worker ID: %d') % (self._current_timestamp,
-                                                   job_id, worker_id))
+                   'Job ID: %s, Worker type: %s') % (self._current_timestamp,
+                                                   job_id, worker_type))
             # NOTE: for debug purposes.
             if self._verbose:
                 print("[{job_id: {worker_type: steps}}]",
@@ -849,15 +854,15 @@ class Scheduler:
                 print("[{job_id: {worker_type: time}}]", self._time_run_so_far)
                 print()
 
-            for single_job_id in job_id.singletons():
-                if (self._get_total_steps_run(single_job_id) <
-                    self._jobs[single_job_id].total_steps):
-                    self._add_to_queue(single_job_id)
-                else:
-                    print(('%s] [Job succeeded] '
-                           'Job ID: %s') % (self._current_timestamp,
-                                            single_job_id))
-                    to_remove.append(single_job_id)
+        for single_job_id in job_id.singletons():
+            if (self._get_total_steps_run(single_job_id) <
+                self._jobs[single_job_id].total_steps):
+                self._add_to_queue(single_job_id)
+            else:
+                print(('%s] [Job succeeded] '
+                       'Job ID: %s') % (self._current_timestamp,
+                                        single_job_id))
+                to_remove.append(single_job_id)
 
         self._add_available_worker_id(worker_id)
 
