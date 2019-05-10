@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 import datetime
+import random
 
 import priority_queue
 import utils
@@ -19,6 +20,9 @@ DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration
 TIME_PER_ITERATION = 20 * 60    # Time in seconds each iteration should run for
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average
 MAX_FAILED_ATTEMPTS = 5
+
+np.random.seed(42)
+random.seed(42)
 
 class Scheduler:
 
@@ -402,6 +406,9 @@ class Scheduler:
                 self._register_worker_callback(worker_type)
 
         # Add all jobs to the queue
+        for i in range(1, len(arrival_times)):
+            assert(arrival_times[i] >= arrival_times[i-1])
+
         for (arrival_time, job) in zip(arrival_times, jobs):
             queued_jobs.append((arrival_time, job))
 
@@ -440,7 +447,10 @@ class Scheduler:
             seen_worker_ids = set()
             while True:
                 worker_id = self._remove_available_worker_id()
-                if worker_id is None or worker_id in seen_worker_ids:
+                if worker_id in seen_worker_ids:
+                    self._add_available_worker_id(worker_id)
+                    break
+                elif worker_id is None:
                     break
                 else:
                     seen_worker_ids.add(worker_id)
@@ -457,7 +467,6 @@ class Scheduler:
                 # to the available worker pool.
                 if self._allocation[job_id][worker_type] == 0.0:
                     # Move worker_id to the end of the queue.
-                    print('%s] Job %s has 0 allocation on worker %s' % (self._current_timestamp, job_id, worker_type))
                     self._add_available_worker_id(worker_id)
                     continue
 
@@ -477,7 +486,8 @@ class Scheduler:
 
                     finish_time = (self._current_timestamp +
                                    (num_steps /
-                                    self._throughputs[job_id][worker_type]))
+                                    self._throughputs[job_id][worker_type])
+                                   + random.random())
                     heapq.heappush(running_jobs, (finish_time, job_id,
                                                   worker_id, num_steps))
                     self._per_job_latest_timestamps[job_id] = \

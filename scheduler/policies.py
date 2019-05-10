@@ -11,13 +11,14 @@ class Policy:
     def name(self):
         return self._name
 
-    def flatten(self, d):
+    def flatten(self, d, cluster_spec):
         """Converts a 2-level dict to a NumPy array."""
 
         job_id_pairs = sorted(list(d.keys()))
         if len(job_id_pairs) == 0:
             return None, None
         worker_types = sorted(list(d[job_id_pairs[0]].keys()))
+        self._num_workers = [cluster_spec[worker_type] for worker_type in worker_types]
         if len(worker_types) == 0:
             return None, None
         m = []
@@ -65,7 +66,7 @@ class MaximumThroughputPolicy(Policy):
                                               axis=1)))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= 1,
+            cp.sum(x, axis=0) <= 4,
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
@@ -79,8 +80,9 @@ class KSPolicy(Policy):
     def __init__(self):
         self._name = 'KS'
 
-    def get_allocation(self, unflattened_throughputs):
-        throughputs, index = super().flatten(unflattened_throughputs)
+    def get_allocation(self, unflattened_throughputs, cluster_spec={'k80': 4, 'p100': 4, 'v100': 4}):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
         if throughputs is None: return None
         (m, n) = throughputs.shape
         scale = 1.0 / throughputs.sum(axis=1)
@@ -223,13 +225,8 @@ class FIFOPolicy(Policy):
         self._name = 'FIFO'
         self._allocation = {}
         self._queue = []
-        self._num_workers = {
-            'k80': 4,
-            'p100': 4,
-            'v100': 4,
-          }
 
-    def get_allocation(self, throughputs):
+    def get_allocation(self, throughputs, cluster_spec={'k80': 4, 'p100': 4, 'v100': 4}):
         # New Job ID; put on queue to schedule.
         job_id = None
         for job_id in throughputs:
@@ -248,7 +245,7 @@ class FIFOPolicy(Policy):
 
         # worker_types_seen keeps track of all workers that have been assigned
         # jobs.
-        worker_types_seen = {}#set()
+        worker_types_seen = {}
         for job_id in self._allocation:
             worker_type = self._allocation[job_id]
             if worker_type not in worker_types_seen:
@@ -261,7 +258,7 @@ class FIFOPolicy(Policy):
             job_id = job_ids[0]
             for worker_type in throughputs[job_id]:
                 if (worker_type not in worker_types_seen or
-                    worker_types_seen[worker_type] < self._num_workers[worker_type]):
+                    worker_types_seen[worker_type] < cluster_spec[worker_type]):
                     if len(self._queue) > 0:
                         job_id_to_schedule = self._queue.pop(0)
                         self._allocation[job_id_to_schedule] = worker_type
