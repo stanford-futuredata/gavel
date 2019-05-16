@@ -805,7 +805,7 @@ class Scheduler:
                 start_timestamp = self._per_job_latest_timestamps[job_id]
                 execution_time = current_timestamp - start_timestamp
             if execution_time < 0:
-                # Job failed
+                # Job failed.
                 self._num_failures_per_job[job_id] += 1
                 print(('%s]\t[Micro-task failed]\t'
                        'Job ID: %s') % (current_timestamp,
