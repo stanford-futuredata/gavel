@@ -6,7 +6,7 @@ import datetime
 
 import job
 import policies
-import emulator
+import merged_scheduler
 
 def get_policy(policy_name):
     if policy_name == "isolated":
@@ -42,9 +42,11 @@ def parse_trace(trace_file):
 def main(args):
     jobs, arrival_times = parse_trace(args.trace_file)
     policy = get_policy(args.policy)
-    sched = emulator.Scheduler(policy, args.throughputs_file,
-                               job_packing=False)
+    sched = merged_scheduler.Scheduler(policy,
+                               throughputs_file=args.throughputs_file,
+                               emulate=True)
     start_time = datetime.datetime.now()
+    # TODO: Make this a command line argument
     cluster_spec = {
           'k80': 4,
           'p100': 4,
