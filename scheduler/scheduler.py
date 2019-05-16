@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-import heapq
 import numpy as np
 import os
 from preconditions import preconditions
@@ -14,6 +13,8 @@ import job_queue
 import priority_queue
 from runtime.rpc import scheduler_server, scheduler_client
 import utils
+
+np.random.seed(42)
 
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
@@ -51,7 +52,7 @@ class Scheduler:
         self._policy = policy
         self._job_packing = job_packing
         # RPC clients.
-        self._cluster_spec = 0
+        self._cluster_spec = {}
         self._worker_connections = {}
         # Next job_id to assign.
         self._job_id_counter = 0
@@ -387,7 +388,7 @@ class Scheduler:
                     timestamp = max(timestamp,
                                     self._per_job_latest_timestamps.get(single_job_id, 0))
                     self._remove_from_queue(single_job_id)
-                self._print_allocation()
+
                 # Actually execute the scheduled job_id(s) on the right
                 # worker_id.
                 for single_job_id in job_id.singletons():

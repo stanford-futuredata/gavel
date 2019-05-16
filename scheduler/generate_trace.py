@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 import random
 
-INITIAL_DELAY = 0
+INITIAL_DELAY = 10
 MAX_JOB_STEPS = 10000000
 
 random.seed(42)
@@ -58,7 +58,7 @@ throughputs = {
       '--max_steps')),
 """
 
-def generate(lam, N, output_file):
+def generate(lam, N, initial_delay, output_file):
     samples = np.random.poisson(lam, size=N)
     arrival_times = [np.sum(samples[0:i]) for i in xrange(N)]
     with open(output_file, 'w') as f:
@@ -70,10 +70,10 @@ def generate(lam, N, output_file):
             # 'job_type\tcommand\tnum_steps_arg\ttotal_steps\tarrival_time'
             f.write('%s\t%s\t%s\t%d\t%d\n' % (job[0], job[1], job[2],
                                               total_steps,
-                                              arrival_time + INITIAL_DELAY))
+                                              arrival_time + initial_delay))
 
 def main(args):
-    generate(args.lam, args.num_jobs, args.output_file)
+    generate(args.lam, args.num_jobs, args.initial_delay, args.output_file)
 
 if __name__=='__main__':
    parser = argparse.ArgumentParser(description='Generate scheduler trace')
@@ -83,4 +83,6 @@ if __name__=='__main__':
                        help='Number of jobs')
    parser.add_argument('-o', '--output_file', type=str, required=True,
                        help='File to output trace to')
+   parser.add_argument('-i', '--initial_delay', type=int, default=10,
+                       help='Initial job arrival time delay')
    main(parser.parse_args())

@@ -1,3 +1,5 @@
+import heapq
+
 class JobQueue:
     
     class JobQueueEntry(object):
@@ -48,3 +50,26 @@ class JobQueue:
 
     def add_job(self, priority, steps_run, job_id, heappush=False):
         entry = self.JobQueueEntry(priority, steps_run, job_id)
+        if heappush:
+            heapq.heappush(self._queue, entry)
+        else:
+            self._queue.append(entry)
+
+    def pop(self, i):
+        self._queue.pop(i)
+
+    def heapify(self):
+        heapq.heapify(self._queue)
+
+    def update_entry(self, i, priority=None, steps_run=None):
+        if priority is not None:
+            self._queue[i].priority = priority
+
+        if steps_run is not None:
+            self._queue[i].steps_run = steps_run
+
+    def size(self):
+        return len(self._queue)
+
+    def get_sorted_queue(self):
+        return sorted(self._queue)
