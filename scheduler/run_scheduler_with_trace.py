@@ -6,7 +6,7 @@ import datetime
 
 import job
 import policies
-import merged_scheduler
+import scheduler
 
 def get_policy(policy_name):
     if policy_name == "isolated":
@@ -44,7 +44,7 @@ def main(args):
     for job in jobs:
         job_queue.put(job)
     policy = get_policy(args.policy)
-    sched = merged_scheduler.Scheduler(policy, job_packing=False)
+    sched = scheduler.Scheduler(policy, job_packing=False)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()

@@ -252,7 +252,7 @@ class Scheduler:
                         worker_types.append(wt)
                     worker_types = sorted(worker_types)
                     for wt in worker_types:
-                        allocation = self._allocation[single_job_id][wt])
+                        allocation = self._allocation[single_job_id][wt]
                         allocation_str += ' [%4s %.3f]' % (wt, allocation)
                     print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                            'Worker type: %s\tWorker ID: %d\t'
