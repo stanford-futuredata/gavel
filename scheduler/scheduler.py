@@ -9,6 +9,8 @@ import threading
 import time
 import datetime
 
+import job_id_pair
+import job_queue
 import priority_queue
 from runtime.rpc import scheduler_server, scheduler_client
 import utils
@@ -23,142 +25,6 @@ EMA_ALPHA = .25 # Alpha parameter for exponential moving average
 MAX_FAILED_ATTEMPTS = 5
 
 class Scheduler:
-
-    class JobIdPair():
-
-        def __init__(self, job0, job1):
-            if job0 is None and job1 is None:
-                raise ValueError('Cannot form JobIdPair with both ids None')
-            elif job0 is None and job1 is not None:
-                raise ValueError('First job id in a JobIdPair cannot be None')
-            self._job0 = job0
-            self._job1 = job1
-
-        def __getitem__(self, index):
-            if index == 0:
-                return self._job0
-            elif index == 1:
-                return self._job1
-            else:
-                raise ValueError('Attempting to access invalid JobIdPair '
-                                 'index %d' % index)
-
-        def __lt__(self, other):
-            if self[0] != other[0]:
-                return self[0] < other[0]
-            elif self[1] is None and self[0] is None:
-                return False
-            elif self[1] is not None and other[1] is not None:
-                return self[1] < other[1]
-            else:
-                return self[1] is None
-
-        def __eq__(self, other):
-            return self[0] == other[0] and self[1] == other[1]
-
-        def __hash__(self):
-            return hash(self.as_tuple())
-
-        def __repr__(self):
-            if self[1] is None:
-                return '%d' % (self[0])
-            else:
-                return ('(%d, %d)' % (self[0], self[1]))
-
-        def as_tuple(self):
-            return (self._job0, self._job1)
-
-        def overlaps_with(self, other):
-            if self.is_pair():
-                raise ValueError('Can only call overlaps_with on a '
-                                 'single job id')
-            return ((other[0] is not None and self[0] == other[0]) or
-                    (other[1] is not None and self[0] == other[1]))
-
-        def is_pair(self):
-            return self._job0 is not None and self._job1 is not None
-
-        def singletons(self):
-            if self[1] is None:
-                return (self,)
-            else:
-                return (Scheduler.JobIdPair(self[0], None),
-                        Scheduler.JobIdPair(self[1], None))
-
-    class JobQueueEntry(object):
-
-        def __init__(self, priority, steps_run, job_id):
-            self._priority = priority
-            self._steps_run = steps_run
-            self._job_id = job_id
-
-        @property
-        def priority(self):
-            return self._priority
-
-        @priority.setter
-        def priority(self, priority):
-            self._priority = priority
-
-        @property
-        def steps_run(self):
-            return self._steps_run
-
-        @steps_run.setter
-        def steps_run(self, steps_run):
-            self._steps_run = steps_run
-
-        @property
-        def job_id(self):
-            return self._job_id
-
-        def __lt__(self, other):
-            if self._priority != other._priority:
-                return self._priority < other._priority
-            elif self._steps_run != other._steps_run:
-                return self._steps_run < other.steps_run
-            else:
-                return self._job_id < other.job_id
-
-        def __eq__(self, other):
-            return (self._priority == other_.priority
-                    and self._steps_run == other._steps_run
-                    and self._job_id == other._job_id)
-
-    class JobQueue:
-
-        def __init__(self):
-            self._queue = []
-
-        def __getitem__(self, index):
-            return self._queue[index]
-
-        def add_job(self, priority, steps_run, job_id, heappush=False):
-            entry = Scheduler.JobQueueEntry(priority, steps_run, job_id)
-            if heappush:
-                heapq.heappush(self._queue, entry)
-            else:
-                self._queue.append(entry)
-
-        def pop(self, i):
-            self._queue.pop(i)
-
-        def heapify(self):
-            heapq.heapify(self._queue)
-
-        def update_entry(self, i, priority=None, steps_run=None):
-            if priority is not None:
-                self._queue[i].priority = priority
-
-            if steps_run is not None:
-                self._queue[i].steps_run = steps_run
-
-        def size(self):
-            return len(self._queue)
-
-        def get_sorted_queue(self):
-            return sorted(self._queue)
-
 
     def __init__(self, policy, job_packing=False):
 
@@ -251,37 +117,6 @@ class Scheduler:
         self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
 
-    """
-    ======================================================================
-       Methods for emulation.
-    ======================================================================
-    """
-
-    @preconditions(lambda self: self._emulate)
-    def add_to_event_queue(self, func, args, timestamp):
-        """Adds passed-in func to the event queue with the passed-in timestamp.
-
-        Used in emulation mode to queue add_job and register_worker events."""
-
-        with self._scheduler_lock:
-            self._event_queue.append((timestamp, func, args))
-            self._event_queue.sort(key=lambda x: x[0])
-
-    @preconditions(lambda self: self._emulate)
-    def execute_from_event_queue(self, timestamp):
-        """Executes all events with timestamps lower than the current timestamp."""
-
-        while True:
-            with self._scheduler_lock:
-                if len(self._event_queue) == 0:
-                    return
-                # If passed-in timestamp is before the first timestamp in the
-                # event queue and no jobs are scheduled to run.
-                if (timestamp < self._event_queue[0][0] and
-                    len(self._steps_run_so_far) > 0):
-                    return
-                (_, func, args) = self._event_queue.pop(0)
-            func(*args, timestamp=timestamp)
 
     """
     ======================================================================
@@ -307,7 +142,7 @@ class Scheduler:
         with self._scheduler_lock:
             timestamp = time.time()
 
-            job_id = self.JobIdPair(self._job_id_counter, None)
+            job_id = job_id_pair.JobIdPair(self._job_id_counter, None)
             self._job_id_counter += 1
             job._job_id = job_id
             self._jobs[job_id] = job
@@ -354,7 +189,7 @@ class Scheduler:
             job_id: The job_id of the job to remove.
         """
 
-        job_id = self.JobIdPair(job_id, None)
+        job_id = job_id_pair.JobIdPair(job_id, None)
         with self._scheduler_lock:
             try:
                 duration = self._per_job_latest_timestamps[job_id] - \
@@ -621,7 +456,7 @@ class Scheduler:
         for other_job_id in self._jobs:
             if other_job_id != job_id:
                 other_job = self._jobs[other_job_id]
-                merged_job_id = self.JobIdPair(job_id[0], other_job_id[0])
+                merged_job_id = job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
                     self._throughputs[merged_job_id] = {}
                     self._steps_run_so_far[merged_job_id] = {}
@@ -680,19 +515,6 @@ class Scheduler:
         from here on out.
 
         Requires self._scheduler_lock to be held when calling this function.
-        """
-        """
-        job_ids = sorted([job_id for job_id in self._time_run_so_far])
-        for job_id in job_ids:
-            time_line = '[DEBUG_ALLOCATION]\tJob %s time run so far:\t' % (job_id)
-            allocation_line = '[DEBUG_ALLOCATION]\tJob %s allocation:\t' % (job_id)
-            worker_types = \
-                    sorted([worker_type for worker_type in self._time_run_so_far[job_id]])
-            for worker_type in worker_types:
-                allocation_line += '[%4s %.3f]\t' % (worker_type, self._allocation[job_id][worker_type])
-                time_line += '[%4s %.3f]\t' % (worker_type, self._time_run_so_far[job_id][worker_type])
-            print(allocation_line)
-            print(time_line)
         """
         for worker_type in self._worker_types:
             for job_id in self._time_run_so_far:
@@ -906,7 +728,8 @@ class Scheduler:
             self._devices[worker_id] = devices
 
             if worker_type not in self._per_worker_type_job_queue:
-                self._per_worker_type_job_queue[worker_type] = self.JobQueue()
+                self._per_worker_type_job_queue[worker_type] = \
+                        job_queue.JobQueue()
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._time_run_so_far[job_id][worker_type] = 0
@@ -971,7 +794,7 @@ class Scheduler:
             num_steps: The number of steps the job ran for.
         """
 
-        job_id = self.JobIdPair(job_id, None)
+        job_id = job_id_pair.JobIdPair(job_id, None)
         to_remove = []
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
