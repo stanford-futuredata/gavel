@@ -6,7 +6,7 @@ import datetime
 
 import job
 import policies
-import scheduler
+import merged_scheduler
 
 def get_policy(policy_name):
     if policy_name == "isolated":
@@ -30,11 +30,11 @@ def parse_trace(trace_file):
             job_type, command, num_steps_arg, total_steps, arrival_time = \
                     line.split('\t')
             jobs.append((job.Job(job_id=None,
-                                job_type=job_type,
-                                command=command,
-                                num_steps_arg=num_steps_arg,
-                                total_steps=int(total_steps),
-                                duration=None),
+                                 job_type=job_type,
+                                 command=command,
+                                 num_steps_arg=num_steps_arg,
+                                 total_steps=int(total_steps),
+                                 duration=None),
                         int(arrival_time)))
     return jobs
 
@@ -44,7 +44,7 @@ def main(args):
     for job in jobs:
         job_queue.put(job)
     policy = get_policy(args.policy)
-    sched = scheduler.Scheduler(policy, job_packing=False)
+    sched = merged_scheduler.Scheduler(policy, job_packing=False)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -54,11 +54,9 @@ def main(args):
         if remaining_time > 0:
             time.sleep(remaining_time)
         job_id = sched.add_job(job)
-        print('%s] [Job dispatched] Job ID: %s' % (str(datetime.datetime.now()),
-                                                   str(job_id)))
 
     sleep_seconds = 30
-    while sched.pending_jobs():
+    while not sched.is_done():
         time.sleep(sleep_seconds)
 
     print("Total time taken: %d seconds" % (datetime.datetime.now() - start_time).seconds)

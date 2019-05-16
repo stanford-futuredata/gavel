@@ -21,6 +21,7 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
         return None
 
     def RegisterWorker(self, request, context):
+        # TODO(keshav2): Remove devices
         devices = []
         for device_proto in request.devices:
             devices.append(self._device_proto_to_device(device_proto))
@@ -28,11 +29,11 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
         try:
             worker_id = register_worker_callback(request.worker_type,
                                                  request.ip_addr,
-                                                 request.port,
-                                                 devices)
+                                                 request.port)
             return w2s_pb2.RegisterWorkerResponse(worker_id=worker_id)
         except Exception as e:
             # TODO: catch a more specific exception?
+            print(e)
             return w2s_pb2.RegisterWorkerResponse(error_message=e)
 
     def SendHeartbeat(self, request, context):
@@ -42,8 +43,11 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
 
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
-        done_callback(request.job_id, request.worker_id,
-                      request.num_steps, request.execution_time)
+        try:
+            done_callback(request.job_id, request.worker_id,
+                          request.num_steps, request.execution_time)
+        except Exception as e:
+            print(e)
         return common_pb2.Empty()
 
 def serve(port, callbacks):
