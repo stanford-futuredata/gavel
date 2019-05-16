@@ -125,22 +125,21 @@ def process_log(log_file, job_types):
                 job_id = int(line.strip().split('Job ID:')[-1])
                 jobs[job_id] = Job(job_id, job_types[job_id], dispatch_time)
             elif '[Micro-task scheduled]' in line:
-                start_time, _, job_id, worker_type, allocation = \
+                start_time, _, job_id, worker_type, worker_id, allocation = \
                     line.strip().split('\t')
                 start_time = float(start_time.split(']')[0])
-                job_id = int(job_id.split('Job ID:')[1].split(',')[0])
-                worker_id = int(worker_type.split('(')[-1][:-1])
+                job_id = int(job_id.split('Job ID:')[-1])
                 worker_type = \
-                    worker_type.split('Worker type: ')[-1].split(' ')[0]
+                    worker_type.split('Worker type: ')[-1].strip()
+                worker_id = int(worker_id.split('Worker ID: ')[-1])
                 jobs[job_id].add_start_time(start_time)
                 jobs[job_id].add_worker_id(worker_id)
                 jobs[job_id].add_worker_type(worker_type)
                 jobs[job_id].add_allocation(allocation)
             elif '[Micro-task succeeded]' in line:
-                end_time, _, job_id, worker_type = line.strip().split('\t')
+                end_time, _, job_id, _, _ = line.strip().split('\t')
                 end_time = float(end_time.split(']')[0])
-                job_id = int(job_id.split('Job ID:')[1].split(',')[0])
-                #job_id = int(line.strip().split('Job ID:')[1].split('\t')[0])
+                job_id = int(job_id.split('Job ID:')[-1])
                 jobs[job_id].add_end_time(end_time)
 
     for job_id in jobs:
@@ -171,9 +170,12 @@ def get_job_end_times(jobs):
 
     return sorted(end_times)
 
-def get_worker_runtimes(jobs):
+
+def get_worker_runtimes(jobs, num_jobs=None):
     runtimes = {}
-    max_end_time = get_job_end_times(jobs)[38][0]
+    if num_jobs is None:
+        num_jobs = len(jobs)
+    max_end_time = get_job_end_times(jobs)[num_jobs - 1][0]
     overall_execution_time = get_overall_execution_time(jobs, max_end_time)
     for job_id in jobs:
         job = jobs[job_id]
@@ -188,7 +190,7 @@ def get_worker_runtimes(jobs):
                 (min(end_time, max_end_time) - start_time)
     return runtimes, overall_execution_time
 
-def print_job_summary(jobs):
+def print_job_summary(jobs, num_jobs):
     for job_id in jobs:
         print(jobs[job_id])
         print('')
@@ -197,7 +199,8 @@ def print_job_summary(jobs):
     computation_times = \
             [jobs[job_id].total_computation_time() for job_id in jobs]
     overall_execution_time = get_overall_execution_time(jobs)
-    worker_runtimes, restricted_execution_time = get_worker_runtimes(jobs)
+    worker_runtimes, restricted_execution_time = get_worker_runtimes(jobs,
+                                                                     num_jobs)
     print('Average job completion time: %.3f' % (np.mean(job_completion_times)))
     print('Average queuing delay: %.3f' % (np.mean(queueing_delays)))
     print(('Queueing delay / (Queueing delay + Computation time): '
@@ -222,7 +225,7 @@ def plot_jct_cdf(jobs):
     for logfile in jobs:
         job_completion_times = []
         for job_id in jobs[logfile]:
-            job_completion_times.append(jobs[logfile][job_id].completion_time()
+            job_completion_times.append(jobs[logfile][job_id].completion_time())
         num_bins = 20
         counts, bin_edges = np.histogram(job_completion_times, bins=num_bins,
                                          normed=True)
@@ -264,8 +267,8 @@ def plot_worker_utilization(jobs, xstart=None, xend=None):
             ax.plot([start, end], [worker_id, worker_id],
                     linewidth=10, c="C%d" % (job_id % 10))
 
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Worker ID")
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Worker ID')
     if max_end is not None:
         if xstart is None:
             xstart = 0
@@ -282,7 +285,7 @@ def plot_worker_utilization(jobs, xstart=None, xend=None):
 def main(args):
     job_types = get_job_types(args.trace_file)
     jobs = process_log(args.log_files[0], job_types)
-    print_job_summary(jobs)
+    print_job_summary(jobs, args.num_jobs)
     #plot_worker_utilization(jobs)
     #jobs = {}
     #for log_file in args.log_files:
@@ -295,5 +298,8 @@ if __name__=='__main__':
                         help='Log file')
     parser.add_argument('-t', '--trace_file', type=str, required=True,
                         help='Trace file')
+    parser.add_argument('-n', '--num_jobs', type=int, default=None,
+                        help=('The maximum number of completed jobs to '
+                              'consider when computing worker utilization'))
     args = parser.parse_args()
     main(args)

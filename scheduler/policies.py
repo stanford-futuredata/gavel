@@ -68,7 +68,7 @@ class MaximumThroughputPolicy(Policy):
                                               axis=1)))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= 4,
+            cp.sum(x, axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
