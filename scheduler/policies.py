@@ -3,13 +3,23 @@ import numpy as np
 
 
 class Policy:
-    def flatten(self, d):
+
+    def __init__(self):
+        self._name = None
+
+    @property
+    def name(self):
+        return self._name
+
+    def flatten(self, d, cluster_spec):
         """Converts a 2-level dict to a NumPy array."""
 
-        job_id_pairs = list(d.keys())
+        job_id_pairs = sorted(list(d.keys()))
         if len(job_id_pairs) == 0:
             return None, None
-        worker_types = list(d[job_id_pairs[0]].keys())
+        worker_types = sorted(list(d[job_id_pairs[0]].keys()))
+        self._num_workers = \
+            [cluster_spec[worker_type] for worker_type in worker_types]
         if len(worker_types) == 0:
             return None, None
         m = []
@@ -34,14 +44,21 @@ class Policy:
 
 class IsolatedPolicy(Policy):
 
-    def get_allocation(self, unflattened_throughputs):
-        throughputs, index = super().flatten(unflattened_throughputs)
+    def __init__(self):
+        self._name = 'Isolated'
+
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
         if throughputs is None: return None
         (m, n) = throughputs.shape
         return super().unflatten(np.full((m, n), 1.0 / (m * n)), index)
 
 
 class MaximumThroughputPolicy(Policy):
+
+    def __init__(self):
+        self._name = 'MaximumThroughput'
 
     def get_allocation(self, unflattened_throughputs):
         throughputs, index = super().flatten(unflattened_throughputs)
@@ -51,7 +68,7 @@ class MaximumThroughputPolicy(Policy):
                                               axis=1)))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= 1,
+            cp.sum(x, axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
@@ -62,8 +79,12 @@ class MaximumThroughputPolicy(Policy):
 
 class KSPolicy(Policy):
 
-    def get_allocation(self, unflattened_throughputs):
-        throughputs, index = super().flatten(unflattened_throughputs)
+    def __init__(self):
+        self._name = 'KS'
+
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
         if throughputs is None: return None
         (m, n) = throughputs.shape
         scale = 1.0 / throughputs.sum(axis=1)
@@ -74,7 +95,7 @@ class KSPolicy(Policy):
                                               axis=1)))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= 1,
+            cp.sum(x, axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
@@ -85,6 +106,9 @@ class KSPolicy(Policy):
 
 
 class KSPolicyWithPacking(Policy):
+
+    def __init__(self):
+        self._name = 'KS_Packing'
 
     def flatten(self, d):
         """
@@ -200,10 +224,11 @@ class KSPolicyWithPacking(Policy):
 
 class FIFOPolicy(Policy):
     def __init__(self):
+        self._name = 'FIFO'
         self._allocation = {}
         self._queue = []
 
-    def get_allocation(self, throughputs):
+    def get_allocation(self, throughputs, cluster_spec):
         # New Job ID; put on queue to schedule.
         job_id = None
         for job_id in throughputs:
@@ -214,37 +239,40 @@ class FIFOPolicy(Policy):
         job_ids = list(self._allocation.keys())
         for job_id in job_ids:
             if job_id not in throughputs:
-                worker_id = self._allocation[job_id]
+                worker_type = self._allocation[job_id]
                 del self._allocation[job_id]
                 if len(self._queue) > 0:
                     job_id_to_schedule = self._queue.pop(0)
-                    self._allocation[job_id_to_schedule] = worker_id
+                    self._allocation[job_id_to_schedule] = worker_type
 
-        # worker_ids_seen keeps track of all workers that have been assigned
+        # worker_types_seen keeps track of all workers that have been assigned
         # jobs.
-        worker_ids_seen = set()
+        worker_types_seen = {}
         for job_id in self._allocation:
-            worker_id = self._allocation[job_id]
-            worker_ids_seen.add(worker_id)
+            worker_type = self._allocation[job_id]
+            if worker_type not in worker_types_seen:
+                worker_types_seen[worker_type] = 0
+            worker_types_seen[worker_type] += 1
 
         # Try to allocation all queued job IDs on available workers.
         job_ids = list(throughputs.keys())
         if len(job_ids) > 0:
             job_id = job_ids[0]
-            for worker_id in throughputs[job_id]:
-                if worker_id not in worker_ids_seen:
+            for worker_type in throughputs[job_id]:
+                if (worker_type not in worker_types_seen or
+                    worker_types_seen[worker_type] < cluster_spec[worker_type]):
                     if len(self._queue) > 0:
                         job_id_to_schedule = self._queue.pop(0)
-                        self._allocation[job_id_to_schedule] = worker_id
+                        self._allocation[job_id_to_schedule] = worker_type
 
         # Construct output allocation.
         allocation = {}
         for job_id in throughputs:
             allocation[job_id] = {}
-            for worker_id in throughputs[job_id]:
+            for worker_type in throughputs[job_id]:
                 if (job_id in self._allocation and
-                    self._allocation[job_id] == worker_id):
-                    allocation[job_id][worker_id] = 1.0
+                    self._allocation[job_id] == worker_type):
+                    allocation[job_id][worker_type] = 1.0
                 else:
-                    allocation[job_id][worker_id] = 0.0
+                    allocation[job_id][worker_type] = 0.0
         return allocation
