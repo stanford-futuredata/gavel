@@ -22,9 +22,9 @@ SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
 INFINITY = float(1e9)
 DEFAULT_THROUGHPUT = INFINITY
-DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration
-TIME_PER_ITERATION = 20 * 60    # Time in seconds each iteration should run for
-EMA_ALPHA = .25 # Alpha parameter for exponential moving average
+DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
+TIME_PER_ITERATION = 20 * 60    # Time in seconds each iteration should run for.
+EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 
 class Scheduler:
