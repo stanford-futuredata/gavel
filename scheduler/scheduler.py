@@ -452,6 +452,8 @@ class Scheduler:
                 job_id = self._schedule_job_on_worker(worker_id)
                 if job_id is None:
                     continue
+                worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+                num_steps = self._num_steps_per_iteration[job_id][worker_type]
                 self._worker_connections[worker_id].run(
                     [(job_id[0], self._jobs[job_id].command,
                       self._jobs[job_id].num_steps_arg,
