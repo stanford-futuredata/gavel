@@ -8,6 +8,7 @@ import threading
 import time
 import datetime
 import random
+import math
 
 import priority_queue
 import utils
@@ -270,7 +271,7 @@ class Scheduler:
         self._add_to_queue(job_id)
         self._allocation = self._get_allocation()
         self._per_job_start_timestamps[job_id] = self._current_timestamp
-        print('%s] [Job dispatched] Job ID: %s' % (self._current_timestamp,
+        print('%.5f]\t[Job dispatched]\tJob ID: %s' % (self._current_timestamp,
                                                    str(job_id)))
         return job_id
 
@@ -469,11 +470,10 @@ class Scheduler:
 
                 # If the chosen job has an allocation of zero, return the worker
                 # to the available worker pool.
-                if self._allocation[job_id][worker_type] == 0.0:
+                if round(self._allocation[job_id][worker_type], 2) < 0.05:
                     # Move worker_id to the end of the queue.
                     self._add_available_worker_id(worker_id)
                     continue
-
                 for single_job_id in job_id.singletons():
                     self._remove_from_queue(single_job_id)
                 # self._print_allocation()
@@ -485,10 +485,16 @@ class Scheduler:
                         self._num_steps_per_iteration[single_job_id][worker_type]
                     if num_steps <= 0:
                         raise ValueError('Num steps should be greater than 0, is %d' % (num_steps))
-                    print('Running job %s for %d steps' % (job_id, num_steps))
-                    print(('%s] [Micro-task scheduled] Job ID: %s, '
-                           'Worker type: %s') % (self._current_timestamp,
-                                                 job_id, worker_type))
+                    allocation_str = ''
+
+                    worker_types = sorted([wt for wt in self._allocation[single_job_id]])
+                    for wt in worker_types:
+                        allocation_str += ' [%4s %.3f]' % (wt, self._allocation[single_job_id][wt])
+                    print(('%.5f]\t[Micro-task scheduled]\tJob ID: %s\t'
+                           'Worker type: %s (%d)\t'
+                           'Allocation:%s') % (self._current_timestamp,
+                                               job_id, worker_type, worker_id,
+                                               allocation_str))
 
                     finish_time = (self._current_timestamp +
                                    (num_steps /
@@ -844,9 +850,9 @@ class Scheduler:
         for single_job_id in job_id.singletons():
             self._per_job_latest_timestamps[single_job_id] = \
                 self._current_timestamp
-            print(('%s] [Micro-task succeeded] '
-                   'Job ID: %s, Worker type: %s') % (self._current_timestamp,
-                                                   job_id, worker_type))
+            print(('%.5f]\t[Micro-task succeeded]\t'
+                   'Job ID: %s\tWorker type: %s (%d)') % (self._current_timestamp,
+                                                     job_id, worker_type, worker_id))
             # NOTE: for debug purposes.
             if self._verbose:
                 print("[{job_id: {worker_type: steps}}]",
@@ -859,7 +865,7 @@ class Scheduler:
                 self._jobs[single_job_id].total_steps):
                 self._add_to_queue(single_job_id)
             else:
-                print(('%s] [Job succeeded] '
+                print(('%.5f]\t[Job succeeded]\t'
                        'Job ID: %s') % (self._current_timestamp,
                                         single_job_id))
                 to_remove.append(single_job_id)

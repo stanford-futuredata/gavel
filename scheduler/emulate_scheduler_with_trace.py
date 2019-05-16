@@ -48,7 +48,7 @@ def main(args):
     cluster_spec = {
           'k80': 4,
           'p100': 4,
-          'v100': 4
+          'v100': 4,
     }
     sched.emulate(cluster_spec, arrival_times, jobs)
 
