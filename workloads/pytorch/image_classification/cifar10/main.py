@@ -12,6 +12,7 @@ import torchvision.transforms as transforms
 
 import os
 import argparse
+import time
 
 from models import *
 from utils import progress_bar
@@ -26,6 +27,9 @@ parser.add_argument('--resume', '-r', action='store_true', help='resume from che
 parser.add_argument('--use_progress_bar', '-p', action='store_true', default=False, help='Use progress bar')
 parser.add_argument('--log_interval', type=int, default=100,
                     help='Interval to log')
+parser.add_argument('--throughput_estimation_interval', type=int, default=None,
+                    help='Steps between logging steps completed')
+
 args = parser.parse_args()
 
 
@@ -123,6 +127,10 @@ def train(epoch, cumulative_steps=None):
                                            100.*correct/total, correct, total))
         if cumulative_steps is not None:
             cumulative_steps += 1
+            if (args.throughput_estimation_interval is not None and
+                cumulative_steps % args.throughput_estimation_interval == 0):
+                print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
+                                                           cumulative_steps))
             if args.num_steps is not None and cumulative_steps >= args.num_steps:
                 done = True
                 break

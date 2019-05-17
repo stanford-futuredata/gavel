@@ -119,6 +119,11 @@ parser.add_argument(
     default=None,
     metavar='MS',
     help='Maximum number of steps')
+parser.add_argument(
+    '--throughput_estimation_interval',
+    type=int,
+    default=None,
+    help='Steps between logging steps completed')
 
 # Based on
 # https://github.com/pytorch/examples/tree/master/mnist_hogwild

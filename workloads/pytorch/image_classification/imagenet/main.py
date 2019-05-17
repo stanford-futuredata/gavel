@@ -65,6 +65,8 @@ parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
 parser.add_argument('--gpu', default=None, type=int,
                     help='GPU id to use.')
+parser.add_argument('--throughput_estimation_interval', type=int, default=None,
+                    help='Steps between logging steps completed')
 
 best_acc1 = 0
 
@@ -250,6 +252,9 @@ def train(train_loader, model, criterion, optimizer, epoch):
                    epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
 
+        if (args.throughput_estimation_interval is not None and
+            i % args.throughput_estimation_interval == 0):
+            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), i))
 
 def validate(val_loader, model, criterion):
     batch_time = AverageMeter()
