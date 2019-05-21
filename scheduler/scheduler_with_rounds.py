@@ -48,9 +48,9 @@ class Scheduler:
         self._worker_ids = []
         # List of worker types.
         self._worker_types = set()
-        # Mapping of worker ID to worker type.
+        # Mapping of worker ID to worker type, and worker type to worker ID.
         self._worker_id_to_worker_type_mapping = {}
-        # TODO: Add a worker_type_to_worker_id_mapping as well.
+        self._worker_type_to_worker_id_mapping = {}
         # Policy instance.
         self._policy = policy
         self._job_packing = job_packing
@@ -288,8 +288,7 @@ class Scheduler:
             if job_id not in already_scheduled_job_ids:
                 job_ids.append(job_id)
 
-        # TODO: Don't hardcode num_workers.
-        num_workers = 4
+        num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
 
         # DP table initialization.
         A = []
@@ -348,6 +347,8 @@ class Scheduler:
             jobs_to_schedule = \
                 self._schedule_and_place_jobs_on_workers_helper(worker_type,
                                                                 already_scheduled_job_ids)
+            for (job_id, _) in jobs_to_schedule:
+                already_scheduled_job_ids.append(job_id)
             all_jobs_to_schedule[worker_type] = jobs_to_schedule
 
         # TODO: Do something with all_jobs_to_schedule.
@@ -799,6 +800,7 @@ class Scheduler:
             self._worker_id_counter += 1
             self._worker_types.add(worker_type)
             self._worker_id_to_worker_type_mapping[worker_id] = worker_type
+            self._worker_type_to_worker_id_mapping[worker_type] = worker_id
 
             if worker_type not in self._priorities:
                 self._priorities[worker_type] = {}
