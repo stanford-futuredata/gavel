@@ -50,6 +50,7 @@ class Scheduler:
         self._worker_types = set()
         # Mapping of worker ID to worker type.
         self._worker_id_to_worker_type_mapping = {}
+        # TODO: Add a worker_type_to_worker_id_mapping as well.
         # Policy instance.
         self._policy = policy
         self._job_packing = job_packing
@@ -272,9 +273,84 @@ class Scheduler:
 
     """
     ======================================================================
-       Scheduler's main _schedule() method.
+       Scheduler's main schedule() and emulate() methods, along with
+       associated helper methods.
     ======================================================================
     """
+
+    @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    def _schedule_and_place_jobs_on_workers_helper(self, worker_type,
+                                                   already_scheduled_job_ids):
+
+        # Only iterate through job_ids that haven't been scheduled yet.
+        job_ids = []
+        for job_id in self._jobs.keys():
+            if job_id not in already_scheduled_job_ids:
+                job_ids.append(job_id)
+
+        # TODO: Don't hardcode num_workers.
+        num_workers = 4
+
+        # DP table initialization.
+        A = []
+        parent_pointers = []
+        for i in range(len(job_ids)):
+            job = self._jobs[job_ids[0]]
+            job_id = job.job_id
+            scale_factor = job.scale_factor
+            A.append([])
+            for j in range(num_workers):
+                if (i == 0) and ((j+1) >= scale_factor):
+                    A[-1].append(self._priorities[worker_type][job_id])
+                else:
+                    A[-1].append(0.0)
+
+        # Solve Knapsack-like DP problem to determine which applications to
+        # run on available workers of the passed-in worker_type.
+        for j in range(len(A)):
+            for i in range(len(A[0])):
+                job = self._jobs[job_ids[i]
+                job_id = job.job_id
+                scale_factor = job.scale_factor
+                if i > 0 and A[i-1][j] > A[i][j]:
+                    A[i][j] = A[i-1][j]
+                    parent_pointer = (i-1, j)
+                if j > 0 and A[i][j-1] > A[i][j]:
+                    A[i][j] = A[i][j-1]
+                    parent_pointer = (i, j-1)
+                if (i > 0) and (j >= scale_factor):
+                    new_priority_sum = (A[i-1][j-scale_factor] +
+                        self._priorities[worker_type][job_id])
+                    if new_priority_sum > A[i][j]:
+                        A[i][j] = new_priority_sum
+                        parent_pointer = (i-1, j-scale_factor)
+                    parent_pointers[(i, j)] = parent_pointer
+
+        # Now route through parent_pointers backward to get the applications
+        # that are active in this round.
+        (i, j) = (len(job_ids)-1, num_workers-1)
+        jobs_to_schedule = []
+        while (i, j) in parent_pointers:
+            (i_prime, j_prime) = parent_pointers[(i, j)]
+            if (i_prime < i) and (j_prime < j):
+                jobs_to_schedule.append((i, j-j_prime))
+            (i, j) = (i_prime, j_prime)
+        jobs_to_schedule.append((i, j+1))
+
+        return jobs_to_schedule
+
+    @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    def _schedule_and_place_jobs_on_workers(self):
+        all_jobs_to_schedule = {}
+
+        already_scheduled_job_ids = []
+        for worker_type in self.worker_types:
+            jobs_to_schedule = \
+                self._schedule_and_place_jobs_on_workers_helper(worker_type,
+                                                                already_scheduled_job_ids)
+            all_jobs_to_schedule[worker_type] = jobs_to_schedule
+
+        # TODO: Do something with all_jobs_to_schedule.
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _schedule_job_on_worker(self, worker_id):
@@ -314,7 +390,7 @@ class Scheduler:
             num_steps = \
                     self._num_steps_per_iteration[single_job_id][worker_type]
             if num_steps <= 0:
-                raise ValueError('Num steps should be greater'
+                raise ValueError('num_steps should be greater'
                                  'than 0, is %d' % (num_steps))
             worker_types = []
             for x in self._allocation[single_job_id]:
@@ -444,6 +520,7 @@ class Scheduler:
         while True:
             with self._scheduler_lock:
                 num_workers = len(self.worker_ids)
+                # Reset available_worker_ids to the desired size.
                 self._available_worker_ids = queue.Queue(self.num_workers)
                 for worker_id in self.worker_ids:
                     self._add_available_worker_id(worker_id)
@@ -591,9 +668,9 @@ class Scheduler:
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 new_priority = float("inf")
-                if self._allocation[job_id][worker_type] > 0.0:
-                    new_priority = fractions[worker_type][job_id] /\
-                            self._allocation[job_id][worker_type]
+                if fractions[job_id][worker_type] > 0.0:
+                    new_priority = self._allocation[job_id][worker_type] /\
+                            fractions[worker_type][job_id]
                 self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):
