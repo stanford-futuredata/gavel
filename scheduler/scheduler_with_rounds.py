@@ -303,8 +303,8 @@ class Scheduler:
         parent_pointers = []
         for i in range(len(job_ids)):
             job = self._jobs[job_ids[0]]
-            job_id = job.job_id
-            scale_factor = job.scale_factor
+            job_id = job._job_id
+            scale_factor = job._scale_factor
             A.append([])
             for j in range(num_workers):
                 if (i == 0) and ((j+1) >= scale_factor):
@@ -314,11 +314,14 @@ class Scheduler:
 
         # Solve Knapsack-like DP problem to determine which applications to
         # run on available workers of the passed-in worker_type.
-        for j in range(len(A)):
-            for i in range(len(A[0])):
-                job = self._jobs[job_ids[i]
-                job_id = job.job_id
-                scale_factor = job.scale_factor
+        if len(A) == 0:
+            return []
+
+        for j in range(len(A[0])):
+            for i in range(len(A)):
+                job = self._jobs[job_ids[i]]
+                job_id = job._job_id
+                scale_factor = job._scale_factor
                 if i > 0 and A[i-1][j] > A[i][j]:
                     A[i][j] = A[i-1][j]
                     parent_pointer = (i-1, j)
@@ -359,7 +362,7 @@ class Scheduler:
 
         already_scheduled_jobs = []
         scheduled_jobs = []
-        for worker_type in self.worker_types:
+        for worker_type in self._worker_types:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
             scheduled_jobs_on_worker_type = \
@@ -372,7 +375,7 @@ class Scheduler:
 
                 # For now, ignore locality. Place job_id on the first
                 # `scale_factor` workers of the desired type.
-                assert(scale_factor == self._jobs[job_id].scale_factor)
+                assert(scale_factor == self._jobs[job_id]._scale_factor)
                 worker_id_ptrs = [worker_id_ptr + i for i in range(scale_factor)]
                 scheduled_jobs.append((job_id,
                                        tuple([worker_ids[i] for i in worker_id_ptrs])))
@@ -420,6 +423,8 @@ class Scheduler:
                 max_timestamp = running_jobs[-1][0]
             if max_timestamp > 0:
                 self._current_timestamp = max_timestamp
+            else:
+                self._current_timestamp = queued_jobs[0][0]
 
             # Check if any jobs have completed.
             while len(running_jobs) > 0:
@@ -760,7 +765,9 @@ class Scheduler:
             self._worker_id_counter += 1
             self._worker_types.add(worker_type)
             self._worker_id_to_worker_type_mapping[worker_id] = worker_type
-            self._worker_type_to_worker_id_mapping[worker_type] = worker_id
+            if worker_type not in self._worker_type_to_worker_id_mapping:
+                self._worker_type_to_worker_id_mapping[worker_type] = []
+            self._worker_type_to_worker_id_mapping[worker_type].append(worker_id)
 
             if worker_type not in self._priorities:
                 self._priorities[worker_type] = {}

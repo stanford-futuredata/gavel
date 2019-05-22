@@ -64,7 +64,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
     parser.add_argument('-t', '--trace_file', type=str, required=True,
                         help='Trace file')
-    parser.add_argument('-r', '--use_rounds', action='store_true',
+    parser.add_argument('-r', '--use_rounds', action='store_true',
                         help='Use rounds for scheduling')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
                         choices=['isolated', 'ks', 'ks_packed', 'fifo',
