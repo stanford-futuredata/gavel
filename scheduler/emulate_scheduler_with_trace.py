@@ -7,6 +7,7 @@ import datetime
 import job
 import policies
 import scheduler
+import scheduler_with_rounds
 
 def get_policy(policy_name):
     if policy_name == "isolated":
@@ -42,9 +43,14 @@ def parse_trace(trace_file):
 def main(args):
     jobs, arrival_times = parse_trace(args.trace_file)
     policy = get_policy(args.policy)
-    sched = scheduler.Scheduler(policy,
-                               throughputs_file=args.throughputs_file,
-                               emulate=True)
+    if args.use_rounds:
+        sched = scheduler_with_rounds.Scheduler(policy,
+                                                throughputs_file=args.throughputs_file,
+                                                emulate=True)
+    else:
+        sched = scheduler.Scheduler(policy,
+                                    throughputs_file=args.throughputs_file,
+                                    emulate=True)
     start_time = datetime.datetime.now()
     # TODO: Make this a command line argument
     cluster_spec = {
@@ -58,11 +64,13 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
     parser.add_argument('-t', '--trace_file', type=str, required=True,
                         help='Trace file')
+    parser.add_argument('-r', '--use_rounds', action='store_true',
+                        help='Use rounds for scheduling')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
                         choices=['isolated', 'ks', 'ks_packed', 'fifo',
                                  'max_throughput'],
                         help='Scheduler policy')
-    parser.add_argument('-r', '--throughputs_file', type=str,
+    parser.add_argument('-f', '--throughputs_file', type=str,
                         default='throughputs.json',
                         help='Throughputs file')
     main(parser.parse_args())
