@@ -41,3 +41,7 @@ class Job:
     @property
     def duration(self):
         return self._duration
+
+    @property
+    def scale_factor(self):
+        return self._scale_factor

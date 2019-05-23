@@ -303,8 +303,8 @@ class Scheduler:
         parent_pointers = {}
         for i in range(len(job_ids)):
             job = self._jobs[job_ids[0]]
-            job_id = job._job_id
-            scale_factor = job._scale_factor
+            job_id = job.job_id
+            scale_factor = job.scale_factor
             A.append([])
             for j in range(num_workers):
                 if (i == 0) and ((j+1) >= scale_factor):
@@ -320,21 +320,31 @@ class Scheduler:
         for j in range(len(A[0])):
             for i in range(len(A)):
                 job = self._jobs[job_ids[i]]
-                job_id = job._job_id
-                scale_factor = job._scale_factor
+                job_id = job.job_id
+                scale_factor = job.scale_factor
                 parent_pointer = None
+
+                # If application i is not in the optimal subset of applications
+                # to run on workers of type `worker_type`.
                 if i > 0 and A[i-1][j] >= A[i][j]:
                     A[i][j] = A[i-1][j]
                     parent_pointer = (i-1, j)
+
+                # If the optimal subset of applications to run on workers of
+                # type `worker_type` need only `j-1` GPUs instead of `j`.
                 if j > 0 and A[i][j-1] >= A[i][j]:
                     A[i][j] = A[i][j-1]
                     parent_pointer = (i, j-1)
+
+                # If application `i` is in the optimal subset of applications
+                # to run on <= j GPUs of type `worker_type`.
                 if (i > 0) and (j >= scale_factor):
                     new_priority_sum = (A[i-1][j-scale_factor] +
                         self._priorities[worker_type][job_id])
                     if new_priority_sum > A[i][j]:
                         A[i][j] = new_priority_sum
                         parent_pointer = (i-1, j-scale_factor)
+
                 parent_pointers[(i, j)] = parent_pointer
 
         # Now route through parent_pointers backward to get the applications
@@ -363,7 +373,10 @@ class Scheduler:
         # TODO: See if any code needs to be borrowed from _schedule_job_on_worker
         # from master.
 
+        # Update priorities before trying to figure out applications to run
+        # in the upcoming round.
         self._update_priorities()
+
         already_scheduled_jobs = []
         scheduled_jobs = []
         # TODO: Sort self._worker_types in some way for this.
@@ -380,7 +393,7 @@ class Scheduler:
 
                 # For now, ignore locality. Place job_id on the first
                 # `scale_factor` workers of the desired type.
-                assert(scale_factor == self._jobs[job_id]._scale_factor)
+                assert(scale_factor == self._jobs[job_id].scale_factor)
                 worker_id_ptrs = [worker_id_ptr + i for i in range(scale_factor)]
                 scheduled_jobs.append((job_id,
                                        tuple([worker_ids[i] for i in worker_id_ptrs])))
