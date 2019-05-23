@@ -300,7 +300,7 @@ class Scheduler:
 
         # DP table initialization.
         A = []
-        parent_pointers = []
+        parent_pointers = {}
         for i in range(len(job_ids)):
             job = self._jobs[job_ids[0]]
             job_id = job._job_id
@@ -322,10 +322,11 @@ class Scheduler:
                 job = self._jobs[job_ids[i]]
                 job_id = job._job_id
                 scale_factor = job._scale_factor
-                if i > 0 and A[i-1][j] > A[i][j]:
+                parent_pointer = None
+                if i > 0 and A[i-1][j] >= A[i][j]:
                     A[i][j] = A[i-1][j]
                     parent_pointer = (i-1, j)
-                if j > 0 and A[i][j-1] > A[i][j]:
+                if j > 0 and A[i][j-1] >= A[i][j]:
                     A[i][j] = A[i][j-1]
                     parent_pointer = (i, j-1)
                 if (i > 0) and (j >= scale_factor):
@@ -334,18 +335,20 @@ class Scheduler:
                     if new_priority_sum > A[i][j]:
                         A[i][j] = new_priority_sum
                         parent_pointer = (i-1, j-scale_factor)
-                    parent_pointers[(i, j)] = parent_pointer
+                parent_pointers[(i, j)] = parent_pointer
 
         # Now route through parent_pointers backward to get the applications
         # that are active in this round.
         (i, j) = (len(job_ids)-1, num_workers-1)
         scheduled_jobs_on_worker_type = []
         while (i, j) in parent_pointers:
+            if parent_pointers[(i, j)] is None:
+                break
             (i_prime, j_prime) = parent_pointers[(i, j)]
             if (i_prime < i) and (j_prime < j):
-                scheduled_jobs_on_worker_type.append((i, j-j_prime))
+                scheduled_jobs_on_worker_type.append((job_ids[i], j-j_prime))
             (i, j) = (i_prime, j_prime)
-        scheduled_jobs_on_worker_type.append((i, j+1))
+        scheduled_jobs_on_worker_type.append((job_ids[i], j+1))
 
         return scheduled_jobs_on_worker_type
 
@@ -380,6 +383,35 @@ class Scheduler:
                 scheduled_jobs.append((job_id,
                                        tuple([worker_ids[i] for i in worker_id_ptrs])))
                 worker_id_ptr += scale_factor
+
+                for single_job_id in job_id.singletons():
+                    num_steps = \
+                        self._num_steps_per_iteration[single_job_id][worker_type]
+                    self._num_steps_per_iteration[single_job_id][worker_type] = \
+                        min(num_steps,
+                            self._get_remaining_steps(single_job_id))
+                    num_steps = \
+                        self._num_steps_per_iteration[single_job_id][worker_type]
+                    if num_steps <= 0:
+                        raise ValueError('Num steps should be greater'
+                                         'than 0, is %d' % (num_steps))
+                    worker_types = []
+                    for x in self._allocation[single_job_id]:
+                        worker_types.append(x)
+                    worker_types = sorted(worker_types)
+                    allocation_str = ''
+                    for x in worker_types:
+                        allocation_str += \
+                            ' [%4s %.3f]' % (x,
+                                             self._allocation[single_job_id][x])
+                    print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
+                           'Worker type: %s\tWorker IDs: %s\t'
+                           'Allocation:%s') % (self._get_current_timestamp(),
+                                               single_job_id, worker_type,
+                                               tuple([worker_ids[i] for i in worker_id_ptrs]),
+                                               allocation_str))
+                    self._per_job_latest_timestamps[single_job_id] = \
+                        self._get_current_timestamp()
 
         return scheduled_jobs
 
@@ -419,8 +451,8 @@ class Scheduler:
         while remaining_jobs > 0:
             # Jump to the next event's timestamp.
             max_timestamp = 0
-            if (len(running_jobs) > 0) and (-running_jobs[-1][0] > max_timestamp):
-                max_timestamp = running_jobs[-1][0]
+            if (len(running_jobs) > 0) and (-running_jobs[0][0] > max_timestamp):
+                max_timestamp = -running_jobs[0][0]
             if max_timestamp > 0:
                 self._current_timestamp = max_timestamp
             else:
@@ -428,10 +460,11 @@ class Scheduler:
 
             # Check if any jobs have completed.
             while len(running_jobs) > 0:
-                (finish_time, job_id, worker_id, num_steps) = running_jobs[0]
+                (finish_time, job_id, worker_ids, num_steps) = running_jobs[0]
                 finish_time = (-finish_time)
                 if finish_time <= self._current_timestamp:
-                    self._done_callback(job_id[0], worker_id, num_steps)
+                    for worker_id in worker_ids:
+                        self._done_callback(job_id, worker_id, num_steps)
                     if job_id not in self._jobs:
                         remaining_jobs -= 1
                     heapq.heappop(running_jobs)
@@ -461,7 +494,7 @@ class Scheduler:
                 finish_time = (self._current_timestamp +
                                 (num_steps /
                                    self._throughputs[job_id][worker_type]))
-                heapq.heappush(running_jobs, (-finish_time, job_id, worker_ids))
+                heapq.heappush(running_jobs, (-finish_time, job_id, worker_ids, num_steps))
 
         print('Total duration: %.3f seconds' % (self._current_timestamp))
 
@@ -812,13 +845,14 @@ class Scheduler:
             num_steps: The number of steps the job ran for.
         """
 
-        job_id = job_id_pair.JobIdPair(job_id, None)
         to_remove = []
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             current_timestamp = self._get_current_timestamp()
             if self._emulate:
-                start_timestamp = self._per_job_latest_timestamps[job_id]
+                # TODO: Fix this.
+                for single_job_id in job_id.singletons():
+                    start_timestamp = self._per_job_latest_timestamps[single_job_id]
                 execution_time = current_timestamp - start_timestamp
             if execution_time < 0:
                 # Job failed.
