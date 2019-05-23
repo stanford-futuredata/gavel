@@ -363,9 +363,11 @@ class Scheduler:
         # TODO: See if any code needs to be borrowed from _schedule_job_on_worker
         # from master.
 
+        self._update_priorities()
         already_scheduled_jobs = []
         scheduled_jobs = []
-        for worker_type in self._worker_types:
+        # TODO: Sort self._worker_types in some way for this.
+        for worker_type in ["v100", "p100", "k80"]:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
             scheduled_jobs_on_worker_type = \
@@ -667,7 +669,7 @@ class Scheduler:
                 new_priority = float("inf")
                 if self._allocation[job_id][worker_type] == 0.0:
                     new_priority = 0.0
-                elif fractions[job_id][worker_type] > 0.0:
+                elif fractions[worker_type][job_id] > 0.0:
                     new_priority = self._allocation[job_id][worker_type] /\
                             fractions[worker_type][job_id]
                 self._priorities[worker_type][job_id] = new_priority
