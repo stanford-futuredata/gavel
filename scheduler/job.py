@@ -1,12 +1,14 @@
 class Job:
     def __init__(self, job_id, job_type, command, num_steps_arg, total_steps,
-                 duration):
+                 duration, scale_factor=1):
+        # TODO: Remove the default value of scale_factor.
         self._job_id = job_id
         self._job_type = job_type
         self._command = command
         self._num_steps_arg = num_steps_arg
         self._total_steps = total_steps
         self._duration = duration
+        self._scale_factor = scale_factor
 
     @staticmethod
     def from_proto(job_proto):
@@ -39,3 +41,7 @@ class Job:
     @property
     def duration(self):
         return self._duration
+
+    @property
+    def scale_factor(self):
+        return self._scale_factor

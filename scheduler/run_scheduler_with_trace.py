@@ -7,6 +7,7 @@ import datetime
 import job
 import policies
 import scheduler
+import scheduler_with_rounds
 
 def get_policy(policy_name):
     if policy_name == "isolated":
@@ -44,7 +45,10 @@ def main(args):
     for job in jobs:
         job_queue.put(job)
     policy = get_policy(args.policy)
-    sched = scheduler.Scheduler(policy, job_packing=False)
+    if args.use_rounds:
+        sched = scheduler_with_rounds.Scheduler(policy, job_packing=False)
+    else:
+        sched = scheduler.Scheduler(policy, job_packing=False)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -66,6 +70,8 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
     parser.add_argument('-t', '--trace_file', type=str, required=True,
                         help='Trace file')
+    parser.add_argument('-r', '--use_rounds', action='store_true',
+                        help='Use rounds for scheduling')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
                         choices=['isolated', 'ks', 'ks_packed', 'fifo',
                                  'max_throughput'],
