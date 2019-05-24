@@ -1,7 +1,6 @@
 class Job:
     def __init__(self, job_id, job_type, command, num_steps_arg, total_steps,
-                 duration, scale_factor=1):
-        # TODO: Remove the default value of scale_factor.
+                 duration, scale_factor):
         self._job_id = job_id
         self._job_type = job_type
         self._command = command
