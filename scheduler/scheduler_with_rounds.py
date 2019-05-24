@@ -12,7 +12,6 @@ import datetime
 
 import job_id_pair
 import job_queue
-import priority_queue
 from runtime.rpc import scheduler_server, scheduler_client
 import utils
 
