@@ -28,14 +28,15 @@ def parse_trace(trace_file):
     jobs = []
     with open(trace_file, 'r') as f:
         for line in f:
-            job_type, command, num_steps_arg, total_steps, arrival_time = \
+            job_type, command, num_steps_arg, total_steps, arrival_time, scale_factor = \
                     line.split('\t')
             jobs.append((job.Job(job_id=None,
                                  job_type=job_type,
                                  command=command,
                                  num_steps_arg=num_steps_arg,
                                  total_steps=int(total_steps),
-                                 duration=None),
+                                 duration=None,
+                                 scale_factor=int(scale_factor)),
                         int(arrival_time)))
     return jobs
 

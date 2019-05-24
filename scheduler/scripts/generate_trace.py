@@ -67,10 +67,12 @@ def generate(lam, N, initial_delay, output_file):
             duration = 10 ** random.uniform(0, 2)  # this is in minutes.
             duration *= 60
             total_steps = int(duration * throughputs[job[0]])
+            scale_factor = 1
             # 'job_type\tcommand\tnum_steps_arg\ttotal_steps\tarrival_time'
-            f.write('%s\t%s\t%s\t%d\t%d\n' % (job[0], job[1], job[2],
-                                              total_steps,
-                                              arrival_time + initial_delay))
+            f.write('%s\t%s\t%s\t%d\t%d\t%d\n' % (job[0], job[1], job[2],
+                                                  total_steps,
+                                                  arrival_time + initial_delay,
+                                                  scale_factor))
 
 def main(args):
     generate(args.lam, args.num_jobs, args.initial_delay, args.output_file)
