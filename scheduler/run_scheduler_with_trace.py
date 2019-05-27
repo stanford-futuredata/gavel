@@ -7,7 +7,6 @@ import datetime
 import job
 import policies
 import scheduler
-import scheduler_with_rounds
 
 def get_policy(policy_name):
     if policy_name == "isolated":
