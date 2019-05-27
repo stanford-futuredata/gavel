@@ -1,0 +1,20 @@
+ResNet-18	cd /home/keshavsanthanam/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/home/keshavsanthanam/data/cifar10	--num_steps	101792	10	1
+A3C	cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	41391	38	1
+Transformer	cd /home/keshavsanthanam/gpusched/workloads/pytorch/translation/ && python3 train.py -data /home/keshavsanthanam/data/translation/multi30k.atok.low.pt -proj_share_weight	-step	771170	72	1
+CycleGAN	cd /home/keshavsanthanam/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /home/keshavsanthanam/data/monet2photo --decay_epoch 0	--n_steps	10946	95	1
+LM	cd /home/keshavsanthanam/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /home/keshavsanthanam/data/wikitext-2	--steps	1720	127	1
+A3C	cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	210024	163	1
+ResNet-50	cd /home/keshavsanthanam/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/	--num_minibatches	7946	187	1
+ResNet-18	cd /home/keshavsanthanam/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/home/keshavsanthanam/data/cifar10	--num_steps	2030213	214	1
+A3C	cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	340443	243	1
+Transformer	cd /home/keshavsanthanam/gpusched/workloads/pytorch/translation/ && python3 train.py -data /home/keshavsanthanam/data/translation/multi30k.atok.low.pt -proj_share_weight	-step	16279	275	1
+Transformer	cd /home/keshavsanthanam/gpusched/workloads/pytorch/translation/ && python3 train.py -data /home/keshavsanthanam/data/translation/multi30k.atok.low.pt -proj_share_weight	-step	872469	301	1
+LM	cd /home/keshavsanthanam/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /home/keshavsanthanam/data/wikitext-2	--steps	3547	330	1
+CycleGAN	cd /home/keshavsanthanam/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /home/keshavsanthanam/data/monet2photo --decay_epoch 0	--n_steps	46068	355	1
+ResNet-50	cd /home/keshavsanthanam/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/	--num_minibatches	4414	386	1
+Transformer	cd /home/keshavsanthanam/gpusched/workloads/pytorch/translation/ && python3 train.py -data /home/keshavsanthanam/data/translation/multi30k.atok.low.pt -proj_share_weight	-step	506660	418	1
+Transformer	cd /home/keshavsanthanam/gpusched/workloads/pytorch/translation/ && python3 train.py -data /home/keshavsanthanam/data/translation/multi30k.atok.low.pt -proj_share_weight	-step	1046480	445	1
+Recommendation	cd /home/keshavsanthanam/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py	-n	233115	478	1
+LM	cd /home/keshavsanthanam/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /home/keshavsanthanam/data/wikitext-2	--steps	34776	500	1
+Transformer	cd /home/keshavsanthanam/gpusched/workloads/pytorch/translation/ && python3 train.py -data /home/keshavsanthanam/data/translation/multi30k.atok.low.pt -proj_share_weight	-step	551697	526	1
+CycleGAN	cd /home/keshavsanthanam/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /home/keshavsanthanam/data/monet2photo --decay_epoch 0	--n_steps	184205	553	1

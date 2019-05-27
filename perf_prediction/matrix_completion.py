@@ -6,8 +6,14 @@ import random
 from fancyimpute import NuclearNormMinimization
 
 def mse(matrix, matrix_with_missing_entries, missing_entries):
-    predicted_matrix = NuclearNormMinimization(
-        verbose=False).fit_transform(matrix_with_missing_entries)
+    try:
+      predicted_matrix = NuclearNormMinimization(
+          verbose=False).fit_transform(matrix_with_missing_entries)
+    except Exception as e:
+        print(e)
+        print(matrix_with_missing_entries)
+        import sys
+        sys.exit(-1)
     error = []
     for (i, j) in missing_entries:
         error.append(matrix[(i, j)] - predicted_matrix[(i, j)])
@@ -16,9 +22,9 @@ def mse(matrix, matrix_with_missing_entries, missing_entries):
 def matrix_completion(matrices_filename, p_drops, num_trials):
     matrices = pickle.load(open(matrices_filename, 'rb'))
     for gpu_architecture in matrices:
-        print "===================================================================="
-        print "                              %s" % gpu_architecture
-        print "===================================================================="
+        print("====================================================================")
+        print("                              %s" % gpu_architecture)
+        print("====================================================================")
         print(np.array(matrices[gpu_architecture]))
         missing_entries = []
         for p_drop in p_drops:
@@ -36,8 +42,8 @@ def matrix_completion(matrices_filename, p_drops, num_trials):
                             missing_entries.append((i, j))
                 mses.append(mse(matrix, matrix_with_missing_entries,
                                 missing_entries))
-            print "Average MSE with p_{drop}=%.1f: %.3f" % (p_drop,
-                                                            np.array(mses).mean())
+            print("Average MSE with p_{drop}=%.1f: %.3f" % (p_drop,
+                                                            np.array(mses).mean()))
 
 
 if __name__ == '__main__':
