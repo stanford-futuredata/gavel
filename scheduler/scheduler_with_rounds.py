@@ -26,7 +26,7 @@ DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 # fully use their time quantum is rare.
 # TODO: Figure out a more sustainable solution to this, since 1 minute is too
 # short (will incur appreciable context switch overhead).
-TIME_PER_ITERATION = 5 * 60    # Time in seconds each iteration should run for.
+TIME_PER_ITERATION = 20 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 

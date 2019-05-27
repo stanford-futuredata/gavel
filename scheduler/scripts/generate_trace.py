@@ -64,7 +64,7 @@ def generate(lam, N, initial_delay, output_file):
     with open(output_file, 'w') as f:
         for arrival_time in arrival_times:
             job = random.choice(jobs)
-            duration = 10 ** random.uniform(0, 2)  # this is in minutes.
+            duration = 10 ** random.uniform(1.5, 4)  # this is in minutes.
             duration *= 60
             total_steps = int(duration * throughputs[job[0]])
             scale_factor = 1

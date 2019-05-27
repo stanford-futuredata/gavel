@@ -1,1 +1,0 @@
-0	resnet50	/home/deepakn94/miniconda3/bin/python ~/gpusched/workloads/pytorch/image_classification/main.py -a resnet50 -b 128 --epochs 1 /home/deepakn94/imagenet/ | tee resnet50.out	5	5

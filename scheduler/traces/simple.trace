@@ -1,7 +1,0 @@
-60	alexnet	sleep 2; echo "AlexNet!"	2	20
-0	nmt	sleep 2; echo "NMT!"	2	20
-0	inception3	sleep 2; echo "Inception v3!"	2	20
-30	vgg16	sleep 2; echo "VGG-16!"	2	20
-20	vae	sleep 2; echo "VAE!"	2	20
-20	lm_large	sleep 2; echo "LM (large)!"	2	20
-20	resnet50	sleep 2; echo "ResNet-50!"	2	20
