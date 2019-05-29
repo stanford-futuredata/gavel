@@ -557,7 +557,7 @@ class Scheduler:
                         steps_per_time = 0.0
                         for worker_type in self._allocation[job_id]:
                             steps_per_time += (self._allocation[job_id][worker_type] *
-                                               len(self._worker_type_to_worker_id_mapping[worker_type]) *
+                                               self._jobs[job_id].scale_factor *
                                                self._throughputs[job_id][worker_type])
                         true_finish_time = int(self._get_remaining_steps(job_id) /\
                             steps_per_time + 1)
@@ -578,7 +578,7 @@ class Scheduler:
                         for worker_type in self._allocation[job_id]:
                             time_run = (time_to_next_timestamp *
                                         self._allocation[job_id][worker_type] *
-                                        len(self._worker_type_to_worker_id_mapping[worker_type]))
+                                        self._jobs[job_id].scale_factor)
                             steps_run = time_run * self._throughputs[job_id][worker_type]
                             self._steps_run_so_far[job_id][worker_type] += steps_run
                             self._time_run_so_far[job_id][worker_type] += time_run
