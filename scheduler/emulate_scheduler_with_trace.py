@@ -53,7 +53,7 @@ def main(args):
           'p100': 4,
           'v100': 4,
     }
-    sched.emulate(cluster_spec, arrival_times, jobs)
+    sched.emulate(cluster_spec, arrival_times, jobs, ideal=args.ideal)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
@@ -65,6 +65,8 @@ if __name__=='__main__':
                         choices=['isolated', 'ks', 'ks_packed', 'fifo',
                                  'max_throughput'],
                         help='Scheduler policy')
+    parser.add_argument('-i', '--ideal', action='store_true',
+                        help='Use allocation returned by policy ideally')
     parser.add_argument('-f', '--throughputs_file', type=str,
                         default='throughputs.json',
                         help='Throughputs file')
