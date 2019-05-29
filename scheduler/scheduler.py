@@ -540,54 +540,69 @@ class Scheduler:
         while remaining_jobs > 0:
             # Jump to the next event's timestamp.
             if ideal:
+                # Find the next arrival timestamp (timestamp at which a job is to be
+                # added as specified in the trace).
                 next_arrival_timestamp = None
                 time_to_next_arrival_timestamp = None
-                default_worker_type = list(self._worker_types)[0]
                 if len(queued_jobs) > 0:
                     next_arrival_timestamp = queued_jobs[0][0]
                     time_to_next_arrival_timestamp = \
                         next_arrival_timestamp - self._current_timestamp
 
+                # Find the next departure timestamp (timestamp at which a job completes).
+                # Compute departure timestamps for all jobs, and find the minimum.
                 time_to_next_departure_timestamp = None
                 if self._allocation is not None:
-                    first_job_id = None
+                    first_job_id_to_depart = None
                     for job_id in self._allocation:
                         if job_id not in self._throughputs:
                             continue
+                        # Effective throughput with the computed allocation, which is a
+                        # weighted average of the throughputs and allocations.
                         steps_per_time = 0.0
                         for worker_type in self._allocation[job_id]:
+                            # TODO: scale_factor needed here?
                             steps_per_time += (self._allocation[job_id][worker_type] *
-                                               self._jobs[job_id].scale_factor *
                                                self._throughputs[job_id][worker_type])
+                        # Can now compute the finish_time for this job_id using the
+                        # effective throughput computed above.
                         true_finish_time = int(self._get_remaining_steps(job_id) /\
                             steps_per_time + 1)
+                        # Only update time_to_next_departure_timestamp if earlier than
+                        # time_to_next_arrival_timestamp.
                         if (time_to_next_departure_timestamp is None) or \
                             (time_to_next_departure_timestamp > true_finish_time):
                             if time_to_next_arrival_timestamp is None or\
                                 true_finish_time < time_to_next_arrival_timestamp:
                                 time_to_next_departure_timestamp = true_finish_time
-                                first_job_id = job_id
+                                first_job_id_to_depart = job_id
 
-                    # Compute steps run between two events (an event is an add_job or remove_job call).
+                    # Now, compute the time to the next event (next_arrival_timestamp if
+                    # before next_departure_timestamp, otherwise next_departure_timestamp).
                     next_timestamp = next_arrival_timestamp
                     if time_to_next_departure_timestamp is not None:
-                        next_timestamp = self._current_timestamp + time_to_next_departure_timestamp
+                        next_timestamp = self._current_timestamp + \
+                            time_to_next_departure_timestamp
                     time_to_next_timestamp = next_timestamp - self._current_timestamp
+
+                    # Update step and time counts for all jobs on the different worker types.
                     steps_run = 0
                     for job_id in self._allocation:
                         for worker_type in self._allocation[job_id]:
+                            # TODO: scale_factor needed here?
                             time_run = (time_to_next_timestamp *
-                                        self._allocation[job_id][worker_type] *
-                                        self._jobs[job_id].scale_factor)
+                                        self._allocation[job_id][worker_type])
                             steps_run = time_run * self._throughputs[job_id][worker_type]
                             self._steps_run_so_far[job_id][worker_type] += steps_run
                             self._time_run_so_far[job_id][worker_type] += time_run
                             self._cumulative_time_run_so_far[job_id][worker_type] += time_run
-                    if first_job_id is not None:
-                        assert self._get_remaining_steps(first_job_id) <= 0
-                        self._per_job_latest_timestamps[first_job_id] = self._get_current_timestamp()
-                        self.remove_job(first_job_id[0])
-                        remaining_jobs -= 1
+                    if first_job_id_to_depart is not None:
+                        # first_job_id_to_depart should have no steps remaining.
+                        assert self._get_remaining_steps(first_job_id_to_depart) <= 0
+                        self._per_job_latest_timestamps[first_job_id_to_depart] = \
+                            self._get_current_timestamp()
+                        self.remove_job(first_job_id_to_depart[0])
+                        remaining_jobs -= 1  # Remove job and update remaining_jobs counter.
                     self._current_timestamp = next_timestamp
 
             else:
