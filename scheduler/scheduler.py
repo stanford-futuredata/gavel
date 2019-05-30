@@ -28,7 +28,7 @@ MAX_FAILED_ATTEMPTS = 5
 
 class Scheduler:
 
-    def __init__(self, policy, schedule_in_rounds, job_packing=False, emulate=False,
+    def __init__(self, policy, schedule_in_rounds, emulate=False,
                  throughputs_file=None):
 
         # Flag to control whether scheduling should occur in rounds.
@@ -55,7 +55,7 @@ class Scheduler:
         self._worker_type_to_worker_id_mapping = {}
         # Policy instance.
         self._policy = policy
-        self._job_packing = job_packing
+        self._job_packing = "Packing" in self._policy._name
         # RPC clients.
         self._cluster_spec = {}
         self._worker_connections = {}
@@ -563,14 +563,17 @@ class Scheduler:
                         # weighted average of the throughputs and allocations.
                         steps_per_time = 0.0
                         for other_job_id in self._allocation:
-                            if not other_job_id.overlaps_with(job_id):
+                            if not job_id.overlaps_with(other_job_id):
                                 continue
                             for worker_type in self._allocation[other_job_id]:
                                 # TODO: scale_factor needed here?
                                 if other_job_id.is_pair():
+                                    # Determine which part of the tuple corresponds to
+                                    # the current job_id.
                                     i = 0
-                                    if other_job_id[1] == job_id:
+                                    if other_job_id.singletons()[1] == job_id:
                                         i = 1
+                                    assert other_job_id.singletons()[i] == job_id
                                     steps_per_time += (
                                         self._allocation[other_job_id][worker_type] *
                                         self._throughputs[other_job_id][worker_type][i])
@@ -586,7 +589,7 @@ class Scheduler:
                         # time_to_next_arrival_timestamp.
                         if (time_to_next_departure_timestamp is None) or \
                             (time_to_next_departure_timestamp > true_finish_time):
-                            if time_to_next_arrival_timestamp is None or\
+                            if time_to_next_arrival_timestamp is None or \
                                 true_finish_time < time_to_next_arrival_timestamp:
                                 time_to_next_departure_timestamp = true_finish_time
                                 first_job_id_to_depart = job_id
@@ -602,14 +605,30 @@ class Scheduler:
                     # Update step and time counts for all jobs on the different worker types.
                     steps_run = 0
                     for job_id in self._allocation:
-                        for worker_type in self._allocation[job_id]:
-                            # TODO: scale_factor needed here?
-                            time_run = (time_to_next_timestamp *
-                                        self._allocation[job_id][worker_type])
-                            steps_run = time_run * self._throughputs[job_id][worker_type]
-                            self._steps_run_so_far[job_id][worker_type] += steps_run
-                            self._time_run_so_far[job_id][worker_type] += time_run
-                            self._cumulative_time_run_so_far[job_id][worker_type] += time_run
+                        if job_id.is_pair():
+                            continue
+                        for other_job_id in self._allocation:
+                            if not job_id.overlaps_with(other_job_id):
+                                continue
+                            for worker_type in self._allocation[other_job_id]:
+                                if other_job_id.is_pair():
+                                    # Determine which part of the tuple corresponds to
+                                    # the current job_id.
+                                    i = 0
+                                    if other_job_id.singletons()[1] == job_id:
+                                        i = 1
+                                    assert other_job_id.singletons()[i] == job_id
+                                    throughput = \
+                                        self._throughputs[other_job_id][worker_type][i]
+                                else:
+                                    throughput = self._throughputs[other_job_id][worker_type]
+                                # TODO: scale_factor needed here?
+                                time_run = (time_to_next_timestamp *
+                                            self._allocation[other_job_id][worker_type])
+                                steps_run = time_run * throughput
+                                self._steps_run_so_far[job_id][worker_type] += steps_run
+                                self._time_run_so_far[job_id][worker_type] += time_run
+                                self._cumulative_time_run_so_far[job_id][worker_type] += time_run
                     if first_job_id_to_depart is not None:
                         # first_job_id_to_depart should have no steps remaining.
                         assert self._get_remaining_steps(first_job_id_to_depart) <= 0
@@ -811,21 +830,29 @@ class Scheduler:
             if other_job_id != job_id:
                 other_job = self._jobs[other_job_id]
                 merged_job_id = \
-                        self.JobIdPair(job_id[0], other_job_id[0])
+                        job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
                     self._throughputs[merged_job_id] = {}
                     self._steps_run_so_far[merged_job_id] = {}
                     self._time_run_so_far[merged_job_id] = {}
                     self._cumulative_time_run_so_far[merged_job_id] = {}
                 self._throughputs[merged_job_id][worker_type] = \
-                    self._compute_throughput([job, other_job], worker_type)
+                    self._compute_throughput(
+                        [job.job_type, other_job.job_type],
+                        worker_type)
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
 
-    def _compute_throughput(self, job_type, worker_type):
-        if self._emulate:
-            return self._all_throughputs[job_type][worker_type]
+    def _compute_throughput(self, job_types, worker_type):
+        if isinstance(job_types, list):
+            if self._emulate:
+                return self._all_throughputs[worker_type][job_types[0]][job_types[1]]
+            else:
+                return (DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0)
         else:
-            return DEFAULT_THROUGHPUT
+            if self._emulate:
+                return self._all_throughputs[worker_type][job_types]["null"]
+            else:
+                return DEFAULT_THROUGHPUT
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
@@ -1159,11 +1186,13 @@ class Scheduler:
             self._worker_id_counter += 1
             self._worker_types.add(worker_type)
             self._worker_id_to_worker_type_mapping[worker_id] = worker_type
+            found = True
             if worker_type not in self._worker_type_to_worker_id_mapping:
+                found = False
                 self._worker_type_to_worker_id_mapping[worker_type] = []
             self._worker_type_to_worker_id_mapping[worker_type].append(worker_id)
 
-            if worker_type not in self._per_worker_type_job_queue:
+            if not found:
                 self._per_worker_type_job_queue[worker_type] = \
                         job_queue.JobQueue()
                 self._priorities[worker_type] = {}

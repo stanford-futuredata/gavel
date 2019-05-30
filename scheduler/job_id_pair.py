@@ -56,5 +56,5 @@ class JobIdPair():
         if self[1] is None:
             return (self,)
         else:
-            return (Scheduler.JobIdPair(self[0], None),
-                    Scheduler.JobIdPair(self[1], None))
+            return (JobIdPair(self[0], None),
+                    JobIdPair(self[1], None))
