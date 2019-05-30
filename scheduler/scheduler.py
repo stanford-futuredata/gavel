@@ -555,15 +555,29 @@ class Scheduler:
                 if self._allocation is not None:
                     first_job_id_to_depart = None
                     for job_id in self._allocation:
-                        if job_id not in self._throughputs:
+                        if job_id.is_pair():
+                            continue
+                        if job_id not in self._throughputs:  # TODO: Is this needed?
                             continue
                         # Effective throughput with the computed allocation, which is a
                         # weighted average of the throughputs and allocations.
                         steps_per_time = 0.0
-                        for worker_type in self._allocation[job_id]:
-                            # TODO: scale_factor needed here?
-                            steps_per_time += (self._allocation[job_id][worker_type] *
-                                               self._throughputs[job_id][worker_type])
+                        for other_job_id in self._allocation:
+                            if not other_job_id.overlaps_with(job_id):
+                                continue
+                            for worker_type in self._allocation[other_job_id]:
+                                # TODO: scale_factor needed here?
+                                if other_job_id.is_pair():
+                                    i = 0
+                                    if other_job_id[1] == job_id:
+                                        i = 1
+                                    steps_per_time += (
+                                        self._allocation[other_job_id][worker_type] *
+                                        self._throughputs[other_job_id][worker_type][i])
+                                else:
+                                    steps_per_time += (
+                                        self._allocation[other_job_id][worker_type] *
+                                        self._throughputs[other_job_id][worker_type])
                         # Can now compute the finish_time for this job_id using the
                         # effective throughput computed above.
                         true_finish_time = int(self._get_remaining_steps(job_id) /\
