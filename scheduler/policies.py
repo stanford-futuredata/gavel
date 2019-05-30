@@ -171,7 +171,7 @@ class KSPolicyWithPacking(Policy):
                     else:
                         if not single_job_id.overlaps_with(job_id):
                             m_row.append(0.0)
-                            mask_row.append(1.0)
+                            mask_row.append(0.0)
                         else:
                             # Find the index of the job of interest in the job
                             # combination tuple.
@@ -211,7 +211,6 @@ class KSPolicyWithPacking(Policy):
         constraints = [
             x >= 0,
             cp.sum(x, axis=0) <= 1,  # One of these is redundant.
-            cp.sum(x, axis=1) <= 1,
         ]
         for mask in masks:
             constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
