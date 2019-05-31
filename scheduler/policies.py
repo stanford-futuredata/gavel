@@ -14,21 +14,21 @@ class Policy:
     def flatten(self, d, cluster_spec):
         """Converts a 2-level dict to a NumPy array."""
 
-        job_id_pairs = sorted(list(d.keys()))
-        if len(job_id_pairs) == 0:
+        job_ids = sorted(list(d.keys()))
+        if len(job_ids) == 0:
             return None, None
-        worker_types = sorted(list(d[job_id_pairs[0]].keys()))
+        worker_types = sorted(list(d[job_ids[0]].keys()))
         self._num_workers = \
             [cluster_spec[worker_type] for worker_type in worker_types]
         if len(worker_types) == 0:
             return None, None
         m = []
-        for job_id in job_id_pairs:
+        for job_id in job_ids:
             m_row = []
             for worker_type in worker_types:
                 m_row.append(d[job_id][worker_type])
             m.append(m_row)
-        return np.array(m), (job_id_pairs, worker_types)
+        return np.array(m), (job_ids, worker_types)
 
     def unflatten(self, m, index):
         """Converts a NumPy array to a 2-level dict."""
@@ -110,7 +110,7 @@ class KSPolicyWithPacking(Policy):
     def __init__(self):
         self._name = 'KS_Packing'
 
-    def flatten(self, d):
+    def flatten(self, d, cluster_spec):
         """
         Converts a 2-level dict to a NumPy array.
 
@@ -124,9 +124,14 @@ class KSPolicyWithPacking(Policy):
         index to reconstruct the allocation as a dict.
         """
 
-        job_ids = list(d.keys())
+        job_ids = sorted(list(d.keys()))
         if len(job_ids) == 0:
             return None, None, None
+        worker_types = sorted(list(d[job_ids[0]].keys()))
+        self._num_workers = \
+            [cluster_spec[worker_type] for worker_type in worker_types]
+
+
         worker_types = list(d[job_ids[0]].keys())
         single_job_ids = []
         for job_id in job_ids:
@@ -197,8 +202,9 @@ class KSPolicyWithPacking(Policy):
                 d[job_id_combinations[i]][worker_types[j]] = m[i][j]
         return d
 
-    def get_allocation(self, unflattened_throughputs):
-        all_throughputs, masks, index = self.flatten(unflattened_throughputs)
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        all_throughputs, masks, index = self.flatten(unflattened_throughputs,
+                                                     cluster_spec)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         x = cp.Variable(all_throughputs[0].shape)
         objective_terms = []
@@ -210,7 +216,7 @@ class KSPolicyWithPacking(Policy):
             objective = cp.Maximize(cp.minimum(*objective_terms))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= 1,  # One of these is redundant.
+            cp.sum(x, axis=0) <= self._num_workers,
         ]
         for mask in masks:
             constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)

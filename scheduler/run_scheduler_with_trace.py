@@ -45,8 +45,7 @@ def main(args):
     for job in jobs:
         job_queue.put(job)
     policy = get_policy(args.policy)
-    sched = scheduler.Scheduler(policy, schedule_in_rounds=args.schedule_in_rounds,
-                                job_packing=False)
+    sched = scheduler.Scheduler(policy, schedule_in_rounds=args.schedule_in_rounds)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
