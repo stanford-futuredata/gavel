@@ -583,8 +583,8 @@ class Scheduler:
                                         self._throughputs[other_job_id][worker_type])
                         # Can now compute the finish_time for this job_id using the
                         # effective throughput computed above.
-                        true_finish_time = int(self._get_remaining_steps(job_id) /\
-                            steps_per_time + 1)
+                        true_finish_time = self._get_remaining_steps(job_id) /\
+                            steps_per_time + 1
                         # Only update time_to_next_departure_timestamp if earlier than
                         # time_to_next_arrival_timestamp.
                         if (time_to_next_departure_timestamp is None) or \
@@ -607,6 +607,8 @@ class Scheduler:
                     for job_id in self._allocation:
                         if job_id.is_pair():
                             continue
+                        if job_id not in self._throughputs:
+                            continue
                         for other_job_id in self._allocation:
                             if not job_id.overlaps_with(other_job_id):
                                 continue
@@ -620,8 +622,10 @@ class Scheduler:
                                     assert other_job_id.singletons()[i] == job_id
                                     throughput = \
                                         self._throughputs[other_job_id][worker_type][i]
-                                else:
+                                elif other_job_id in self._throughputs:
                                     throughput = self._throughputs[other_job_id][worker_type]
+                                else:
+                                    raise Exception("other_job_id should be in self._throughputs!")
                                 # TODO: scale_factor needed here?
                                 time_run = (time_to_next_timestamp *
                                             self._allocation[other_job_id][worker_type])
