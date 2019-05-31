@@ -54,6 +54,7 @@ def main(args):
           'v100': 4,
     }
     sched.emulate(cluster_spec, arrival_times, jobs, ideal=args.ideal)
+    sched.shutdown()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
