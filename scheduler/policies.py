@@ -99,7 +99,13 @@ class KSPolicy(Policy):
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve()
+        try:
+            result = cvxprob.solve()
+        except cp.error.SolverError as e:
+            print(e)
+            print(throughputs)
+            import sys
+            sys.exit(-1)
         assert cvxprob.status == "optimal"
 
         return super().unflatten(x.value.clip(min=0.0), index)
@@ -131,8 +137,6 @@ class KSPolicyWithPacking(Policy):
         self._num_workers = \
             [cluster_spec[worker_type] for worker_type in worker_types]
 
-
-        worker_types = list(d[job_ids[0]].keys())
         single_job_ids = []
         for job_id in job_ids:
             if not job_id.is_pair():
@@ -186,7 +190,7 @@ class KSPolicyWithPacking(Policy):
                             mask_row.append(1.0)
                 m.append(m_row)
                 mask.append(mask_row)
-            # Normalize
+            # Normalize.
             all_m.append(np.array(m) / normalizing_factors[single_job_id])
             masks.append(np.array(mask))
         return all_m, masks, (job_ids, single_job_ids, worker_types)

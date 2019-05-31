@@ -1,3 +1,5 @@
+import hashlib
+
 class JobIdPair():
 
     def __init__(self, job0, job1):
@@ -7,6 +9,13 @@ class JobIdPair():
             raise ValueError('First job id in a JobIdPair cannot be None')
         self._job0 = job0
         self._job1 = job1
+
+        a = self._job0
+        b = self._job1
+        if b is None:
+            self._hash_value = a
+        else:
+            self._hash_value = a * a + a + b if a > b else a + b * b
 
     def __getitem__(self, index):
         if index == 0:
@@ -18,20 +27,20 @@ class JobIdPair():
                              'index %d' % index)
 
     def __lt__(self, other):
-        if self[0] != other[0]:
-            return self[0] < other[0]
-        elif self[1] is None and self[0] is None:
+        if self._job0 != other._job0:
+            return self._job0 < other._job0
+        elif self._job1 is None and self._job0 is None:
             return False
-        elif self[1] is not None and other[1] is not None:
-            return self[1] < other[1]
+        elif self._job1 is not None and other._job1 is not None:
+            return self._job0 < other._job1
         else:
-            return self[1] is None
+            return self._job1 is None
 
     def __eq__(self, other):
-        return self[0] == other[0] and self[1] == other[1]
+        return self._job0 == other._job0 and self._job1 == other._job1
 
     def __hash__(self):
-        return hash(self.as_tuple())
+        return self._hash_value
 
     def __repr__(self):
         if self[1] is None:
