@@ -220,13 +220,7 @@ class KSPolicyWithPacking(Policy):
             objective = cp.Maximize(cp.minimum(*objective_terms))
         constraints = [
             x >= 0,
-<<<<<<< HEAD
             cp.sum(x, axis=0) <= self._num_workers,
-||||||| parent of c2c3265... Fix various performance bugs when packing jobs
-            cp.sum(x, axis=0) <= 1,  # One of these is redundant.
-=======
-            cp.sum(x, axis=0) <= self._num_workers,  # One of these is redundant.
->>>>>>> c2c3265... Fix various performance bugs when packing jobs
         ]
         for mask in masks:
             constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
