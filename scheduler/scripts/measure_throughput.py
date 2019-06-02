@@ -1,7 +1,9 @@
 import argparse
+import datetime
 import json
 import multiprocessing
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -34,7 +36,7 @@ job_table = [
                  'image_classification/cifar10 && python3 '
                  'main.py --data_dir=/home/keshavsanthanam/data/cifar10 '
                  '--num_steps'),
-        num_steps=1000),
+        num_steps=4000),
     Job(model='ResNet-50',
         command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
                  'image_classification/imagenet && python3 '
@@ -43,7 +45,7 @@ job_table = [
         num_steps=300),
     Job(model='A3C',
         command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && '
-                 'python3 main.py --env PongDeterministic-v4 --workers 4 ' 
+                 'python3 main.py --env PongDeterministic-v4 --workers 4 '
                  '--amsgrad True --max-steps'),
         num_steps=1000),
     Job(model='LM',
@@ -69,29 +71,62 @@ job_table = [
         num_steps=1000),
 ]
 
-def run_job(job, send_end=None):
+def enable_mps():
+    print('Enabling CUDA MPS')
+    command = 'nvidia-cuda-mps-control -d'
+    try:
+        subprocess.run(command,
+                       check=True,
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT,
+                       shell=True)
+    except subprocess.CalledProcessError as e:
+        print(e)
+
+
+def run_job(job):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES="0")
     command = ('%s %d '
                '--throughput_estimation_interval %d') % (job.command,
                                                          job.num_steps,
                                                          job.num_steps // 100)
     try:
-        proc = subprocess.run(command,
-                              env=env,
-                              check=True,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.STDOUT,
-                              shell=True)
-        if send_end is None:
-            return (None, proc.stdout.decode('utf-8'))
-        else:
-          send_end.send((None, proc.stdout.decode('utf-8')))
-    except subprocess.CalledProcessError as e:
-        if send_end is None:
-            return (e.returncode, e.stdout.decode('utf-8'))
-        else:
-            send_end.send((e.returncode, e.stdout.decode('utf-8'))) 
-
+        output = subprocess.run(command,
+                                env=env,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT,
+                                shell=True,
+                                check=True).stdout.decode('utf-8')
+        return output
+    except Exception as e:
+        return None
+    """
+    with subprocess.Popen(command,
+                          env=env,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT,
+                          shell=True,
+                          preexec_fn=os.setsid) as process:
+        try:
+            output = process.communicate(timeout=timeout)[0]
+            if send_end is None:
+                return (None, output.decode('utf-8'))
+            else:
+                send_end.send((None, output.decode('utf-8')))
+        except subprocess.TimeoutExpired as e:
+            printf('%s] Job timed out' % (datetime.datetime.now()))
+            os.killpg(process.pid, signal.SIGINT)
+            #output = process.communicate()[0]
+            if send_end is None:
+                return (-1, '')#output.decode('utf-8'))
+            else:
+                send_end.send((-1, ''))#output.decode('utf-8')))
+        except subprocess.CalledProcessError as e:
+            if send_end is None:
+                return (e.returncode, e.stdout.decode('utf-8'))
+            else:
+               send_end.send((e.returncode, e.stdout.decode('utf-8')))
+    """
 def get_throughputs(outputs):
     earliest_end_time = None
     for output in outputs:
@@ -103,7 +138,7 @@ def get_throughputs(outputs):
                     float(time) < earliest_end_time):
                     earliest_end_time = float(time)
                 break
-               
+
     throughputs = None
     for output in outputs:
         lines = output.split('\n')
@@ -115,6 +150,8 @@ def get_throughputs(outputs):
                     start_time = float(time)
                 elif float(time) > earliest_end_time:
                     break
+        if start_time is None:
+            return (-1, -1)
         throughput = int(steps) / (float(time) - start_time)
         if throughputs is None:
             throughputs = (throughput,)
@@ -125,33 +162,34 @@ def get_throughputs(outputs):
 
 def main(args):
     global job_table
-    
+
+    if args.enable_mps:
+        enable_mps()
+
     throughputs = {}
     # Get isolated throughputs.
-    for i in range(len(job_table)):
-      print('Running %s' % (job_table[i].model))
-      start_time = time.time()
-      (errorcode, output) = run_job(job_table[i])
-      runtime = time.time() - start_time
-      if errorcode is None:
+    if args.measure_isolated_throughputs:
+        for i in range(len(job_table)):
+          print('%s] Running %s' % (datetime.datetime.now(),
+                                    job_table[i].model))
+          start_time = time.time()
+          output = run_job(job_table[i])
+          runtime = time.time() - start_time
           throughput = get_throughputs([output])[0]
           # Update the number of steps the job runs for.
           old_steps = job_table[i].num_steps
-          new_steps = int(old_steps * args.time_per_measurement / runtime)
-          job_table[i].num_steps = new_steps 
-          print('%s steps %d -> %d' % (job_table[i].model, old_steps,
-                                       new_steps))
-      else:
-          print('Could not get throughput for '
-                'job %s:' % (job_table[i].model))
-          print('Error %d: %s' % (errorcode, output))
-          throughput = -1
-      throughputs[job_table[i].model] = {}
-      throughputs[job_table[i].model][None] = throughput
-      print('%s: %.3f (%.3f seconds)\n' % (job_table[i].model, throughput,
-                                           runtime))
-
-    # Get co-located throughputs.        
+          new_steps = int(old_steps *
+                          args.seconds_per_measurement / runtime)
+          job_table[i].num_steps = new_steps
+          print('%s] %s steps %d -> %d' % (datetime.datetime.now(),
+                                           job_table[i].model,
+                                           old_steps,
+                                           new_steps))
+          throughputs[job_table[i].model] = {}
+          throughputs[job_table[i].model][None] = throughput
+          print('%s: %.3f (%.3f seconds)\n' % (job_table[i].model, throughput,
+                                               runtime))
+    # Get co-located throughputs.
     for i in range(len(job_table)):
         for j in range(len(job_table)):
             job1 = job_table[i]
@@ -161,29 +199,31 @@ def main(args):
                 (job2.model in throughputs and
                  job1.model in throughputs[job2.model])):
                 continue
-            print('Running %s with %s' % (job1.model, job2.model))
-            jobs = []
-            pipe_list = []
-            for job in [job1, job2]:
-               recv_end, send_end = multiprocessing.Pipe(False)
-               p = multiprocessing.Process(target=run_job,
-                                           args=(job, send_end,))
-               jobs.append(p)
-               pipe_list.append(recv_end)
-               p.start()
-            for proc in jobs:
-                proc.join()
-            result_list = [x.recv() for x in pipe_list]
+            if job1.model not in throughputs:
+                throughputs[job1.model] = {}
+            if job2.model not in throughputs:
+                throughputs[job2.model] = {}
+            print('%s] Running %s with %s' % (datetime.datetime.now(),
+                                              job1.model, job2.model))
             outputs = []
+            results = []
+            pipe_list = []
+            pool = multiprocessing.Pool(2)
+            for job in [job1, job2]:
+                results.append(pool.map_async(run_job, (job,)))
+            pool.close()
+            pool.join()
+
             success = True
-            for result in result_list:
-                if result[0] is None:
-                    outputs.append(result[1])
+            for result in results:
+                output = result.get()[0]
+                if output is not None:
+                    outputs.append(output)
                 else:
                     success = False
                     break
             key = '(%s, %s)' % (job1.model, job2.model)
-            if success: 
+            if success:
                 throughput = get_throughputs(outputs)
             else:
                 throughput = (-1, -1)
@@ -200,7 +240,13 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Measure colocated throughput')
     parser.add_argument('-o', '--output_file', type=str, required=True,
                         help='Output file')
-    parser.add_argument('-t', '--time_per_measurement', type=int, default=300,
-                        help='Time per measurement in seconds')
+    parser.add_argument('-s', '--seconds_per_measurement', type=int,
+                        default=300,
+                        help='Seconds per measurement in seconds')
+    parser.add_argument('-m', '--enable_mps', action='store_true',
+                        default=False, help='Enable CUDA MPS')
+    parser.add_argument('-i', '--measure_isolated_throughputs',
+                        action='store_true', default=False,
+                        help='Measure isolated throughputs')
     args = parser.parse_args()
     main(args)
