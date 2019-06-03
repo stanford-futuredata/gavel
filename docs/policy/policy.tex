@@ -1,6 +1,7 @@
 \documentclass{article}
+\usepackage[margin=1in]{geometry}
 \usepackage{amsmath}
-\title{ILP Formulation for Scheduler}
+\title{LP Formulation for Scheduler}
 
 \date{\today}
 \begin{document}
@@ -20,8 +21,8 @@ times from other measurements). The performance estimate for application $i$
 on machine $j$ is represented by $a_{ij}$.
 
 Now, let $x_{ij}$ be a floating point number, representing the fraction of
-a computation (in other words, the fraction of total epochs) to run on
-machine $j$.
+total wall-clock time spent executing the computation associated with
+application $i$ on machine $j$.
 
 \begin{eqnarray}
 0 \leq x_{ij} \leq 1 & \forall (i,j) \in \{1, 2, \ldots, n\} \times \{1, 2, \ldots, m\} \nonumber  \\
