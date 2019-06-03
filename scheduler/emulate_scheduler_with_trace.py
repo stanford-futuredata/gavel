@@ -46,13 +46,9 @@ def main(args):
     sched = scheduler.Scheduler(policy, schedule_in_rounds=args.schedule_in_rounds,
                                 throughputs_file=args.throughputs_file,
                                 emulate=True)
-    start_time = datetime.datetime.now()
-    # TODO: Make this a command line argument
-    cluster_spec = {
-          'k80': 4,
-          'p100': 4,
-          'v100': 4,
-    }
+
+    cluster_spec = {key_value.split(':')[0]: int(key_value.split(':')[1])
+                    for key_value in args.cluster_spec.split(',')}
     sched.emulate(cluster_spec, arrival_times, jobs, ideal=args.ideal)
     sched.shutdown()
 
@@ -72,4 +68,8 @@ if __name__=='__main__':
     parser.add_argument('-f', '--throughputs_file', type=str,
                         default='combined_throughputs.json',
                         help='Throughputs file')
+    parser.add_argument('-c', '--cluster_spec', type=str,
+                        default='k80:4,p100:4,v100:4',
+                        help='Cluster specification')
+
     main(parser.parse_args())
