@@ -36,6 +36,48 @@ job_table = [
                  'image_classification/cifar10 && python3 '
                  'main.py --data_dir=/home/keshavsanthanam/data/cifar10 '
                  '--num_steps'),
+        num_steps=100),
+    Job(model='Transformer',
+        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+                 'translation && python3 train.py -data '
+                 '/home/keshavsanthanam/data/translation/multi30k.atok.low.pt '
+                 '-proj_share_weight -step'),
+        num_steps=100),
+    Job(model='ResNet-50',
+        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+                 'image_classification/imagenet && python3 '
+                 'main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/ '
+                 '--num_minibatches'),
+        num_steps=25),
+    Job(model='A3C',
+        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && '
+                 'python3 main.py --env PongDeterministic-v4 --workers 4 '
+                 '--amsgrad True --max-steps'),
+        num_steps=70),
+    Job(model='LM',
+        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+                 'language_modeling && python main.py --cuda --data '
+                 '/home/keshavsanthanam/data/wikitext-2 --steps'),
+        num_steps=300),
+    Job(model='Recommendation',
+        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+                 'recommendation/scripts/ml-20m && python3 train.py -n'),
+        num_steps=5),
+    Job(model='CycleGAN',
+        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+                 'cyclegan && python3 cyclegan.py --dataset_path '
+                 '/home/keshavsanthanam/data/monet2photo --decay_epoch 0 '
+                 '--n_steps'),
+        num_steps=1000),
+]
+
+"""
+job_table = [
+    Job(model='ResNet-18',
+        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+                 'image_classification/cifar10 && python3 '
+                 'main.py --data_dir=/home/keshavsanthanam/data/cifar10 '
+                 '--num_steps'),
         num_steps=4000),
     Job(model='ResNet-50',
         command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
@@ -70,6 +112,8 @@ job_table = [
                  '--n_steps'),
         num_steps=1000),
 ]
+"""
+
 
 def enable_mps():
     print('Enabling CUDA MPS')
@@ -82,6 +126,7 @@ def enable_mps():
                        shell=True)
     except subprocess.CalledProcessError as e:
         print(e)
+        print(e.stdout.decode('utf-8'))
 
 
 def run_job(job):
@@ -99,34 +144,10 @@ def run_job(job):
                                 check=True).stdout.decode('utf-8')
         return output
     except Exception as e:
+        print(e)
+        print(e.stdout.decode('utf-8'))
         return None
-    """
-    with subprocess.Popen(command,
-                          env=env,
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT,
-                          shell=True,
-                          preexec_fn=os.setsid) as process:
-        try:
-            output = process.communicate(timeout=timeout)[0]
-            if send_end is None:
-                return (None, output.decode('utf-8'))
-            else:
-                send_end.send((None, output.decode('utf-8')))
-        except subprocess.TimeoutExpired as e:
-            printf('%s] Job timed out' % (datetime.datetime.now()))
-            os.killpg(process.pid, signal.SIGINT)
-            #output = process.communicate()[0]
-            if send_end is None:
-                return (-1, '')#output.decode('utf-8'))
-            else:
-                send_end.send((-1, ''))#output.decode('utf-8')))
-        except subprocess.CalledProcessError as e:
-            if send_end is None:
-                return (e.returncode, e.stdout.decode('utf-8'))
-            else:
-               send_end.send((e.returncode, e.stdout.decode('utf-8')))
-    """
+
 def get_throughputs(outputs):
     earliest_end_time = None
     for output in outputs:
@@ -174,6 +195,8 @@ def main(args):
                                     job_table[i].model))
           start_time = time.time()
           output = run_job(job_table[i])
+          if not output:
+              sys.exit(-1)
           runtime = time.time() - start_time
           throughput = get_throughputs([output])[0]
           # Update the number of steps the job runs for.
