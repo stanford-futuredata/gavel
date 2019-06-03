@@ -131,10 +131,11 @@ def enable_mps():
 
 def run_job(job):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES="0")
+    interval = max(1, job.num_steps // 100)
     command = ('%s %d '
                '--throughput_estimation_interval %d') % (job.command,
                                                          job.num_steps,
-                                                         job.num_steps // 100)
+                                                         interval)
     try:
         output = subprocess.run(command,
                                 env=env,
