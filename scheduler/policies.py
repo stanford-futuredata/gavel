@@ -108,7 +108,7 @@ class KSPolicy(Policy):
             sys.exit(-1)
         assert cvxprob.status == "optimal"
 
-        return super().unflatten(x.value.clip(min=0.0), index)
+        return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
 
 class KSPolicyWithPacking(Policy):
@@ -226,10 +226,9 @@ class KSPolicyWithPacking(Policy):
             constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve()
-        x = x.value.clip(min=0.0)
-        x[x < 1e-2] = 0.0
-        return self.unflatten(x,
-                              index)
+        assert cvxprob.status == "optimal"
+
+        return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
 class FIFOPolicy(Policy):
     def __init__(self):

@@ -506,6 +506,19 @@ class Scheduler:
         return scheduled_jobs
 
     def _emulate_ideal(self, queued_jobs):
+        """Emulates the passed-in policy ``ideally''.
+
+           Determines the timestamps at which ``events'' occur --
+           ``add_job'' or ``remove_job'' events. Then gives each job
+           time proportional to its computed allocation between these
+           timestamps.
+
+           Args:
+            queued_jobs: A list of jobs sorted by their arrival times
+            into the cluster. All jobs in this list have not occurred
+            yet.
+        """
+
         # Find the next arrival timestamp (timestamp at which a job is to be
         # added as specified in the trace).
         next_arrival_timestamp = None
@@ -602,8 +615,8 @@ class Scheduler:
             # TODO: Check if this is updated correctly.
             self._current_timestamp = next_timestamp
 
-            return queued_jobs, first_job_id_to_depart
-        return queued_jobs, None
+            return first_job_id_to_depart
+        return None
 
     def emulate(self, cluster_spec, arrival_times, jobs, ideal=False):
         """Emulates the scheduler execution.
@@ -646,7 +659,7 @@ class Scheduler:
         while remaining_jobs > 0:
             # Jump to the next event's timestamp.
             if ideal:
-                queued_jobs, first_job_id_to_depart = self._emulate_ideal(queued_jobs)
+                first_job_id_to_depart = self._emulate_ideal(queued_jobs)
                 if first_job_id_to_depart is not None:
                     # first_job_id_to_depart should have no steps remaining.
                     assert self._get_remaining_steps(first_job_id_to_depart) <= 0
