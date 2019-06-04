@@ -509,9 +509,11 @@ class Scheduler:
         """Emulates the passed-in policy ``ideally''.
 
            Determines the timestamps at which ``events'' occur --
-           ``add_job'' or ``remove_job'' events. Then gives each job
-           time proportional to its computed allocation between these
-           timestamps.
+           ``add_job'' or ``remove_job''. Now, given the time between
+           these events, the amount of time each application / job spends
+           on each worker type can be computed. Note that this method
+           makes no determination whether such a time assignment is actually
+           achievable.
 
            Args:
             queued_jobs: A list of jobs sorted by their arrival times
