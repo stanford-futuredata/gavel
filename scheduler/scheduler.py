@@ -505,6 +505,121 @@ class Scheduler:
 
         return scheduled_jobs
 
+    def _emulate_ideal(self, queued_jobs):
+        """Emulates the passed-in policy ``ideally''.
+
+           Determines the timestamps at which ``events'' occur --
+           ``add_job'' or ``remove_job''. Now, given the time between
+           these events, the amount of time each application / job spends
+           on each worker type can be computed. Note that this method
+           makes no determination whether such a time assignment is actually
+           achievable.
+
+           Args:
+            queued_jobs: A list of jobs sorted by their arrival times
+            into the cluster. All jobs in this list have not occurred
+            yet.
+        """
+
+        # Find the next arrival timestamp (timestamp at which a job is to be
+        # added as specified in the trace).
+        next_arrival_timestamp = None
+        time_to_next_arrival_timestamp = None
+        if len(queued_jobs) > 0:
+            next_arrival_timestamp = queued_jobs[0][0]
+            time_to_next_arrival_timestamp = \
+                next_arrival_timestamp - self._current_timestamp
+
+        # Find the next departure timestamp (timestamp at which a job completes).
+        # Compute departure timestamps for all jobs, and find the minimum.
+        time_to_next_departure_timestamp = None
+        if self._allocation is not None:
+            first_job_id_to_depart = None
+            for job_id in self._allocation:
+                if job_id.is_pair():
+                    continue
+                if job_id not in self._throughputs:  # TODO: Is this needed?
+                    continue
+                # Effective throughput with the computed allocation, which is a
+                # weighted average of the throughputs and allocations.
+                steps_per_time = 0.0
+                for other_job_id in self._allocation:
+                    if not job_id.overlaps_with(other_job_id):
+                        continue
+                    for worker_type in self._allocation[other_job_id]:
+                        # TODO: scale_factor needed here?
+                        if other_job_id.is_pair():
+                            # Determine which part of the tuple corresponds to
+                            # the current job_id.
+                            i = 0
+                            if other_job_id.singletons()[1] == job_id:
+                                i = 1
+                            assert other_job_id.singletons()[i] == job_id
+                            steps_per_time += (
+                                self._allocation[other_job_id][worker_type] *
+                                self._throughputs[other_job_id][worker_type][i])
+                        else:
+                            steps_per_time += (
+                                self._allocation[other_job_id][worker_type] *
+                                self._throughputs[other_job_id][worker_type])
+                # Can now compute the finish_time for this job_id using the
+                # effective throughput computed above.
+                true_finish_time = self._get_remaining_steps(job_id) /\
+                    steps_per_time + 1
+                # Only update time_to_next_departure_timestamp if earlier than
+                # time_to_next_arrival_timestamp.
+                if (time_to_next_departure_timestamp is None) or \
+                    (time_to_next_departure_timestamp > true_finish_time):
+                    if time_to_next_arrival_timestamp is None or \
+                        true_finish_time < time_to_next_arrival_timestamp:
+                        time_to_next_departure_timestamp = true_finish_time
+                        first_job_id_to_depart = job_id
+
+            # Now, compute the time to the next event (next_arrival_timestamp if
+            # before next_departure_timestamp, otherwise next_departure_timestamp).
+            next_timestamp = next_arrival_timestamp
+            if time_to_next_departure_timestamp is not None:
+                next_timestamp = self._current_timestamp + \
+                    time_to_next_departure_timestamp
+            time_to_next_timestamp = next_timestamp - self._current_timestamp
+
+            # Update step and time counts for all jobs on the different worker types.
+            steps_run = 0
+            for job_id in self._allocation:
+                if job_id.is_pair():
+                    continue
+                if job_id not in self._throughputs:
+                    continue
+                for other_job_id in self._allocation:
+                    if not job_id.overlaps_with(other_job_id):
+                        continue
+                    for worker_type in self._allocation[other_job_id]:
+                        if other_job_id.is_pair():
+                            # Determine which part of the tuple corresponds to
+                            # the current job_id.
+                            i = 0
+                            if other_job_id.singletons()[1] == job_id:
+                                i = 1
+                            assert other_job_id.singletons()[i] == job_id
+                            throughput = \
+                                self._throughputs[other_job_id][worker_type][i]
+                        elif other_job_id in self._throughputs:
+                            throughput = self._throughputs[other_job_id][worker_type]
+                        else:
+                            raise Exception("other_job_id should be in self._throughputs!")
+                        # TODO: scale_factor needed here?
+                        time_run = (time_to_next_timestamp *
+                                    self._allocation[other_job_id][worker_type])
+                        steps_run = time_run * throughput
+                        self._steps_run_so_far[job_id][worker_type] += steps_run
+                        self._job_time_so_far[job_id][worker_type] += time_run
+                        self._worker_time_so_far[worker_type] += time_run
+            # TODO: Check if this is updated correctly.
+            self._current_timestamp = next_timestamp
+
+            return first_job_id_to_depart
+        return None
+
     def emulate(self, cluster_spec, arrival_times, jobs, ideal=False):
         """Emulates the scheduler execution.
 
@@ -546,107 +661,14 @@ class Scheduler:
         while remaining_jobs > 0:
             # Jump to the next event's timestamp.
             if ideal:
-                # Find the next arrival timestamp (timestamp at which a job is to be
-                # added as specified in the trace).
-                next_arrival_timestamp = None
-                time_to_next_arrival_timestamp = None
-                if len(queued_jobs) > 0:
-                    next_arrival_timestamp = queued_jobs[0][0]
-                    time_to_next_arrival_timestamp = \
-                        next_arrival_timestamp - self._current_timestamp
-
-                # Find the next departure timestamp (timestamp at which a job completes).
-                # Compute departure timestamps for all jobs, and find the minimum.
-                time_to_next_departure_timestamp = None
-                if self._allocation is not None:
-                    first_job_id_to_depart = None
-                    for job_id in self._allocation:
-                        if job_id.is_pair():
-                            continue
-                        if job_id not in self._throughputs:  # TODO: Is this needed?
-                            continue
-                        # Effective throughput with the computed allocation, which is a
-                        # weighted average of the throughputs and allocations.
-                        steps_per_time = 0.0
-                        for other_job_id in self._allocation:
-                            if not job_id.overlaps_with(other_job_id):
-                                continue
-                            for worker_type in self._allocation[other_job_id]:
-                                # TODO: scale_factor needed here?
-                                if other_job_id.is_pair():
-                                    # Determine which part of the tuple corresponds to
-                                    # the current job_id.
-                                    i = 0
-                                    if other_job_id.singletons()[1] == job_id:
-                                        i = 1
-                                    assert other_job_id.singletons()[i] == job_id
-                                    steps_per_time += (
-                                        self._allocation[other_job_id][worker_type] *
-                                        self._throughputs[other_job_id][worker_type][i])
-                                else:
-                                    steps_per_time += (
-                                        self._allocation[other_job_id][worker_type] *
-                                        self._throughputs[other_job_id][worker_type])
-                        # Can now compute the finish_time for this job_id using the
-                        # effective throughput computed above.
-                        true_finish_time = self._get_remaining_steps(job_id) /\
-                            steps_per_time + 1
-                        # Only update time_to_next_departure_timestamp if earlier than
-                        # time_to_next_arrival_timestamp.
-                        if (time_to_next_departure_timestamp is None) or \
-                            (time_to_next_departure_timestamp > true_finish_time):
-                            if time_to_next_arrival_timestamp is None or \
-                                true_finish_time < time_to_next_arrival_timestamp:
-                                time_to_next_departure_timestamp = true_finish_time
-                                first_job_id_to_depart = job_id
-
-                    # Now, compute the time to the next event (next_arrival_timestamp if
-                    # before next_departure_timestamp, otherwise next_departure_timestamp).
-                    next_timestamp = next_arrival_timestamp
-                    if time_to_next_departure_timestamp is not None:
-                        next_timestamp = self._current_timestamp + \
-                            time_to_next_departure_timestamp
-                    time_to_next_timestamp = next_timestamp - self._current_timestamp
-
-                    # Update step and time counts for all jobs on the different worker types.
-                    steps_run = 0
-                    for job_id in self._allocation:
-                        if job_id.is_pair():
-                            continue
-                        if job_id not in self._throughputs:
-                            continue
-                        for other_job_id in self._allocation:
-                            if not job_id.overlaps_with(other_job_id):
-                                continue
-                            for worker_type in self._allocation[other_job_id]:
-                                if other_job_id.is_pair():
-                                    # Determine which part of the tuple corresponds to
-                                    # the current job_id.
-                                    i = 0
-                                    if other_job_id.singletons()[1] == job_id:
-                                        i = 1
-                                    assert other_job_id.singletons()[i] == job_id
-                                    throughput = \
-                                        self._throughputs[other_job_id][worker_type][i]
-                                elif other_job_id in self._throughputs:
-                                    throughput = self._throughputs[other_job_id][worker_type]
-                                else:
-                                    raise Exception("other_job_id should be in self._throughputs!")
-                                # TODO: scale_factor needed here?
-                                time_run = (time_to_next_timestamp *
-                                            self._allocation[other_job_id][worker_type])
-                                steps_run = time_run * throughput
-                                self._steps_run_so_far[job_id][worker_type] += steps_run
-                                self._job_time_so_far[job_id][worker_type] += time_run
-                                self._worker_time_so_far[worker_type] += time_run
-                    if first_job_id_to_depart is not None:
-                        # first_job_id_to_depart should have no steps remaining.
-                        assert self._get_remaining_steps(first_job_id_to_depart) <= 0
-                        self._per_job_latest_timestamps[first_job_id_to_depart] = \
-                            self._get_current_timestamp()
-                        self.remove_job(first_job_id_to_depart[0])
-                        remaining_jobs -= 1  # Remove job and update remaining_jobs counter.
-                    self._current_timestamp = next_timestamp
+                first_job_id_to_depart = self._emulate_ideal(queued_jobs)
+                if first_job_id_to_depart is not None:
+                    # first_job_id_to_depart should have no steps remaining.
+                    assert self._get_remaining_steps(first_job_id_to_depart) <= 0
+                    self._per_job_latest_timestamps[first_job_id_to_depart] = \
+                        self._get_current_timestamp()
+                    self.remove_job(first_job_id_to_depart[0])
+                    remaining_jobs -= 1  # Remove job and update remaining_jobs counter.
 
             else:
                 if self._schedule_in_rounds:
