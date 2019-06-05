@@ -307,14 +307,13 @@ class Scheduler:
         job_id = queued_job.job_id
         priority = queued_job.priority
 
-        # TODO: Commented out for now. How to set the threshold?
-        # Threshold needs to be tuned depending on the number of users /
-        # workers.
-        # If the chosen job has an allocation of zero, return the worker
-        # to the available worker pool.
-        # if round(self._allocation[job_id][worker_type], 2) < 0.05:
+        # TODO: Do we need to include a check along the lines below?
+        # if self._allocation[job_id][worker_type] < threshold:
         #     self._add_available_worker_id(worker_id)
         #     return None
+        # threshold here is tuned according to the number of users, etc.
+        # Check is meant to make sure very small allocations don't get
+        # GPU time.
 
         for single_job_id in job_id.singletons():
             self._remove_from_queue(single_job_id)
@@ -664,7 +663,8 @@ class Scheduler:
                 first_job_id_to_depart = self._emulate_ideal(queued_jobs)
                 if first_job_id_to_depart is not None:
                     # first_job_id_to_depart should have no steps remaining.
-                    assert self._get_remaining_steps(first_job_id_to_depart) <= 0
+                    assert(self._get_remaining_steps(first_job_id_to_depart) /
+                        self._jobs[first_job_id_to_depart].total_steps <= 0.01)
                     self._per_job_latest_timestamps[first_job_id_to_depart] = \
                         self._get_current_timestamp()
                     self.remove_job(first_job_id_to_depart[0])
@@ -888,6 +888,14 @@ class Scheduler:
 
         unflattened_allocation = self._policy.get_allocation(
             self._throughputs, self._cluster_spec)
+        if unflattened_allocation is None:
+            return None
+        for job_id in unflattened_allocation:
+            for worker_type in unflattened_allocation[job_id]:
+                threshold = float(len(self._worker_type_to_worker_id_mapping[worker_type])) / \
+                    (len(self._jobs) * 1000.0)
+                if unflattened_allocation[job_id][worker_type] < threshold:
+                    unflattened_allocation[job_id][worker_type] = 0.0
         return unflattened_allocation
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())

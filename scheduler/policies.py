@@ -106,7 +106,6 @@ class KSPolicy(Policy):
             print(throughputs)
             import sys
             sys.exit(-1)
-        assert cvxprob.status == "optimal"
 
         return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
@@ -226,7 +225,6 @@ class KSPolicyWithPacking(Policy):
             constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve()
-        assert cvxprob.status == "optimal"
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
