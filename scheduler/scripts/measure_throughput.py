@@ -32,81 +32,81 @@ class Job:
 
 job_table = [
     Job(model='ResNet-18',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'image_classification/cifar10 && python3 '
                  'main.py --data_dir=/home/keshavsanthanam/data/cifar10 '
                  '--num_steps'),
-        num_steps=100),
+        num_steps=1500),
     Job(model='Transformer',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'translation && python3 train.py -data '
                  '/home/keshavsanthanam/data/translation/multi30k.atok.low.pt '
                  '-proj_share_weight -step'),
-        num_steps=100),
+        num_steps=250),
     Job(model='ResNet-50',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'image_classification/imagenet && python3 '
                  'main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/ '
                  '--num_minibatches'),
-        num_steps=25),
+        num_steps=44),
     Job(model='A3C',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && '
+        command=('cd /home/%s/gpusched/workloads/pytorch/rl && '
                  'python3 main.py --env PongDeterministic-v4 --workers 4 '
                  '--amsgrad True --max-steps'),
-        num_steps=70),
+        num_steps=200),
     Job(model='LM',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'language_modeling && python main.py --cuda --data '
                  '/home/keshavsanthanam/data/wikitext-2 --steps'),
-        num_steps=300),
+        num_steps=800),
     Job(model='Recommendation',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'recommendation/scripts/ml-20m && python3 train.py -n'),
-        num_steps=5),
+        num_steps=15),
     Job(model='CycleGAN',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'cyclegan && python3 cyclegan.py --dataset_path '
                  '/home/keshavsanthanam/data/monet2photo --decay_epoch 0 '
                  '--n_steps'),
-        num_steps=1000),
+        num_steps=150),
 ]
 
 """
 job_table = [
     Job(model='ResNet-18',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'image_classification/cifar10 && python3 '
                  'main.py --data_dir=/home/keshavsanthanam/data/cifar10 '
                  '--num_steps'),
         num_steps=4000),
     Job(model='ResNet-50',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'image_classification/imagenet && python3 '
                  'main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/ '
                  '--num_minibatches'),
         num_steps=300),
     Job(model='A3C',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/rl && '
+        command=('cd /home/%s/gpusched/workloads/pytorch/rl && '
                  'python3 main.py --env PongDeterministic-v4 --workers 4 '
                  '--amsgrad True --max-steps'),
         num_steps=1000),
     Job(model='LM',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'language_modeling && python main.py --cuda --data '
                  '/home/keshavsanthanam/data/wikitext-2 --steps'),
         num_steps=1000),
     Job(model='Recommendation',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'recommendation/scripts/ml-20m && python3 train.py -n'),
         num_steps=100),
     Job(model='Transformer',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'translation && python3 train.py -data '
                  '/home/keshavsanthanam/data/translation/multi30k.atok.low.pt '
                  '-proj_share_weight -step'),
         num_steps=1000),
     Job(model='CycleGAN',
-        command=('cd /home/keshavsanthanam/gpusched/workloads/pytorch/'
+        command=('cd /home/%s/gpusched/workloads/pytorch/'
                  'cyclegan && python3 cyclegan.py --dataset_path '
                  '/home/keshavsanthanam/data/monet2photo --decay_epoch 0 '
                  '--n_steps'),
@@ -129,11 +129,12 @@ def enable_mps():
         print(e.stdout.decode('utf-8'))
 
 
-def run_job(job):
+def run_job(job, user):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES="0")
     interval = max(1, job.num_steps // 100)
+    parameterized_command = job.command % user
     command = ('%s %d '
-               '--throughput_estimation_interval %d') % (job.command,
+               '--throughput_estimation_interval %d') % (parameterized_command,
                                                          job.num_steps,
                                                          interval)
     try:
@@ -195,9 +196,10 @@ def main(args):
           print('%s] Running %s' % (datetime.datetime.now(),
                                     job_table[i].model))
           start_time = time.time()
-          output = run_job(job_table[i])
+          output = run_job(job_table[i], args.user)
           if not output:
               sys.exit(-1)
+
           runtime = time.time() - start_time
           throughput = get_throughputs([output])[0]
           # Update the number of steps the job runs for.
@@ -234,7 +236,7 @@ def main(args):
             pipe_list = []
             pool = multiprocessing.Pool(2)
             for job in [job1, job2]:
-                results.append(pool.map_async(run_job, (job,)))
+                results.append(pool.starmap_async(run_job, [(job, args.user),]))
             pool.close()
             pool.join()
 
@@ -272,5 +274,8 @@ if __name__=='__main__':
     parser.add_argument('-i', '--measure_isolated_throughputs',
                         action='store_true', default=False,
                         help='Measure isolated throughputs')
+    parser.add_argument('-u', '--user', type=str,
+                        default='keshavsanthanam', 
+                        help='Username corresponding to gpusched directory') 
     args = parser.parse_args()
     main(args)
