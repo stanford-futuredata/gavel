@@ -452,8 +452,16 @@ class Scheduler:
 
         already_scheduled_jobs = []
         scheduled_jobs = []
-        # TODO: Sort self._worker_types in some way for this.
-        for worker_type in ["v100", "p100", "k80"]:
+
+        to_remove = []
+        worker_types = ["v100", "p100", "k80"]
+        for i, worker_type in enumerate(worker_types):
+            if worker_type not in self._worker_type_to_worker_id_mapping:
+                to_remove.append(i)
+        for i in reversed(to_remove):
+            worker_types.pop(i)
+
+        for worker_type in worker_types:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
             scheduled_jobs_on_worker_type = \
@@ -787,8 +795,11 @@ class Scheduler:
                                         self._throughputs[job_id][worker_type][i]
                             else:
                                 throughput = self._throughputs[job_id][worker_type]
-                            finish_time = (self._current_timestamp + \
-                                            (num_steps / throughput))
+                            if throughput == 0.0:
+                                finish_time = INFINITY
+                            else:
+                                finish_time = (self._current_timestamp + \
+                                                (num_steps / throughput))
                             if (max_finish_time is None or
                                     finish_time > max_finish_time):
                                 max_finish_time = finish_time
@@ -1069,7 +1080,10 @@ class Scheduler:
             for i in range(self._per_worker_type_job_queue[worker_type].size()):
                 queued_job = self._per_worker_type_job_queue[worker_type][i]
                 job_id = queued_job.job_id
-                if self._allocation[job_id][worker_type] == 0.0:
+                if worker_type not in self._allocation[job_id] or \
+                    self._allocation[job_id][worker_type] == 0.0 or \
+                    self._throughputs[job_id][worker_type] == 0.0 or \
+                    self._throughputs[job_id][worker_type] == [0.0, 0.0]:
                     self._per_worker_type_job_queue[worker_type].update_entry(
                             i, priority=INFINITY)
                 else:
