@@ -452,8 +452,16 @@ class Scheduler:
 
         already_scheduled_jobs = []
         scheduled_jobs = []
-        # TODO: Sort self._worker_types in some way for this.
-        for worker_type in ["v100", "p100", "k80"]:
+
+        to_remove = []
+        worker_types = ["v100", "p100", "k80"]
+        for i, worker_type in enumerate(worker_types):
+            if worker_type not in self._worker_type_to_worker_id_mapping:
+                to_remove.append(i)
+        for i in reversed(to_remove):
+            worker_types.pop(i)
+
+        for worker_type in worker_types:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
             scheduled_jobs_on_worker_type = \
@@ -563,8 +571,11 @@ class Scheduler:
                                 self._throughputs[other_job_id][worker_type])
                 # Can now compute the finish_time for this job_id using the
                 # effective throughput computed above.
-                true_finish_time = self._get_remaining_steps(job_id) /\
-                    steps_per_time + 1
+                if steps_per_time == 0.0:
+                    true_finish_time = INFINITY
+                else:
+                    true_finish_time = self._get_remaining_steps(job_id) /\
+                        steps_per_time + 1
                 # Only update time_to_next_departure_timestamp if earlier than
                 # time_to_next_arrival_timestamp.
                 if (time_to_next_departure_timestamp is None) or \
@@ -787,8 +798,11 @@ class Scheduler:
                                         self._throughputs[job_id][worker_type][i]
                             else:
                                 throughput = self._throughputs[job_id][worker_type]
-                            finish_time = (self._current_timestamp + \
-                                            (num_steps / throughput))
+                            if throughput == 0.0:
+                                raise Exception("Throughput should not be 0!")
+                            else:
+                                finish_time = (self._current_timestamp + \
+                                                (num_steps / throughput))
                             if (max_finish_time is None or
                                     finish_time > max_finish_time):
                                 max_finish_time = finish_time
@@ -1069,7 +1083,12 @@ class Scheduler:
             for i in range(self._per_worker_type_job_queue[worker_type].size()):
                 queued_job = self._per_worker_type_job_queue[worker_type][i]
                 job_id = queued_job.job_id
-                if self._allocation[job_id][worker_type] == 0.0:
+                # If allocation for this job_id and worker_type is 0, or
+                # if the throughput of this job_id pair on this worker_type is
+                # 0, give this job_id pair the lowest possible priority.
+                if self._allocation[job_id][worker_type] == 0.0 or \
+                    self._throughputs[job_id][worker_type] == 0.0 or \
+                    self._throughputs[job_id][worker_type] == [0.0, 0.0]:
                     self._per_worker_type_job_queue[worker_type].update_entry(
                             i, priority=INFINITY)
                 else:

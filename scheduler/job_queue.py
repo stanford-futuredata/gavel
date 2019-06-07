@@ -9,6 +9,9 @@ class JobQueue:
             self._steps_run = steps_run
             self._job_id = job_id
 
+        def __repr__(self):
+            return "Job ID: %s, Priority: %f" % (self._job_id, self._priority)
+
         @property
         def priority(self):
             return self._priority
