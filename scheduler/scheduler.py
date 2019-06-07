@@ -796,7 +796,7 @@ class Scheduler:
                             else:
                                 throughput = self._throughputs[job_id][worker_type]
                             if throughput == 0.0:
-                                finish_time = INFINITY
+                                raise Exception("Throughput should not be 0!")
                             else:
                                 finish_time = (self._current_timestamp + \
                                                 (num_steps / throughput))
@@ -1080,8 +1080,10 @@ class Scheduler:
             for i in range(self._per_worker_type_job_queue[worker_type].size()):
                 queued_job = self._per_worker_type_job_queue[worker_type][i]
                 job_id = queued_job.job_id
-                if worker_type not in self._allocation[job_id] or \
-                    self._allocation[job_id][worker_type] == 0.0 or \
+                # If allocation for this job_id and worker_type is 0, or
+                # if the throughput of this job_id pair on this worker_type is
+                # 0, give this job_id pair the lowest possible priority.
+                if self._allocation[job_id][worker_type] == 0.0 or \
                     self._throughputs[job_id][worker_type] == 0.0 or \
                     self._throughputs[job_id][worker_type] == [0.0, 0.0]:
                     self._per_worker_type_job_queue[worker_type].update_entry(
