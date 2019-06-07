@@ -80,6 +80,8 @@ class Scheduler:
         # Time spent running any application on each worker, for all current
         # incomplete applications.
         self._worker_time_so_far = {}
+        # Cumulative time spent running any application on each worker.
+        self._cumulative_worker_time_so_far = {}
         # Number of jobs to compute fair share.
         self._num_jobs = 0
         # Commands to run for all current incomplete applications.
@@ -100,6 +102,8 @@ class Scheduler:
             self._all_throughputs = {}
         # Currently running jobs.
         self._running_jobs = set()
+        # The timestamp when each worker entered the cluster.
+        self._worker_start_times = {}
         # Verbose flag.
         self._verbose = False
 
@@ -277,8 +281,9 @@ class Scheduler:
                   '%.3f seconds' % (average_job_completion_time))
             for worker_id in self._worker_connections:
                 self._worker_connections[worker_id].shutdown()
+        return average_job_completion_time
         # TODO: Any other cleanup?
-        sys.exit(0)
+        #sys.exit(0)
 
     """
     ======================================================================
@@ -868,14 +873,26 @@ class Scheduler:
             self._wait_until_all_workers_available(num_workers)
 
     def schedule(self):
-        """Schedules jobs on workers.
-        """
+        """Schedules jobs on workers."""
         if self._schedule_in_rounds:
             self._schedule_with_rounds()
         else:
             self._schedule_without_rounds()
 
 
+    def get_cluster_utilization(self):
+        """Gets the utilization of the cluser."""
+        utilizations = [] 
+        current_timestamp = self._get_current_timestamp()
+        for worker_id in self._cumulative_worker_time_so_far:
+            total_runtime = (current_timestamp -
+                             self._worker_start_times[worker_id])
+            worker_time = self._cumulative_worker_time_so_far[worker_id]
+            utilization = worker_time / total_runtime
+            assert(utilization <= 1.0)
+            utilizations.append(utilization)
+        return np.mean(utilizations)
+    
     """
     ======================================================================
        Helper methods to get and mutate state needed for scheduling.
@@ -1258,6 +1275,7 @@ class Scheduler:
             self._worker_id_counter += 1
             self._worker_types.add(worker_type)
             self._worker_id_to_worker_type_mapping[worker_id] = worker_type
+            self._cumulative_worker_time_so_far[worker_id] = 0.0
             found = True
             if worker_type not in self._worker_type_to_worker_id_mapping:
                 found = False
@@ -1296,6 +1314,7 @@ class Scheduler:
                 self._worker_connections[worker_id] = \
                     scheduler_client.SchedulerRpcClient(ip_addr, port)
 
+            self._worker_start_times[worker_id] = self._get_current_timestamp()
             self._allocation = self._get_allocation()
 
         return worker_id
@@ -1362,6 +1381,7 @@ class Scheduler:
                     self._steps_run_so_far[single_job_id][worker_type] += all_num_steps[i]
                     self._job_time_so_far[single_job_id][worker_type] += execution_time
                     self._worker_time_so_far[worker_type] += execution_time
+                    self._cumulative_worker_time_so_far[worker_id] += execution_time
 
                     self._per_job_latest_timestamps[single_job_id] = \
                             self._get_current_timestamp()
