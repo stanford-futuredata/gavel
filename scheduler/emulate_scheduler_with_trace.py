@@ -73,12 +73,12 @@ def main(args):
     jobs, arrival_times = parse_trace(args.trace_file)
     policy = get_policy(args.policy)
 
-    # TODO: Decide how to control this with command line options
-    #for policy_name in ['ks_packed', 'ks']:
-    #   output_file = '%s_utilization.csv' % (policy_name)
-    #   sweep_cluster_sizes(jobs, arrival_times, policy,
-    #                       args.schedule_in_rounds,
-    #                       args.throughputs_file, output_file)
+    # TODO: Sweep based on command line arguments.
+    # for policy_name in ['ks_packed', 'ks']:
+    #    output_file = '%s_utilization.csv' % (policy_name)
+    #    sweep_cluster_sizes(jobs, arrival_times, policy,
+    #                        args.schedule_in_rounds,
+    #                        args.throughputs_file, output_file)
 
     sched = scheduler.Scheduler(policy,
                                 schedule_in_rounds=args.schedule_in_rounds,
