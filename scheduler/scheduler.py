@@ -889,7 +889,12 @@ class Scheduler:
                              self._worker_start_times[worker_id])
             worker_time = self._cumulative_worker_time_so_far[worker_id]
             utilization = worker_time / total_runtime
-            assert(utilization <= 1.0)
+            if utilization > 1.0 and not self._job_packing:
+                print('Error: invalid utilization %.3f' % (utilization))
+                print('Worker ID: %d' % (worker_id))
+                print('Worker time: %.3f' % (worker_time))
+                print('Total time: %.3f.' % (total_runtime))
+                return None
             utilizations.append(utilization)
         return np.mean(utilizations)
     
