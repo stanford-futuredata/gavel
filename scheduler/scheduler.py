@@ -80,6 +80,8 @@ class Scheduler:
         # Time spent running any application on each worker, for all current
         # incomplete applications.
         self._worker_time_so_far = {}
+        # Cumulative time spent running any application on each worker.
+        self._cumulative_worker_time_so_far = {}
         # Number of jobs to compute fair share.
         self._num_jobs = 0
         # Commands to run for all current incomplete applications.
@@ -100,6 +102,8 @@ class Scheduler:
             self._all_throughputs = {}
         # Currently running jobs.
         self._running_jobs = set()
+        # The timestamp when each worker entered the cluster.
+        self._worker_start_times = {}
         # Verbose flag.
         self._verbose = False
 
@@ -263,22 +267,9 @@ class Scheduler:
     def shutdown(self):
         """Sends a shutdown signal to every worker and ends the scheduler."""
         with self._scheduler_lock:
-            if len(self._job_completion_times) == 0:
-                return
-            print('Job completion times:')
-            job_ids = sorted([job_id for job_id in self._job_completion_times])
-            for job_id in job_ids:
-                print('Job %s: %.3f' % (job_id,
-                                        self._job_completion_times[job_id]))
-            average_job_completion_time = \
-                sum([x for x in self._job_completion_times.values()]) / \
-                len(self._job_completion_times)
-            print('Average job completion time: '
-                  '%.3f seconds' % (average_job_completion_time))
             for worker_id in self._worker_connections:
                 self._worker_connections[worker_id].shutdown()
         # TODO: Any other cleanup?
-        sys.exit(0)
 
     """
     ======================================================================
@@ -868,13 +859,51 @@ class Scheduler:
             self._wait_until_all_workers_available(num_workers)
 
     def schedule(self):
-        """Schedules jobs on workers.
-        """
+        """Schedules jobs on workers."""
         if self._schedule_in_rounds:
             self._schedule_with_rounds()
         else:
             self._schedule_without_rounds()
 
+
+    def get_average_jct(self):
+        """Computes the average job completion time."""
+        with self._scheduler_lock:
+            if len(self._job_completion_times) == 0:
+                return
+            print('Job completion times:')
+            job_ids = sorted([job_id for job_id in self._job_completion_times])
+            for job_id in job_ids:
+                print('Job %s: %.3f' % (job_id,
+                                        self._job_completion_times[job_id]))
+            average_job_completion_time = \
+                sum([x for x in self._job_completion_times.values()]) / \
+                len(self._job_completion_times)
+            print('Average job completion time: '
+                  '%.3f seconds' % (average_job_completion_time))
+            return average_job_completion_time
+
+
+    def get_cluster_utilization(self):
+        """Computes the utilization of the cluster."""
+        with self._scheduler_lock:
+            utilizations = []
+            current_timestamp = self._get_current_timestamp()
+            for worker_id in self._cumulative_worker_time_so_far:
+                total_runtime = (current_timestamp -
+                                 self._worker_start_times[worker_id])
+                worker_time = self._cumulative_worker_time_so_far[worker_id]
+                utilization = worker_time / total_runtime
+                if utilization > 1.0 and not self._job_packing:
+                    print('Error: invalid utilization %.3f' % (utilization))
+                    print('Worker ID: %d' % (worker_id))
+                    print('Worker time: %.3f' % (worker_time))
+                    print('Total time: %.3f.' % (total_runtime))
+                    return None
+                utilizations.append(utilization)
+            cluster_utilization = np.mean(utilization)
+            print('Cluster utilization: %.3f' % (cluster_utilization))
+            return cluster_utilization
 
     """
     ======================================================================
@@ -1258,6 +1287,7 @@ class Scheduler:
             self._worker_id_counter += 1
             self._worker_types.add(worker_type)
             self._worker_id_to_worker_type_mapping[worker_id] = worker_type
+            self._cumulative_worker_time_so_far[worker_id] = 0.0
             found = True
             if worker_type not in self._worker_type_to_worker_id_mapping:
                 found = False
@@ -1296,6 +1326,7 @@ class Scheduler:
                 self._worker_connections[worker_id] = \
                     scheduler_client.SchedulerRpcClient(ip_addr, port)
 
+            self._worker_start_times[worker_id] = self._get_current_timestamp()
             self._allocation = self._get_allocation()
 
         return worker_id
@@ -1362,6 +1393,7 @@ class Scheduler:
                     self._steps_run_so_far[single_job_id][worker_type] += all_num_steps[i]
                     self._job_time_so_far[single_job_id][worker_type] += execution_time
                     self._worker_time_so_far[worker_type] += execution_time
+                    self._cumulative_worker_time_so_far[worker_id] += execution_time
 
                     self._per_job_latest_timestamps[single_job_id] = \
                             self._get_current_timestamp()
