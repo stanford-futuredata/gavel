@@ -41,45 +41,55 @@ def parse_trace(trace_file):
     return jobs, arrival_times
 
 def sweep_cluster_sizes(jobs, arrival_times, policy, schedule_in_rounds,
-                        throughputs_file):
-    ratios = [(1, 0, 0), (1, 1, 1), (1, 1, 0), (2, 1, 0)] 
-    for ratio in ratios:
-        for i in range(8):
-            cluster_spec = {}
-            cluster_spec['v100'] = ratio[0] * (2 ** i)
-            cluster_spec['p100'] = ratio[1] * (2 ** i)
-            cluster_spec['k80'] = ratio[2] * (2 ** i)
-            sched = scheduler.Scheduler(policy,
+                        throughputs_file, output_file):
+    ratios = [(1, 0, 0), (1, 1, 1), (1, 1, 0), (2, 1, 0)]
+    with open(output_file, 'w') as f:
+        f.write('# v100\t# p100\t# k80\tUtilization\tAverage JCT\n')
+        f.flush()
+        for ratio in ratios:
+            for i in range(8):
+                cluster_spec = {}
+                cluster_spec['v100'] = ratio[0] * (2 ** i)
+                cluster_spec['p100'] = ratio[1] * (2 ** i)
+                cluster_spec['k80'] = ratio[2] * (2 ** i)
+                sched = \
+                    scheduler.Scheduler(policy,
                                         schedule_in_rounds=schedule_in_rounds,
                                         throughputs_file=throughputs_file,
                                         emulate=True)
-            sched.emulate(cluster_spec, arrival_times, jobs, ideal=False)
-            utilization = sched.get_cluster_utilization()
-            average_jct = sched.shutdown()
-            print('[UTILIZATION]\t'
-                  '%d\t%d\t%d\t%.3f\t%.3f' % (cluster_spec['v100'],
-                                              cluster_spec['p100'],
-                                              cluster_spec['k80'],
-                                              utilization,
-                                              average_jct))
+                sched.emulate(cluster_spec, arrival_times, jobs, ideal=False)
+                utilization = sched.get_cluster_utilization()
+                if utilization is None:
+                    continue
+                average_jct = sched.shutdown()
+                f.write('%d\t%d\t%d\t%.3f\t%.3f\n' % (cluster_spec['v100'],
+                                                      cluster_spec['p100'],
+                                                      cluster_spec['k80'],
+                                                      utilization,
+                                                      average_jct))
+                f.flush()
 
 def main(args):
     jobs, arrival_times = parse_trace(args.trace_file)
     policy = get_policy(args.policy)
-    sweep_cluster_sizes(jobs, arrival_times, policy, args.schedule_in_rounds,
-                        args.throughputs_file)
-    """
-    sched = scheduler.Scheduler(policy, schedule_in_rounds=args.schedule_in_rounds,
+
+    # TODO: Decide how to control this with command line options
+    #for policy_name in ['ks_packed', 'ks']:
+    #   output_file = '%s_utilization.csv' % (policy_name)
+    #   sweep_cluster_sizes(jobs, arrival_times, policy,
+    #                       args.schedule_in_rounds,
+    #                       args.throughputs_file, output_file)
+
+    sched = scheduler.Scheduler(policy,
+                                schedule_in_rounds=args.schedule_in_rounds,
                                 throughputs_file=args.throughputs_file,
                                 emulate=True)
 
     cluster_spec = {key_value.split(':')[0]: int(key_value.split(':')[1])
                     for key_value in args.cluster_spec.split(',')}
     sched.emulate(cluster_spec, arrival_times, jobs, ideal=args.ideal)
-    utilization = sched.get_cluster_utilization()
-    print('Cluster utilization: %.3f' % (utilization))
-    sched.shutdown()
-    """
+    sched.get_average_jct()
+    sched.get_cluster_utilization()
 
 
 if __name__=='__main__':
