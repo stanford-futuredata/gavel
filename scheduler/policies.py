@@ -55,32 +55,10 @@ class IsolatedPolicy(Policy):
         return super().unflatten(np.full((m, n), 1.0 / (m * n)), index)
 
 
-class MaximumThroughputPolicy(Policy):
+class MaxMinFairnessPolicy(Policy):
 
     def __init__(self):
-        self._name = 'MaximumThroughput'
-
-    def get_allocation(self, unflattened_throughputs):
-        throughputs, index = super().flatten(unflattened_throughputs)
-        if throughputs is None: return None
-        x = cp.Variable(throughputs.shape)
-        objective = cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs, x),
-                                              axis=1)))
-        constraints = [
-            x >= 0,
-            cp.sum(x, axis=0) <= self._num_workers,
-            cp.sum(x, axis=1) <= 1,
-        ]
-        cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve()
-        assert cvxprob.status == "optimal"
-        return super().unflatten(x.value.clip(min=0.0), index)
-
-
-class KSPolicy(Policy):
-
-    def __init__(self):
-        self._name = 'KS'
+        self._name = 'MaxMinFairness'
 
     def get_allocation(self, unflattened_throughputs, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
@@ -108,14 +86,13 @@ class KSPolicy(Policy):
             sys.exit(-1)
         assert cvxprob.status == "optimal"
 
-
         return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
 
-class KSPolicyWithPacking(Policy):
+class MaxMinFairnessPolicyWithPacking(Policy):
 
     def __init__(self):
-        self._name = 'KS_Packing'
+        self._name = 'MaxMinFairness_Packing'
 
     def flatten(self, d, cluster_spec):
         """
@@ -230,6 +207,60 @@ class KSPolicyWithPacking(Policy):
         assert cvxprob.status == "optimal"
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
+
+
+class MinTotalDurationPolicy(Policy):
+
+    def __init__(self):
+        self._name = 'MinTotalDuration'
+
+    def get_allocation_helper(self, throughputs, T):
+        x = cp.Variable(throughputs.shape)
+        objective = cp.Maximize(1)
+        constraints = [
+            x >= 0,
+            cp.sum(x, axis=0) <= self._num_workers,
+            cp.sum(x, axis=1) <= 1,
+            cp.sum(cp.multiply(throughputs, x), axis=1) >= (
+                self._num_steps_remaining / T)
+        ]
+        cvxprob = cp.Problem(objective, constraints)
+        try:
+            result = cvxprob.solve()
+        except cp.error.SolverError as e:
+            pass
+        return cvxprob.status, x
+
+    def get_allocation(self, unflattened_throughputs, num_steps_remaining,
+                       cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if index is None: return None
+        (job_ids, _) = index
+        self._num_steps_remaining = np.array([num_steps_remaining[job_id]
+                                              for job_id in job_ids])
+        if throughputs is None: return None
+
+        done = False
+        # Units are in seconds.
+        max_T = 1000000.
+        min_T = 100.
+        status = None
+        last_feasible_x = None
+        # Binary search for the smallest T that gives an optimal solution.
+        while (1.05 * min_T) < max_T:  # TODO: Can tweak the 1.05 in this loop.
+            T = (min_T + max_T) / 2.
+            status, x = self.get_allocation_helper(throughputs, T)
+            if status == "optimal":
+                last_feasible_x = x
+            if status == "infeasible":
+                min_T = T
+            else:
+                max_T = T
+
+        return super().unflatten(
+            last_feasible_x.value.clip(min=0.0).clip(max=1.0), index)
+
 
 class FIFOPolicy(Policy):
     def __init__(self):
