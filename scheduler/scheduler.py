@@ -929,8 +929,15 @@ class Scheduler:
             job 0 and for 95% of the time, worker type 'p100' should run job 0.
         """
 
-        unflattened_allocation = self._policy.get_allocation(
-            self._throughputs, self._cluster_spec)
+        if self._policy.name == "MinTotalDuration":
+            num_steps_remaining = {
+                job_id: self._get_remaining_steps(job_id)
+                for job_id in self._jobs} # TODO: Need to fix this for packed policies.
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, num_steps_remaining, self._cluster_spec)
+        else:
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, self._cluster_spec)
         if unflattened_allocation is None:
             return None
         for job_id in unflattened_allocation:

@@ -11,14 +11,14 @@ import scheduler
 def get_policy(policy_name):
     if policy_name == "isolated":
         policy = policies.IsolatedPolicy()
-    elif policy_name == "ks":
-        policy = policies.KSPolicy()
-    elif policy_name == "ks_packed":
-        policy = policies.KSPolicyWithPacking()
+    elif policy_name == "max_min_fairness":
+        policy = policies.MaxMinFairnessPolicy()
+    elif policy_name == "max_min_fairness_packed":
+        policy = policies.MaxMinFairnessPolicyWithPacking()
+    elif policy_name == "min_total_duration":
+        policy = policies.MinTotalDurationPolicy()
     elif policy_name == "fifo":
         policy = policies.FIFOPolicy()
-    elif policy_name == "max_throughput":
-        policy = policies.MaximumThroughputPolicy()
     else:
         raise Exception("Unknown policy!")
     return policy
@@ -63,7 +63,6 @@ def main(args):
     print("Total time taken: %d seconds" % (datetime.datetime.now() - start_time).seconds)
     sched.get_average_jct()
     sched.get_cluster_utilization()
-    sched.shutdown()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
@@ -72,7 +71,8 @@ if __name__=='__main__':
     parser.add_argument('-r', '--schedule_in_rounds', action='store_true',
                         help='Use rounds for scheduling')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
-                        choices=['isolated', 'ks', 'ks_packed', 'fifo',
-                                 'max_throughput'],
+                        choices=['isolated', 'max_min_fairness',
+                                 'max_min_fairness_packed', 'min_total_duration',
+                                 'fifo'],
                         help='Scheduler policy')
     main(parser.parse_args())
