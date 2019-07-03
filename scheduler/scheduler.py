@@ -213,11 +213,12 @@ class Scheduler:
                 self._per_job_start_timestamps[job_id]
             self._job_completion_times[job_id] = duration
             print("Job %d completed\n\tStart timestamp: %.2f\n\t"
-                  "End timestamp: %.2f\nDuration: %.2f %s\n" % (
+                  "End timestamp: %.2f\nDuration: %.2f %s\n"
+                  "Number of active jobs: %d\n" % (
                       job_id[0],
                       self._per_job_start_timestamps[job_id],
                       self._per_job_latest_timestamps[job_id],
-                      duration, "seconds")
+                      duration, "seconds", len(self._jobs))
                   )
 
             self._reset_time_run_so_far()
@@ -929,10 +930,11 @@ class Scheduler:
             job 0 and for 95% of the time, worker type 'p100' should run job 0.
         """
 
-        if self._policy.name == "MinTotalDuration":
+        if self._policy.name.startswith("MinTotalDuration"):
+            # TODO: Need to fix this for packed policies.
             num_steps_remaining = {
                 job_id: self._get_remaining_steps(job_id)
-                for job_id in self._jobs} # TODO: Need to fix this for packed policies.
+                for job_id in self._jobs}
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, num_steps_remaining, self._cluster_spec)
         else:
