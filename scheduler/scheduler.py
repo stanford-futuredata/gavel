@@ -366,12 +366,12 @@ class Scheduler:
         A = []
         parent_pointers = {}
         for i in range(len(job_ids)):
-            job = self._jobs[job_ids[0]]
+            job = self._jobs[job_ids[i]]
             job_id = job.job_id
             scale_factor = job.scale_factor
             A.append([])
             for j in range(num_workers):
-                if (i == 0) and ((j+1) >= scale_factor):
+                if (j+1) >= scale_factor:
                     A[-1].append(self._priorities[worker_type][job_id])
                 else:
                     A[-1].append(0.0)
@@ -1164,7 +1164,7 @@ class Scheduler:
                             self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
-                new_priority = float("inf")
+                new_priority = 1e9.  # Don't use inf so 2*new_priority > new_priority.
                 if self._allocation[job_id][worker_type] == 0.0:
                     new_priority = 0.0
                 elif fractions[worker_type][job_id] > 0.0:
