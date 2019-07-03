@@ -22,7 +22,7 @@ SLEEP_SECONDS = 2
 INFINITY = float("inf")
 DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
-TIME_PER_ITERATION = 20 * 60    # Time in seconds each iteration should run for.
+TIME_PER_ITERATION = 32 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 
@@ -1164,7 +1164,7 @@ class Scheduler:
                             self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
-                new_priority = 1e9.  # Don't use inf so 2*new_priority > new_priority.
+                new_priority = 1e9  # Don't use inf so 2*new_priority > new_priority.
                 if self._allocation[job_id][worker_type] == 0.0:
                     new_priority = 0.0
                 elif fractions[worker_type][job_id] > 0.0:
