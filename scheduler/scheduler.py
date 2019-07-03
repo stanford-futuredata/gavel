@@ -901,7 +901,7 @@ class Scheduler:
                     print('Total time: %.3f.' % (total_runtime))
                     return None
                 utilizations.append(utilization)
-            cluster_utilization = np.mean(utilization)
+            cluster_utilization = np.mean(utilizations)
             print('Cluster utilization: %.3f' % (cluster_utilization))
             return cluster_utilization
 
