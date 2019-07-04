@@ -20,9 +20,11 @@ parser.add_argument('-n', '--num_epochs', required=True, type=int,
                     help='Number of epochs to run for')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
+parser.add_argument('-d', '--data_dir', required=True, type=str,
+                    help='Data directory')
 args = parser.parse_args()
 
-data_dir = '/home/keshavsanthanam/data/ml-20m/pro_sg/'
+data_dir = args.data_dir #'/home/keshavsanthanam/data/ml-20m/pro_sg/'
 model_dir = '/tmp/models/ml-20m/'
 
 if not os.path.isdir(model_dir):

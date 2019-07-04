@@ -9,10 +9,11 @@ import sys
 import time
 
 class Job:
-    def __init__(self, model, command, num_steps):
+    def __init__(self, model, command, num_steps, needs_data_dir=True):
         self._model = model
         self._command = command
         self._num_steps = num_steps
+        self._needs_data_dir = needs_data_dir
 
     @property
     def model(self):
@@ -30,45 +31,51 @@ class Job:
     def num_steps(self, num_steps):
         self._num_steps = num_steps
 
+    @property
+    def needs_data_dir(self):
+        return self._needs_data_dir
+
 job_table = [
     Job(model='ResNet-18',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
+        command=('cd %s/gpusched/workloads/pytorch/'
                  'image_classification/cifar10 && python3 '
-                 'main.py --data_dir=/home/keshavsanthanam/data/cifar10 '
+                 'main.py --data_dir=%s/data/cifar10 '
                  '--num_steps'),
+        num_steps=15000),
+    Job(model='ResNet-50',
+        command=('cd %s/gpusched/workloads/pytorch/'
+                 'image_classification/imagenet && python3 '
+                 'main.py -j 4 -a resnet50 -b 64 %s/data/imagenet/pytorch '
+                 '--num_minibatches'),
         num_steps=1500),
     Job(model='Transformer',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
+        command=('cd %s/gpusched/workloads/pytorch/'
                  'translation && python3 train.py -data '
-                 '/home/keshavsanthanam/data/translation/multi30k.atok.low.pt '
+                 '%s/data/translation/multi30k.atok.low.pt '
                  '-proj_share_weight -step'),
-        num_steps=250),
-    Job(model='ResNet-50',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'image_classification/imagenet && python3 '
-                 'main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/ '
-                 '--num_minibatches'),
-        num_steps=44),
+        num_steps=2000),
     Job(model='A3C',
-        command=('cd /home/%s/gpusched/workloads/pytorch/rl && '
+        command=('cd %s/gpusched/workloads/pytorch/rl && '
                  'python3 main.py --env PongDeterministic-v4 --workers 4 '
                  '--amsgrad True --max-steps'),
-        num_steps=200),
+        num_steps=2000,
+        needs_data_dir=False),
     Job(model='LM',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
+        command=('cd %s/gpusched/workloads/pytorch/'
                  'language_modeling && python main.py --cuda --data '
-                 '/home/keshavsanthanam/data/wikitext-2 --steps'),
-        num_steps=800),
+                 '%s/data/wikitext-2 --steps'),
+        num_steps=30000),
     Job(model='Recommendation',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'recommendation/scripts/ml-20m && python3 train.py -n'),
-        num_steps=15),
-    Job(model='CycleGAN',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'cyclegan && python3 cyclegan.py --dataset_path '
-                 '/home/keshavsanthanam/data/monet2photo --decay_epoch 0 '
-                 '--n_steps'),
+        command=('cd %s/gpusched/workloads/pytorch/'
+                 'recommendation/scripts/ml-20m && python3 train.py '
+                 '--data_dir %s/data/ml-20m/pro_sg/ -n '),
         num_steps=150),
+    Job(model='CycleGAN',
+        command=('cd %s/gpusched/workloads/pytorch/'
+                 'cyclegan && python3 cyclegan.py --dataset_path '
+                 '%s/data/monet2photo --decay_epoch 0 '
+                 '--n_steps'),
+        num_steps=1000),
 ]
 
 """
@@ -129,10 +136,13 @@ def enable_mps():
         print(e.stdout.decode('utf-8'))
 
 
-def run_job(job, user):
+def run_job(job, run_dir):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES="0")
     interval = max(1, job.num_steps // 100)
-    parameterized_command = job.command % user
+    if job.needs_data_dir:
+        parameterized_command = job.command % (run_dir, run_dir)
+    else:
+        parameterized_command = job.command % (run_dir)
     command = ('%s %d '
                '--throughput_estimation_interval %d') % (parameterized_command,
                                                          job.num_steps,
@@ -171,11 +181,12 @@ def get_throughputs(outputs):
                 _, time, steps = line.split('\t')
                 if start_time is None:
                     start_time = float(time)
+                    start_steps = int(steps)
                 elif float(time) > earliest_end_time:
                     break
         if start_time is None:
             return (-1, -1)
-        throughput = int(steps) / (float(time) - start_time)
+        throughput = (int(steps) - start_steps) / (float(time) - start_time)
         if throughputs is None:
             throughputs = (throughput,)
         else:
@@ -196,7 +207,7 @@ def main(args):
           print('%s] Running %s' % (datetime.datetime.now(),
                                     job_table[i].model))
           start_time = time.time()
-          output = run_job(job_table[i], args.user)
+          output = run_job(job_table[i], args.run_dir)
           if not output:
               sys.exit(-1)
 
@@ -220,6 +231,8 @@ def main(args):
         for j in range(len(job_table)):
             job1 = job_table[i]
             job2 = job_table[j]
+            print(type(job1))
+            print(type(job2))
             if ((job1.model in throughputs and
                  job2.model in throughputs[job1.model]) or
                 (job2.model in throughputs and
@@ -236,7 +249,8 @@ def main(args):
             pipe_list = []
             pool = multiprocessing.Pool(2)
             for job in [job1, job2]:
-                results.append(pool.starmap_async(run_job, [(job, args.user),]))
+                results.append(pool.starmap_async(run_job,
+                                                  [(job, args.run_dir),]))
             pool.close()
             pool.join()
 
@@ -274,8 +288,8 @@ if __name__=='__main__':
     parser.add_argument('-i', '--measure_isolated_throughputs',
                         action='store_true', default=False,
                         help='Measure isolated throughputs')
-    parser.add_argument('-u', '--user', type=str,
-                        default='keshavsanthanam', 
-                        help='Username corresponding to gpusched directory') 
+    parser.add_argument('-r', '--run_dir', type=str,
+                        default='/lfs/1/keshav/workspace',
+                        help='Directory to run from')
     args = parser.parse_args()
     main(args)
