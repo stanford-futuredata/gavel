@@ -17,6 +17,8 @@ def get_policy(policy_name):
         policy = policies.MaxMinFairnessPolicyWithPacking()
     elif policy_name == "min_total_duration":
         policy = policies.MinTotalDurationPolicy()
+    elif policy_name == "min_total_duration_packed":
+        policy = policies.MinTotalDurationPolicyWithPacking()
     elif policy_name == "fifo":
         policy = policies.FIFOPolicy()
     else:
@@ -73,6 +75,6 @@ if __name__=='__main__':
     parser.add_argument('-p', '--policy', type=str, default='fifo',
                         choices=['isolated', 'max_min_fairness',
                                  'max_min_fairness_packed', 'min_total_duration',
-                                 'fifo'],
+                                 'min_total_duration_packed', 'fifo'],
                         help='Scheduler policy')
     main(parser.parse_args())
