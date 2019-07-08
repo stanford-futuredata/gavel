@@ -1,0 +1,100 @@
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	10	0	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	276	8	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	3705	8	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	17149	10	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	20	12	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	28	23	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	27862	32	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	28371	50	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	242	51	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	26526	55	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	223903	55	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	375	57	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	43	63	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	528	63	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	229161	65	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	1800	73	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	10	80	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	12028	82	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	2322	89	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	164	102	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	287212	102	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	3111	115	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	10	125	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	186	128	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	23	129	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	8438	155	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	42	158	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	367	159	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	19097	160	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	1144	175	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	5145	182	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	4113	195	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	2999	206	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	88	212	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	69	241	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	116	244	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	11	251	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	10	265	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	460	273	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	87	289	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	128513	295	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	995	305	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	652	306	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	61	308	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	531424	310	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	277	311	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	5056	313	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	1989	314	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	17	317	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	189	325	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	31	328	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	10	332	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	404638	334	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	10	336	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	83	358	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	10	367	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	41	374	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	10	376	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	17	386	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	147349	388	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	217	392	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	124243	428	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	153	436	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	103398	443	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	18655	452	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	63	467	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	120	479	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	134588	481	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	213	481	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	76354	484	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	18681	487	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	478	488	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	263	511	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	922731	528	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	3214	531	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	36	540	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	347	544	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	19957	563	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	15	568	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	162	571	1
+CycleGAN	cd /lfs/1/keshav/gpusched/workloads/pytorch/cyclegan && python3 cyclegan.py --dataset_path /lfs/1/keshav/data/monet2photo --decay_epoch 0	--n_steps	296	573	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	6236	580	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	326228	582	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	119062	589	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	103	607	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	20271	611	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	290	613	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	929	661	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	67	667	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	4573	668	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	1594	668	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	7546	669	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	4173	677	1
+A3C	cd /lfs/1/keshav/gpusched/workloads/pytorch/rl && python3 main.py --env PongDeterministic-v4 --workers 4 --amsgrad True	--max-steps	65	690	1
+Recommendation	cd /lfs/1/keshav/gpusched/workloads/pytorch/recommendation/scripts/ml-20m && python3 train.py --data_dir /lfs/1/keshav/data/ml-20m/pro_sg/	-n	10	694	1
+Transformer	cd /lfs/1/keshav/gpusched/workloads/pytorch/translation && python3 train.py -data /lfs/1/keshav/data/translation/multi30k.atok.low.pt-proj_share_weight	-step	138	695	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	243488	698	1
+LM	cd /lfs/1/keshav/gpusched/workloads/pytorch/language_modeling && python main.py --cuda --data /lfs/1/keshav/data/wikitext-2 	--steps	104	743	1
+ResNet-18	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=/lfs/1/keshav/data/cifar10	--num_steps	461555	749	1
+ResNet-50	cd /lfs/1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /lfs/1/keshav/data/imagenet/pytorch	--num_minibatches	10	777	1
