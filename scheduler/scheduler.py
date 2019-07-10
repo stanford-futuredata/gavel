@@ -428,6 +428,33 @@ class Scheduler:
         return scheduled_jobs_on_worker_type
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    def _schedule_jobs_on_workers_helper_v2(self, worker_type,
+                                            already_scheduled_jobs):
+        already_scheduled_jobs_set = set(already_scheduled_jobs)
+        scheduled_jobs_on_worker_type = []
+        num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
+
+        sorted_job_queue = \
+                sorted([job_id for job_id in self._priorities[worker_type]],
+                       key=lambda job_id: self._priorities[worker_type][job_id],
+                       reverse=True)
+
+        for job_id in sorted_job_queue:
+            if len(scheduled_jobs_on_worker_type) == num_workers:
+                break
+            if (job_id not in already_scheduled_jobs_set and
+                (not job_id.is_pair() or
+                 (job_id.singletons()[0] not in already_scheduled_jobs_set and
+                  job_id.singletons()[1] not in already_scheduled_jobs_set))):
+                already_scheduled_jobs_set.add(job_id)
+                for single_job_id in job_id.singletons():
+                    already_scheduled_jobs_set.add(single_job_id)
+                scheduled_jobs_on_worker_type.append((job_id, 1))
+
+        return scheduled_jobs_on_worker_type
+
+
+    @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers(self):
         """Attempts to schedule jobs on as many alive workers as possible.
 
@@ -457,16 +484,24 @@ class Scheduler:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
             scheduled_jobs_on_worker_type = \
+                    self._schedule_jobs_on_workers_helper_v2(
+                            worker_type, already_scheduled_jobs)
+            """
+            scheduled_jobs_on_worker_type = \
                 self._schedule_jobs_on_workers_helper(worker_type,
                                                       already_scheduled_jobs)
+            """
             for (job_id, scale_factor) in scheduled_jobs_on_worker_type:
                 # Make sure a job is only scheduled on a single worker_type in
                 # a given round.
                 already_scheduled_jobs.append(job_id)
+                if job_id.is_pair():
+                    for single_job_id in job_id.singletons():
+                        already_scheduled_jobs.append(single_job_id)
 
                 # For now, ignore locality. Place job_id on the first
                 # `scale_factor` workers of the desired type.
-                assert(scale_factor == self._jobs[job_id].scale_factor)
+                # assert(scale_factor == self._jobs[job_id].scale_factor)
                 worker_id_ptrs = [worker_id_ptr + i for i in range(scale_factor)]
                 scheduled_jobs.append((job_id,
                                        tuple([worker_ids[i] for i in worker_id_ptrs])))
@@ -503,6 +538,30 @@ class Scheduler:
                                            allocation_str))
 
         return scheduled_jobs
+
+    def _get_job_steps_and_finish_times(self, job_id, worker_type):
+        max_finish_time = None
+        all_num_steps = []
+        for i, single_job_id in enumerate(job_id.singletons()):
+            num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
+            all_num_steps.append(num_steps)
+            if job_id.is_pair():
+                throughput = \
+                        self._throughputs[job_id][worker_type][i]
+            else:
+                throughput = self._throughputs[job_id][worker_type]
+            if throughput <= 0.0:
+                print(single_job_id)
+                print(worker_type)
+                raise Exception("Throughput should not be 0!")
+            else:
+                finish_time = (self._current_timestamp + \
+                                (num_steps / throughput))
+            if (max_finish_time is None or
+                    finish_time > max_finish_time):
+                max_finish_time = finish_time
+            self._running_jobs.add(single_job_id)
+        return all_num_steps, max_finish_time
 
     def _emulate_ideal(self, queued_jobs):
         """Emulates the passed-in policy ``ideally''.
@@ -757,12 +816,12 @@ class Scheduler:
                         num_steps = self._num_steps_per_iteration[job_id][worker_type]
                         for worker_id in worker_ids:
                             self._remove_available_worker_id(worker_id)
-                        finish_time = (self._current_timestamp +
-                                        (num_steps /
-                                           self._throughputs[job_id][worker_type]))
-                        self._running_jobs.add(job_id)
-                        heapq.heappush(running_jobs, (-finish_time, job_id,
-                                                      worker_ids, [num_steps]))
+                        all_num_steps, max_finish_time = \
+                                self._get_job_steps_and_finish_times(job_id,
+                                                                     worker_type)
+                        heapq.heappush(running_jobs, (-max_finish_time, job_id,
+                                                      worker_ids,
+                                                      all_num_steps))
                 else:
                     seen_worker_ids = set()
                     while True:
@@ -780,25 +839,9 @@ class Scheduler:
                             continue
 
                         worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-                        max_finish_time = None
-                        all_num_steps = []
-                        for i, single_job_id in enumerate(job_id.singletons()):
-                            num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
-                            all_num_steps.append(num_steps)
-                            if job_id.is_pair():
-                                throughput = \
-                                        self._throughputs[job_id][worker_type][i]
-                            else:
-                                throughput = self._throughputs[job_id][worker_type]
-                            if throughput == 0.0:
-                                raise Exception("Throughput should not be 0!")
-                            else:
-                                finish_time = (self._current_timestamp + \
-                                                (num_steps / throughput))
-                            if (max_finish_time is None or
-                                    finish_time > max_finish_time):
-                                max_finish_time = finish_time
-                            self._running_jobs.add(single_job_id)
+                        all_num_steps, max_finish_time = \
+                                self._get_job_steps_and_finish_times(job_id,
+                                                                     worker_type)
                         heapq.heappush(running_jobs, (max_finish_time, job_id,
                                        (worker_id,), all_num_steps))
 
@@ -948,6 +991,23 @@ class Scheduler:
                     (len(self._jobs) * 1000.0)
                 if unflattened_allocation[job_id][worker_type] < threshold:
                     unflattened_allocation[job_id][worker_type] = 0.0
+        print('')
+        print('=' * 80)
+        print('Current_time: %f' % (self._get_current_timestamp()))
+        print('-' * 80)
+        worker_types = ['v100']
+        for i, worker_type in enumerate(worker_types):
+            print('Worker type: %s' % (worker_type))
+            for job_id in unflattened_allocation:
+                if worker_type not in unflattened_allocation[job_id]:
+                    continue
+                print('Job %s: Allocation=%.3f' % (job_id,
+                                                   unflattened_allocation[job_id][worker_type]))
+            if i < len(worker_types) - 1:
+                print('-' * 80)
+        print('=' * 80)
+        print('')
+
         return unflattened_allocation
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
@@ -1167,7 +1227,9 @@ class Scheduler:
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 new_priority = 1e9  # Don't use inf so 2*new_priority > new_priority.
-                if self._allocation[job_id][worker_type] == 0.0:
+                if (self._allocation[job_id][worker_type] == 0.0 or
+                    self._throughputs[job_id][worker_type] == 0.0 or
+                    self._throughputs[job_id][worker_type] == [0.0, 0.0]):
                     new_priority = 0.0
                 elif fractions[worker_type][job_id] > 0.0:
                     new_priority = self._allocation[job_id][worker_type] /\
