@@ -1077,8 +1077,11 @@ class Scheduler:
         if worker_type is not None:
             worker_types = [worker_type]
         for worker_type in worker_types:
-            self._per_worker_type_job_queue[worker_type].add_job(0.0, 0,
-                                                                 job_id)
+            self._per_worker_type_job_queue[worker_type].add_job(
+                                                        priority=INFINITY,
+                                                        allocation=0.0,
+                                                        steps_run=0,
+                                                        job_id=job_id)
             for other_job_id in self._throughputs:
                 if (other_job_id.is_pair() and
                     job_id.overlaps_with(other_job_id)):
@@ -1089,7 +1092,10 @@ class Scheduler:
                             break
                     if add_job:
                         self._per_worker_type_job_queue[worker_type].add_job(
-                                    0.0, 0.0, other_job_id)
+                                    priority=INFINITY,
+                                    allocation=0.0,
+                                    steps_run=0,
+                                    job_id=other_job_id)
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _add_to_priorities(self, job_id, worker_type=None):
@@ -1199,8 +1205,12 @@ class Scheduler:
                     new_priority = fractions[worker_type][job_id] /\
                             self._allocation[job_id][worker_type]
                     steps_run = self._steps_run_so_far[job_id][worker_type]
+                    # NOTE: use negative allocation here to sort in order of
+                    # highest allocation -> lowest
                     self._per_worker_type_job_queue[worker_type].update_entry(
-                            i, priority=new_priority, steps_run=steps_run)
+                            i, priority=new_priority,
+                            allocation=-self._allocation[job_id][worker_type],
+                            steps_run=steps_run)
             self._per_worker_type_job_queue[worker_type].heapify()
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
@@ -1232,7 +1242,7 @@ class Scheduler:
                             self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
-                new_priority = 1e9  # Don't use inf so 2*new_priority > new_priority.
+                new_priority = self._allocation[job_id][worker_type] * 1e9  # Don't use inf so 2*new_priority > new_priority.
                 if (self._allocation[job_id][worker_type] == 0.0 or
                     self._throughputs[job_id][worker_type] == 0.0 or
                     self._throughputs[job_id][worker_type] == [0.0, 0.0]):
@@ -1272,7 +1282,7 @@ class Scheduler:
                                        worker_type))
         priorities.sort(key=lambda x: x[0])
         if len(priorities) == 0:
-            return float("inf"), None
+            return INFINITY, None
         priority = priorities[0][0]
         worker_id = priorities[0][1]
         return priority, worker_id
