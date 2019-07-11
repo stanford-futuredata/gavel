@@ -205,7 +205,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='SCS')
-        assert cvxprob.status == "optimal"
+        #assert cvxprob.status == "optimal"
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 

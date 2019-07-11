@@ -22,7 +22,7 @@ SLEEP_SECONDS = 2
 INFINITY = float("inf")
 DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
-TIME_PER_ITERATION = 32 * 60    # Time in seconds each iteration should run for.
+TIME_PER_ITERATION = 33 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 
@@ -949,6 +949,12 @@ class Scheduler:
             print('Cluster utilization: %.3f' % (cluster_utilization))
             return cluster_utilization
 
+    def get_job_start_and_end_times(self):
+        with self._scheduler_lock:
+            job_ids = sorted([job_id for job_id in self._job_completion_times])
+            start_times = [self._per_job_start_timestamps[job_id] for job_id in job_ids]
+            end_times = [self._job_completion_times[job_id] for job_id in job_ids]
+        return start_times, end_times
     """
     ======================================================================
        Helper methods to get and mutate state needed for scheduling.
