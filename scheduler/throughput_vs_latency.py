@@ -51,7 +51,7 @@ def debug_packing_for_rounds_with_timelines():
     cluster_spec = {'v100': 5}
     x = {}
     colors = {}
-    ranges = [(0, 23)]#, (10, 60), (20, 70), (30, 80), (40, 90), (50, 100)]#[(50, 90), (50, 100)]#, (50, 80), (50, 100), (50, 90), (80, 100)]
+    ranges = [(0, 11)]#, (10, 60), (20, 70), (30, 80), (40, 90), (50, 100)]#[(50, 90), (50, 100)]#, (50, 80), (50, 100), (50, 90), (80, 100)]
 
     all_colors = np.random.rand(100)
 
@@ -60,7 +60,7 @@ def debug_packing_for_rounds_with_timelines():
                 'Utilization without rounds, Utilization with rounds\n')
         f.flush()
         for debug_trace in debug_traces:
-            if 'v4' not in debug_trace:
+            if 'v5' not in debug_trace:
                 continue
             trace_path = os.path.join('traces/generated/msr/debug', debug_trace)
             all_jobs, all_arrival_times = parse_trace(trace_path)
