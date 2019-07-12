@@ -1487,13 +1487,13 @@ class Scheduler:
                                            worker_type,
                                            worker_id))
 
+                execution_times = []
                 for i, single_job_id in enumerate(job_id.singletons()):
                     if self._emulate:
                         start_timestamp = self._per_job_latest_timestamps[single_job_id]
                         execution_time = current_timestamp - start_timestamp
                         assert(execution_time > 0)
-                    if i == 0:
-                        self._job_time_so_far[job_id][worker_type] += execution_time
+                        execution_times.append(execution_time)
 
                     if single_job_id not in self._micro_tasks_per_job:
                         self._micro_tasks_per_job[single_job_id] = []
@@ -1505,7 +1505,11 @@ class Scheduler:
 
                     self._per_job_latest_timestamps[single_job_id] = \
                             self._get_current_timestamp()
+                # If we just ran co-located jobs, use the maximum of the individual execution
+                # times.
+                self._job_time_so_far[job_id][worker_type] += max(execution_times)
 
+                for i, single_job_id in enumerate(job_id.singletons()):
                     if (self._get_total_steps_run(single_job_id) <
                         self._jobs[single_job_id].total_steps):
                         self._add_to_queue(single_job_id)
