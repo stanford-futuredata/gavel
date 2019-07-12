@@ -22,7 +22,7 @@ SLEEP_SECONDS = 2
 INFINITY = float("inf")
 DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
-TIME_PER_ITERATION = 33 * 60    # Time in seconds each iteration should run for.
+TIME_PER_ITERATION = 1 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 
@@ -331,9 +331,7 @@ class Scheduler:
         worker_types = sorted(worker_types)
         allocation_str = ''
         for x in worker_types:
-            allocation_str += \
-                    ' [%4s %.3f]' % (x,
-                                     self._allocation[job_id][x])
+            allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
         print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                'Worker type: %s\tWorker ID: %d\t'
                'Allocation:%s') % (self._get_current_timestamp(),
@@ -446,6 +444,8 @@ class Scheduler:
                 (not job_id.is_pair() or
                  (job_id.singletons()[0] not in already_scheduled_jobs_set and
                   job_id.singletons()[1] not in already_scheduled_jobs_set))):
+                if self._priorities[worker_type][job_id] == 0.0:
+                    print('WARNING: scheduling job %s with 0 priority')
                 already_scheduled_jobs_set.add(job_id)
                 for single_job_id in job_id.singletons():
                     already_scheduled_jobs_set.add(single_job_id)
@@ -518,24 +518,23 @@ class Scheduler:
                     if num_steps <= 0:
                         raise ValueError('Num steps should be greater'
                                          'than 0, is %d' % (num_steps))
-                    worker_types = []
-                    for x in self._allocation[single_job_id]:
-                        worker_types.append(x)
-                    worker_types = sorted(worker_types)
-                    allocation_str = ''
-                    for x in worker_types:
-                        allocation_str += \
-                            ' [%4s %.3f]' % (x,
-                                             self._allocation[single_job_id][x])
                     self._per_job_latest_timestamps[single_job_id] = \
                         self._get_current_timestamp()
                     self._running_jobs.add(single_job_id)
+                worker_types = []
+                for x in self._allocation[job_id]:
+                    worker_types.append(x)
+                worker_types = sorted(worker_types)
+                allocation_str = ''
+                for x in worker_types:
+                    allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
                 print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                        'Worker type: %s\tWorker IDs: %s\t'
-                       'Allocation:%s') % (self._get_current_timestamp(),
+                       'Allocation:%s\tPriority: %f') % (self._get_current_timestamp(),
                                            job_id, worker_type,
                                            tuple([worker_ids[i] for i in worker_id_ptrs]),
-                                           allocation_str))
+                                           allocation_str,
+                                           self._priorities[worker_type][job_id]))
 
         return scheduled_jobs
 
@@ -543,6 +542,7 @@ class Scheduler:
         max_finish_time = None
         all_num_steps = []
         for i, single_job_id in enumerate(job_id.singletons()):
+            # NOTE: This should already be updated to the min between num steps and remaining steps
             num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
             all_num_steps.append(num_steps)
             if job_id.is_pair():
@@ -951,9 +951,9 @@ class Scheduler:
 
     def get_job_start_and_end_times(self):
         with self._scheduler_lock:
-            job_ids = sorted([job_id for job_id in self._job_completion_times])
+            job_ids = sorted([job_id for job_id in self._per_job_latest_timestamps])
             start_times = [self._per_job_start_timestamps[job_id] for job_id in job_ids]
-            end_times = [self._job_completion_times[job_id] for job_id in job_ids]
+            end_times = [self._per_job_latest_timestamps[job_id] for job_id in job_ids]
         return start_times, end_times
     """
     ======================================================================
@@ -1031,6 +1031,7 @@ class Scheduler:
                     self._steps_run_so_far[merged_job_id] = {}
                     self._job_time_so_far[merged_job_id] = {}
                     self._num_steps_per_iteration[merged_job_id] = {}
+                    self._priorities[worker_type][job_id] = 0.0
                 self._throughputs[merged_job_id][worker_type] = \
                     self._compute_throughput(
                         [job.job_type, other_job.job_type],
@@ -1243,13 +1244,17 @@ class Scheduler:
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 new_priority = self._allocation[job_id][worker_type] * 1e9  # Don't use inf so 2*new_priority > new_priority.
+                if self._allocation[job_id][worker_type] == 0.0:
+                    assert(new_priority == 0)
+                elif fractions[worker_type][job_id] > 0.0:
+                    new_priority = self._allocation[job_id][worker_type] /\
+                            fractions[worker_type][job_id]
+                """
                 if (self._allocation[job_id][worker_type] == 0.0 or
                     self._throughputs[job_id][worker_type] == 0.0 or
                     self._throughputs[job_id][worker_type] == [0.0, 0.0]):
                     new_priority = 0.0
-                elif fractions[worker_type][job_id] > 0.0:
-                    new_priority = self._allocation[job_id][worker_type] /\
-                            fractions[worker_type][job_id]
+                """
                 self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):

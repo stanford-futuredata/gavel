@@ -45,13 +45,13 @@ def parse_trace(trace_file):
     return jobs, arrival_times
 
 
-def debug_packing_for_rounds():
+def debug_packing_for_rounds_with_timelines():
     debug_traces = os.listdir('traces/generated/msr/debug')
     throughputs_file = 'combined_throughputs.json'
-    cluster_spec = {'v100': 28}
+    cluster_spec = {'v100': 5}
     x = {}
     colors = {}
-    ranges = [(80, 90)]#, (50, 80), (50, 100), (50, 90), (80, 100)]
+    ranges = [(0, 23)]#, (10, 60), (20, 70), (30, 80), (40, 90), (50, 100)]#[(50, 90), (50, 100)]#, (50, 80), (50, 100), (50, 90), (80, 100)]
 
     all_colors = np.random.rand(100)
 
@@ -60,6 +60,8 @@ def debug_packing_for_rounds():
                 'Utilization without rounds, Utilization with rounds\n')
         f.flush()
         for debug_trace in debug_traces:
+            if 'v4' not in debug_trace:
+                continue
             trace_path = os.path.join('traces/generated/msr/debug', debug_trace)
             all_jobs, all_arrival_times = parse_trace(trace_path)
             for (i, j) in ranges:
@@ -68,8 +70,7 @@ def debug_packing_for_rounds():
                 arrival_times = all_arrival_times[i:j]
                 results = {}
                 for use_rounds in [True, False]:
-                    x[(i, j, use_rounds)] = []
-                    colors[(i, j, use_rounds)] = []
+                    x[(i, j, use_rounds)] = {}
                     policy = get_policy('max_min_fairness_packed')
                     results[use_rounds] = {}
                     sched = \
@@ -80,11 +81,11 @@ def debug_packing_for_rounds():
                     sched.emulate(cluster_spec, arrival_times, jobs,
                                   ideal=False)
                     start_times, end_times = sched.get_job_start_and_end_times()
-                    for k, (start_time, end_time) in enumerate(zip(start_times, end_times)):
-                        x[(i, j, use_rounds)].append(start_time)
-                        x[(i, j, use_rounds)].append(end_time)
-                        colors[(i, j, use_rounds)].append(all_colors[i+k])
-                        colors[(i, j, use_rounds)].append(all_colors[i+k])
+                    x[(i, j, use_rounds)]['start'] = start_times
+                    x[(i, j, use_rounds)]['end'] = end_times
+                    colors[(i, j, use_rounds)] = all_colors[i:j]
+                    assert(len(start_times) == len(all_colors[i:j]))
+                    assert(len(end_times) == len(start_times))
                     #results[use_rounds]['utilization'] = \
                     #        sched.get_cluster_utilization()
                     #results[use_rounds]['average_jct'] = sched.get_average_jct()
@@ -97,14 +98,32 @@ def debug_packing_for_rounds():
                 """
 
 
+    labels = []
     for k, (i, j) in enumerate(ranges):
         for m, use_rounds in enumerate([True, False]):
-            y = [k*2+m for _ in range(len(x[(i, j, use_rounds)]))]
+            y = [k*2+m for _ in range(len(x[(i, j, use_rounds)]['start']))]
             if use_rounds:
-                label = 'Jobs %d to %d with rounds' % (i, j)
+                label = '%d:%d w/ rounds' % (i, j)
             else:
-                label = 'Jobs %d to %d without rounds' % (i, j)
-            plt.scatter(x[(i, j, use_rounds)], y, c=colors[(i, j, use_rounds)], label=label)
+                label = '%d:%d w/out rounds' % (i, j)
+            labels.append(label)
+            plt.scatter(x[(i, j, use_rounds)]['start'], y, c=colors[(i, j, use_rounds)], marker='o')
+            plt.scatter(x[(i, j, use_rounds)]['end'], y, c=colors[(i, j, use_rounds)], marker='^')
+            for n, (x_coord, y_coord) in enumerate(zip(x[(i, j, use_rounds)]['start'], y)):
+                plt.annotate(str(i+n),
+                             (x_coord, y_coord),
+                             textcoords='offset points',
+                             xytext=(0,10),
+                             ha='center')
+            for n, (x_coord, y_coord) in enumerate(zip(x[(i, j, use_rounds)]['end'], y)):
+                plt.annotate(str(i+n),
+                             (x_coord, y_coord),
+                             textcoords='offset points',
+                             xytext=(0,10),
+                             ha='center')
+    plt.yticks(list(range(len(ranges) * 2)), labels, rotation=30) 
+    
+    plt.tight_layout()
     plt.show()
 
 
@@ -113,7 +132,7 @@ def main():
     schedule_in_rounds = True
     throughputs_file = 'combined_throughputs.json'
     num_v100s = 4
-    policy_names = ['max_min_fairness_packed'] 
+    policy_names = ['max_min_fairness'] 
     ratios = [
             {'v100': 1, 'p100': 0, 'k80': 0},
             #{'v100': 1, 'p100': 1, 'k80': 0},
@@ -158,5 +177,5 @@ def main():
 
 
 if __name__=='__main__':
-    debug_packing_for_rounds()
+    debug_packing_for_rounds_with_timelines()
     #main()
