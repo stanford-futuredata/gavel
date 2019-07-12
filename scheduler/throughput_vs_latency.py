@@ -149,30 +149,32 @@ def main():
                        '%d_%d_%d.csv') % (ratio['v100'], ratio['p100'],
                                           ratio['k80'])
         with open(output_file, 'w') as f:
-            f.write('# v100,# p100,# k80,Policy,Lambda,Utilization,Average JCT\n')
-            for policy_name in policy_names:
-                for lam in lams:
-                    # TODO: can this be moved to previous for loop?
-                    policy = get_policy(policy_name)
-                    trace = 'traces/generated/microbenchmark/arrival_rate_%d.trace' % (lam)
-                    #trace = 'traces/generated/msr/msr_debug_truncated.trace'
-                    jobs, arrival_times = parse_trace(trace)
-                    sched = \
-                        scheduler.Scheduler(policy,
-                                            schedule_in_rounds=schedule_in_rounds,
-                                            throughputs_file=throughputs_file,
-                                            emulate=True)
-                    sched.emulate(cluster_spec, arrival_times, jobs,
-                                  ideal=False)
-                    utilization = sched.get_cluster_utilization()
-                    average_jct = sched.get_average_jct()
-                    f.write('%d,%d,%d,%s,%d,%.3f,%.3f\n' % (cluster_spec['v100'],
-                                                            cluster_spec['p100'],
-                                                            cluster_spec['k80'],
-                                                            policy.name,
-                                                            lam,
-                                                            utilization,
-                                                            average_jct))
+            f.write('# v100,# p100,# k80,Rounds,Policy,Lambda,Utilization,Average JCT\n')
+            for use_rounds in [True, False]:
+                for policy_name in policy_names:
+                    for lam in lams:
+                        # TODO: can this be moved to previous for loop?
+                        policy = get_policy(policy_name)
+                        trace = 'traces/generated/microbenchmark/arrival_rate_%d.trace' % (lam)
+                        #trace = 'traces/generated/msr/msr_debug_truncated.trace'
+                        jobs, arrival_times = parse_trace(trace)
+                        sched = \
+                            scheduler.Scheduler(policy,
+                                                schedule_in_rounds=use_rounds,
+                                                throughputs_file=throughputs_file,
+                                                emulate=True)
+                        sched.emulate(cluster_spec, arrival_times, jobs,
+                                      ideal=False)
+                        utilization = sched.get_cluster_utilization()
+                        average_jct = sched.get_average_jct()
+                        f.write('%d,%d,%d,%s,%s,%d,%.3f,%.3f\n' % (cluster_spec['v100'],
+                                                                   cluster_spec['p100'],
+                                                                   cluster_spec['k80'],
+                                                                   str(use_rounds),
+                                                                   policy.name,
+                                                                   lam,
+                                                                   utilization,
+                                                                   average_jct))
                     f.flush()
 
 
