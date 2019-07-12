@@ -22,7 +22,7 @@ SLEEP_SECONDS = 2
 INFINITY = float("inf")
 DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
-TIME_PER_ITERATION = 1 * 60    # Time in seconds each iteration should run for.
+TIME_PER_ITERATION = 32 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 
@@ -106,6 +106,7 @@ class Scheduler:
         self._worker_start_times = {}
         # Verbose flag.
         self._verbose = False
+        self._micro_tasks_per_job = {}
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -445,7 +446,7 @@ class Scheduler:
                  (job_id.singletons()[0] not in already_scheduled_jobs_set and
                   job_id.singletons()[1] not in already_scheduled_jobs_set))):
                 if self._priorities[worker_type][job_id] == 0.0:
-                    print('WARNING: scheduling job %s with 0 priority')
+                    print('WARNING: scheduling job %s with 0 priority' % (job_id))
                 already_scheduled_jobs_set.add(job_id)
                 for single_job_id in job_id.singletons():
                     already_scheduled_jobs_set.add(single_job_id)
@@ -542,7 +543,8 @@ class Scheduler:
         max_finish_time = None
         all_num_steps = []
         for i, single_job_id in enumerate(job_id.singletons()):
-            # NOTE: This should already be updated to the min between num steps and remaining steps
+            # NOTE: This should already be updated to the min between num steps
+            # and remaining steps.
             num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
             all_num_steps.append(num_steps)
             if job_id.is_pair():
@@ -813,7 +815,7 @@ class Scheduler:
                     scheduled_jobs = self._schedule_jobs_on_workers()
                     for (job_id, worker_ids) in scheduled_jobs:
                         worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                        num_steps = self._num_steps_per_iteration[job_id][worker_type]
+                        #num_steps = self._num_steps_per_iteration[job_id][worker_type]
                         for worker_id in worker_ids:
                             self._remove_available_worker_id(worker_id)
                         all_num_steps, max_finish_time = \
@@ -948,6 +950,16 @@ class Scheduler:
             cluster_utilization = np.mean(utilizations)
             print('Cluster utilization: %.3f' % (cluster_utilization))
             return cluster_utilization
+
+    def get_micro_tasks(self):
+        job_ids = sorted(self._micro_tasks_per_job.keys())
+        for job_id in job_ids:
+            print('Job %s: %d' % (job_id, len(self._micro_tasks_per_job[job_id])))
+            """
+            for i, (start, end) in enumerate(self._micro_tasks_per_job[job_id]):
+                print('\t%d%f - %f' % (i, start, end))
+            print('')
+            """
 
     def get_job_start_and_end_times(self):
         with self._scheduler_lock:
@@ -1480,10 +1492,14 @@ class Scheduler:
                         start_timestamp = self._per_job_latest_timestamps[single_job_id]
                         execution_time = current_timestamp - start_timestamp
                         assert(execution_time > 0)
+                    if i == 0:
+                        self._job_time_so_far[job_id][worker_type] += execution_time
 
+                    if single_job_id not in self._micro_tasks_per_job:
+                        self._micro_tasks_per_job[single_job_id] = []
+                    self._micro_tasks_per_job[single_job_id].append((start_timestamp, current_timestamp))
                     self._running_jobs.remove(single_job_id)
                     self._steps_run_so_far[single_job_id][worker_type] += all_num_steps[i]
-                    self._job_time_so_far[single_job_id][worker_type] += execution_time
                     self._worker_time_so_far[worker_type] += execution_time
                     self._cumulative_worker_time_so_far[worker_id] += execution_time
 

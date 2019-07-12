@@ -85,7 +85,7 @@ def main(args):
     sched.emulate(cluster_spec, arrival_times, jobs, ideal=args.ideal)
     sched.get_average_jct()
     sched.get_cluster_utilization()
-
+    sched.get_micro_tasks()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
