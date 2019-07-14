@@ -825,7 +825,8 @@ class Scheduler:
                         max_timestamp = -running_jobs[0][0]
                     if max_timestamp > 0:
                         self._current_timestamp = max_timestamp
-                    #else:
+                    else:
+                        self._current_timestamp = next_job_arrival_time
                     #    self._current_timestamp = queued_jobs[0][0]
                 else:
                     # Otherwise, find the time when the first job completes, which
@@ -882,20 +883,19 @@ class Scheduler:
 
             # Dispatch any newly arrived jobs.
             #while len(queued_jobs) > 0:
-            while True:
-                #(arrival_time, job) = queued_jobs[0]
-                if next_job_arrival_time is None:
-                    arrival_time_delta = self._sample_arrival_time_delta(1.0 / lam)
-                    next_job_arrival_time = arrival_time_delta + last_job_arrival_time
+            while next_job_arrival_time <= self._current_timestamp:
+                job = self._generate_job(throughputs)
+                job_id = self.add_job(job)
+                dispatched_jobs.add(job_id)
+                last_job_arrival_time = next_job_arrival_time
+                arrival_time_delta = self._sample_arrival_time_delta(1.0 / lam)
+                next_job_arrival_time = arrival_time_delta + last_job_arrival_time
+                """
                 if next_job_arrival_time <= self._current_timestamp:
-                    job = self._generate_job(throughputs)
-                    job_id = self.add_job(job)
-                    dispatched_jobs.add(job_id)
-                    last_job_arrival_time = next_job_arrival_time
-                    next_job_arrival_time = None
-                    #queued_jobs.pop(0)
+                    queued_jobs.pop(0)
                 else:
                     break
+                """
 
             if not ideal:
                 # Schedule jobs until there are no available workers or no jobs
