@@ -9,13 +9,19 @@ import sys
 import threading
 import time
 import datetime
+import random
+import math
 
+# TODO: clean these up
+from job import Job
 import job_id_pair
 import job_queue
+from job_template import JobTemplate
 from runtime.rpc import scheduler_server, scheduler_client
 import utils
 
 np.random.seed(42)
+random.seed(42)
 
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
@@ -25,6 +31,48 @@ DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 TIME_PER_ITERATION = 32 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
+
+job_generator = random.Random()
+job_generator.seed(42)
+
+interarrival_time_generator = random.Random()
+interarrival_time_generator.seed(42)
+
+job_table = [
+    JobTemplate(model='ResNet-18',
+              command=('cd %s/gpusched/workloads/pytorch/'
+                       'image_classification/cifar10 && python3 '
+                       'main.py --data_dir=%s/data/cifar10'),
+              num_steps_arg='--num_steps'),
+    JobTemplate(model='ResNet-50',
+              command=('cd %s/gpusched/workloads/pytorch/'
+                       'image_classification/imagenet && python3 '
+                       'main.py -j 4 -a resnet50 -b 64 '
+                       '%s/data/imagenet/pytorch'),
+              num_steps_arg='--num_minibatches'),
+    JobTemplate(model='Transformer',
+              command=('cd %s/gpusched/workloads/pytorch/'
+                       'translation && python3 train.py -data '
+                       '%s/data/translation/multi30k.atok.low.pt'
+                       '-proj_share_weight'),
+              num_steps_arg='-step'),
+    JobTemplate(model='A3C',
+              command=('cd %s/gpusched/workloads/pytorch/rl && '
+                       'python3 main.py --env PongDeterministic-v4 --workers 4 '
+                       '--amsgrad True'),
+              num_steps_arg='--max-steps',
+              needs_data_dir=False),
+    JobTemplate(model='Recommendation',
+              command=('cd %s/gpusched/workloads/pytorch/'
+                       'recommendation/scripts/ml-20m && python3 train.py '
+                       '--data_dir %s/data/ml-20m/pro_sg/'),
+              num_steps_arg='-n'),
+    JobTemplate(model='CycleGAN',
+              command=('cd %s/gpusched/workloads/pytorch/'
+                       'cyclegan && python3 cyclegan.py --dataset_path '
+                       '%s/data/monet2photo --decay_epoch 0'),
+              num_steps_arg='--n_steps'),
+]
 
 class Scheduler:
 
@@ -530,10 +578,11 @@ class Scheduler:
                 for x in worker_types:
                     allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
                 print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
-                       'Worker type: %s\tWorker IDs: %s\t'
+                       'Worker type: %s\tWorker ID: %d\t'
                        'Allocation:%s\tPriority: %f') % (self._get_current_timestamp(),
                                            job_id, worker_type,
-                                           tuple([worker_ids[i] for i in worker_id_ptrs]),
+                                           worker_ids[worker_id_ptrs[0]],
+                                           # tuple([worker_ids[i] for i in worker_id_ptrs]),
                                            allocation_str,
                                            self._priorities[worker_type][job_id]))
 
@@ -683,7 +732,35 @@ class Scheduler:
             return first_job_id_to_depart
         return None
 
-    def emulate(self, cluster_spec, arrival_times, jobs, ideal=False):
+    def _sample_arrival_time_delta(self, rate_parameter):
+        global interarrival_time_generator
+        return -math.log(1.0 - interarrival_time_generator.random()) / rate_parameter
+
+    def _generate_job(self, throughputs, run_dir='/tmp'):
+        global job_table, job_generator
+        job_template = job_generator.choice(job_table)
+        job_type = job_template.model
+        run_time = 60 * (10 ** job_generator.uniform(2, 4))
+        num_steps = run_time * throughputs['v100'][job_type]['null']
+        assert(run_time > 0)
+        assert(num_steps > 0)
+        if job_template.needs_data_dir:
+            command = job_template.command % (run_dir, run_dir)
+        else:
+            command = job_template.command % (run_dir)
+
+        job = Job(job_id=None,
+                  job_type=job_type,
+                  command=command,
+                  num_steps_arg=job_template.num_steps_arg,
+                  total_steps=num_steps,
+                  duration=None,
+                  scale_factor=1)
+
+        return job
+
+    def emulate(self, cluster_spec, throughputs, lam, jobs_to_complete,
+                ideal=False):
         """Emulates the scheduler execution.
 
            Using the throughput estimates, this function emulates the
@@ -699,10 +776,11 @@ class Scheduler:
             jobs: A dictionary from job ID to Job.
         """
 
-        remaining_jobs = len(jobs)
+        #remaining_jobs = len(jobs)
         queued_jobs = []
         running_jobs = []
-        completed_jobs = []
+        completed_jobs = set()
+        dispatched_jobs = set()
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
@@ -710,6 +788,7 @@ class Scheduler:
             for i in range(cluster_spec[worker_type]):
                 self._register_worker_callback(worker_type)
 
+        """
         # Add all jobs to the queue.
         for i in range(1, len(arrival_times)):
             assert(arrival_times[i] >= arrival_times[i-1])
@@ -719,9 +798,11 @@ class Scheduler:
 
         if ideal:
             self._current_timestamp = queued_jobs[0][0]
-
+        """
+        last_job_arrival_time = None
+        next_job_arrival_time = 0
         no_dispatched_or_running_jobs = False
-        while remaining_jobs > 0:
+        while not jobs_to_complete.issubset(completed_jobs):
             # Jump to the next event's timestamp.
             if ideal:
                 first_job_id_to_depart = self._emulate_ideal(queued_jobs)
@@ -744,8 +825,8 @@ class Scheduler:
                         max_timestamp = -running_jobs[0][0]
                     if max_timestamp > 0:
                         self._current_timestamp = max_timestamp
-                    else:
-                        self._current_timestamp = queued_jobs[0][0]
+                    #else:
+                    #    self._current_timestamp = queued_jobs[0][0]
                 else:
                     # Otherwise, find the time when the first job completes, which
                     # signals that a worker is available.
@@ -762,7 +843,7 @@ class Scheduler:
                             print('ERROR: No newly dispatched or running jobs!')
                             print('%d remaining jobs' % (remaining_jobs))
                             print('Completed jobs:')
-                            for i, job_id in enumerate(sorted(completed_jobs)):
+                            for i, job_id in enumerate(sorted(list(completed_jobs))):
                                 print('\t%d) %s' % (i+1, job_id))
                             print('Per worker type queues:')
                             for worker_type in self._per_worker_type_job_queue:
@@ -788,7 +869,8 @@ class Scheduler:
                                                 all_num_steps)
                         for single_job_id in job_id.singletons():
                             if single_job_id not in self._jobs:
-                                remaining_jobs -= 1
+                                #remaining_jobs -= 1
+                                completed_jobs.add(single_job_id[0])
                         heapq.heappop(running_jobs)
                     else:
                         break
@@ -799,11 +881,19 @@ class Scheduler:
                     assert(len(running_jobs) == 0)
 
             # Dispatch any newly arrived jobs.
-            while len(queued_jobs) > 0:
-                (arrival_time, job) = queued_jobs[0]
-                if arrival_time <= self._current_timestamp:
+            #while len(queued_jobs) > 0:
+            while True:
+                #(arrival_time, job) = queued_jobs[0]
+                if next_job_arrival_time is None:
+                    arrival_time_delta = self._sample_arrival_time_delta(1.0 / lam)
+                    next_job_arrival_time = arrival_time_delta + last_job_arrival_time
+                if next_job_arrival_time <= self._current_timestamp:
+                    job = self._generate_job(throughputs)
                     job_id = self.add_job(job)
-                    queued_jobs.pop(0)
+                    dispatched_jobs.add(job_id)
+                    last_job_arrival_time = next_job_arrival_time
+                    next_job_arrival_time = None
+                    #queued_jobs.pop(0)
                 else:
                     break
 
@@ -912,19 +1002,21 @@ class Scheduler:
             self._schedule_without_rounds()
 
 
-    def get_average_jct(self):
+    def get_average_jct(self, job_ids=None):
         """Computes the average job completion time."""
         with self._scheduler_lock:
             if len(self._job_completion_times) == 0:
                 return
+            if job_ids is None:
+                job_ids = sorted([job_id for job_id in self._job_completion_times])
+            else:
+                job_ids = [job_id_pair.JobIdPair(job_id, None) for job_id in job_ids]
             print('Job completion times:')
-            job_ids = sorted([job_id for job_id in self._job_completion_times])
             for job_id in job_ids:
                 print('Job %s: %.3f' % (job_id,
                                         self._job_completion_times[job_id]))
             average_job_completion_time = \
-                sum([x for x in self._job_completion_times.values()]) / \
-                len(self._job_completion_times)
+                np.mean([self._job_completion_times[job_id] for job_id in job_ids])
             print('Average job completion time: '
                   '%.3f seconds' % (average_job_completion_time))
             return average_job_completion_time
@@ -1009,6 +1101,7 @@ class Scheduler:
                     (len(self._jobs) * 1000.0)
                 if unflattened_allocation[job_id][worker_type] < threshold:
                     unflattened_allocation[job_id][worker_type] = 0.0
+        """
         print('')
         print('=' * 80)
         print('Current_time: %f' % (self._get_current_timestamp()))
@@ -1025,6 +1118,7 @@ class Scheduler:
                 print('-' * 80)
         print('=' * 80)
         print('')
+        """
 
         return unflattened_allocation
 
