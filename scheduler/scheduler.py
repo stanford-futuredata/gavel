@@ -234,7 +234,7 @@ class Scheduler:
                                                             worker_type)
                 self._initialize_num_steps_per_iteration(job_id, worker_type)
 
-            self._reset_time_run_so_far()
+            #self._reset_time_run_so_far()
             if self._schedule_in_rounds:
                 self._add_to_priorities(job_id)
             else:
@@ -270,7 +270,7 @@ class Scheduler:
                       duration, "seconds", len(self._jobs))
                   )
 
-            self._reset_time_run_so_far()
+            #self._reset_time_run_so_far()
 
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
@@ -1513,7 +1513,9 @@ class Scheduler:
                     else:
                         self._add_to_queue(job_id, worker_type=worker_type)
 
-                self._reset_time_run_so_far()
+                if worker_type not in self._worker_time_so_far:
+                    self._worker_time_so_far[worker_type] = 0.0
+                # self._reset_time_run_so_far()
 
             self._add_available_worker_id(worker_id)
 
