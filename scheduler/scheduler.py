@@ -1380,7 +1380,7 @@ class Scheduler:
                             self._allocation[job_id][worker_type]
                     steps_run = self._steps_run_so_far[job_id][worker_type]
                     # NOTE: use negative allocation here to sort in order of
-                    # highest allocation -> lowest
+                    # highest allocation -> lowest.
                     self._per_worker_type_job_queue[worker_type].update_entry(
                             i, priority=new_priority,
                             allocation=-self._allocation[job_id][worker_type],
