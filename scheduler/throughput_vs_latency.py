@@ -132,7 +132,7 @@ def main():
     job_range = (0, 100)
     with open(throughputs_file, 'r') as f:
         throughputs = json.load(f)
-    lams = [256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
+    lams = [1024]#[256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
     for ratio in ratios:
         cluster_spec = {}
         total_gpu_fraction = sum([ratio[gpu_type] for gpu_type in ratio])
@@ -161,8 +161,7 @@ def main():
                         jobs_to_complete = set(list(range(job_range[0], job_range[1])))
                         sched.emulate_with_generated_jobs(cluster_spec,
                                                           throughputs, lam,
-                                                          jobs_to_complete,
-                                                          ideal=False)
+                                                          jobs_to_complete)
                         utilization = sched.get_cluster_utilization()
                         average_jct = sched.get_average_jct(jobs_to_complete)
                         f.write('%d,%d,%d,%s,%s,%d,%.3f,%.3f\n' % (cluster_spec['v100'],
