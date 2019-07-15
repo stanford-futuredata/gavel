@@ -57,11 +57,12 @@ def debug_packing_for_rounds_with_timelines():
     cluster_spec = {'v100': 25}
     x = {}
     colors = {}
-    ranges = [(50, 100)]
+    ranges = [(0, 10)]
 
     all_colors = np.random.rand(100)
 
-    all_jobs, all_arrival_times = parse_trace(trace_file)
+    all_jobs, all_arrival_times, durations = \
+            parse_trace(trace_file, throughputs_file)
     for (i, j) in ranges:
         jobs = all_jobs[i:j]
         arrival_times = all_arrival_times[i:j]
@@ -128,7 +129,7 @@ def main():
             #{'v100': 1, 'p100': 1, 'k80': 1},
             #{'v100': 2, 'p100': 1, 'k80': 0},
         ]
-    job_range = (400, 500)
+    job_range = (0, 100)
     with open(throughputs_file, 'r') as f:
         throughputs = json.load(f)
     lams = [256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
