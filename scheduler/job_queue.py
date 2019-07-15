@@ -4,8 +4,9 @@ class JobQueue:
     
     class JobQueueEntry(object):
 
-        def __init__(self, priority, steps_run, job_id):
+        def __init__(self, priority, allocation, steps_run, job_id):
             self._priority = priority
+            self._allocation = allocation
             self._steps_run = steps_run
             self._job_id = job_id
 
@@ -19,6 +20,14 @@ class JobQueue:
         @priority.setter
         def priority(self, priority):
             self._priority = priority
+
+        @property
+        def allocation(self):
+            return self._allocation
+        
+        @allocation.setter
+        def allocation(self, allocation):
+            self._allocation = allocation
 
         @property
         def steps_run(self):
@@ -35,13 +44,16 @@ class JobQueue:
         def __lt__(self, other):
             if self._priority != other._priority:
                 return self._priority < other._priority
+            elif self._allocation != other._allocation:
+                return self._allocation < other._allocation
             elif self._steps_run != other._steps_run:
-                return self._steps_run < other.steps_run
+                return self._steps_run < other._steps_run
             else:
-                return self._job_id < other.job_id
+                return self._job_id < other._job_id
 
         def __eq__(self, other):
             return (self._priority == other_.priority
+                    and self._allocation == other._allocation
                     and self._steps_run == other._steps_run
                     and self._job_id == other._job_id)
 
@@ -51,8 +63,8 @@ class JobQueue:
     def __getitem__(self, index):
         return self._queue[index]
 
-    def add_job(self, priority, steps_run, job_id, heappush=False):
-        entry = self.JobQueueEntry(priority, steps_run, job_id)
+    def add_job(self, priority, allocation, steps_run, job_id, heappush=False):
+        entry = self.JobQueueEntry(priority, allocation, steps_run, job_id)
         if heappush:
             heapq.heappush(self._queue, entry)
         else:
@@ -64,9 +76,12 @@ class JobQueue:
     def heapify(self):
         heapq.heapify(self._queue)
 
-    def update_entry(self, i, priority=None, steps_run=None):
+    def update_entry(self, i, priority=None, allocation=None, steps_run=None):
         if priority is not None:
             self._queue[i].priority = priority
+
+        if allocation is not None:
+            self._queue[i].allocation = allocation
 
         if steps_run is not None:
             self._queue[i].steps_run = steps_run
