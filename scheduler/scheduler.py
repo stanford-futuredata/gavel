@@ -616,7 +616,7 @@ class Scheduler:
             if throughput <= 0.0:
                 print(single_job_id)
                 print(worker_type)
-                raise Exception("Throughput should not be 0!")
+                raise Exception("Throughput should not be less than 0!")
             else:
                 finish_time = (self._current_timestamp + \
                                 (num_steps / throughput))
@@ -942,8 +942,9 @@ class Scheduler:
                                         self._throughputs[job_id][worker_type][i]
                             else:
                                 throughput = self._throughputs[job_id][worker_type]
-                            if throughput == 0.0:
-                                raise Exception("Throughput should not be 0!")
+                            if throughput <= 0.0:
+                                raise Exception('Throughput should not be '
+                                                'less than 0!')
                             else:
                                 finish_time = (self._current_timestamp + \
                                                 (num_steps / throughput))
