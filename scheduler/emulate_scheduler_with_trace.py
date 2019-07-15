@@ -82,10 +82,10 @@ def main(args):
 
     cluster_spec = {key_value.split(':')[0]: int(key_value.split(':')[1])
                     for key_value in args.cluster_spec.split(',')}
-    sched.emulate(cluster_spec, arrival_times, jobs, ideal=args.ideal)
+    sched.emulate_from_trace(cluster_spec, arrival_times, jobs,
+                             ideal=args.ideal)
     sched.get_average_jct()
     sched.get_cluster_utilization()
-    sched.get_micro_tasks()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')

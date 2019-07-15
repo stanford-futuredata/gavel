@@ -155,6 +155,7 @@ class Scheduler:
         # Verbose flag.
         self._verbose = False
         self._micro_tasks_per_job = {}
+        self._all_jobs = []
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -233,8 +234,8 @@ class Scheduler:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
                 self._initialize_num_steps_per_iteration(job_id, worker_type)
-
-            #self._reset_time_run_so_far()
+                self._job_time_so_far[job_id][worker_type] = 0.0
+            self._reset_time_run_so_far()
             if self._schedule_in_rounds:
                 self._add_to_priorities(job_id)
             else:
@@ -244,6 +245,7 @@ class Scheduler:
             self._per_job_start_timestamps[job_id] = current_timestamp
             print('%s]\t[Job dispatched]\tJob ID: %s' % (current_timestamp,
                                                          job_id))
+
         return job_id
 
     def remove_job(self, job_id):
@@ -270,7 +272,7 @@ class Scheduler:
                       duration, "seconds", len(self._jobs))
                   )
 
-            #self._reset_time_run_so_far()
+            self._reset_time_run_so_far()
 
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
@@ -477,6 +479,13 @@ class Scheduler:
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper_v2(self, worker_type,
                                             already_scheduled_jobs):
+        """Greedily selects the jobs to run in the next round by iterating
+           through the job list in sorted priority order.
+
+           Returns:
+             A list of job IDs to schedule on the passed-in worker_type in
+             the upcoming round.
+        """
         already_scheduled_jobs_set = set(already_scheduled_jobs)
         scheduled_jobs_on_worker_type = []
         num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
@@ -536,6 +545,7 @@ class Scheduler:
                     self._schedule_jobs_on_workers_helper_v2(
                             worker_type, already_scheduled_jobs)
             """
+            TODO: Return to this when we have a viable solution for packing
             scheduled_jobs_on_worker_type = \
                 self._schedule_jobs_on_workers_helper(worker_type,
                                                       already_scheduled_jobs)
@@ -589,6 +599,8 @@ class Scheduler:
         return scheduled_jobs
 
     def _get_job_steps_and_finish_times(self, job_id, worker_type):
+        """Returns the number of steps to execute and and latest finish time(s)
+           for a job or job pair."""
         max_finish_time = None
         all_num_steps = []
         for i, single_job_id in enumerate(job_id.singletons()):
@@ -733,10 +745,13 @@ class Scheduler:
         return None
 
     def _sample_arrival_time_delta(self, rate_parameter):
+        """Samples job interarrival rate from a Poisson distribution according
+           to the specified rate parameter."""
         global interarrival_time_generator
         return -math.log(1.0 - interarrival_time_generator.random()) / rate_parameter
 
     def _generate_job(self, throughputs, run_dir='/tmp'):
+        """Generates a new job for emulation."""
         global job_table, job_generator
         job_template = job_generator.choice(job_table)
         job_type = job_template.model
@@ -759,8 +774,8 @@ class Scheduler:
 
         return job
 
-    def emulate(self, cluster_spec, throughputs, lam, jobs_to_complete,
-                ideal=False):
+    def emulate_from_trace(self, cluster_spec, arrival_times, jobs,
+                           ideal=False):
         """Emulates the scheduler execution.
 
            Using the throughput estimates, this function emulates the
@@ -775,8 +790,193 @@ class Scheduler:
             arrival_times: A list of job arrival times.
             jobs: A dictionary from job ID to Job.
         """
+        remaining_jobs = len(jobs)
+        queued_jobs = []
+        running_jobs = []
+        completed_jobs = []
 
-        #remaining_jobs = len(jobs)
+        # Set up the cluster according to the provided spec.
+        worker_types = sorted([worker_type for worker_type in cluster_spec])
+        for worker_type in worker_types:
+            for i in range(cluster_spec[worker_type]):
+                self._register_worker_callback(worker_type)
+
+        # Add all jobs to the queue.
+        for i in range(1, len(arrival_times)):
+            assert(arrival_times[i] >= arrival_times[i-1])
+
+        for (arrival_time, job) in zip(arrival_times, jobs):
+            queued_jobs.append((arrival_time, job))
+
+        if ideal:
+            self._current_timestamp = queued_jobs[0][0]
+
+        no_dispatched_or_running_jobs = False
+        while remaining_jobs > 0:
+            # Jump to the next event's timestamp.
+            if ideal:
+                first_job_id_to_depart = self._emulate_ideal(queued_jobs)
+                if first_job_id_to_depart is not None:
+                    # first_job_id_to_depart should have no steps remaining.
+                    assert(self._get_remaining_steps(first_job_id_to_depart) /
+                        self._jobs[first_job_id_to_depart].total_steps <= 0.01)
+                    self._per_job_latest_timestamps[first_job_id_to_depart] = \
+                        self._get_current_timestamp()
+                    self.remove_job(first_job_id_to_depart[0])
+                    remaining_jobs -= 1  # Remove job and update remaining_jobs counter.
+
+            else:
+                if self._schedule_in_rounds:
+                    # If scheduling in rounds, find the time when the latest job
+                    # completes, which signals the finishing of the round.
+                    max_timestamp = 0
+                    if (len(running_jobs) > 0 and
+                        -running_jobs[0][0] > max_timestamp):
+                        max_timestamp = -running_jobs[0][0]
+                    if max_timestamp > 0:
+                        self._current_timestamp = max_timestamp
+                    else:
+                        self._current_timestamp = queued_jobs[0][0]
+                else:
+                    # Otherwise, find the time when the first job completes, which
+                    # signals that a worker is available.
+                    min_timestamp = INFINITY
+                    if len(running_jobs) > 0 and running_jobs[0][0] < min_timestamp:
+                        min_timestamp = running_jobs[0][0]
+                    if len(queued_jobs) > 0 and queued_jobs[0][0] < min_timestamp:
+                        min_timestamp = queued_jobs[0][0]
+                    if min_timestamp is not INFINITY:
+                        self._current_timestamp = min_timestamp
+                        no_dispatched_or_running_jobs = False
+                    else:
+                        if no_dispatched_or_running_jobs:
+                            print('ERROR: No newly dispatched or running jobs!')
+                            print('%d remaining jobs' % (remaining_jobs))
+                            print('Completed jobs:')
+                            for i, job_id in enumerate(sorted(completed_jobs)):
+                                print('\t%d) %s' % (i+1, job_id))
+                            print('Per worker type queues:')
+                            for worker_type in self._per_worker_type_job_queue:
+                                print(worker_type + ':')
+                                for jqe in self._per_worker_type_job_queue[worker_type]:
+                                    allocation = self._allocation[jqe.job_id][worker_type]
+                                    print('%s: Allocation: %10f\t'
+                                          'Priority: %10f' % (jqe.job_id,
+                                                              allocation,
+                                                              jqe.priority))
+                            sys.exit(-1)
+                        else:
+                            no_dispatched_or_running_jobs = True
+
+                # Check if any jobs have completed.
+                while len(running_jobs) > 0:
+                    (finish_time, job_id, worker_ids, all_num_steps) = running_jobs[0]
+                    if self._schedule_in_rounds:
+                        finish_time = (-finish_time)
+                    if finish_time <= self._current_timestamp:
+                        for worker_id in worker_ids:
+                            self._done_callback(job_id, worker_id,
+                                                all_num_steps)
+                        for single_job_id in job_id.singletons():
+                            if single_job_id not in self._jobs:
+                                remaining_jobs -= 1
+                        heapq.heappop(running_jobs)
+                    else:
+                        break
+
+                if self._schedule_in_rounds:
+                    # Since we're scheduling in rounds, no jobs should be
+                    # running when scheduling the next round of jobs.
+                    assert(len(running_jobs) == 0)
+
+            # Dispatch any newly arrived jobs.
+            while len(queued_jobs) > 0:
+                (arrival_time, job) = queued_jobs[0]
+                if arrival_time <= self._current_timestamp:
+                    job_id = self.add_job(job)
+                    queued_jobs.pop(0)
+                else:
+                    break
+
+            if not ideal:
+                # Schedule jobs until there are no available workers or no jobs
+                # with non-zero allocations on available workers.
+                if self._schedule_in_rounds:
+                    #TODO: Handle packing
+                    scheduled_jobs = self._schedule_jobs_on_workers()
+                    for (job_id, worker_ids) in scheduled_jobs:
+                        worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
+                        num_steps = self._num_steps_per_iteration[job_id][worker_type]
+                        for worker_id in worker_ids:
+                            self._remove_available_worker_id(worker_id)
+                        finish_time = (self._current_timestamp +
+                                        (num_steps /
+                                           self._throughputs[job_id][worker_type]))
+                        self._running_jobs.add(job_id)
+                        heapq.heappush(running_jobs, (-finish_time, job_id,
+                                                      worker_ids, [num_steps]))
+                else:
+                    seen_worker_ids = set()
+                    while True:
+                        worker_id = self._remove_available_worker_id()
+                        if worker_id in seen_worker_ids:
+                            self._add_available_worker_id(worker_id)
+                            break
+                        elif worker_id is None:
+                            break
+                        else:
+                            seen_worker_ids.add(worker_id)
+
+                        job_id = self._schedule_job_on_worker(worker_id)
+                        if job_id is None:
+                            continue
+
+                        worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+                        max_finish_time = None
+                        all_num_steps = []
+                        for i, single_job_id in enumerate(job_id.singletons()):
+                            num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
+                            all_num_steps.append(num_steps)
+                            if job_id.is_pair():
+                                throughput = \
+                                        self._throughputs[job_id][worker_type][i]
+                            else:
+                                throughput = self._throughputs[job_id][worker_type]
+                            if throughput == 0.0:
+                                raise Exception("Throughput should not be 0!")
+                            else:
+                                finish_time = (self._current_timestamp + \
+                                                (num_steps / throughput))
+                            if (max_finish_time is None or
+                                    finish_time > max_finish_time):
+                                max_finish_time = finish_time
+                            self._running_jobs.add(single_job_id)
+                        heapq.heappush(running_jobs, (max_finish_time, job_id,
+                                       (worker_id,), all_num_steps))
+
+        print('Total duration: %.3f seconds' % (self._current_timestamp))
+
+    def emulate_with_generated_jobs(self, cluster_spec, throughputs, lam,
+                                    jobs_to_complete, ideal=False):
+        """Emulates the scheduler execution.
+
+           Using the throughput estimates, this function continuously emulates
+           the behavior of an indefinite stream of jobs until all the
+           specified jobs complete.
+
+           Currently, the cluster specification must be statically
+           specified from the beginning of execution.
+
+           Args:
+            cluster_spec: A dictionary of worker type to worker count.
+            throughputs: The measured throughputs of each job on each worker type.
+            lam: 1 / the rate parameter to be passed in to the Poisson process
+                 used to generate arrival times.
+            jobs_to_complete: A set of job IDs that must be completed before
+                              terminating the emulation.
+            ideal: If True, emulates ideal behavior.
+        """
+
         queued_jobs = []
         running_jobs = []
         completed_jobs = set()
@@ -788,17 +988,6 @@ class Scheduler:
             for i in range(cluster_spec[worker_type]):
                 self._register_worker_callback(worker_type)
 
-        """
-        # Add all jobs to the queue.
-        for i in range(1, len(arrival_times)):
-            assert(arrival_times[i] >= arrival_times[i-1])
-
-        for (arrival_time, job) in zip(arrival_times, jobs):
-            queued_jobs.append((arrival_time, job))
-
-        if ideal:
-            self._current_timestamp = queued_jobs[0][0]
-        """
         last_job_arrival_time = None
         next_job_arrival_time = 0
         no_dispatched_or_running_jobs = False
@@ -827,7 +1016,6 @@ class Scheduler:
                         self._current_timestamp = max_timestamp
                     else:
                         self._current_timestamp = next_job_arrival_time
-                    #    self._current_timestamp = queued_jobs[0][0]
                 else:
                     # Otherwise, find the time when the first job completes, which
                     # signals that a worker is available.
@@ -885,17 +1073,12 @@ class Scheduler:
             #while len(queued_jobs) > 0:
             while next_job_arrival_time <= self._current_timestamp:
                 job = self._generate_job(throughputs)
+                self._all_jobs.append((next_job_arrival_time, job))
                 job_id = self.add_job(job)
                 dispatched_jobs.add(job_id)
                 last_job_arrival_time = next_job_arrival_time
                 arrival_time_delta = self._sample_arrival_time_delta(1.0 / lam)
                 next_job_arrival_time = arrival_time_delta + last_job_arrival_time
-                """
-                if next_job_arrival_time <= self._current_timestamp:
-                    queued_jobs.pop(0)
-                else:
-                    break
-                """
 
             if not ideal:
                 # Schedule jobs until there are no available workers or no jobs
@@ -1003,7 +1186,14 @@ class Scheduler:
 
 
     def get_average_jct(self, job_ids=None):
-        """Computes the average job completion time."""
+        """Computes the average job completion time.
+
+           Args:
+               job_ids: If specified, computes the average JCT using only these
+                        jobs.
+
+           Returns: The average JCT.
+        """
         with self._scheduler_lock:
             if len(self._job_completion_times) == 0:
                 return
@@ -1044,26 +1234,72 @@ class Scheduler:
             return cluster_utilization
 
     def get_micro_tasks(self):
+        """Prints all micro-tasks run for each job.
+
+           Debug function used print all micro-tasks run for each job.
+        """
         job_ids = sorted(self._micro_tasks_per_job.keys())
         for job_id in job_ids:
             print('Job %s: %d' % (job_id, len(self._micro_tasks_per_job[job_id])))
-            """
             for i, (start, end) in enumerate(self._micro_tasks_per_job[job_id]):
                 print('\t%d%f - %f' % (i, start, end))
             print('')
-            """
 
     def get_job_start_and_end_times(self):
+        """Returns the start and end times of each job.
+
+           Debug function for returning the start and end times of each job.
+        """
         with self._scheduler_lock:
             job_ids = sorted([job_id for job_id in self._per_job_latest_timestamps])
             start_times = [self._per_job_start_timestamps[job_id] for job_id in job_ids]
             end_times = [self._per_job_latest_timestamps[job_id] for job_id in job_ids]
         return start_times, end_times
+
+    def get_all_emulated_jobs(self, job_range):
+        """Returns all the jobs run during emulation.
+
+           Debug function used to print all jobs generated during
+           emulation within a specified range.
+
+           Args:
+               job_range: A tuple specifying which jobs to be printed.
+        """
+        print('All emulated jobs:')
+        for arrival_time, job in self._all_jobs[job_range[0]:job_range[1]]:
+            print('%s\t%s\t%d\t%f' % (job.job_id,
+                                      job.job_type,
+                                      job.total_steps,
+                                      arrival_time))
     """
     ======================================================================
        Helper methods to get and mutate state needed for scheduling.
     ======================================================================
     """
+
+    @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    def _print_allocation(self):
+        """Prints the allocation.
+
+           Debug method used for printing the allocation of each job on each
+           worker type.
+        """
+        print('')
+        print('=' * 80)
+        print('Current_time: %f' % (self._get_current_timestamp()))
+        print('-' * 80)
+        for i, worker_type in enumerate(self._worker_types):
+            print('Worker type: %s' % (worker_type))
+            for job_id in unflattened_allocation:
+                if worker_type not in unflattened_allocation[job_id]:
+                    continue
+                allocation = unflattened_allocation[job_id][worker_type]
+                print('Job %s: Allocation=%.3f' % (job_id, allocation))
+            if i < len(worker_types) - 1:
+                print('-' * 80)
+        print('=' * 80)
+        print('')
+
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _get_allocation(self):
@@ -1102,22 +1338,6 @@ class Scheduler:
                 if unflattened_allocation[job_id][worker_type] < threshold:
                     unflattened_allocation[job_id][worker_type] = 0.0
         """
-        print('')
-        print('=' * 80)
-        print('Current_time: %f' % (self._get_current_timestamp()))
-        print('-' * 80)
-        worker_types = ['v100']
-        for i, worker_type in enumerate(worker_types):
-            print('Worker type: %s' % (worker_type))
-            for job_id in unflattened_allocation:
-                if worker_type not in unflattened_allocation[job_id]:
-                    continue
-                print('Job %s: Allocation=%.3f' % (job_id,
-                                                   unflattened_allocation[job_id][worker_type]))
-            if i < len(worker_types) - 1:
-                print('-' * 80)
-        print('=' * 80)
-        print('')
         """
 
         return unflattened_allocation
@@ -1349,18 +1569,16 @@ class Scheduler:
                             self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
-                new_priority = self._allocation[job_id][worker_type] * 1e9  # Don't use inf so 2*new_priority > new_priority.
+                # Don't use inf so 2*new_priority > new_priority.
+                #
+                # Scale the default value by the allocation so that newly
+                # added jobs run according to their respective allocations.
+                new_priority = self._allocation[job_id][worker_type] * 1e9
                 if self._allocation[job_id][worker_type] == 0.0:
                     assert(new_priority == 0)
                 elif fractions[worker_type][job_id] > 0.0:
                     new_priority = self._allocation[job_id][worker_type] /\
                             fractions[worker_type][job_id]
-                """
-                if (self._allocation[job_id][worker_type] == 0.0 or
-                    self._throughputs[job_id][worker_type] == 0.0 or
-                    self._throughputs[job_id][worker_type] == [0.0, 0.0]):
-                    new_priority = 0.0
-                """
                 self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):
@@ -1512,10 +1730,10 @@ class Scheduler:
                         self._add_to_priorities(job_id, worker_type=worker_type)
                     else:
                         self._add_to_queue(job_id, worker_type=worker_type)
-
+                    self._job_time_so_far[job_id][worker_type] = 0.0
                 if worker_type not in self._worker_time_so_far:
                     self._worker_time_so_far[worker_type] = 0.0
-                # self._reset_time_run_so_far()
+                self._reset_time_run_so_far()
 
             self._add_available_worker_id(worker_id)
 
