@@ -205,10 +205,10 @@ class Scheduler:
             else:
                 self._add_to_queue(job_id)
             self._allocation = self._get_allocation()
-            current_timestamp = self._get_current_timestamp()
-            self._per_job_start_timestamps[job_id] = current_timestamp
-            print('%s]\t[Job dispatched]\tJob ID: %s' % (current_timestamp,
-                                                         job_id))
+            if timestamp is None:
+                timestamp = self._get_current_timestamp()
+            self._per_job_start_timestamps[job_id] = timestamp
+            print('%s]\t[Job dispatched]\tJob ID: %s' % (timestamp, job_id))
 
         return job_id
 
@@ -740,22 +740,30 @@ class Scheduler:
 
     def _emulate_common(self, from_trace, cluster_spec, arrival_times=None,
                         jobs=None, throughputs=None, lam=None,
-                        jobs_to_complete=None, ideal=False):
+                        jobs_to_complete=None, measurement_window=None,
+                        ideal=False):
         if ideal:
             assert(from_trace == True)
         if from_trace:
             assert(arrival_times is not None)
             assert(jobs is not None)
+            assert(measurement_window is None)
             remaining_jobs = len(jobs)
+            queued_jobs = []
         else:
             assert(throughputs is not None)
             assert(lam is not None)
-            assert(jobs_to_complete is not None)
-            jobs_to_complete = set([job_id_pair.JobIdPair(job_id, None) for job_id in jobs_to_complete])
+            assert((jobs_to_complete is not None and
+                    measurement_window is None) or
+                   (jobs_to_complete is None and
+                    measurement_window is not None))
 
-        queued_jobs = []
+            if jobs_to_complete is not None:
+                jobs_to_complete = set([job_id_pair.JobIdPair(job_id, None) for job_id in jobs_to_complete])
+
         running_jobs = []
         completed_jobs = set()
+        jobs_to_measure = set()
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
@@ -783,7 +791,12 @@ class Scheduler:
                     break
                 elif len(queued_jobs) > 0:
                     next_job_arrival_time = queued_jobs[0][0]
-            elif jobs_to_complete.issubset(completed_jobs):
+            elif (jobs_to_complete is not None and
+                  jobs_to_complete.issubset(completed_jobs)):
+                break
+            elif (measurement_window is not None and
+                  self._current_timestamp >= measurement_window[1] and
+                  jobs_to_measure.issubset(completed_jobs)):
                 break
 
             # Jump to the next event's timestamp.
@@ -815,6 +828,7 @@ class Scheduler:
                     # Otherwise, find the time when the first job completes, which
                     # signals that a worker is available.
                     min_timestamp = INFINITY
+                    #print('Queued jobs:', queued_jobs)
                     if len(running_jobs) > 0 and running_jobs[0][0] < min_timestamp:
                         min_timestamp = running_jobs[0][0]
                     if len(queued_jobs) > 0 and next_job_arrival_time < min_timestamp:
@@ -871,15 +885,23 @@ class Scheduler:
                 while len(queued_jobs) > 0:
                     (arrival_time, job) = queued_jobs[0]
                     if arrival_time <= self._current_timestamp:
-                        job_id = self.add_job(job)
+                        job_id = self.add_job(job, timestamp=arrival_time)
                         queued_jobs.pop(0)
                     else:
                         break
             else:
                 while next_job_arrival_time <= self._current_timestamp:
+                    #print('Current timestamp: %f' % (self._current_timestamp))
+                    #print('next job arrival time: %f' % ( next_job_arrival_time))
+                    #print('')
                     job = self._generate_job(throughputs)
                     self._all_jobs.append((next_job_arrival_time, job))
-                    job_id = self.add_job(job)
+                    job_id = self.add_job(job, timestamp=next_job_arrival_time)
+                    if (measurement_window is not None and
+                        next_job_arrival_time >= measurement_window[0] and
+                        next_job_arrival_time <= measurement_window[1]):
+                        jobs_to_measure.add(job_id)
+
                     last_job_arrival_time = next_job_arrival_time
                     arrival_time_delta = \
                             self._sample_arrival_time_delta(1.0 / lam)
@@ -926,6 +948,8 @@ class Scheduler:
                                        (worker_id,), all_num_steps))
 
         print('Total duration: %.3f seconds' % (self._current_timestamp))
+        if measurement_window is not None:
+            return jobs_to_measure
 
     def emulate_from_trace(self, cluster_spec, arrival_times, jobs,
                            ideal=False):
@@ -970,6 +994,13 @@ class Scheduler:
         self._emulate_common(from_trace=False, cluster_spec=cluster_spec,
                              throughputs=throughputs, lam=lam,
                              jobs_to_complete=jobs_to_complete)
+
+    def emulate_for_measurement_window(self, cluster_spec, throughputs, lam,
+                                       measurement_window):
+        return self._emulate_common(from_trace=False,
+                                    cluster_spec=cluster_spec,
+                                    throughputs=throughputs, lam=lam,
+                                    measurement_window=measurement_window)
 
     def _schedule_without_rounds(self):
         """Schedules jobs on workers without rounds.
@@ -1048,8 +1079,8 @@ class Scheduler:
                 return
             if job_ids is None:
                 job_ids = sorted([job_id for job_id in self._job_completion_times])
-            else:
-                job_ids = [job_id_pair.JobIdPair(job_id, None) for job_id in job_ids]
+            #else:
+            #    job_ids = [job_id_pair.JobIdPair(job_id, None) for job_id in job_ids]
             print('Job completion times:')
             for job_id in job_ids:
                 print('Job %s: %.3f' % (job_id,
