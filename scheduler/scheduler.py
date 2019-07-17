@@ -927,9 +927,6 @@ class Scheduler:
                         break
             else:
                 while next_job_arrival_time <= self._current_timestamp:
-                    #print('Current timestamp: %f' % (self._current_timestamp))
-                    #print('next job arrival time: %f' % ( next_job_arrival_time))
-                    #print('')
                     job = self._generate_job(throughputs)
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
@@ -1057,7 +1054,7 @@ class Scheduler:
         """Computes the average job completion time.
 
            Args:
-               job_ids: A list of JobIdPair objects. If specified, computes
+               job_ids: A list of `JobIdPair` objects. If specified, computes
                         the average JCT using only these jobs.
 
            Returns: The average JCT.
