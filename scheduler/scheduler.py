@@ -173,8 +173,11 @@ class Scheduler:
         {job: <fraction of allocations on different workers>}.
 
         Args:
-            command: The command to execute.
-            total_steps: The total number of steps to run the command for.
+            job: Job object to schedule. Contains information about the command
+                 to run, as well as the number of steps to run the command for.
+            timestamp (optional): Timestamp at which job is to be added
+                                  (defaults to current_timestamp() if not
+                                  specified).
 
         Returns:
             The job_id of the newly added job.
