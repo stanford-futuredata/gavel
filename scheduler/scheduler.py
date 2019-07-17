@@ -738,28 +738,61 @@ class Scheduler:
 
         return job
 
-    def _emulate_common(self, from_trace, cluster_spec, arrival_times=None,
-                        jobs=None, throughputs=None, lam=None,
-                        jobs_to_complete=None, measurement_window=None,
-                        ideal=False):
-        if ideal:
-            assert(from_trace == True)
+    def emulate(self, cluster_spec, arrival_times=None, jobs=None,
+                ideal=False, throughputs=None, lam=None,
+                jobs_to_complete=None, measurement_window=None):
+        """Emulates the scheduler execution.
+
+           Emulation can be performed using a trace or with continuously
+           generated synthetic data. Emulation is terminated when either
+               1) All jobs in the specified trace complete.
+               2) A specific subset of jobs complete.
+               3) All jobs in a specific time window complete.
+
+           Currently, the cluster specification must be statically
+           specified from the beginning of execution.
+
+           Args:
+            cluster_spec: A dictionary of worker type to worker count.
+            arrival_times: The arrival times of a set of pre-generated jobs.
+            jobs: A set of pre-generated jobs.
+            ideal: If True, emulates ideal behavior. This is only available
+                   when running from a trace.
+            throughputs: A `dict` specifying the measured throughputs of each
+                         job on each worker type.
+            lam: 1 / the rate parameter to be passed in to the Poisson process
+                 used to generate arrival times.
+            jobs_to_complete: A set of `JobIdPair`s that must be completed
+                              before terminating the emulation. Mutually
+                              exclusive with 'measurement_window'.
+            measurement_window: A tuple specifying the beginning and ending
+                                timestamps of the window in which to collect
+                                jobs for the termination condition. Mutually
+                                exclusive with `jobs_to_complete`.
+
+            Returns:
+                If `measurement_window` is specified, returns the jobs
+                collected in the window. Otherwise returns None.
+        """
+        from_trace = arrival_times is not None and jobs is not None
         if from_trace:
-            assert(arrival_times is not None)
-            assert(jobs is not None)
-            assert(measurement_window is None)
             remaining_jobs = len(jobs)
             queued_jobs = []
         else:
-            assert(throughputs is not None)
-            assert(lam is not None)
-            assert((jobs_to_complete is not None and
-                    measurement_window is None) or
-                   (jobs_to_complete is None and
-                    measurement_window is not None))
-
-            if jobs_to_complete is not None:
-                jobs_to_complete = set([job_id_pair.JobIdPair(job_id, None) for job_id in jobs_to_complete])
+            if throughputs is None or lam is None:
+                raise ValueError('\'throughputs\' and \'lam\' must be '
+                                 'specified when running without trace.')
+        if ideal:
+            if not from_trace:
+                raise ValueError('Can only emulate in ideal mode with a trace.')
+        if (jobs_to_complete is not None and
+                measurement_window is not None):
+            raise ValueError('Only one of \'jobs_to_complete\' or '
+                             '\'measurement_window\' can be set.')
+        if (not from_trace and jobs_to_complete is None and
+            measurement_window is None):
+            raise ValueError('One of \'jobs_to_complete\' or '
+                             '\'measurement_window\' must be set.')
 
         running_jobs = []
         completed_jobs = set()
@@ -786,18 +819,20 @@ class Scheduler:
         next_job_arrival_time = 0
         no_dispatched_or_running_jobs = False
         while True:
-            if from_trace:
-                if remaining_jobs == 0:
-                    break
-                elif len(queued_jobs) > 0:
-                    next_job_arrival_time = queued_jobs[0][0]
-            elif (jobs_to_complete is not None and
+            if (jobs_to_complete is not None and
                   jobs_to_complete.issubset(completed_jobs)):
                 break
             elif (measurement_window is not None and
                   self._current_timestamp >= measurement_window[1] and
                   jobs_to_measure.issubset(completed_jobs)):
                 break
+            elif from_trace:
+                if remaining_jobs == 0:
+                    break
+                elif len(queued_jobs) > 0:
+                    next_job_arrival_time = queued_jobs[0][0]
+                else:
+                    next_job_arrival_time = None
 
             # Jump to the next event's timestamp.
             if ideal:
@@ -825,13 +860,14 @@ class Scheduler:
                     else:
                         self._current_timestamp = next_job_arrival_time
                 else:
-                    # Otherwise, find the time when the first job completes, which
-                    # signals that a worker is available.
+                    # Otherwise, find the time when the first job completes,
+                    # which signals that a worker is available.
                     min_timestamp = INFINITY
-                    #print('Queued jobs:', queued_jobs)
-                    if len(running_jobs) > 0 and running_jobs[0][0] < min_timestamp:
+                    if (len(running_jobs) > 0 and
+                        running_jobs[0][0] < min_timestamp):
                         min_timestamp = running_jobs[0][0]
-                    if len(queued_jobs) > 0 and next_job_arrival_time < min_timestamp:
+                    if (next_job_arrival_time is not None and
+                        next_job_arrival_time < min_timestamp):
                         min_timestamp = next_job_arrival_time
                     if min_timestamp is not INFINITY:
                         self._current_timestamp = min_timestamp
@@ -950,57 +986,9 @@ class Scheduler:
         print('Total duration: %.3f seconds' % (self._current_timestamp))
         if measurement_window is not None:
             return jobs_to_measure
+        else:
+            return None
 
-    def emulate_from_trace(self, cluster_spec, arrival_times, jobs,
-                           ideal=False):
-        """Emulates the scheduler execution.
-
-           Using the throughput estimates, this function emulates the
-           behavior of a set of jobs submitted to the actual scheduler
-           given a cluster specification.
-
-           Currently, the cluster specification must be statically
-           specified from the beginning of execution.
-
-           Args:
-            cluster_spec: A dictionary of worker type to worker count.
-            arrival_times: A list of job arrival times.
-            jobs: A dictionary from job ID to Job.
-        """
-        self._emulate_common(from_trace=True, cluster_spec=cluster_spec,
-                             arrival_times=arrival_times,
-                             jobs=jobs, ideal=ideal)
-
-    def emulate_with_generated_jobs(self, cluster_spec, throughputs, lam,
-                                    jobs_to_complete):
-        """Emulates the scheduler execution.
-
-           Using the throughput estimates, this function continuously emulates
-           the behavior of an indefinite stream of jobs until all the
-           specified jobs complete.
-
-           Currently, the cluster specification must be statically
-           specified from the beginning of execution.
-
-           Args:
-            cluster_spec: A dictionary of worker type to worker count.
-            throughputs: The measured throughputs of each job on each worker type.
-            lam: 1 / the rate parameter to be passed in to the Poisson process
-                 used to generate arrival times.
-            jobs_to_complete: A set of job IDs that must be completed before
-                              terminating the emulation.
-            ideal: If True, emulates ideal behavior.
-        """
-        self._emulate_common(from_trace=False, cluster_spec=cluster_spec,
-                             throughputs=throughputs, lam=lam,
-                             jobs_to_complete=jobs_to_complete)
-
-    def emulate_for_measurement_window(self, cluster_spec, throughputs, lam,
-                                       measurement_window):
-        return self._emulate_common(from_trace=False,
-                                    cluster_spec=cluster_spec,
-                                    throughputs=throughputs, lam=lam,
-                                    measurement_window=measurement_window)
 
     def _schedule_without_rounds(self):
         """Schedules jobs on workers without rounds.
@@ -1069,8 +1057,8 @@ class Scheduler:
         """Computes the average job completion time.
 
            Args:
-               job_ids: If specified, computes the average JCT using only these
-                        jobs.
+               job_ids: A list of JobIdPair objects. If specified, computes
+                        the average JCT using only these jobs.
 
            Returns: The average JCT.
         """
@@ -1079,8 +1067,6 @@ class Scheduler:
                 return
             if job_ids is None:
                 job_ids = sorted([job_id for job_id in self._job_completion_times])
-            #else:
-            #    job_ids = [job_id_pair.JobIdPair(job_id, None) for job_id in job_ids]
             print('Job completion times:')
             for job_id in job_ids:
                 print('Job %s: %.3f' % (job_id,
