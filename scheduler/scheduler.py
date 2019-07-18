@@ -120,7 +120,6 @@ class Scheduler:
         self._verbose = False
         self._micro_tasks_per_job = {}
         self._all_jobs = []
-        self._last_reset_time = 0
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -1270,13 +1269,10 @@ class Scheduler:
 
         Requires self._scheduler_lock to be held when calling this function.
         """
-        current_time = self._get_current_timestamp()
-        elapsed_time_since_last_reset = current_time - self._last_reset_time
         for worker_type in self._worker_types:
             self._worker_time_so_far[worker_type] = 0.0
             for job_id in self._job_time_so_far:
                 self._job_time_so_far[job_id][worker_type] = 0.0
-        self._last_reset_time = current_time
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _add_to_queue(self, job_id, worker_type=None):
