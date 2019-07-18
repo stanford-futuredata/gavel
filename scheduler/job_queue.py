@@ -76,8 +76,7 @@ class JobQueue:
     def heapify(self):
         heapq.heapify(self._queue)
 
-    def update_entry(self, i, priority=None, allocation=None,
-                     steps_run=None):
+    def update_entry(self, i, priority=None, allocation=None, steps_run=None):
         if priority is not None:
             self._queue[i].priority = priority
 
