@@ -101,6 +101,7 @@ class Scheduler:
         # Priority queues for each worker_type.
         self._per_worker_type_job_queue = {}
         self._priorities = {}
+        self._deficits = {}
         # The number of steps to run of each job on each worker type
         # for each iteration.
         self._num_steps_per_iteration = {}
@@ -207,11 +208,11 @@ class Scheduler:
                 self._job_time_so_far[job_id][worker_type] = 0.0
             self._per_job_start_timestamps[job_id] = current_timestamp
             self._per_job_latest_timestamps[job_id] = current_timestamp
-            self._reset_time_run_so_far()
             if self._schedule_in_rounds:
                 self._add_to_priorities(job_id)
             else:
                 self._add_to_queue(job_id)
+            self._reset_time_run_so_far()
             self._allocation = self._get_allocation()
             if timestamp is None:
                 timestamp = self._get_current_timestamp()
@@ -357,9 +358,12 @@ class Scheduler:
             allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
         print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                'Worker type: %s\tWorker ID: %d\t'
+               'Priority: %f\tDeficit: %f\t'
                'Allocation:%s') % (self._get_current_timestamp(),
                                    job_id, worker_type,
                                    worker_id,
+                                   priority,
+                                   self._deficits[worker_type][job_id],
                                    allocation_str))
 
         return job_id
@@ -454,6 +458,8 @@ class Scheduler:
         """Greedily selects the jobs to run in the next round by iterating
            through the job list in sorted priority order.
 
+           Assumes only single-GPU jobs.
+
            Returns:
              A list of job IDs to schedule on the passed-in worker_type in
              the upcoming round.
@@ -462,12 +468,17 @@ class Scheduler:
         scheduled_jobs_on_worker_type = []
         num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
 
-        sorted_job_queue = \
-                sorted([job_id for job_id in self._priorities[worker_type]],
-                       key=lambda job_id: self._priorities[worker_type][job_id],
-                       reverse=True)
+        entries = []
+        for job_id in self._priorities[worker_type]:
+            entries.append((job_id, self._priorities[worker_type][job_id],
+                            self._deficits[worker_type][job_id],
+                            self._allocation[job_id][worker_type]))
 
-        for job_id in sorted_job_queue:
+        sorted_job_queue = sorted(entries,
+                                  key=lambda x: (x[1], x[2], x[3]),
+                                  reverse=True)
+
+        for job_id, *_ in sorted_job_queue:
             if len(scheduled_jobs_on_worker_type) == num_workers:
                 break
             if (job_id not in already_scheduled_jobs_set and
@@ -561,12 +572,14 @@ class Scheduler:
                     allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
                 print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                        'Worker type: %s\tWorker ID: %d\t'
-                       'Allocation:%s\tPriority: %f') % (self._get_current_timestamp(),
+                       'Priority: %f\tDeficit: %f\t'
+                       'Allocation: %s') % (self._get_current_timestamp(),
                                            job_id, worker_type,
                                            worker_ids[worker_id_ptrs[0]],
                                            # tuple([worker_ids[i] for i in worker_id_ptrs]),
-                                           allocation_str,
-                                           self._priorities[worker_type][job_id]))
+                                           self._priorities[worker_type][job_id],
+                                           self._deficits[worker_type][job_id],
+                                           allocation_str))
 
         return scheduled_jobs
 
@@ -1170,16 +1183,36 @@ class Scheduler:
         print('-' * 80)
         for i, worker_type in enumerate(self._worker_types):
             print('Worker type: %s' % (worker_type))
-            for job_id in unflattened_allocation:
-                if worker_type not in unflattened_allocation[job_id]:
+            for job_id in self._allocation:
+                if worker_type not in self._allocation[job_id]:
                     continue
-                allocation = unflattened_allocation[job_id][worker_type]
+                allocation = self._allocation[job_id][worker_type]
                 print('Job %s: Allocation=%.3f' % (job_id, allocation))
-            if i < len(worker_types) - 1:
+            if i < len(self._worker_types) - 1:
                 print('-' * 80)
         print('=' * 80)
         print('')
 
+    @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    def _print_deficits(self):
+        """Prints the allocation.
+
+           Debug method used for printing the allocation of each job on each
+           worker type.
+        """
+        print('')
+        print('=' * 80)
+        print('Current_time: %f' % (self._get_current_timestamp()))
+        print('-' * 80)
+        for i, worker_type in enumerate(self._worker_types):
+            print('Worker type: %s' % (worker_type))
+            for job_id in self._deficits[worker_type]:
+                deficit = self._deficits[worker_type][job_id]
+                print('Job %s: Deficit=%.3f' % (job_id, deficit))
+            if i < len(self._worker_types) - 1:
+                print('-' * 80)
+        print('=' * 80)
+        print('')
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _get_allocation(self):
@@ -1236,6 +1269,7 @@ class Scheduler:
                     self._job_time_so_far[merged_job_id] = {}
                     self._num_steps_per_iteration[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
+                    self._deficits[worker_type][job_id] = 0.0
                 self._throughputs[merged_job_id][worker_type] = \
                     self._compute_throughput(
                         [job.job_type, other_job.job_type],
@@ -1263,9 +1297,13 @@ class Scheduler:
         Requires self._scheduler_lock to be held when calling this function.
         """
         current_time = self._get_current_timestamp()
+        elapsed_time_since_last_reset = current_time - self._last_reset_time
         for worker_type in self._worker_types:
             self._worker_time_so_far[worker_type] = 0.0
             for job_id in self._job_time_so_far:
+                self._job_time_so_far[job_id][worker_type] = 0.0
+
+                # Compute priority deficit.
                 latest_timestamp = None
                 for single_job_id in job_id.singletons():
                     single_job_latest_timestamp = \
@@ -1273,19 +1311,17 @@ class Scheduler:
                     if (latest_timestamp is None or
                         single_job_latest_timestamp > latest_timestamp):
                         latest_timestamp = single_job_latest_timestamp
-                time_received = latest_timestamp - self._last_reset_time
-                elapsed_time_since_last_reset = \
-                        current_time - self._last_reset_time
+                time_received = max(0, latest_timestamp - self._last_reset_time)
                 if self._allocation is None or job_id not in self._allocation:
                     time_should_have_received = 0
                 else:
                     time_should_have_received = \
                             self._allocation[job_id][worker_type] *\
                                 elapsed_time_since_last_reset
-                time_so_far = time_should_have_received - time_received
-                self._job_time_so_far[job_id][worker_type] = time_so_far
-                self._worker_time_so_far[worker_type] += time_so_far
-        self._last_reset_time = self._get_current_timestamp()
+                deficit = time_should_have_received - time_received
+                self._deficits[worker_type][job_id] += deficit
+        self._print_deficits()
+        self._last_reset_time = current_time
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _add_to_queue(self, job_id, worker_type=None):
@@ -1321,6 +1357,7 @@ class Scheduler:
                                     allocation=0.0,
                                     steps_run=0,
                                     job_id=other_job_id)
+        self._deficits[worker_type][job_id] = 0.0
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _add_to_priorities(self, job_id, worker_type=None):
@@ -1338,10 +1375,12 @@ class Scheduler:
             worker_types = [worker_type]
         for worker_type in worker_types:
             self._priorities[worker_type][job_id] = 0.0
+            self._deficits[worker_type][job_id] = 0.0
             for other_job_id in self._throughputs:
                 if (other_job_id.is_pair() and
                     job_id.overlaps_with(other_job_id)):
                     self._priorities[worker_type][other_job_id] = 0.0
+                    self._deficits[worker_type][other_job_id] = 0.0
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _remove_from_queue(self, job_id):
@@ -1382,6 +1421,7 @@ class Scheduler:
                 for other_job_id in self._priorities[worker_type]:
                     if job_id.overlaps_with(other_job_id):
                         del self._priorities[worker_type][other_job_id]
+                        del self._deficits[worker_type][other_job_id]
                         found = True
                         break
                 if not found:
@@ -1424,18 +1464,19 @@ class Scheduler:
                 if self._allocation[job_id][worker_type] == 0.0 or \
                     self._throughputs[job_id][worker_type] == 0.0 or \
                     self._throughputs[job_id][worker_type] == [0.0, 0.0]:
-                    self._per_worker_type_job_queue[worker_type].update_entry(
-                            i, priority=INFINITY)
+                    new_priority = INFINITY
+                    steps_run = None
                 else:
                     new_priority = fractions[worker_type][job_id] /\
                             self._allocation[job_id][worker_type]
                     steps_run = self._steps_run_so_far[job_id][worker_type]
-                    # NOTE: use negative allocation here to sort in order of
-                    # highest allocation -> lowest.
-                    self._per_worker_type_job_queue[worker_type].update_entry(
-                            i, priority=new_priority,
-                            allocation=-self._allocation[job_id][worker_type],
-                            steps_run=steps_run)
+                # NOTE: use negative allocation and deficit here to sort in
+                # order of highest allocation -> lowest.
+                self._per_worker_type_job_queue[worker_type].update_entry(
+                        i, priority=new_priority,
+                        deficit=-self._deficits[worker_type][job_id],
+                        allocation=-self._allocation[job_id][worker_type],
+                        steps_run=steps_run)
             self._per_worker_type_job_queue[worker_type].heapify()
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
@@ -1612,6 +1653,7 @@ class Scheduler:
                 self._per_worker_type_job_queue[worker_type] = \
                         job_queue.JobQueue()
                 self._priorities[worker_type] = {}
+                self._deficits[worker_type] = {}
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = 0
