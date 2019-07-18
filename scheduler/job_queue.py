@@ -6,7 +6,6 @@ class JobQueue:
 
         def __init__(self, priority, allocation, steps_run, job_id):
             self._priority = priority
-            self._deficit = 0.0
             self._allocation = allocation
             self._steps_run = steps_run
             self._job_id = job_id
@@ -21,14 +20,6 @@ class JobQueue:
         @priority.setter
         def priority(self, priority):
             self._priority = priority
-
-        @property
-        def deficit(self):
-            return self._deficit
-
-        @deficit.setter
-        def deficit(self, deficit):
-            self._deficit = deficit
 
         @property
         def allocation(self):
@@ -53,8 +44,6 @@ class JobQueue:
         def __lt__(self, other):
             if self._priority != other._priority:
                 return self._priority < other._priority
-            elif self._deficit != other._deficit:
-                return self._deficit < other._deficit
             elif self._allocation != other._allocation:
                 return self._allocation < other._allocation
             elif self._steps_run != other._steps_run:
@@ -64,7 +53,6 @@ class JobQueue:
 
         def __eq__(self, other):
             return (self._priority == other_.priority
-                    and self._deficit == other._deficit
                     and self._allocation == other._allocation
                     and self._steps_run == other._steps_run
                     and self._job_id == other._job_id)
@@ -88,13 +76,10 @@ class JobQueue:
     def heapify(self):
         heapq.heapify(self._queue)
 
-    def update_entry(self, i, priority=None, deficit=None, allocation=None,
+    def update_entry(self, i, priority=None, allocation=None,
                      steps_run=None):
         if priority is not None:
             self._queue[i].priority = priority
-
-        if deficit is not None:
-            self._queue[i].deficit = deficit
 
         if allocation is not None:
             self._queue[i].allocation = allocation
