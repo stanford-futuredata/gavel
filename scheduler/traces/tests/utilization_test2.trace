@@ -1,0 +1,2 @@
+A3C	cd /home/keshavsanthanam/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/	--num_minibatches	7946	0	1
+A3C	cd /home/keshavsanthanam/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/	--num_minibatches	3977	0	1

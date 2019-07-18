@@ -355,13 +355,12 @@ class Scheduler:
         for x in worker_types:
             allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
         print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
-               'Worker type: %s\tWorker ID: %d\t'
-               'Priority: %f\t'
-               'Allocation:%s') % (self._get_current_timestamp(),
-                                   job_id, worker_type,
-                                   worker_id,
-                                   priority,
-                                   allocation_str))
+               'Worker type: %s\tWorker ID: %d\n\t'
+               'Priority: %f\tAllocation: %s') % (self._get_current_timestamp(),
+                                                 job_id, worker_type,
+                                                 worker_id,
+                                                 priority,
+                                                 allocation_str))
 
         return job_id
 
@@ -1709,7 +1708,6 @@ class Scheduler:
                                             all_execution_times[0])
 
 
-                execution_times = []
                 # If we just ran co-located jobs, use the maximum of the
                 # individual execution times.
                 max_execution_time = np.max(all_execution_times)

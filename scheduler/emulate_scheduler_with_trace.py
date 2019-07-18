@@ -82,8 +82,8 @@ def main(args):
 
     cluster_spec = {key_value.split(':')[0]: int(key_value.split(':')[1])
                     for key_value in args.cluster_spec.split(',')}
-    sched.emulate_from_trace(cluster_spec, arrival_times, jobs,
-                             ideal=args.ideal)
+    sched.emulate(cluster_spec, arrival_times, jobs,
+                  ideal=args.ideal)
     sched.get_average_jct()
     sched.get_cluster_utilization()
 
