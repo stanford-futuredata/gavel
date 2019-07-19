@@ -1,5 +1,8 @@
 import argparse
 import json
+import io
+from contextlib import redirect_stdout
+from func_timeout import func_timeout, FunctionTimedOut
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -119,22 +122,89 @@ def debug_packing_for_rounds_with_timelines():
     plt.show()
 
 
-def main():
+def main(args):
     # TODO: convert to command line arguments
-    schedule_in_rounds = False
+    schedule_in_rounds = True
     throughputs_file = 'combined_throughputs.json'
     num_v100s = 25
-    policy_names = ['fifo']
+    policy_names = ['max_min_fairness']#, 'fifo', 'isolated']
     ratios = [
             {'v100': 1, 'p100': 0, 'k80': 0},
             #{'v100': 1, 'p100': 1, 'k80': 0},
             #{'v100': 1, 'p100': 1, 'k80': 1},
             #{'v100': 2, 'p100': 1, 'k80': 0},
         ]
-    job_range = (0, 100)
+    job_range = (1000, 2000)
+
     with open(throughputs_file, 'r') as f:
         throughputs = json.load(f)
-    lams = [16384]
+
+    raw_logs_dir = os.path.join(args.log_dir, 'raw_logs')
+    if not os.path.isdir(raw_logs_dir):
+        os.mkdir(raw_logs_dir)
+
+    summary_logs_dir = os.path.join(args.log_dir, 'summary')
+    if not os.path.isdir(summary_logs_dir):
+        os.mkdir(summary_logs_dir)
+
+    jobs_to_complete = set()
+    for i in range(job_range[0], job_range[1]):
+        jobs_to_complete.add(JobIdPair(i, None))
+
+    for ratio in ratios:
+        cluster_spec = {}
+        total_gpu_fraction = sum([ratio[gpu_type] for gpu_type in ratio])
+        for gpu_type in ratio:
+            fraction = ratio[gpu_type] / total_gpu_fraction
+            cluster_spec[gpu_type] = int(fraction * num_v100s)
+
+        for policy_name in policy_names:
+            lam_upper_bound = 32768
+            lam_lower_bound = 16384
+            all_lams = []
+            average_jcts = []
+            knee = None
+            final_lam = None
+            while final_lam is None:
+                lams = np.linspace(lam_upper_bound, lam_lower_bound, num=10)
+                for lam in lams:
+                    # TODO: move this one level up?
+                    policy = get_policy(policy_name)
+                    sched = scheduler.Scheduler(
+                                    policy,
+                                    schedule_in_rounds=schedule_in_rounds,
+                                    throughputs_file=throughputs_file,
+                                    emulate=True)
+                    try:
+                        func_timeout(300, sched.emulate,
+                                     args=(cluster_spec,),
+                                     kwargs={
+                                        'throughputs': throughputs,
+                                        'lam': lam,
+                                        'jobs_to_complete': jobs_to_complete
+                                     })
+                        average_jct = sched.get_average_jct(jobs_to_complete)
+                        average_jcts.append(average_jct)
+                        utilization = sched.get_cluster_utilization()
+                    except FunctionTimedOut:
+                        average_jcts.append(float('inf'))
+                    if knee is None and utilization = 1.0:
+                        knee = lam
+                        lam_lower_bound = knee
+                        break
+                    elif (knee is not None and 
+                          np.max(average_jcts) / np.min(average_jcts) >= 10):
+                        final_lam = lam
+                        break
+                lam_upper_bound = lam_lower_bound
+                lam_lower_bound /= 2
+
+        print('knee at lamda=', knee)
+        print('final lambda=', final_lam)
+        print(all_lams)
+        print(average_jcts)
+
+    """
     for ratio in ratios:
         cluster_spec = {}
         total_gpu_fraction = sum([ratio[gpu_type] for gpu_type in ratio])
@@ -182,8 +252,17 @@ def main():
                                                  utilization,
                                                  average_jct))
                         f.flush()
-
+    """
 
 if __name__=='__main__':
+    parser = argparse.ArgumentParser(
+            description='Sweep through lambda values')
+    parser.add_argument('-v', '--v100s', type=int, default=25,
+                        help='Number of v100s')
+    parser.add_argument('-n', '--num_jobs', type=int, default=1000,
+                        help='Number of jobs to run')
+    parser.add_argument('-l', '--log_dir', type=str, default='logs',
+                        help='Log directory')
+    args = parser.parse_args()
     #debug_packing_for_rounds_with_timelines()
-    main()
+    main(args)
