@@ -42,35 +42,6 @@ def parse_trace(trace_file):
             arrival_times.append(int(arrival_time))
     return jobs, arrival_times
 
-def sweep_cluster_sizes(jobs, arrival_times, policy, schedule_in_rounds,
-                        throughputs_file, output_file):
-    ratios = [(1, 0, 0), (1, 1, 1), (1, 1, 0), (2, 1, 0)]
-    with open(output_file, 'w') as f:
-        f.write('# v100\t# p100\t# k80\tUtilization\tAverage JCT\n')
-        f.flush()
-        for ratio in ratios:
-            for i in range(8):
-                cluster_spec = {}
-                cluster_spec['v100'] = ratio[0] * (2 ** i)
-                cluster_spec['p100'] = ratio[1] * (2 ** i)
-                cluster_spec['k80'] = ratio[2] * (2 ** i)
-                sched = \
-                    scheduler.Scheduler(policy,
-                                        schedule_in_rounds=schedule_in_rounds,
-                                        throughputs_file=throughputs_file,
-                                        emulate=True)
-                sched.emulate(cluster_spec, arrival_times, jobs, ideal=False)
-                utilization = sched.get_cluster_utilization()
-                if utilization is None:
-                    continue
-                average_jct = sched.shutdown()
-                f.write('%d\t%d\t%d\t%.3f\t%.3f\n' % (cluster_spec['v100'],
-                                                      cluster_spec['p100'],
-                                                      cluster_spec['k80'],
-                                                      utilization,
-                                                      average_jct))
-                f.flush()
-
 def main(args):
     jobs, arrival_times = parse_trace(args.trace_file)
     policy = get_policy(args.policy)
