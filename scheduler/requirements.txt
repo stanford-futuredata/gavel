@@ -1,1 +1,4 @@
+cvxpy
+grpcio
+grpcio-tools
 preconditions
