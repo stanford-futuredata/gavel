@@ -175,7 +175,9 @@ class MaxMinFairnessPolicy(Policy):
         ]
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='SCS')
-        assert cvxprob.status == "optimal"
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
 
         return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
@@ -205,7 +207,9 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='SCS')
-        #assert cvxprob.status == "optimal"
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
