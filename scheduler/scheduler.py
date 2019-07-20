@@ -45,7 +45,7 @@ class Scheduler:
 
         # Flag to control whether scheduling should occur in rounds.
         self._schedule_in_rounds = schedule_in_rounds
-        print("Running with schedule_in_rounds: %s" % self._schedule_in_rounds)
+        #print("Running with schedule_in_rounds: %s" % self._schedule_in_rounds)
 
         # Flag to control whether scheduler runs in emulation mode.
         self._emulate = emulate
@@ -730,13 +730,13 @@ class Scheduler:
         global interarrival_time_generator
         return -math.log(1.0 - interarrival_time_generator.random()) / rate_parameter
 
-    def _generate_job(self, throughputs, run_dir='/tmp'):
+    def _generate_job(self, run_dir='/tmp'):
         """Generates a new job for emulation."""
         global job_generator
         job_template = job_generator.choice(JobTable)
         job_type = job_template.model
         run_time = 60 * (10 ** job_generator.uniform(2, 4))
-        num_steps = run_time * throughputs['v100'][job_type]['null']
+        num_steps = run_time * self._all_throughputs['v100'][job_type]['null']
         assert(run_time > 0)
         assert(num_steps > 0)
         if job_template.needs_data_dir:
@@ -755,8 +755,8 @@ class Scheduler:
         return job
 
     def emulate(self, cluster_spec, arrival_times=None, jobs=None,
-                ideal=False, throughputs=None, lam=None,
-                jobs_to_complete=None, measurement_window=None):
+                ideal=False, lam=None, jobs_to_complete=None,
+                measurement_window=None):
         """Emulates the scheduler execution.
 
            Emulation can be performed using a trace or with continuously
@@ -774,8 +774,6 @@ class Scheduler:
             jobs: A set of pre-generated jobs.
             ideal: If True, emulates ideal behavior. This is only available
                    when running from a trace.
-            throughputs: A `dict` specifying the measured throughputs of each
-                         job on each worker type.
             lam: 1 / the rate parameter to be passed in to the Poisson process
                  used to generate arrival times.
             jobs_to_complete: A set of `JobIdPair`s that must be completed
@@ -790,14 +788,18 @@ class Scheduler:
                 If `measurement_window` is specified, returns the jobs
                 collected in the window. Otherwise returns None.
         """
+
         from_trace = arrival_times is not None and jobs is not None
         if from_trace:
             remaining_jobs = len(jobs)
             queued_jobs = []
         else:
-            if throughputs is None or lam is None:
-                raise ValueError('\'throughputs\' and \'lam\' must be '
-                                 'specified when running without trace.')
+            if self._all_throughputs is None:
+                raise ValueError('Scheduler must be initialized with a '
+                                 'throughputs file.')
+            elif lam is None:
+                raise ValueError('\'lam\' must be specified when running '
+                                 'without trace.')
         if ideal:
             if not from_trace:
                 raise ValueError('Can only emulate in ideal mode with a trace.')
@@ -952,7 +954,7 @@ class Scheduler:
                         break
             else:
                 while next_job_arrival_time <= self._current_timestamp:
-                    job = self._generate_job(throughputs)
+                    job = self._generate_job()
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
                     if (measurement_window is not None and
