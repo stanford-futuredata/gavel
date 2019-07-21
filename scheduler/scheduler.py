@@ -54,6 +54,7 @@ class Scheduler:
         # Start and last processed timestamp for each job_id.
         self._per_job_start_timestamps = {}
         self._per_job_latest_timestamps = {}
+        self._per_job_latest_microtask_end_timestamps = {}
         # Job completion times.
         self._job_completion_times = {}
         # Queue of events that need to be processed at specific timestamps.
@@ -929,6 +930,8 @@ class Scheduler:
                             all_execution_times.append(execution_time)
                             self._per_job_latest_timestamps[single_job_id] = \
                                     finish_time
+                            self._per_job_latest_microtask_end_timestamps[single_job_id] = \
+                                    finish_time
                         # TODO: decide whether to pass in all worker_ids to
                         # _done_callback.
                         for worker_id in worker_ids:
@@ -1147,9 +1150,14 @@ class Scheduler:
            Debug function for returning the start and end times of each job.
         """
         with self._scheduler_lock:
-            job_ids = sorted([job_id for job_id in self._per_job_latest_timestamps])
-            start_times = [self._per_job_start_timestamps[job_id] for job_id in job_ids]
-            end_times = [self._per_job_latest_timestamps[job_id] for job_id in job_ids]
+            job_ids = sorted(
+                [job_id for job_id in self._per_job_latest_timestamps])
+            start_times = [
+                self._per_job_start_timestamps[job_id]
+                for job_id in job_ids]
+            end_times = [
+                self._per_job_latest_timestamps[job_id]
+                for job_id in job_ids]
         return start_times, end_times
 
     def get_all_emulated_jobs(self, job_range):
@@ -1307,20 +1315,43 @@ class Scheduler:
                 self._job_time_so_far[job_id][worker_type] = 0.0
 
                 # Compute priority deficit.
+                # latest_timestamp is the last timestamp associated with this
+                # job_id. Could correspond to either a start or an end timestamp
+                # for a microtask.
+                # latest_microtask_end_timestamp is the last timestamp associated
+                # with a microtask completing for this job_id.
                 latest_timestamp = None
+                latest_microtask_end_timestamp = None
                 for single_job_id in job_id.singletons():
+                    single_job_latest_microtask_end_timestamp = \
+                        self._per_job_latest_microtask_end_timestamps[single_job_id]
                     single_job_latest_timestamp = \
-                            self._per_job_latest_timestamps[single_job_id]
+                        self._per_job_latest_timestamps[single_job_id]
+
                     if (latest_timestamp is None or
                         single_job_latest_timestamp > latest_timestamp):
                         latest_timestamp = single_job_latest_timestamp
-                time_received = max(0, latest_timestamp - self._last_reset_time)
+                    if (latest_microtask_end_timestamp is None or
+                        single_job_latest_microtask_end_timestamp >
+                        latest_microtask_end_timestamp):
+                        latest_microtask_end_timestamp = \
+                        single_job_latest_microtask_end_timestamp
+
+                # If latest_timestamp > latest_microtask_end_timestamp, a microtask
+                # for this job_id is running, so use latest_timestamp as a start
+                # timestamp. Otherwise, use it as an end timestamp.
+                if latest_microtask_end_timestamp < latest_timestamp:
+                    time_received = max(0, current_time - latest_timestamp)
+                else:
+                    time_received = max(0, latest_timestamp - self._last_reset_time)
+
                 if self._allocation is None or job_id not in self._allocation:
                     time_should_have_received = 0
                 else:
                     time_should_have_received = \
                             self._allocation[job_id][worker_type] *\
                                 elapsed_time_since_last_reset
+
                 deficit = time_should_have_received - time_received
                 self._deficits[worker_type][job_id] += deficit
         self._print_deficits()
