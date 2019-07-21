@@ -209,7 +209,7 @@ class Scheduler:
                 self._initialize_num_steps_per_iteration(job_id, worker_type)
                 self._job_time_so_far[job_id][worker_type] = 0.0
             self._per_job_start_timestamps[job_id] = current_timestamp
-            self._per_job_latest_timestamps[job_id] = current_timestamp
+            self._per_job_latest_timestamps[job_id] = None
             if self._schedule_in_rounds:
                 self._add_to_priorities(job_id)
             else:
@@ -1312,39 +1312,12 @@ class Scheduler:
         for worker_type in self._worker_types:
             self._worker_time_so_far[worker_type] = 0.0
             for job_id in self._job_time_so_far:
-                self._job_time_so_far[job_id][worker_type] = 0.0
+                # _job_time_so_far keeps track of how long job_id has run on
+                # worker_type since the last reset event.
+                time_received = self._job_time_so_far[job_id][worker_type]
 
-                # Compute priority deficit.
-                # latest_timestamp is the last timestamp associated with this
-                # job_id. Could correspond to either a start or an end timestamp
-                # for a microtask.
-                # latest_microtask_end_timestamp is the last timestamp associated
-                # with a microtask completing for this job_id.
-                latest_timestamp = None
-                latest_microtask_end_timestamp = None
-                for single_job_id in job_id.singletons():
-                    single_job_latest_microtask_end_timestamp = \
-                        self._per_job_latest_microtask_end_timestamps[single_job_id]
-                    single_job_latest_timestamp = \
-                        self._per_job_latest_timestamps[single_job_id]
-
-                    if (latest_timestamp is None or
-                        single_job_latest_timestamp > latest_timestamp):
-                        latest_timestamp = single_job_latest_timestamp
-                    if (latest_microtask_end_timestamp is None or
-                        single_job_latest_microtask_end_timestamp >
-                        latest_microtask_end_timestamp):
-                        latest_microtask_end_timestamp = \
-                        single_job_latest_microtask_end_timestamp
-
-                # If latest_timestamp > latest_microtask_end_timestamp, a microtask
-                # for this job_id is running, so use latest_timestamp as a start
-                # timestamp. Otherwise, use it as an end timestamp.
-                if latest_microtask_end_timestamp < latest_timestamp:
-                    time_received = max(0, current_time - latest_timestamp)
-                else:
-                    time_received = max(0, latest_timestamp - self._last_reset_time)
-
+                # Compute the time this job_id should have received since the
+                # last reset event.
                 if self._allocation is None or job_id not in self._allocation:
                     time_should_have_received = 0
                 else:
@@ -1352,8 +1325,12 @@ class Scheduler:
                             self._allocation[job_id][worker_type] *\
                                 elapsed_time_since_last_reset
 
+                # deficit is now just the difference between the time job_id
+                # should have received, and how much it actually received.
                 deficit = time_should_have_received - time_received
                 self._deficits[worker_type][job_id] += deficit
+
+                self._job_time_so_far[job_id][worker_type] = 0.0
         self._print_deficits()
         self._last_reset_time = current_time
 
@@ -1391,7 +1368,6 @@ class Scheduler:
                                     allocation=0.0,
                                     steps_run=0,
                                     job_id=other_job_id)
-        self._deficits[worker_type][job_id] = 0.0
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _add_to_priorities(self, job_id, worker_type=None):
