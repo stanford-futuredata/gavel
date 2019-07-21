@@ -45,7 +45,7 @@ class Scheduler:
 
         # Flag to control whether scheduling should occur in rounds.
         self._schedule_in_rounds = schedule_in_rounds
-        #print("Running with schedule_in_rounds: %s" % self._schedule_in_rounds)
+        print("Running with schedule_in_rounds=%s" % self._schedule_in_rounds)
 
         # Flag to control whether scheduler runs in emulation mode.
         self._emulate = emulate
