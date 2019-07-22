@@ -477,10 +477,20 @@ class Scheduler:
         for job_id, *_ in sorted_job_queue:
             if len(scheduled_jobs_on_worker_type) == num_workers:
                 break
+            # Don't schedule jobs that have already been scheduled.
             if (job_id not in already_scheduled_jobs_set and
                 (not job_id.is_pair() or
                  (job_id.singletons()[0] not in already_scheduled_jobs_set and
                   job_id.singletons()[1] not in already_scheduled_jobs_set))):
+                # Don't schedule jobs with 0 throughput.
+                if ((job_id.is_pair() and
+                    (self._throughputs[job_id][worker_type][0] <= 0 or
+                     self._throughputs[job_id][worker_type][1] <= 0)) or
+                    (not job_id.is_pair() and
+                     self._throughputs[job_id][worker_type] <= 0)):
+                        continue
+                else:
+                    new_priority = 0
                 if self._priorities[worker_type][job_id] == 0.0:
                     print('WARNING: scheduling job %s with 0 priority' % (job_id))
                 already_scheduled_jobs_set.add(job_id)
