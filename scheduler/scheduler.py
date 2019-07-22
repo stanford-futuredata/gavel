@@ -1463,6 +1463,12 @@ class Scheduler:
                 new_priority = self._allocation[job_id][worker_type] * 1e9
                 if self._allocation[job_id][worker_type] == 0.0:
                     assert(new_priority == 0)
+                elif ((job_id.is_pair() and
+                       (self._throughputs[job_id][worker_type][0] == 0 or
+                        self._throughputs[job_id][worker_type][1] == 0)) or
+                      (not job_id.is_pair() and
+                       self._throughputs[job_id][worker_type] == 0)):
+                    new_priority = 0
                 elif fractions[worker_type][job_id] > 0.0:
                     new_priority = self._allocation[job_id][worker_type] /\
                             fractions[worker_type][job_id]
