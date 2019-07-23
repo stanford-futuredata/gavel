@@ -54,7 +54,6 @@ class Scheduler:
         # Start and last processed timestamp for each job_id.
         self._per_job_start_timestamps = {}
         self._per_job_latest_timestamps = {}
-        self._per_job_latest_microtask_end_timestamps = {}
         # Job completion times.
         self._job_completion_times = {}
         # Queue of events that need to be processed at specific timestamps.
@@ -929,8 +928,6 @@ class Scheduler:
                             execution_time = finish_time - self._per_job_latest_timestamps[single_job_id]
                             all_execution_times.append(execution_time)
                             self._per_job_latest_timestamps[single_job_id] = \
-                                    finish_time
-                            self._per_job_latest_microtask_end_timestamps[single_job_id] = \
                                     finish_time
                         # TODO: decide whether to pass in all worker_ids to
                         # _done_callback.
