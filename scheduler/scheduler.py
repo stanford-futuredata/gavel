@@ -1311,7 +1311,10 @@ class Scheduler:
             for job_id in self._job_time_so_far:
                 # _job_time_so_far keeps track of how long job_id has run on
                 # worker_type since the last reset event.
-                time_received = self._job_time_so_far[job_id][worker_type]
+                if worker_type not in self._job_time_so_far[job_id]:
+                    time_received = 0.0
+                else:
+                    time_received = self._job_time_so_far[job_id][worker_type]
 
                 # Compute the time this job_id should have received since the
                 # last reset event.
@@ -1325,6 +1328,8 @@ class Scheduler:
                 # deficit is now just the difference between the time job_id
                 # should have received, and how much it actually received.
                 deficit = time_should_have_received - time_received
+                if job_id not in self._deficits[worker_type]:
+                    self._deficits[worker_type][job_id] = 0.0
                 self._deficits[worker_type][job_id] += deficit
 
                 self._job_time_so_far[job_id][worker_type] = 0.0
