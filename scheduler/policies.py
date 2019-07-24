@@ -387,7 +387,7 @@ class FIFOPolicy(Policy):
             allocation[job_id] = {}
             worker_types = sorted(list(throughputs[job_id].keys()),
                                   reverse=True)
-            for worker_type in worker_type:
+            for worker_type in worker_types:
                 if (job_id in self._allocation and
                     self._allocation[job_id] == worker_type):
                     allocation[job_id][worker_type] = 1.0
