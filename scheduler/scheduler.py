@@ -1615,9 +1615,7 @@ class Scheduler:
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _initialize_num_steps_per_iteration(self, job_id, worker_type):
-        if self._policy.name == 'FIFO':
-            num_steps = self._jobs[job_id].total_steps
-        elif self._emulate:
+        if self._emulate:
             throughput = self._throughputs[job_id][worker_type]
             num_steps = int(throughput * TIME_PER_ITERATION)
         else:

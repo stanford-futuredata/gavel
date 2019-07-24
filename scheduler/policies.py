@@ -340,12 +340,13 @@ class FIFOPolicy(Policy):
     def get_allocation(self, throughputs, cluster_spec):
         # New Job ID; put on queue to schedule.
         job_id = None
-        for job_id in throughputs:
+        job_ids = sorted(list(throughputs.keys()))
+        for job_id in job_ids:
             if job_id not in self._allocation and job_id not in self._queue:
                 self._queue.append(job_id)
 
         # Old Job ID that has been removed; schedule job from queue.
-        job_ids = list(self._allocation.keys())
+        job_ids = sorted(list(self._allocation.keys()))
         for job_id in job_ids:
             if job_id not in throughputs:
                 worker_type = self._allocation[job_id]
@@ -357,28 +358,36 @@ class FIFOPolicy(Policy):
         # worker_types_seen keeps track of all workers that have been assigned
         # jobs.
         worker_types_seen = {}
-        for job_id in self._allocation:
+        job_ids = sorted(list(self._allocation.keys()))
+        for job_id in job_ids:
             worker_type = self._allocation[job_id]
             if worker_type not in worker_types_seen:
                 worker_types_seen[worker_type] = 0
             worker_types_seen[worker_type] += 1
 
         # Try to allocation all queued job IDs on available workers.
-        job_ids = list(throughputs.keys())
+        job_ids = sorted(list(throughputs.keys()))
         if len(job_ids) > 0:
             job_id = job_ids[0]
-            for worker_type in throughputs[job_id]:
+            worker_types = sorted(list(throughputs[job_id].keys()),
+                                  reverse=True)
+            for worker_type in worker_types:
                 if (worker_type not in worker_types_seen or
                     worker_types_seen[worker_type] < cluster_spec[worker_type]):
                     if len(self._queue) > 0:
                         job_id_to_schedule = self._queue.pop(0)
                         self._allocation[job_id_to_schedule] = worker_type
+                        if worker_type not in worker_types_seen:
+                            worker_types_seen[worker_type] = 0
+                        worker_types_seen[worker_type] += 1
 
         # Construct output allocation.
         allocation = {}
         for job_id in throughputs:
             allocation[job_id] = {}
-            for worker_type in throughputs[job_id]:
+            worker_types = sorted(list(throughputs[job_id].keys()),
+                                  reverse=True)
+            for worker_type in worker_type:
                 if (job_id in self._allocation and
                     self._allocation[job_id] == worker_type):
                     allocation[job_id][worker_type] = 1.0
