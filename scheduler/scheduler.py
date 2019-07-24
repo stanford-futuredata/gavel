@@ -1203,9 +1203,9 @@ class Scheduler:
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _print_deficits(self):
-        """Prints the allocation.
+        """Prints the deficit.
 
-           Debug method used for printing the allocation of each job on each
+           Debug method used for printing the deficit of each job on each
            worker type.
         """
         print('')
@@ -1333,7 +1333,8 @@ class Scheduler:
                 self._deficits[worker_type][job_id] += deficit
 
                 self._job_time_so_far[job_id][worker_type] = 0.0
-        self._print_deficits()
+        # Prints deficits every time allocation is reset.
+        # self._print_deficits()
         self._last_reset_time = current_time
 
     @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
@@ -1482,8 +1483,9 @@ class Scheduler:
                     new_priority = fractions[worker_type][job_id] /\
                             self._allocation[job_id][worker_type]
                     steps_run = self._steps_run_so_far[job_id][worker_type]
-                # Use negative allocation and deficit here to sort in
-                # order of highest allocation -> lowest.
+                # Use negative deficit and allocation here to sort in
+                # order of highest deficit -> lowest deficit followed by
+                # highest allocation -> lowest allocation.
                 self._per_worker_type_job_queue[worker_type].update_entry(
                         i, priority=new_priority,
                         deficit=-self._deficits[worker_type][job_id],
