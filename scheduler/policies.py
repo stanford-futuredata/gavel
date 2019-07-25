@@ -149,7 +149,21 @@ class IsolatedPolicy(Policy):
                                              cluster_spec)
         if throughputs is None: return None
         (m, n) = throughputs.shape
-        return super().unflatten(np.full((m, n), 1.0 / (m * n)), index)
+        (_, worker_types) = index
+        num_workers = [cluster_spec[worker_type] for worker_type in worker_types]
+        allocation = np.full((m, n), 1.0 / float(m))
+
+        # Give each user 1/m of the cluster (num_workers[i] workers
+        # available to each user i).
+        for i in range(n):
+            allocation[:, i] *= num_workers[i]
+
+        # Normalization to make sure each row in the allocation has a sum
+        # <= 1, and each column in the allocation has a sum <= num_workers
+        # of that type.
+        for i in range(m):
+            allocation[i] = allocation[i] / max(1.0, np.sum(allocation[i]))
+        return super().unflatten(allocation, index)
 
 
 class MaxMinFairnessPolicy(Policy):
