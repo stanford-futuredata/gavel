@@ -1,6 +1,7 @@
 import cvxpy as cp
 import numpy as np
 
+import job_id_pair
 
 class Policy:
 
@@ -346,31 +347,74 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
 
 
 class FIFOPolicy(Policy):
-    def __init__(self):
+    def __init__(self, mode='base'):
         self._name = 'FIFO'
         self._allocation = {}
         self._queue = []
+        self._active_jobs = set()
+        if mode != 'base' and mode != 'heterogeneous' and mode != 'packing':
+            raise ValueError('FIFOPolicy mode must either be \'base\', '
+                              '\'heterogeneous\', or \'packing\'')
+        self._mode = mode
 
     def get_allocation(self, throughputs, cluster_spec):
+
+        runtime_dist = {}
+
         # New Job ID; put on queue to schedule.
         job_id = None
-        job_ids = sorted(list(throughputs.keys()))
+        job_ids = []
+        for job_id in throughputs:
+            if not job_id.is_pair():
+                job_ids.append(job_id)
+        job_ids.sort()
+
+        # Add all newly arrived jobs to the queue.
         for job_id in job_ids:
-            if job_id not in self._allocation and job_id not in self._queue:
+            if (job_id not in self._allocation and
+                job_id not in self._active_jobs and job_id not in self._queue):
                 self._queue.append(job_id)
 
-        # Old Job ID that has been removed; schedule job from queue.
-        job_ids = sorted(list(self._allocation.keys()))
+        # Find all completed jobs.
+        completed_jobs = set()
+        job_ids = sorted(list(self._active_jobs))
         for job_id in job_ids:
+            assert not job_id.is_pair()
             if job_id not in throughputs:
-                worker_type = self._allocation[job_id]
-                del self._allocation[job_id]
-                if len(self._queue) > 0:
-                    job_id_to_schedule = self._queue.pop(0)
-                    self._allocation[job_id_to_schedule] = worker_type
+                completed_jobs.add(job_id)
 
-        # worker_types_seen keeps track of all workers that have been assigned
-        # jobs.
+        # Remove all completed jobs from the internal data structures
+        # and schedule jobs from queue to replace the completed jobs.
+        available_resources = []
+        for job_id in completed_jobs:
+            self._active_jobs.remove(job_id)
+            for other_job_id in self._allocation:
+                if job_id.overlaps_with(other_job_id):
+                    # Free the resource previously allocated to the
+                    # completed job.
+                    worker_type = self._allocation[other_job_id]
+                    available_resources.append(worker_type)
+                    del self._allocation[other_job_id]
+                    # If the completed job was allocated in a pair and the
+                    # other job has not completed, add it to the queue.
+                    for single_job_id in other_job_id.singletons():
+                        if (single_job_id != job_id and
+                            single_job_id not in completed_jobs):
+                            self._active_jobs.remove(single_job_id)
+                            self._queue.append(single_job_id)
+                    break
+        if len(available_resources) > 0:
+            self._output = None
+        self._queue.sort()
+        if self._mode != 'base':
+            # Sort the available resources in order from v100 -> p100 -> k80.
+            available_resources.sort(reverse=True)
+        while len(self._queue) > 0 and len(available_resources) > 0:
+            job_id_to_schedule = self._queue.pop(0)
+            self._active_jobs.add(job_id_to_schedule)
+            self._allocation[job_id_to_schedule] = available_resources.pop(0)
+
+        # Count how many workers of each type have already been allocated.
         worker_types_seen = {}
         job_ids = sorted(list(self._allocation.keys()))
         for job_id in job_ids:
@@ -379,28 +423,79 @@ class FIFOPolicy(Policy):
                 worker_types_seen[worker_type] = 0
             worker_types_seen[worker_type] += 1
 
-        # Try to allocation all queued job IDs on available workers.
+        # Try to allocate all queued job IDs on available workers.
         job_ids = sorted(list(throughputs.keys()))
         if len(job_ids) > 0:
             job_id = job_ids[0]
-            worker_types = sorted(list(throughputs[job_id].keys()),
-                                  reverse=True)
+            if self._mode != 'base':
+                worker_types = sorted(list(throughputs[job_id].keys()),
+                                      reverse=True)
+            else:
+                # TODO: Make this a random selection for base mode?
+                worker_types = list(throughputs[job_id].keys())
             for worker_type in worker_types:
                 if (worker_type not in worker_types_seen or
                     worker_types_seen[worker_type] < cluster_spec[worker_type]):
                     if len(self._queue) > 0:
                         job_id_to_schedule = self._queue.pop(0)
+                        self._active_jobs.add(job_id_to_schedule)
                         self._allocation[job_id_to_schedule] = worker_type
                         if worker_type not in worker_types_seen:
                             worker_types_seen[worker_type] = 0
                         worker_types_seen[worker_type] += 1
 
+        if self._mode == 'packing':
+            if len(self._queue) > 0:
+                for worker_type in cluster_spec:
+                    assert(worker_types_seen[worker_type] ==
+                           cluster_spec[worker_type])
+                # Attempt to pack as many jobs as possible.
+                unpacked_jobs = []
+                while len(self._queue) > 0:
+                    max_packed_throughput = 1.5
+                    job_id_to_pack_with = None
+                    job_id_to_schedule = self._queue.pop(0)
+                    assert job_id_to_schedule not in self._active_jobs
+                    assert job_id_to_schedule in throughputs
+
+                    # Find the already scheduled job with which the next job on
+                    # the queue will pack best with.
+                    for scheduled_job_id in self._active_jobs:
+                        assert not scheduled_job_id.is_pair()
+                        assert scheduled_job_id != job_id_to_schedule
+                        assert scheduled_job_id in throughputs
+                        if scheduled_job_id in self._allocation:
+                            worker_type = self._allocation[scheduled_job_id]
+                            #assert scheduled_job_id < job_id_to_schedule
+                            merged_job_id = \
+                                    job_id_pair.JobIdPair(scheduled_job_id[0],
+                                                          job_id_to_schedule[0])
+                            packed_throughput = \
+                                sum(throughputs[merged_job_id][worker_type])
+                            if packed_throughput > max_packed_throughput:
+                                max_packed_throughput = packed_throughput
+                                job_id_to_pack_with = scheduled_job_id
+                    if job_id_to_pack_with is None:
+                        unpacked_jobs.append(job_id_to_schedule)
+                    else:
+                        # Transfer the allocation for the single job to the
+                        # packed jobs.
+                        self._output = None
+                        self._active_jobs.add(job_id_to_schedule)
+                        merged_job_id = \
+                                job_id_pair.JobIdPair(job_id_to_pack_with[0],
+                                                      job_id_to_schedule[0])
+                        worker_type = self._allocation[job_id_to_pack_with]
+                        del self._allocation[job_id_to_pack_with]
+                        self._allocation[merged_job_id] = worker_type
+                # Add any unpacked jobs back to the queue.
+                for job_id in unpacked_jobs:
+                    self._queue.append(job_id)
+
         # Construct output allocation.
         allocation = {}
         for job_id in throughputs:
             allocation[job_id] = {}
-            worker_types = sorted(list(throughputs[job_id].keys()),
-                                  reverse=True)
             for worker_type in worker_types:
                 if (job_id in self._allocation and
                     self._allocation[job_id] == worker_type):
@@ -408,3 +503,12 @@ class FIFOPolicy(Policy):
                 else:
                     allocation[job_id][worker_type] = 0.0
         return allocation
+
+class FIFOPolicyWithPacking(PolicyWithPacking):
+    def __init__(self):
+        self._name = 'FIFO_Packing'
+        self._policy = FIFOPolicy(mode='packing')
+
+    def get_allocation(self, throughputs, cluster_spec):
+        return self._policy.get_allocation(throughputs, cluster_spec)
+
