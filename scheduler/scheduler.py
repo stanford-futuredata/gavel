@@ -20,9 +20,6 @@ from job_table import JobTable
 from runtime.rpc import scheduler_server, scheduler_client
 import utils
 
-np.random.seed(42)
-random.seed(42)
-
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
 INFINITY = float("inf")
@@ -32,21 +29,17 @@ TIME_PER_ITERATION = 32 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 
-job_generator = random.Random()
-job_generator.seed(42)
-
-interarrival_time_generator = random.Random()
-interarrival_time_generator.seed(42)
-
 class Scheduler:
 
     def __init__(self, policy, schedule_in_rounds, emulate=False,
-                 throughputs_file=None):
+                 throughputs_file=None, seed=42):
 
         # Flag to control whether scheduling should occur in rounds.
         self._schedule_in_rounds = schedule_in_rounds
         print("Running with schedule_in_rounds=%s" % self._schedule_in_rounds)
 
+        # Initialize seeds.
+        self._initialize_seeds(seed)
         # Flag to control whether scheduler runs in emulation mode.
         self._emulate = emulate
         # Latest emulated timestamp.
@@ -138,6 +131,17 @@ class Scheduler:
             self.server_thread.start()
 
             self.start_scheduling_thread()
+
+
+    def _initialize_seeds(self, seed):
+        np.random.seed(seed)
+        random.seed(seed+1)
+
+        self.job_generator = random.Random()
+        self.job_generator.seed(seed+2)
+
+        self.interarrival_time_generator = random.Random()
+        self.interarrival_time_generator.seed(seed+3)
 
 
     def start_scheduling_thread(self):
@@ -743,15 +747,13 @@ class Scheduler:
     def _sample_arrival_time_delta(self, rate_parameter):
         """Samples job interarrival rate from a Poisson distribution according
            to the specified rate parameter."""
-        global interarrival_time_generator
-        return -math.log(1.0 - interarrival_time_generator.random()) / rate_parameter
+        return -math.log(1.0 - self.interarrival_time_generator.random()) / rate_parameter
 
     def _generate_job(self, run_dir='/tmp'):
         """Generates a new job for emulation."""
-        global job_generator
-        job_template = job_generator.choice(JobTable)
+        job_template = self.job_generator.choice(JobTable)
         job_type = job_template.model
-        run_time = 60 * (10 ** job_generator.uniform(2, 4))
+        run_time = 60 * (10 ** self.job_generator.uniform(2, 4))
         num_steps = run_time * self._all_throughputs['v100'][job_type]['null']
         assert(run_time > 0)
         assert(num_steps > 0)
