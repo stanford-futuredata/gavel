@@ -25,14 +25,13 @@ SLEEP_SECONDS = 2
 INFINITY = float("inf")
 DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
-TIME_PER_ITERATION = 32 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 
 class Scheduler:
 
     def __init__(self, policy, schedule_in_rounds, emulate=False,
-                 throughputs_file=None, seed=42):
+                 throughputs_file=None, seed=42, time_per_iteration=1920):
 
         # Flag to control whether scheduling should occur in rounds.
         self._schedule_in_rounds = schedule_in_rounds
@@ -42,6 +41,11 @@ class Scheduler:
         self._initialize_seeds(seed)
         # Flag to control whether scheduler runs in emulation mode.
         self._emulate = emulate
+        # Initialize seeds.
+        self._initialize_seeds(seed)
+        # Initialize time in seconds each iteration should run for.
+        self._time_per_iteration = time_per_iteration
+
         # Latest emulated timestamp.
         self._current_timestamp = 0
         # Start and last processed timestamp for each job_id.
@@ -1619,7 +1623,7 @@ class Scheduler:
     def _initialize_num_steps_per_iteration(self, job_id, worker_type):
         if self._emulate:
             throughput = self._throughputs[job_id][worker_type]
-            num_steps = int(throughput * TIME_PER_ITERATION)
+            num_steps = int(throughput * self._time_per_iteration)
         else:
             num_steps = min(DEFAULT_NUM_STEPS,
                             self._get_remaining_steps(job_id))
@@ -1633,7 +1637,7 @@ class Scheduler:
         # desired wall-clock time per iteration.
         # TODO(keshav2): Use num_steps instead?
         old_steps = self._num_steps_per_iteration[job_id][worker_type]
-        new_steps = max(1, old_steps * (TIME_PER_ITERATION / execution_time))
+        new_steps = max(1, old_steps * (self._time_per_iteration / execution_time))
         new_steps = int(EMA_ALPHA * new_steps + (1 - EMA_ALPHA) * old_steps)
         new_steps = min(new_steps, self._get_remaining_steps(job_id))
         self._num_steps_per_iteration[job_id][worker_type] = new_steps
