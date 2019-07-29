@@ -240,6 +240,9 @@ def main(args):
             if automatic_sweep:
                 p.map(run_automatic_sweep_helper, all_args_list)
             else:
+                # Sort args in order of decreasing lambda to prioritize
+                # short-running jobs.
+                all_args_list.sort(key=lambda x: x[4], reverse=True)
                 p.map(emulate_with_timeout_helper, all_args_list)
 
 if __name__=='__main__':
