@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 import numpy as np
 import os
+import sys
 
 import job
 from job_id_pair import JobIdPair
@@ -34,26 +35,27 @@ def get_policy(policy_name):
 def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
                          cluster_spec, lam, seed, interval, jobs_to_complete,
                          log_dir, timeout, verbose):
-    policy = get_policy(policy_name)
-    sched = scheduler.Scheduler(
-                    policy,
-                    schedule_in_rounds=schedule_in_rounds,
-                    throughputs_file=throughputs_file,
-                    seed=seed,
-                    time_per_iteration=interval,
-                    emulate=True)
-
-    cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
-                                                   cluster_spec['p100'],
-                                                   cluster_spec['k80'])
-    if verbose:
-        current_time = datetime.datetime.now()
-        print('%s] cluster_spec=%s, policy=%s, '
-              'seed=%d, lam=%f' % (current_time, cluster_spec_str, policy.name,
-                                   seed, lam))
-
     f = io.StringIO()
     with redirect_stdout(f):
+        policy = get_policy(policy_name)
+        sched = scheduler.Scheduler(
+                        policy,
+                        schedule_in_rounds=schedule_in_rounds,
+                        throughputs_file=throughputs_file,
+                        seed=seed,
+                        time_per_iteration=interval,
+                        emulate=True)
+
+        cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
+                                                       cluster_spec['p100'],
+                                                       cluster_spec['k80'])
+        if verbose:
+            current_time = datetime.datetime.now()
+            print('%s] cluster_spec=%s, policy=%s, '
+                  'seed=%d, lam=%f' % (current_time, cluster_spec_str,
+                                       policy.name, seed, lam),
+                  file=sys.stderr)
+
         if timeout is None:
             sched.emulate(cluster_spec, lam=lam,
                           jobs_to_complete=jobs_to_complete)
@@ -80,7 +82,8 @@ def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
     if verbose:
         current_time = datetime.datetime.now()
         print('%s] average JCT=%f, utilization=%f' % (current_time, average_jct,
-                                                      utilization))
+                                                      utilization),
+              file=sys.stderr)
 
     return average_jct, utilization
 
@@ -147,12 +150,13 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
         if np.max(average_jcts) / np.min(average_jcts) >= 10:
             break
 
-    print('knee at lamda=', knee)
-    print('final lambda=', lam)
+    print('knee at lamda=', knee, file=sys.stderr)
+    print('final lambda=', lam, file=sys.stderr)
     for lam, average_jct, utilization in \
             zip(all_lams, average_jcts, utilizations):
         print('Lambda=%f,Average JCT=%f,'
-              'Utilization=%f' % (lam, average_jct, utilization))
+              'Utilization=%f' % (lam, average_jct, utilization),
+              file=sys.stderr)
 
 def run_automatic_sweep_helper(args):
     run_automatic_sweep(*args)
@@ -282,7 +286,7 @@ if __name__=='__main__':
                         help=('Number of processes to use in pool '
                               '(use as many as available if not specified)'))
     parser.add_argument('-p', '--policies', type=str, nargs='+',
-                        default=['fifo', 'isolated', 'max_min_fairness,'
+                        default=['fifo', 'isolated', 'max_min_fairness',
                                  'max_min_fairness_packed'],
                         help='List of policies to sweep')
     parser.add_argument('-r', '--ratios', type=str, nargs='+',
