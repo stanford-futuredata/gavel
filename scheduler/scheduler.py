@@ -37,8 +37,6 @@ class Scheduler:
         self._schedule_in_rounds = schedule_in_rounds
         print("Running with schedule_in_rounds=%s" % self._schedule_in_rounds)
 
-        # Initialize seeds.
-        self._initialize_seeds(seed)
         # Flag to control whether scheduler runs in emulation mode.
         self._emulate = emulate
         # Initialize seeds.
