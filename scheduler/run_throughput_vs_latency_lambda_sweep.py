@@ -256,7 +256,7 @@ if __name__=='__main__':
                         help='Measurement window start (job ID)')
     parser.add_argument('-e', '--window-end', type=int, default=5000,
                         help='Measurement window end (job ID)')
-    parser.add_argument('-t', '--timeout', type=int, default=3600,
+    parser.add_argument('-t', '--timeout', type=int, default=None,
                         help='Timeout (in seconds) for each run')
     parser.add_argument('-p', '--processes', type=int, default=None,
                         help=('Number of processes to use in pool '
