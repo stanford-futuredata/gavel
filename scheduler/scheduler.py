@@ -33,9 +33,13 @@ class Scheduler:
     def __init__(self, policy, schedule_in_rounds, emulate=False,
                  throughputs_file=None, seed=42, time_per_iteration=1920):
 
+        print("Running scheduler with policy=%s, schedule_in_rounds=%s,
+               seed=%d, time_per_iteration=%d" % (policy, schedule_in_rounds,
+                                                  seed,
+                                                  time_per_iteration))
+
         # Flag to control whether scheduling should occur in rounds.
         self._schedule_in_rounds = schedule_in_rounds
-        print("Running with schedule_in_rounds=%s" % self._schedule_in_rounds)
 
         # Flag to control whether scheduler runs in emulation mode.
         self._emulate = emulate
