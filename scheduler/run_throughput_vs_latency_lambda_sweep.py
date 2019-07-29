@@ -175,13 +175,17 @@ def main(args):
     schedule_in_rounds = True
     throughputs_file = 'combined_throughputs.json'
     num_v100s = args.gpus
-    policy_names = ['fifo']
-    ratios = [
-            {'v100': 1, 'p100': 0, 'k80': 0},
-            {'v100': 1, 'p100': 1, 'k80': 0},
-            {'v100': 1, 'p100': 1, 'k80': 1},
-            {'v100': 2, 'p100': 1, 'k80': 0},
-        ]
+    policy_names = args.policies
+    ratios = []
+    for ratio in args.ratios:
+        x = ratio.split(':')
+        if len(x) != 3:
+            raise ValueError('Invalid cluster ratio %s' % (ratio))
+        ratios.append({
+            'v100': int(x[0]),
+            'p100': int(x[1]),
+            'k80': int(x[2])
+            })
     job_range = (args.window_start, args.window_end)
 
     with open(throughputs_file, 'r') as f:
@@ -261,9 +265,17 @@ if __name__=='__main__':
                         help='Measurement window end (job ID)')
     parser.add_argument('-t', '--timeout', type=int, default=None,
                         help='Timeout (in seconds) for each run')
-    parser.add_argument('-p', '--processes', type=int, default=None,
+    parser.add_argument('-j', '--processes', type=int, default=None,
                         help=('Number of processes to use in pool '
                               '(use as many as available if not specified)'))
+    parser.add_argument('-p', '--policies', type=str, nargs='+',
+                        default=['fifo', 'isolated', 'max_min_fairness,'
+                                 'max_min_fairness_packed'],
+                        help='List of policies to sweep')
+    parser.add_argument('-r', '--ratios', type=str, nargs='+',
+                        default=['1:0:0', '1:1:0', '1:1:1', '2:1:0'],
+                        help=('List of cluster ratios to sweep in the form '
+                              '#v100s:#p100s:#k80s'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
