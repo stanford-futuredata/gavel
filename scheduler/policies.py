@@ -357,6 +357,7 @@ class FIFOPolicy(Policy):
                               '\'heterogeneous\', or \'packing\'')
         self._mode = mode
 
+    @profile
     def get_allocation(self, throughputs, cluster_spec):
 
         runtime_dist = {}
