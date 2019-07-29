@@ -141,11 +141,11 @@ class Scheduler:
         np.random.seed(seed)
         random.seed(seed+1)
 
-        self.job_generator = random.Random()
-        self.job_generator.seed(seed+2)
+        self._job_generator = random.Random()
+        self._job_generator.seed(seed+2)
 
-        self.interarrival_time_generator = random.Random()
-        self.interarrival_time_generator.seed(seed+3)
+        self._interarrival_time_generator = random.Random()
+        self._interarrival_time_generator.seed(seed+3)
 
 
     def start_scheduling_thread(self):
@@ -751,13 +751,13 @@ class Scheduler:
     def _sample_arrival_time_delta(self, rate_parameter):
         """Samples job interarrival rate from a Poisson distribution according
            to the specified rate parameter."""
-        return -math.log(1.0 - self.interarrival_time_generator.random()) / rate_parameter
+        return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
     def _generate_job(self, run_dir='/tmp'):
         """Generates a new job for emulation."""
-        job_template = self.job_generator.choice(JobTable)
+        job_template = self._job_generator.choice(JobTable)
         job_type = job_template.model
-        run_time = 60 * (10 ** self.job_generator.uniform(2, 4))
+        run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
         num_steps = run_time * self._all_throughputs['v100'][job_type]['null']
         assert(run_time > 0)
         assert(num_steps > 0)
