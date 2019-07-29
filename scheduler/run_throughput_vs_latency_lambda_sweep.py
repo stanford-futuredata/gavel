@@ -32,13 +32,15 @@ def get_policy(policy_name):
     return policy
 
 def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
-                         cluster_spec, lam, jobs_to_complete, log_dir, timeout,
-                         verbose):
+                         cluster_spec, lam, seed, interval, jobs_to_complete,
+                         log_dir, timeout, verbose):
     policy = get_policy(policy_name)
     sched = scheduler.Scheduler(
                     policy,
                     schedule_in_rounds=schedule_in_rounds,
                     throughputs_file=throughputs_file,
+                    seed=seed,
+                    time_per_iteration=interval,
                     emulate=True)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
@@ -46,9 +48,9 @@ def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
                                                    cluster_spec['k80'])
     if verbose:
         current_time = datetime.datetime.now()
-        print('%s] cluster_spec=%s, policy=%s, lam=%f' % (current_time,
-                                                          cluster_spec_str,
-                                                          policy.name, lam))
+        print('%s] cluster_spec=%s, policy=%s, '
+              'seed=%d, lam=%f' % (current_time, cluster_spec_str, policy.name,
+                                   seed, lam))
 
     f = io.StringIO()
     with redirect_stdout(f):
@@ -86,7 +88,7 @@ def emulate_with_timeout_helper(args):
     emulate_with_timeout(*args)
 
 def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
-                        cluster_spec, jobs_to_complete, raw_logs_policy_subdir,
+                        cluster_spec, seed, interval, jobs_to_complete, log_dir,
                         timeout, verbose):
     all_lams = []
     average_jcts = []
@@ -100,9 +102,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
                 emulate_with_timeout(policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
-                                     lam, jobs_to_complete,
-                                     raw_logs_policy_subdir,
-                                     timeout, verbose)
+                                     lam, seed, interval, jobs_to_complete,
+                                     log_dir, timeout, verbose)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -119,9 +120,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
                 emulate_with_timeout(policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
-                                     lam, jobs_to_complete,
-                                     raw_logs_policy_subdir,
-                                     timeout, verbose)
+                                     lam, seed, interval, jobs_to_complete,
+                                     log_dir, timeout, verbose)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -140,9 +140,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
                 emulate_with_timeout(policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
-                                     lam, jobs_to_complete,
-                                     raw_logs_policy_subdir,
-                                     timeout, verbose)
+                                     lam, seed, interval, jobs_to_complete,
+                                     log_dir, timeout, verbose)
         average_jcts.append(average_jct)
         utilizations.append(utilization)
         if np.max(average_jcts) / np.min(average_jcts) >= 10:
@@ -222,10 +221,17 @@ def main(args):
                 os.mkdir(raw_logs_policy_subdir)
 
             if automatic_sweep:
-                all_args_list.append((policy_name, schedule_in_rounds,
-                                      throughputs_file, cluster_spec,
-                                      jobs_to_complete, raw_logs_policy_subdir,
-                                      args.timeout, args.verbose))
+                for seed in args.seeds:
+                    seed_str = 'seed=%d' % (seed)
+                    raw_logs_seed_subdir = os.path.join(raw_logs_policy_subdir,
+                                                        seed_str)
+                    if not os.path.isdir(raw_logs_seed_subdir):
+                        os.mkdir(raw_logs_seed_subdir)
+                    all_args_list.append((policy_name, schedule_in_rounds,
+                                          throughputs_file, cluster_spec,
+                                          seed, interval, jobs_to_complete,
+                                          raw_logs_seed_subdir,
+                                          args.timeout, args.verbose))
             else:
                 throughputs = list(np.linspace(args.throughput_lower_bound,
                                                args.throughput_upper_bound,
@@ -234,11 +240,18 @@ def main(args):
                     throughputs = throughputs[1:]
                 for throughput in throughputs:
                     lam = 3600.0 / throughput
-                    all_args_list.append((policy_name, schedule_in_rounds,
-                                          throughputs_file, cluster_spec,
-                                          lam, jobs_to_complete,
-                                          raw_logs_policy_subdir,
-                                          args.timeout, args.verbose))
+                    for seed in args.seeds:
+                        seed_str = 'seed=%d' % (seed)
+                        raw_logs_seed_subdir = \
+                                os.path.join(raw_logs_policy_subdir, seed_str)
+                        if not os.path.isdir(raw_logs_seed_subdir):
+                            os.mkdir(raw_logs_seed_subdir)
+                        all_args_list.append((policy_name, schedule_in_rounds,
+                                              throughputs_file, cluster_spec,
+                                              lam, seed, args.interval,
+                                              jobs_to_complete,
+                                              raw_logs_seed_subdir,
+                                              args.timeout, args.verbose))
     if len(all_args_list) > 0:
         with multiprocessing.Pool(args.processes) as p:
             if automatic_sweep:
@@ -276,6 +289,11 @@ if __name__=='__main__':
                         default=['1:0:0', '1:1:0', '1:1:1', '2:1:0'],
                         help=('List of cluster ratios to sweep in the form '
                               '#v100s:#p100s:#k80s'))
+    parser.add_argument('-d', '--seeds', type=int, nargs='+',
+                        default=[0, 1, 42, 1234, 10],
+                        help='List of random seeds')
+    parser.add_argument('-i', '--interval', type=int, default=1920,
+                        help='Interval length (in seconds)')
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
