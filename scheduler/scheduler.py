@@ -20,28 +20,18 @@ from job_table import JobTable
 from runtime.rpc import scheduler_server, scheduler_client
 import utils
 
-np.random.seed(42)
-random.seed(42)
-
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
 INFINITY = float("inf")
 DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
-TIME_PER_ITERATION = 32 * 60    # Time in seconds each iteration should run for.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
-
-job_generator = random.Random()
-job_generator.seed(42)
-
-interarrival_time_generator = random.Random()
-interarrival_time_generator.seed(42)
 
 class Scheduler:
 
     def __init__(self, policy, schedule_in_rounds, emulate=False,
-                 throughputs_file=None):
+                 throughputs_file=None, seed=42, time_per_iteration=1920):
 
         # Flag to control whether scheduling should occur in rounds.
         self._schedule_in_rounds = schedule_in_rounds
@@ -49,6 +39,11 @@ class Scheduler:
 
         # Flag to control whether scheduler runs in emulation mode.
         self._emulate = emulate
+        # Initialize seeds.
+        self._initialize_seeds(seed)
+        # Initialize time in seconds each iteration should run for.
+        self._time_per_iteration = time_per_iteration
+
         # Latest emulated timestamp.
         self._current_timestamp = 0
         # Start and last processed timestamp for each job_id.
@@ -138,6 +133,17 @@ class Scheduler:
             self.server_thread.start()
 
             self.start_scheduling_thread()
+
+
+    def _initialize_seeds(self, seed):
+        np.random.seed(seed)
+        random.seed(seed+1)
+
+        self._job_generator = random.Random()
+        self._job_generator.seed(seed+2)
+
+        self._interarrival_time_generator = random.Random()
+        self._interarrival_time_generator.seed(seed+3)
 
 
     def start_scheduling_thread(self):
@@ -743,15 +749,13 @@ class Scheduler:
     def _sample_arrival_time_delta(self, rate_parameter):
         """Samples job interarrival rate from a Poisson distribution according
            to the specified rate parameter."""
-        global interarrival_time_generator
-        return -math.log(1.0 - interarrival_time_generator.random()) / rate_parameter
+        return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
     def _generate_job(self, run_dir='/tmp'):
         """Generates a new job for emulation."""
-        global job_generator
-        job_template = job_generator.choice(JobTable)
+        job_template = self._job_generator.choice(JobTable)
         job_type = job_template.model
-        run_time = 60 * (10 ** job_generator.uniform(2, 4))
+        run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
         num_steps = run_time * self._all_throughputs['v100'][job_type]['null']
         assert(run_time > 0)
         assert(num_steps > 0)
@@ -1617,7 +1621,7 @@ class Scheduler:
     def _initialize_num_steps_per_iteration(self, job_id, worker_type):
         if self._emulate:
             throughput = self._throughputs[job_id][worker_type]
-            num_steps = int(throughput * TIME_PER_ITERATION)
+            num_steps = int(throughput * self._time_per_iteration)
         else:
             num_steps = min(DEFAULT_NUM_STEPS,
                             self._get_remaining_steps(job_id))
@@ -1631,7 +1635,7 @@ class Scheduler:
         # desired wall-clock time per iteration.
         # TODO(keshav2): Use num_steps instead?
         old_steps = self._num_steps_per_iteration[job_id][worker_type]
-        new_steps = max(1, old_steps * (TIME_PER_ITERATION / execution_time))
+        new_steps = max(1, old_steps * (self._time_per_iteration / execution_time))
         new_steps = int(EMA_ALPHA * new_steps + (1 - EMA_ALPHA) * old_steps)
         new_steps = min(new_steps, self._get_remaining_steps(job_id))
         self._num_steps_per_iteration[job_id][worker_type] = new_steps
