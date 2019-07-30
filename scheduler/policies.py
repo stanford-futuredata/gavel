@@ -1,5 +1,7 @@
+import concurrent
 import cvxpy as cp
 import numpy as np
+import time
 
 import job_id_pair
 
@@ -357,10 +359,7 @@ class FIFOPolicy(Policy):
                               '\'heterogeneous\', or \'packing\'')
         self._mode = mode
 
-    @profile
     def get_allocation(self, throughputs, cluster_spec):
-
-        runtime_dist = {}
 
         # New Job ID; put on queue to schedule.
         job_id = None
@@ -435,15 +434,16 @@ class FIFOPolicy(Policy):
                 # TODO: Make this a random selection for base mode?
                 worker_types = list(throughputs[job_id].keys())
             for worker_type in worker_types:
-                if (worker_type not in worker_types_seen or
-                    worker_types_seen[worker_type] < cluster_spec[worker_type]):
-                    if len(self._queue) > 0:
-                        job_id_to_schedule = self._queue.pop(0)
-                        self._active_jobs.add(job_id_to_schedule)
-                        self._allocation[job_id_to_schedule] = worker_type
-                        if worker_type not in worker_types_seen:
-                            worker_types_seen[worker_type] = 0
-                        worker_types_seen[worker_type] += 1
+                if worker_type not in worker_types_seen:
+                    worker_types_seen[worker_type] = 0
+                while (worker_types_seen[worker_type] < cluster_spec[worker_type] and
+                       len(self._queue) > 0):
+                    job_id_to_schedule = self._queue.pop(0)
+                    self._active_jobs.add(job_id_to_schedule)
+                    self._allocation[job_id_to_schedule] = worker_type
+                    if worker_type not in worker_types_seen:
+                        worker_types_seen[worker_type] = 0
+                    worker_types_seen[worker_type] += 1
 
         if self._mode == 'packing':
             if len(self._queue) > 0:
@@ -495,14 +495,13 @@ class FIFOPolicy(Policy):
 
         # Construct output allocation.
         allocation = {}
-        for job_id in throughputs:
-            allocation[job_id] = {}
-            for worker_type in worker_types:
-                if (job_id in self._allocation and
-                    self._allocation[job_id] == worker_type):
-                    allocation[job_id][worker_type] = 1.0
-                else:
-                    allocation[job_id][worker_type] = 0.0
+        all_job_ids = throughputs.keys()
+        for job_id in all_job_ids:
+            allocation[job_id] = \
+                    {worker_type: 0.0 for worker_type in worker_types}
+        for job_id, worker_type in self._allocation.items():
+            allocation[job_id][worker_type] = 1.0
+
         return allocation
 
 class FIFOPolicyWithPacking(PolicyWithPacking):
@@ -512,4 +511,3 @@ class FIFOPolicyWithPacking(PolicyWithPacking):
 
     def get_allocation(self, throughputs, cluster_spec):
         return self._policy.get_allocation(throughputs, cluster_spec)
-
