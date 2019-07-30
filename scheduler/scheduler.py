@@ -603,7 +603,7 @@ class Scheduler:
                                            self._deficits[worker_type][job_id],
                                            allocation_str))
             if worker_id_ptr < len(worker_ids):
-                print(('WARNING: %d GPUs of type %s left unused.'
+                print(('WARNING: %d GPUs of type %s left unused. '
                        'Number of active jobs: %d') % (len(worker_ids) - worker_id_ptr,
                                                        worker_type,
                                                        len(self._jobs)))
