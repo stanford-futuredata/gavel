@@ -1545,8 +1545,6 @@ class Scheduler:
             self._reset_time_run_so_far()
             self._allocation = self._get_allocation()
             self._need_to_update_allocation = False
-        else:
-            return
 
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
