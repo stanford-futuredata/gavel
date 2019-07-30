@@ -85,8 +85,12 @@ class Scheduler:
         self._throughputs = {}
         # Allocations for all current incomplete applications.
         self._allocation = {}
-        # Epochs run on each worker_id, for all current incomplete applications.
+        # Iterations run on each worker_id, for all current incomplete
+        # applications.
         self._steps_run_so_far = {}
+        # Total number of iterations run for each incomplete job across
+        # all worker types.
+        self._total_steps_run = {}
         # Time run so far on each worker_id, for all current incomplete
         # applications.
         self._job_time_so_far = {}
@@ -108,6 +112,10 @@ class Scheduler:
         self._num_steps_per_iteration = {}
         # Number of failures per job.
         self._num_failures_per_job = {}
+        # Timestamp when data structures recording elapsed time was last reset.
+        self._last_reset_time = 0
+        # Flag indicating when to update the allocation.
+        self._need_to_update_allocation = False
         # Throughputs for all job types (pre-measured).
         if throughputs_file is not None:
             self._all_throughputs = utils.read_all_throughputs_json(
@@ -120,11 +128,9 @@ class Scheduler:
         self._worker_start_times = {}
         # Verbose flag.
         self._verbose = False
+        # Data structures for debugging.
         self._micro_tasks_per_job = {}
         self._all_jobs = []
-        self._last_reset_time = 0
-        self._total_steps_run = {}
-        self._need_to_update_allocation = False
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -227,9 +233,7 @@ class Scheduler:
                 self._add_to_priorities(job_id)
             else:
                 self._add_to_queue(job_id)
-            self._reset_time_run_so_far()
-            self._allocation = self._get_allocation()
-            #self._need_to_update_allocation = True
+            self._need_to_update_allocation = True
             if timestamp is None:
                 timestamp = self._get_current_timestamp()
             self._per_job_start_timestamps[job_id] = timestamp
@@ -260,8 +264,6 @@ class Scheduler:
                       self._per_job_latest_timestamps[job_id],
                       duration, "seconds", len(self._jobs))
                   )
-            
-            self._reset_time_run_so_far()
 
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
@@ -290,9 +292,7 @@ class Scheduler:
             else:
                 self._remove_from_queue(job_id)
 
-            #self._need_to_update_allocation = True
-            if len(self._throughputs) > 0:
-                self._allocation = self._get_allocation()
+            self._need_to_update_allocation = True
 
     def num_workers(self):
         """Returns the number of workers the scheduler is connected to."""
@@ -1541,14 +1541,12 @@ class Scheduler:
             job_id: The job_id to add to the workers' queues.
         """
 
-        """
         if self._need_to_update_allocation:
             self._reset_time_run_so_far()
             self._allocation = self._get_allocation()
             self._need_to_update_allocation = False
         else:
             return
-        """
 
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
@@ -1732,7 +1730,6 @@ class Scheduler:
                     self._job_time_so_far[job_id][worker_type] = 0.0
                 if worker_type not in self._worker_time_so_far:
                     self._worker_time_so_far[worker_type] = 0.0
-                self._reset_time_run_so_far()
 
             self._add_available_worker_id(worker_id)
 
@@ -1744,8 +1741,7 @@ class Scheduler:
                     scheduler_client.SchedulerRpcClient(ip_addr, port)
 
             self._worker_start_times[worker_id] = self._get_current_timestamp()
-            #self._need_to_update_allocation = True
-            self._allocation = self._get_allocation()
+            self._need_to_update_allocation = True
 
         return worker_id
 
