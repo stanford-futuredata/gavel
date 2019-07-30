@@ -436,7 +436,8 @@ class FIFOPolicy(Policy):
             for worker_type in worker_types:
                 if worker_type not in worker_types_seen:
                     worker_types_seen[worker_type] = 0
-                while (worker_types_seen[worker_type] < cluster_spec[worker_type] and
+                while ((worker_types_seen[worker_type] <
+                        cluster_spec[worker_type]) and
                        len(self._queue) > 0):
                     job_id_to_schedule = self._queue.pop(0)
                     self._active_jobs.add(job_id_to_schedule)
@@ -453,6 +454,8 @@ class FIFOPolicy(Policy):
                 # Attempt to pack as many jobs as possible.
                 unpacked_jobs = []
                 while len(self._queue) > 0:
+                    # Only make a packing decision if combined normalized
+                    # throughput would provide a signficant gain.
                     max_packed_throughput = 1.5
                     job_id_to_pack_with = None
                     job_id_to_schedule = self._queue.pop(0)
@@ -467,7 +470,6 @@ class FIFOPolicy(Policy):
                         assert scheduled_job_id in throughputs
                         if scheduled_job_id in self._allocation:
                             worker_type = self._allocation[scheduled_job_id]
-                            #assert scheduled_job_id < job_id_to_schedule
                             merged_job_id = \
                                     job_id_pair.JobIdPair(scheduled_job_id[0],
                                                           job_id_to_schedule[0])
