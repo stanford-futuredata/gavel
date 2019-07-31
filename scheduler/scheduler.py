@@ -1562,6 +1562,9 @@ class Scheduler:
                 elif fractions[worker_type][job_id] > 0.0:
                     new_priority = self._allocation[job_id][worker_type] /\
                             fractions[worker_type][job_id]
+                elif fractions[worker_type][job_id] == 0.0:
+                    new_priority = self._allocation[job_id][worker_type] /\
+                            (self._time_per_iteration / 2.0)
                 self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):
