@@ -1362,6 +1362,8 @@ class Scheduler:
 
                 self._job_time_so_far[job_id][worker_type] = \
                         (self._time_per_iteration / 2.0)
+                self._worker_time_so_far[worker_type] += \
+                        self._job_time_so_far[job_id][worker_type]
         # Prints deficits every time allocation is reset.
         # self._print_deficits()
         self._last_reset_time = current_time
@@ -1491,10 +1493,7 @@ class Scheduler:
         for worker_type in self._worker_types:
             fractions[worker_type] = {}
             for job_id in self._job_time_so_far:
-                if self._worker_time_so_far[worker_type] == 0.0:
-                    fraction = 1.0 / len(self._worker_types)
-                else:
-                    fraction = self._job_time_so_far[job_id][worker_type] / \
+                fraction = self._job_time_so_far[job_id][worker_type] / \
                         self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for i in range(self._per_worker_type_job_queue[worker_type].size()):
@@ -1544,11 +1543,8 @@ class Scheduler:
         for worker_type in self._worker_types:
             fractions[worker_type] = {}
             for job_id in self._job_time_so_far:
-                if self._worker_time_so_far[worker_type] == 0.0:
-                    fraction = 1.0 / len(self._worker_types)
-                else:
-                    fraction = self._job_time_so_far[job_id][worker_type] / \
-                            self._worker_time_so_far[worker_type]
+                fraction = self._job_time_so_far[job_id][worker_type] / \
+                         self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 # Don't use inf so 2*new_priority > new_priority.
