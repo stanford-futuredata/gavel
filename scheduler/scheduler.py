@@ -217,7 +217,8 @@ class Scheduler:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
                 self._initialize_num_steps_per_iteration(job_id, worker_type)
-                self._job_time_so_far[job_id][worker_type] = 0.0
+                self._job_time_so_far[job_id][worker_type] = \
+                        (self._time_per_iteration / 2.0)
             self._per_job_start_timestamps[job_id] = current_timestamp
             self._per_job_latest_timestamps[job_id] = None
             if self._schedule_in_rounds:
@@ -1338,7 +1339,10 @@ class Scheduler:
                 if worker_type not in self._job_time_so_far[job_id]:
                     time_received = 0.0
                 else:
-                    time_received = self._job_time_so_far[job_id][worker_type]
+                    # Ignore the initial time recorded for the job.
+                    time_received = \
+                            (self._job_time_so_far[job_id][worker_type] -
+                             (self._time_per_iteration / 2.0))
 
                 # Compute the time this job_id should have received since the
                 # last reset event.
@@ -1356,7 +1360,8 @@ class Scheduler:
                     self._deficits[worker_type][job_id] = 0.0
                 self._deficits[worker_type][job_id] += deficit
 
-                self._job_time_so_far[job_id][worker_type] = 0.0
+                self._job_time_so_far[job_id][worker_type] = \
+                        (self._time_per_iteration / 2.0)
         # Prints deficits every time allocation is reset.
         # self._print_deficits()
         self._last_reset_time = current_time
@@ -1562,9 +1567,6 @@ class Scheduler:
                 elif fractions[worker_type][job_id] > 0.0:
                     new_priority = self._allocation[job_id][worker_type] /\
                             fractions[worker_type][job_id]
-                elif fractions[worker_type][job_id] == 0.0:
-                    new_priority = self._allocation[job_id][worker_type] /\
-                            (self._time_per_iteration / 2.0)
                 self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):
@@ -1701,7 +1703,8 @@ class Scheduler:
                 self._deficits[worker_type] = {}
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
-                    self._job_time_so_far[job_id][worker_type] = 0
+                    self._job_time_so_far[job_id][worker_type] = \
+                            (self._time_per_iteration / 2.0)
                     self._throughputs[job_id][worker_type] = \
                         self._compute_throughput(self._jobs[job_id],
                                                  worker_type)
@@ -1715,7 +1718,6 @@ class Scheduler:
                         self._add_to_priorities(job_id, worker_type=worker_type)
                     else:
                         self._add_to_queue(job_id, worker_type=worker_type)
-                    self._job_time_so_far[job_id][worker_type] = 0.0
                 if worker_type not in self._worker_time_so_far:
                     self._worker_time_so_far[worker_type] = 0.0
                 self._reset_time_run_so_far()
