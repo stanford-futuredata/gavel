@@ -34,7 +34,7 @@ def get_policy(policy_name):
 
 def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
                          cluster_spec, lam, seed, interval, jobs_to_complete,
-                         log_dir, timeout, verbose):
+                         fixed_job_duration, log_dir, timeout, verbose):
     f = io.StringIO()
     lam_str = 'lambda=%f.log' % (lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
@@ -60,7 +60,8 @@ def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
 
             if timeout is None:
                 sched.emulate(cluster_spec, lam=lam,
-                              jobs_to_complete=jobs_to_complete)
+                              jobs_to_complete=jobs_to_complete,
+                              fixed_job_duration=fixed_job_duration)
                 average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
@@ -69,7 +70,8 @@ def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
                                  args=(cluster_spec,),
                                  kwargs={
                                     'lam': lam,
-                                    'jobs_to_complete': jobs_to_complete
+                                    'jobs_to_complete': jobs_to_complete,
+                                    'fixed_job_duration': fixed_job_duration,
                                  })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -90,8 +92,8 @@ def emulate_with_timeout_helper(args):
     emulate_with_timeout(*args)
 
 def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
-                        cluster_spec, seed, interval, jobs_to_complete, log_dir,
-                        timeout, verbose):
+                        cluster_spec, seed, interval, jobs_to_complete,
+                        fixed_job_duration, log_dir, timeout, verbose):
     all_lams = []
     average_jcts = []
     utilizations = []
@@ -105,7 +107,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
-                                     log_dir, timeout, verbose)
+                                     fixed_job_duration, log_dir, timeout,
+                                     verbose)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -123,7 +126,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
-                                     log_dir, timeout, verbose)
+                                     fixed_job_duration, log_dir, timeout,
+                                     verbose)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -143,7 +147,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
-                                     log_dir, timeout, verbose)
+                                     fixed_job_duration, log_dir, timeout,
+                                     verbose)
         average_jcts.append(average_jct)
         utilizations.append(utilization)
         if np.max(average_jcts) / np.min(average_jcts) >= 10:
@@ -234,6 +239,7 @@ def main(args):
                                           throughputs_file, cluster_spec,
                                           seed, args.interval,
                                           jobs_to_complete,
+                                          args.fixed_job_duration,
                                           raw_logs_seed_subdir,
                                           args.timeout, args.verbose))
             else:
@@ -254,6 +260,7 @@ def main(args):
                                               throughputs_file, cluster_spec,
                                               lam, seed, args.interval,
                                               jobs_to_complete,
+                                              args.fixed_job_duration,
                                               raw_logs_seed_subdir,
                                               args.timeout, args.verbose))
     if len(all_args_list) > 0:
@@ -298,6 +305,9 @@ if __name__=='__main__':
                         help='List of random seeds')
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
+    parser.add_argument('-f', '--fixed-job-duration', type=int, default=None,
+                        help=('If set, fixes the duration of all jobs to the '
+                              'specified value (in seconds)'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
