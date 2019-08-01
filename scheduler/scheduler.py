@@ -761,11 +761,15 @@ class Scheduler:
            to the specified rate parameter."""
         return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
-    def _generate_job(self, run_dir='/tmp'):
+    def _generate_job(self, fixed_job_duration=None, run_dir='/tmp'):
         """Generates a new job for emulation."""
         job_template = self._job_generator.choice(JobTable)
         job_type = job_template.model
-        run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
+        if fixed_job_duration:
+            print('Running for fixed duration %d minutes' % (fixed_job_duration / 60.0))
+            run_time = fixed_job_duration
+        else:
+            run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
         num_steps = run_time * self._all_throughputs['v100'][job_type]['null']
         assert(run_time > 0)
         assert(num_steps > 0)
@@ -786,7 +790,7 @@ class Scheduler:
 
     def emulate(self, cluster_spec, arrival_times=None, jobs=None,
                 ideal=False, lam=None, jobs_to_complete=None,
-                measurement_window=None):
+                measurement_window=None, fixed_job_duration=None):
         """Emulates the scheduler execution.
 
            Emulation can be performed using a trace or with continuously
@@ -813,7 +817,8 @@ class Scheduler:
                                 timestamps of the window in which to collect
                                 jobs for the termination condition. Mutually
                                 exclusive with `jobs_to_complete`.
-
+            fixed_job_duration: If set, all generated jobs will have this
+                                duration if run exclusively on a v100.
             Returns:
                 If `measurement_window` is specified, returns the jobs
                 collected in the window. Otherwise returns None.
@@ -984,7 +989,7 @@ class Scheduler:
                         break
             else:
                 while next_job_arrival_time <= self._current_timestamp:
-                    job = self._generate_job()
+                    job = self._generate_job(fixed_job_duration=fixed_job_duration)
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
                     if (measurement_window is not None and
