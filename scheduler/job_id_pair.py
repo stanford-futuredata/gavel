@@ -17,6 +17,23 @@ class JobIdPair():
         else:
             self._hash_value = a * a + a + b if a > b else a + b * b
 
+        self._is_pair = self._job0 is not None and self._job1 is not None
+    
+        if self[1] is None:
+            self._singletons = (self,)
+        else:
+            self._singletons = (JobIdPair(self._job0, None),
+                                JobIdPair(self._job1, None))
+    
+        self._as_tuple = (self._job0, self._job1)
+        self._as_set = set([self._job0, self._job1])
+
+        if self._job1 is None:
+            self._repr = '%d' % (self._job0)
+        else:
+            self._repr = '(%d, %d)' % (self._job0, self._job1)
+
+
     def __getitem__(self, index):
         if index == 0:
             return self._job0
@@ -43,27 +60,22 @@ class JobIdPair():
         return self._hash_value
 
     def __repr__(self):
-        if self[1] is None:
-            return '%d' % (self[0])
-        else:
-            return ('(%d, %d)' % (self[0], self[1]))
-
+        return self._repr
+    
     def as_tuple(self):
-        return (self._job0, self._job1)
+        return self._as_tuple
+
+    def as_set(self):
+        return self._as_set
 
     def overlaps_with(self, other):
-        if self.is_pair():
+        if self._is_pair:
             raise ValueError('Can only call overlaps_with on a '
                              'single job id')
-        return ((other[0] is not None and self[0] == other[0]) or
-                (other[1] is not None and self[0] == other[1]))
+        return self._job0 in other._as_set
 
     def is_pair(self):
-        return self._job0 is not None and self._job1 is not None
+        return self._is_pair
 
     def singletons(self):
-        if self[1] is None:
-            return (self,)
-        else:
-            return (JobIdPair(self[0], None),
-                    JobIdPair(self[1], None))
+        return self._singletons
