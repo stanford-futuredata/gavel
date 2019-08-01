@@ -2,7 +2,7 @@ import argparse
 import datetime
 import json
 import io
-from contextlib import redirect_stdout
+import contextlib
 from func_timeout import func_timeout, FunctionTimedOut
 import matplotlib.pyplot as plt
 import multiprocessing
@@ -36,52 +36,51 @@ def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
                          cluster_spec, lam, seed, interval, jobs_to_complete,
                          log_dir, timeout, verbose):
     f = io.StringIO()
-    with redirect_stdout(f):
-        policy = get_policy(policy_name)
-        sched = scheduler.Scheduler(
-                        policy,
-                        schedule_in_rounds=schedule_in_rounds,
-                        throughputs_file=throughputs_file,
-                        seed=seed,
-                        time_per_iteration=interval,
-                        emulate=True)
-
-        cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
-                                                       cluster_spec['p100'],
-                                                       cluster_spec['k80'])
-        if verbose:
-            current_time = datetime.datetime.now()
-            print('%s] cluster_spec=%s, policy=%s, '
-                  'seed=%d, lam=%f' % (current_time, cluster_spec_str,
-                                       policy.name, seed, lam),
-                  file=sys.stderr)
-
-        if timeout is None:
-            sched.emulate(cluster_spec, lam=lam,
-                          jobs_to_complete=jobs_to_complete)
-            average_jct = sched.get_average_jct(jobs_to_complete)
-            utilization = sched.get_cluster_utilization()
-        else:
-            try:
-                func_timeout(timeout, sched.emulate,
-                             args=(cluster_spec,),
-                             kwargs={
-                                'lam': lam,
-                                'jobs_to_complete': jobs_to_complete
-                             })
-                average_jct = sched.get_average_jct(jobs_to_complete)
-                utilization = sched.get_cluster_utilization()
-            except FunctionTimedOut:
-                average_jct = float('inf')
-                utilization = 1.0
-    output = f.getvalue()
     lam_str = 'lambda=%f.log' % (lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
-        f.write(output)
+        with contextlib.redirect_stdout(f):
+            policy = get_policy(policy_name)
+            sched = scheduler.Scheduler(
+                            policy,
+                            schedule_in_rounds=schedule_in_rounds,
+                            throughputs_file=throughputs_file,
+                            seed=seed,
+                            time_per_iteration=interval,
+                            emulate=True)
+
+            cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
+                                                           cluster_spec['p100'],
+                                                           cluster_spec['k80'])
+            if verbose:
+                current_time = datetime.datetime.now()
+                print('%s] cluster_spec=%s, policy=%s, '
+                      'seed=%d, lam=%f' % (current_time, cluster_spec_str,
+                                           policy.name, seed, lam),
+                      file=sys.stderr)
+
+            if timeout is None:
+                sched.emulate(cluster_spec, lam=lam,
+                              jobs_to_complete=jobs_to_complete)
+                average_jct = sched.get_average_jct(jobs_to_complete)
+                utilization = sched.get_cluster_utilization()
+            else:
+                try:
+                    func_timeout(timeout, sched.emulate,
+                                 args=(cluster_spec,),
+                                 kwargs={
+                                    'lam': lam,
+                                    'jobs_to_complete': jobs_to_complete
+                                 })
+                    average_jct = sched.get_average_jct(jobs_to_complete)
+                    utilization = sched.get_cluster_utilization()
+                except FunctionTimedOut:
+                    average_jct = float('inf')
+                    utilization = 1.0
 
     if verbose:
         current_time = datetime.datetime.now()
-        print('%s] average JCT=%f, utilization=%f' % (current_time, average_jct,
+        print('%s] average JCT=%f, utilization=%f' % (current_time,
+                                                      average_jct,
                                                       utilization),
               file=sys.stderr)
 
@@ -233,7 +232,8 @@ def main(args):
                         os.mkdir(raw_logs_seed_subdir)
                     all_args_list.append((policy_name, schedule_in_rounds,
                                           throughputs_file, cluster_spec,
-                                          seed, interval, jobs_to_complete,
+                                          seed, args.interval,
+                                          jobs_to_complete,
                                           raw_logs_seed_subdir,
                                           args.timeout, args.verbose))
             else:
