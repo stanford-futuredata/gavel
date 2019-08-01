@@ -217,7 +217,8 @@ class Scheduler:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
                 self._initialize_num_steps_per_iteration(job_id, worker_type)
-                self._job_time_so_far[job_id][worker_type] = 0.0
+                self._job_time_so_far[job_id][worker_type] = \
+                        (self._time_per_iteration / 2.0)
             self._per_job_start_timestamps[job_id] = current_timestamp
             self._per_job_latest_timestamps[job_id] = None
             if self._schedule_in_rounds:
@@ -1338,7 +1339,10 @@ class Scheduler:
                 if worker_type not in self._job_time_so_far[job_id]:
                     time_received = 0.0
                 else:
-                    time_received = self._job_time_so_far[job_id][worker_type]
+                    # Ignore the initial time recorded for the job.
+                    time_received = \
+                            (self._job_time_so_far[job_id][worker_type] -
+                             (self._time_per_iteration / 2.0))
 
                 # Compute the time this job_id should have received since the
                 # last reset event.
@@ -1356,7 +1360,10 @@ class Scheduler:
                     self._deficits[worker_type][job_id] = 0.0
                 self._deficits[worker_type][job_id] += deficit
 
-                self._job_time_so_far[job_id][worker_type] = 0.0
+                self._job_time_so_far[job_id][worker_type] = \
+                        (self._time_per_iteration / 2.0)
+                self._worker_time_so_far[worker_type] += \
+                        self._job_time_so_far[job_id][worker_type]
         # Prints deficits every time allocation is reset.
         # self._print_deficits()
         self._last_reset_time = current_time
@@ -1486,10 +1493,7 @@ class Scheduler:
         for worker_type in self._worker_types:
             fractions[worker_type] = {}
             for job_id in self._job_time_so_far:
-                if self._worker_time_so_far[worker_type] == 0.0:
-                    fraction = 1.0 / len(self._worker_types)
-                else:
-                    fraction = self._job_time_so_far[job_id][worker_type] / \
+                fraction = self._job_time_so_far[job_id][worker_type] / \
                         self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for i in range(self._per_worker_type_job_queue[worker_type].size()):
@@ -1539,11 +1543,8 @@ class Scheduler:
         for worker_type in self._worker_types:
             fractions[worker_type] = {}
             for job_id in self._job_time_so_far:
-                if self._worker_time_so_far[worker_type] == 0.0:
-                    fraction = 1.0 / len(self._worker_types)
-                else:
-                    fraction = self._job_time_so_far[job_id][worker_type] / \
-                            self._worker_time_so_far[worker_type]
+                fraction = self._job_time_so_far[job_id][worker_type] / \
+                         self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 # Don't use inf so 2*new_priority > new_priority.
@@ -1698,7 +1699,8 @@ class Scheduler:
                 self._deficits[worker_type] = {}
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
-                    self._job_time_so_far[job_id][worker_type] = 0
+                    self._job_time_so_far[job_id][worker_type] = \
+                            (self._time_per_iteration / 2.0)
                     self._throughputs[job_id][worker_type] = \
                         self._compute_throughput(self._jobs[job_id],
                                                  worker_type)
@@ -1712,7 +1714,6 @@ class Scheduler:
                         self._add_to_priorities(job_id, worker_type=worker_type)
                     else:
                         self._add_to_queue(job_id, worker_type=worker_type)
-                    self._job_time_so_far[job_id][worker_type] = 0.0
                 if worker_type not in self._worker_time_so_far:
                     self._worker_time_so_far[worker_type] = 0.0
                 self._reset_time_run_so_far()
