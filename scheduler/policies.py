@@ -356,6 +356,16 @@ class FIFOPolicy(Policy):
         if seed is not None:
             self._rng.seed(seed)
 
+    def _verify(self, cluster_spec, message):
+        print(message)
+        for worker_type in cluster_spec:
+            num_allocated_workers = 0
+            for job_id in self._allocation:
+                if self._allocation[job_id] == worker_type:
+                    num_allocated_workers += 1
+            assert(num_allocated_workers <= cluster_spec[worker_type])
+
+
     def get_allocation(self, throughputs, cluster_spec):
         available_workers = copy.deepcopy(cluster_spec)
         queue = []
@@ -380,8 +390,16 @@ class FIFOPolicy(Policy):
             else:
                 available_workers[worker_type] -= 1
 
+        self._verify(cluster_spec, 'flag1')
+
+        # Find all available workers.
+        available_worker_types = []
+        for worker_type in available_workers:
+            if available_workers[worker_type] > 0:
+                available_worker_types.append(worker_type)
+        available_worker_types.sort()
+
         # Allocate resources to as many jobs as possible.
-        available_worker_types = sorted(list(available_workers.keys()))
         while len(queue) > 0 and len(available_worker_types) > 0:
             job_id_to_schedule = queue.pop(0)
             worker_type_idx = \
@@ -392,16 +410,17 @@ class FIFOPolicy(Policy):
             if available_workers[worker_type] == 0:
                 available_worker_types.pop(worker_type_idx)
 
+        self._verify(cluster_spec, 'flag2')
+
         for job_id in self._allocation:
             if job_id not in throughputs:
                 raise ValueError('Have allocation for completed job %s!' % (job_id))
 
         # Construct output allocation.
         final_allocation = {}
-        all_job_ids = throughputs.keys()
-        for job_id in all_job_ids:
-            final_allocation[job_id] = \
-                    {worker_type: 0.0 for worker_type in cluster_spec}
+        zero_allocation = {worker_type: 0.0 for worker_type in cluster_spec}
+        for job_id in throughputs:
+            final_allocation[job_id] = zero_allocation
         for job_id, worker_type in self._allocation.items():
             final_allocation[job_id][worker_type] = 1.0
 
