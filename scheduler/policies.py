@@ -349,7 +349,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
 
 
 class FIFOPolicy(Policy):
-    def __init__(self, mode=mode, seed=None):
+    def __init__(self, seed=None):
         self._name = 'FIFO'
         self._allocation = {}
         self._rng = random.Random()
@@ -359,8 +359,6 @@ class FIFOPolicy(Policy):
     def get_allocation(self, throughputs, cluster_spec):
         available_workers = copy.deepcopy(cluster_spec)
         queue = []
-        if mode != 'base':
-            self._allocation = {}
 
         # Add all jobs that have not been allocated already to the queue.
         # Jobs should be added in order of arrival (i.e. according to Job ID).
