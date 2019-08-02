@@ -1248,15 +1248,14 @@ class Scheduler:
         """
         print('')
         print('=' * 80)
-        print('Current_time: %f' % (self._get_current_timestamp()))
+        print('Deficits\t(Current_time: %f)' % (self._get_current_timestamp()))
         print('-' * 80)
-        for i, worker_type in enumerate(self._worker_types):
-            print('Worker type: %s' % (worker_type))
-            for job_id in self._deficits[worker_type]:
-                deficit = self._deficits[worker_type][job_id]
-                print('Job %s: Deficit=%.3f' % (job_id, deficit))
-            if i < len(self._worker_types) - 1:
-                print('-' * 80)
+        for job_id in sorted(list(self._jobs.keys())):
+            deficit_str = 'Job ID %s:' % (job_id)
+            for worker_type in sorted(self._worker_types):
+                deficit = self._deficits[worker_type][job_id] 
+                deficit_str += ' [%s: %f]' % (worker_type, deficit)
+            print(deficit_str)
         print('=' * 80)
         print('')
 
@@ -1378,7 +1377,7 @@ class Scheduler:
                 self._worker_time_so_far[worker_type] += \
                         self._job_time_so_far[job_id][worker_type]
         # Prints deficits every time allocation is reset.
-        # self._print_deficits()
+        self._print_deficits()
         self._last_reset_time = current_time
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
