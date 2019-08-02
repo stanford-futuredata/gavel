@@ -1365,15 +1365,6 @@ class Scheduler:
                 # deficit is now just the difference between the time job_id
                 # should have received, and how much it actually received.
                 deficit = time_should_have_received - time_received
-                print('Job ID %s:' % (job_id))
-                print('Time should have received: %f' % (time_should_have_received))
-                print('Time received: %f' % (time_received))
-                print('Deficit for current round: %f' % (deficit))
-                if job_id in self._deficits[worker_type]:
-                    print('Existing deficit: %f' % (self._deficits[worker_type][job_id]))
-                else:
-                    print('Existing deficit: 0')
-                print('')
                 if job_id not in self._deficits[worker_type]:
                     self._deficits[worker_type][job_id] = 0.0
                 self._deficits[worker_type][job_id] += deficit
@@ -1383,8 +1374,7 @@ class Scheduler:
                 self._worker_time_so_far[worker_type] += \
                         self._job_time_so_far[job_id][worker_type]
         # Prints deficits every time allocation is reset.
-        self._print_allocation()
-        self._print_deficits()
+        # self._print_deficits()
         self._last_reset_time = current_time
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
