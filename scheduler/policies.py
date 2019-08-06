@@ -424,7 +424,7 @@ class FIFOPolicy(Policy):
 
         # Find all completed jobs and schedule jobs off the queue to replace
         # them. Also determine how many workers are available.
-        # NOTE: In performance-aware mode this loop should be a no-op
+        # NOTE: In performance-aware mode, this loop should be a no-op
         # because the allocation is reset.
         for scheduled_job_id in sorted(list(self._allocation.keys())):
             worker_type = self._allocation[scheduled_job_id]
