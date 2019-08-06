@@ -424,10 +424,14 @@ class FIFOPolicy(Policy):
 
         # Find all completed jobs and schedule jobs off the queue to replace
         # them. Also determine how many workers are available.
-        # NOTE: In performance-aware mode this loop should be a no-op.
+        # NOTE: In performance-aware mode this loop should be a no-op
+        # because the allocation is reset.
         for scheduled_job_id in sorted(list(self._allocation.keys())):
             worker_type = self._allocation[scheduled_job_id]
+            # Check if job has completed.
             if scheduled_job_id not in throughputs:
+                # If only one job in a pair of co-located jobs completed then
+                # add the other job back to the queue.
                 for single_job_id in scheduled_job_id.singletons():
                     if single_job_id in throughputs:
                         queue.append(single_job_id)

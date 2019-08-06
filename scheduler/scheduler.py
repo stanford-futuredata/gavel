@@ -1312,6 +1312,9 @@ class Scheduler:
                     self._num_steps_per_iteration[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
+                # The single-job IDs for job pairs are stored in sorted order,
+                # so make sure the co-located throughputs match the order of the
+                # single-job IDs.
                 if job_id [0] == merged_job_id[0]:
                     self._throughputs[merged_job_id][worker_type] = \
                         self._compute_throughput(
