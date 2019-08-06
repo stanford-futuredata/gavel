@@ -142,10 +142,10 @@ class PolicyWithPacking(Policy):
         return d
 
 
-class IsolatedPolicy(Policy):
+class MaxMinFairnessPolicy(Policy):
 
     def __init__(self):
-        self._name = 'Isolated'
+        self._name = 'MaxMinFairness'
 
     def get_allocation(self, unflattened_throughputs, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
@@ -169,10 +169,10 @@ class IsolatedPolicy(Policy):
         return super().unflatten(allocation, index)
 
 
-class MaxMinFairnessPolicy(Policy):
+class MaxMinFairnessPolicyWithPerf(Policy):
 
     def __init__(self):
-        self._name = 'MaxMinFairness'
+        self._name = 'MaxMinFairness_Perf'
 
     def get_allocation(self, unflattened_throughputs, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
