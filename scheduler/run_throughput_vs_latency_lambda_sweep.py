@@ -16,10 +16,10 @@ import policies
 import scheduler
 
 def get_policy(policy_name):
-    if policy_name == 'isolated':
-        policy = policies.IsolatedPolicy()
-    elif policy_name == 'max_min_fairness':
+    if policy_name == 'max_min_fairness':
         policy = policies.MaxMinFairnessPolicy()
+    elif policy_name == 'max_min_fairness_perf':
+        policy = policies.MaxMinFairnessPolicyWithPerf()
     elif policy_name == 'max_min_fairness_packed':
         policy = policies.MaxMinFairnessPolicyWithPacking()
     elif policy_name == 'min_total_duration':
@@ -298,7 +298,7 @@ if __name__=='__main__':
                               '(use as many as available if not specified)'))
     parser.add_argument('-p', '--policies', type=str, nargs='+',
                         default=['fifo', 'fifo_perf', 'fifo_packed',
-                                 'isolated', 'max_min_fairness',
+                                 'max_min_fairness', 'max_min_fairness_perf',
                                  'max_min_fairness_packed'],
                         help='List of policies to sweep')
     parser.add_argument('-r', '--ratios', type=str, nargs='+',
