@@ -398,7 +398,7 @@ class FIFOPolicy(Policy):
                 break
             else:
                 # Transfer the allocation for the single job to the
-                # packed jobs.
+                # packed job.
                 self._output = None
                 merged_job_id = \
                         job_id_pair.JobIdPair(job_id_to_pack_with[0],
@@ -430,7 +430,7 @@ class FIFOPolicy(Policy):
             worker_type = self._allocation[scheduled_job_id]
             # Check if job has completed.
             if scheduled_job_id not in throughputs:
-                # If only one job in a pair of co-located jobs completed then
+                # If only one job in a pair of co-located jobs completed, then
                 # add the other job back to the queue.
                 for single_job_id in scheduled_job_id.singletons():
                     if single_job_id in throughputs:
@@ -459,6 +459,7 @@ class FIFOPolicy(Policy):
                 worker_type_idx = \
                         self._rng.randrange(len(available_worker_types))
             else:
+                # Find the worker_type with best performance for this job.
                 worker_type = None
                 worker_type_idx = None
                 max_throughput = -1
