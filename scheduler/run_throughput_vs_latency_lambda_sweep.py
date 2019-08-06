@@ -36,9 +36,10 @@ def get_policy(policy_name):
         raise ValueError('Unknown policy!')
     return policy
 
-def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
-                         cluster_spec, lam, seed, interval, jobs_to_complete,
-                         fixed_job_duration, log_dir, timeout, verbose):
+def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
+                         throughputs_file, cluster_spec, lam, seed, interval,
+                         jobs_to_complete, fixed_job_duration, log_dir, timeout,
+                         verbose):
     f = io.StringIO()
     lam_str = 'lambda=%f.log' % (lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
@@ -57,9 +58,11 @@ def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
                                                            cluster_spec['k80'])
             if verbose:
                 current_time = datetime.datetime.now()
-                print('%s] cluster_spec=%s, policy=%s, '
-                      'seed=%d, lam=%f' % (current_time, cluster_spec_str,
-                                           policy.name, seed, lam),
+                print('[%s] [Experiment ID: %2d] '
+                      'Configuration: cluster_spec=%s, policy=%s, '
+                       'seed=%d, lam=%f' % (current_time, experiment_id,
+                                            cluster_spec_str, policy.name,
+                                            seed, lam),
                       file=sys.stderr)
 
             if timeout is None:
@@ -85,9 +88,11 @@ def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
 
     if verbose:
         current_time = datetime.datetime.now()
-        print('%s] average JCT=%f, utilization=%f' % (current_time,
-                                                      average_jct,
-                                                      utilization),
+        print('[%s] [Experiment ID: %2d] '
+              'Results: average JCT=%f, utilization=%f' % (current_time,
+                                                           experiment_id,
+                                                           average_jct,
+                                                           utilization),
               file=sys.stderr)
 
     return average_jct, utilization
@@ -198,6 +203,7 @@ def main(args):
             'k80': int(x[2])
             })
     job_range = (args.window_start, args.window_end)
+    experiment_id = 0
 
     with open(throughputs_file, 'r') as f:
         throughputs = json.load(f)
@@ -239,13 +245,15 @@ def main(args):
                                                         seed_str)
                     if not os.path.isdir(raw_logs_seed_subdir):
                         os.mkdir(raw_logs_seed_subdir)
-                    all_args_list.append((policy_name, schedule_in_rounds,
+                    all_args_list.append((experiment_id, policy_name,
+                                          schedule_in_rounds,
                                           throughputs_file, cluster_spec,
                                           seed, args.interval,
                                           jobs_to_complete,
                                           args.fixed_job_duration,
                                           raw_logs_seed_subdir,
                                           args.timeout, args.verbose))
+                    experiment_id += 1
             else:
                 throughputs = list(np.linspace(args.throughput_lower_bound,
                                                args.throughput_upper_bound,
@@ -260,22 +268,28 @@ def main(args):
                                 os.path.join(raw_logs_policy_subdir, seed_str)
                         if not os.path.isdir(raw_logs_seed_subdir):
                             os.mkdir(raw_logs_seed_subdir)
-                        all_args_list.append((policy_name, schedule_in_rounds,
+                        all_args_list.append((experiment_id, policy_name,
+                                              schedule_in_rounds,
                                               throughputs_file, cluster_spec,
                                               lam, seed, args.interval,
                                               jobs_to_complete,
                                               args.fixed_job_duration,
                                               raw_logs_seed_subdir,
                                               args.timeout, args.verbose))
+                        experiment_id += 1
     if len(all_args_list) > 0:
+        print('[%s] Running %d total experiments...' % (datetime.datetime.now(),
+                                                        len(all_args_list)))
         with multiprocessing.Pool(args.processes) as p:
             if automatic_sweep:
                 p.map(run_automatic_sweep_helper, all_args_list)
             else:
                 # Sort args in order of decreasing lambda to prioritize
                 # short-running jobs.
-                all_args_list.sort(key=lambda x: x[4], reverse=True)
+                all_args_list.sort(key=lambda x: x[5], reverse=True)
                 p.map(emulate_with_timeout_helper, all_args_list)
+    else:
+        raise ValueError('No work to be done!')
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
