@@ -7,8 +7,12 @@ class JobIdPair():
             raise ValueError('Cannot form JobIdPair with both ids None')
         elif job0 is None and job1 is not None:
             raise ValueError('First job id in a JobIdPair cannot be None')
-        self._job0 = job0
-        self._job1 = job1
+        elif job0 is not None and job1 is not None:
+            self._job0 = min(job0, job1)
+            self._job1 = max(job0, job1)
+        else:
+            self._job0 = job0
+            self._job1 = None
 
         a = self._job0
         b = self._job1
@@ -18,21 +22,19 @@ class JobIdPair():
             self._hash_value = a * a + a + b if a > b else a + b * b
 
         self._is_pair = self._job0 is not None and self._job1 is not None
-    
-        if self[1] is None:
+        self._as_tuple = (self._job0, self._job1)
+        if self._job1 is None:
             self._singletons = (self,)
         else:
             self._singletons = (JobIdPair(self._job0, None),
                                 JobIdPair(self._job1, None))
     
-        self._as_tuple = (self._job0, self._job1)
         self._as_set = set([self._job0, self._job1])
 
         if self._job1 is None:
             self._repr = '%d' % (self._job0)
         else:
             self._repr = '(%d, %d)' % (self._job0, self._job1)
-
 
     def __getitem__(self, index):
         if index == 0:

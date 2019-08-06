@@ -1225,17 +1225,14 @@ class Scheduler:
         """
         print('')
         print('=' * 80)
-        print('Current_time: %f' % (self._get_current_timestamp()))
+        print('Allocation\t(Current_time: %f)' % (self._get_current_timestamp()))
         print('-' * 80)
-        for i, worker_type in enumerate(self._worker_types):
-            print('Worker type: %s' % (worker_type))
-            for job_id in self._allocation:
-                if worker_type not in self._allocation[job_id]:
-                    continue
+        for job_id in sorted(list(self._allocation.keys())):
+            allocation_str = 'Job ID %s:' % (job_id)
+            for worker_type in sorted(list(self._allocation[job_id].keys())):
                 allocation = self._allocation[job_id][worker_type]
-                print('Job %s: Allocation=%.3f' % (job_id, allocation))
-            if i < len(self._worker_types) - 1:
-                print('-' * 80)
+                allocation_str += ' [%s: %f]' % (worker_type, allocation)
+            print(allocation_str)
         print('=' * 80)
         print('')
 
@@ -1248,15 +1245,14 @@ class Scheduler:
         """
         print('')
         print('=' * 80)
-        print('Current_time: %f' % (self._get_current_timestamp()))
+        print('Deficits\t(Current_time: %f)' % (self._get_current_timestamp()))
         print('-' * 80)
-        for i, worker_type in enumerate(self._worker_types):
-            print('Worker type: %s' % (worker_type))
-            for job_id in self._deficits[worker_type]:
+        for job_id in sorted(list(self._jobs.keys())):
+            deficit_str = 'Job ID %s:' % (job_id)
+            for worker_type in sorted(self._worker_types):
                 deficit = self._deficits[worker_type][job_id]
-                print('Job %s: Deficit=%.3f' % (job_id, deficit))
-            if i < len(self._worker_types) - 1:
-                print('-' * 80)
+                deficit_str += ' [%s: %f]' % (worker_type, deficit)
+            print(deficit_str)
         print('=' * 80)
         print('')
 
@@ -1316,10 +1312,20 @@ class Scheduler:
                     self._num_steps_per_iteration[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
-                self._throughputs[merged_job_id][worker_type] = \
-                    self._compute_throughput(
-                        [job.job_type, other_job.job_type],
-                        worker_type)
+                # The single-job IDs for job pairs are stored in sorted order,
+                # so make sure the co-located throughputs match the order of the
+                # single-job IDs.
+                if job_id [0] == merged_job_id[0]:
+                    self._throughputs[merged_job_id][worker_type] = \
+                        self._compute_throughput(
+                            [job.job_type, other_job.job_type],
+                            worker_type)
+                else:
+                    self._throughputs[merged_job_id][worker_type] = \
+                        self._compute_throughput(
+                            [other_job.job_type, job.job_type],
+                            worker_type)
+
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
                 self._num_steps_per_iteration[merged_job_id][worker_type] = 0
 

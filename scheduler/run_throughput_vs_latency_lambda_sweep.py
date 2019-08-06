@@ -28,8 +28,12 @@ def get_policy(policy_name):
         policy = policies.MinTotalDurationPolicyWithPacking()
     elif policy_name == 'fifo':
         policy = policies.FIFOPolicy()
+    elif policy_name == 'fifo_perf':
+        policy = policies.FIFOPolicyWithPerf()
+    elif policy_name == 'fifo_packed':
+        policy = policies.FIFOPolicyWithPacking()
     else:
-        raise Exception('Unknown policy!')
+        raise ValueError('Unknown policy!')
     return policy
 
 def emulate_with_timeout(policy_name, schedule_in_rounds, throughputs_file,
@@ -293,7 +297,8 @@ if __name__=='__main__':
                         help=('Number of processes to use in pool '
                               '(use as many as available if not specified)'))
     parser.add_argument('-p', '--policies', type=str, nargs='+',
-                        default=['fifo', 'isolated', 'max_min_fairness',
+                        default=['fifo', 'fifo_perf', 'fifo_packed',
+                                 'isolated', 'max_min_fairness',
                                  'max_min_fairness_packed'],
                         help='List of policies to sweep')
     parser.add_argument('-r', '--ratios', type=str, nargs='+',
