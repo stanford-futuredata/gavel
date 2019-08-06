@@ -1312,10 +1312,17 @@ class Scheduler:
                     self._num_steps_per_iteration[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
-                self._throughputs[merged_job_id][worker_type] = \
-                    self._compute_throughput(
-                        [job.job_type, other_job.job_type],
-                        worker_type)
+                if job_id [0] == merged_job_id[0]:
+                    self._throughputs[merged_job_id][worker_type] = \
+                        self._compute_throughput(
+                            [job.job_type, other_job.job_type],
+                            worker_type)
+                else:
+                    self._throughputs[merged_job_id][worker_type] = \
+                        self._compute_throughput(
+                            [other_job.job_type, job.job_type],
+                            worker_type)
+
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
                 self._num_steps_per_iteration[merged_job_id][worker_type] = 0
 
