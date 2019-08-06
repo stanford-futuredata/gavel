@@ -9,20 +9,24 @@ import policies
 import scheduler
 
 def get_policy(policy_name):
-    if policy_name == "isolated":
-        policy = policies.IsolatedPolicy()
-    elif policy_name == "max_min_fairness":
+    if policy_name == 'max_min_fairness':
         policy = policies.MaxMinFairnessPolicy()
-    elif policy_name == "max_min_fairness_packed":
+    elif policy_name == 'max_min_fairness_perf':
+        policy = policies.MaxMinFairnessPolicyWithPerf()
+    elif policy_name == 'max_min_fairness_packed':
         policy = policies.MaxMinFairnessPolicyWithPacking()
-    elif policy_name == "min_total_duration":
+    elif policy_name == 'min_total_duration':
         policy = policies.MinTotalDurationPolicy()
-    elif policy_name == "min_total_duration_packed":
+    elif policy_name == 'min_total_duration_packed':
         policy = policies.MinTotalDurationPolicyWithPacking()
-    elif policy_name == "fifo":
+    elif policy_name == 'fifo':
         policy = policies.FIFOPolicy()
+    elif policy_name == 'fifo_perf':
+        policy = policies.FIFOPolicyWithPerf()
+    elif policy_name == 'fifo_packed':
+        policy = policies.FIFOPolicyWithPacking()
     else:
-        raise Exception("Unknown policy!")
+        raise ValueError('Unknown policy!')
     return policy
 
 def parse_trace(trace_file):
