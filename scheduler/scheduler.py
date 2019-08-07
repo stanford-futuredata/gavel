@@ -605,7 +605,7 @@ class Scheduler:
     def _get_num_steps(self, job_id, worker_type, single_job_id=None):
         if job_id.is_pair():
             assert(single_job_id is not None)
-            index = job_id.as_tuple().index(single_job_id)
+            index = job_id.as_tuple().index(single_job_id[0])
             num_steps = int(self._throughputs[job_id][worker_type][index] *
                             self._time_per_iteration)
         else:
@@ -623,8 +623,7 @@ class Scheduler:
             num_steps = self._get_num_steps(job_id, worker_type, single_job_id)
             all_num_steps.append(num_steps)
             if job_id.is_pair():
-                throughput = \
-                        self._throughputs[job_id][worker_type][i]
+                throughput = self._throughputs[job_id][worker_type][i]
             else:
                 throughput = self._throughputs[job_id][worker_type]
             if throughput <= 0.0:
@@ -632,10 +631,11 @@ class Scheduler:
                 print(worker_type)
                 raise Exception("Throughput should not be less than 0!")
             else:
-                finish_time = (self._current_timestamp + \
+                execution_time = num_steps / throughput
+                finish_time = (self._get_current_timestamp() + \
                                 (num_steps / throughput))
             if (max_finish_time is None or
-                    finish_time > max_finish_time):
+                finish_time > max_finish_time):
                 max_finish_time = finish_time
             self._running_jobs.add(single_job_id)
         return all_num_steps, max_finish_time
@@ -874,6 +874,8 @@ class Scheduler:
         last_job_arrival_time = None
         next_job_arrival_time = 0
         no_dispatched_or_running_jobs = False
+        current_round_start_time = 0
+        current_round_end_time = None
         while True:
             if (jobs_to_complete is not None and
                   jobs_to_complete.issubset(completed_jobs)):
@@ -911,6 +913,9 @@ class Scheduler:
                     if (len(running_jobs) > 0 and
                         -running_jobs[0][0] > max_timestamp):
                         max_timestamp = -running_jobs[0][0]
+                        if current_round_end_time is not None:
+                            current_round_start_time = current_round_end_time
+                        current_round_end_time = max_timestamp
                     if max_timestamp > 0:
                         self._current_timestamp = max_timestamp
                     else:
@@ -957,7 +962,8 @@ class Scheduler:
                     if finish_time <= self._current_timestamp:
                         all_execution_times = []
                         for single_job_id in job_id.singletons():
-                            execution_time = finish_time - self._per_job_latest_timestamps[single_job_id]
+                            execution_time = \
+                                    finish_time - current_round_start_time
                             all_execution_times.append(execution_time)
                             self._per_job_latest_timestamps[single_job_id] = \
                                     finish_time
@@ -1305,7 +1311,6 @@ class Scheduler:
                     self._throughputs[merged_job_id] = {}
                     self._steps_run_so_far[merged_job_id] = {}
                     self._job_time_so_far[merged_job_id] = {}
-                    self._num_steps_per_iteration[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
                 # The single-job IDs for job pairs are stored in sorted order,
@@ -1323,7 +1328,6 @@ class Scheduler:
                             worker_type)
 
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
-                self._num_steps_per_iteration[merged_job_id][worker_type] = 0
 
     def _compute_throughput(self, job_types, worker_type):
         if isinstance(job_types, list):
