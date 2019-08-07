@@ -68,66 +68,53 @@ class PolicyWithPacking(Policy):
         self._num_workers = \
             [cluster_spec[worker_type] for worker_type in worker_types]
 
-        single_job_ids = []
+        single_job_ids = set()
         for job_id in job_ids:
             if not job_id.is_pair():
-                single_job_ids.append(job_id)
+                single_job_ids.add(job_id)
 
         # Compute normalizing factor for each individual job, this normalizing
         # factor will be used to normalize throughputs for the same job in job
         # combinations as well.
-        normalizing_factors = {}
-        for single_job_id in single_job_ids:
-            normalizing_factor = 0.0
-            for worker_type in worker_types:
-                normalizing_factor += d[single_job_id][worker_type]
-            normalizing_factors[single_job_id] = normalizing_factor
+        if normalize:
+            normalizing_factors = {}
+            for single_job_id in single_job_ids:
+                normalizing_factor = 0.0
+                for worker_type in worker_types:
+                    normalizing_factor += d[single_job_id][worker_type]
+                normalizing_factors[single_job_id] = normalizing_factor
 
         if len(worker_types) == 0:
             return None, None, None
 
-        all_m = []
-        masks = []
+        shape = (len(single_job_ids), len(job_ids), len(worker_types))
+        all_m = np.zeros(shape, dtype=float)
+        masks = np.zeros(shape, dtype=float)
         # Compute the throughput matrix and mask for each individual job.
-        for single_job_id in single_job_ids:
-            m = []
-            mask = []
+        for i, single_job_id in enumerate(single_job_ids):
             # Each throughput matrix and mask has dimension
             # (num_app_combinations x num_worker_types).
-            for job_id in job_ids:
-                m_row = []
-                mask_row = []
-                for worker_type in worker_types:
+            for j, job_id in enumerate(job_ids):
+                for k, worker_type in enumerate(worker_types):
                     # If job ID of interest is not in this job_id_combination,
                     # mask and throughput should be 0.
                     # Otherwise, use the right throughput from the input dict.
                     if job_id in single_job_ids:
-                        if job_id != single_job_id:
-                            m_row.append(0.0)
-                            mask_row.append(0.0)
-                        else:
-                            m_row.append(d[job_id][worker_type])
-                            mask_row.append(1.0)
+                        if job_id == single_job_id:
+                            all_m[i][j][k] = d[job_id][worker_type]
+                            masks[i][j][k] = 1.0
                     else:
-                        if not single_job_id.overlaps_with(job_id):
-                            m_row.append(0.0)
-                            mask_row.append(0.0)
-                        else:
+                        if single_job_id.overlaps_with(job_id):
                             # Find the index of the job of interest in the job
                             # combination tuple.
                             index = job_id.as_tuple().index(single_job_id[0])
                             throughputs = d[job_id][worker_type]
-                            m_row.append(d[job_id][worker_type][index])
-                            mask_row.append(1.0)
-                m.append(m_row)
-                mask.append(mask_row)
+                            all_m[i][j][k] = d[job_id][worker_type][index]
+                            masks[i][j][k] = 1.0
             # Normalize.
             if normalize:
-                all_m.append(
-                    np.array(m) / normalizing_factors[single_job_id])
-            else:
-                all_m.append(np.array(m))
-            masks.append(np.array(mask))
+                all_m[i] /= normalizing_factors[single_job_id]
+                #all_m.append(m / normalizing_factors[single_job_id])
         return all_m, masks, (job_ids, single_job_ids, worker_types)
 
     def unflatten(self, m, index):
@@ -210,8 +197,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         if all_throughputs is None or len(all_throughputs) == 0: return None
         x = cp.Variable(all_throughputs[0].shape)
         objective_terms = []
-        for throughputs in all_throughputs:
-            objective_terms.append(cp.sum(cp.multiply(throughputs, x)))
+        for i in range(len(all_throughputs)):
+            objective_terms.append(cp.sum(cp.multiply(all_throughputs[i], x)))
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
         else:
@@ -220,8 +207,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             x >= 0,
             cp.sum(x, axis=0) <= self._num_workers,
         ]
-        for mask in masks:
-            constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
+        for i in range(len(masks)):
+            constraints.append(cp.sum(cp.multiply(x, masks[i])) <= 1)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='SCS')
 
