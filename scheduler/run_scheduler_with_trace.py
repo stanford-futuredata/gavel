@@ -63,6 +63,6 @@ if __name__=='__main__':
                                  'max_min_fairness_packed', 'min_total_duration',
                                  'min_total_duration_packed', 'fifo'],
                         help='Scheduler policy')
-    parser.add_argument('-d', '--seed', type=int, default=None,
+    parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')
     main(parser.parse_args())

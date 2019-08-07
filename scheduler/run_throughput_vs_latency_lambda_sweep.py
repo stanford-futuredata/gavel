@@ -299,7 +299,7 @@ if __name__=='__main__':
                         default=['1:0:0', '1:1:0', '1:1:1', '2:1:0'],
                         help=('List of cluster ratios to sweep in the form '
                               '#v100s:#p100s:#k80s'))
-    parser.add_argument('-d', '--seeds', type=int, nargs='+',
+    parser.add_argument('--seeds', type=int, nargs='+',
                         default=[0, 1, 42, 1234, 10],
                         help='List of random seeds')
     parser.add_argument('-i', '--interval', type=int, default=1920,

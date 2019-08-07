@@ -64,7 +64,7 @@ if __name__=='__main__':
     parser.add_argument('-c', '--cluster_spec', type=str,
                         default='k80:4,p100:4,v100:4',
                         help='Cluster specification')
-    parser.add_argument('-d', '--seed', type=int, default=None,
+    parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')
 
     main(parser.parse_args())

@@ -87,7 +87,7 @@ if __name__=='__main__':
                                  'max_min_fairness', 'max_min_fairness_perf',
                                  'max_min_fairness_packed'],
                         help='Policy')
-    parser.add_argument('-d', '--seed', type=int, nargs='+',
+    parser.add_argument('--seed', type=int, nargs='+',
                         default=0, help='Random seed')
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
