@@ -107,9 +107,6 @@ class Scheduler:
         self._per_worker_type_job_queue = {}
         self._priorities = {}
         self._deficits = {}
-        # The number of steps to run of each job on each worker type
-        # for each iteration.
-        self._num_steps_per_iteration = {}
         # Number of failures per job.
         self._num_failures_per_job = {}
         # Timestamp when data structures recording elapsed time was last reset.
@@ -215,7 +212,6 @@ class Scheduler:
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
             self._throughputs[job_id] = {}
-            self._num_steps_per_iteration[job_id] = {}
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
             for worker_type in self._worker_types:
@@ -225,7 +221,6 @@ class Scheduler:
                 if self._job_packing:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
-                self._initialize_num_steps_per_iteration(job_id, worker_type)
                 self._job_time_so_far[job_id][worker_type] = \
                         (self._time_per_iteration / 2.0)
             self._per_job_start_timestamps[job_id] = current_timestamp
@@ -357,13 +352,7 @@ class Scheduler:
         # Actually execute the scheduled job_id(s) on the right
         # worker_id.
         for single_job_id in job_id.singletons():
-            num_steps = \
-                    self._num_steps_per_iteration[single_job_id][worker_type]
-            self._num_steps_per_iteration[single_job_id][worker_type] = \
-                    min(num_steps,
-                        self._get_remaining_steps(single_job_id))
-            num_steps = \
-                    self._num_steps_per_iteration[single_job_id][worker_type]
+            num_steps = self._get_num_steps(job_id, worker_type, single_job_id)
             if num_steps <= 0:
                 raise ValueError('num_steps should be greater'
                                  'than 0, is %d' % (num_steps))
@@ -580,13 +569,8 @@ class Scheduler:
                 worker_id_ptr += scale_factor
 
                 for single_job_id in job_id.singletons():
-                    num_steps = \
-                        self._num_steps_per_iteration[single_job_id][worker_type]
-                    self._num_steps_per_iteration[single_job_id][worker_type] = \
-                        min(num_steps,
-                            self._get_remaining_steps(single_job_id))
-                    num_steps = \
-                        self._num_steps_per_iteration[single_job_id][worker_type]
+                    num_steps = self._get_num_steps(job_id, worker_type,
+                                                    single_job_id)
                     if num_steps <= 0:
                         raise ValueError('Num steps should be greater'
                                          'than 0, is %d' % (num_steps))
@@ -618,19 +602,28 @@ class Scheduler:
 
         return scheduled_jobs
 
+    def _get_num_steps(self, job_id, worker_type, single_job_id=None):
+        if job_id.is_pair():
+            assert(single_job_id is not None)
+            index = job_id.as_tuple().index(single_job_id[0])
+            num_steps = int(self._throughputs[job_id][worker_type][index] *
+                            self._time_per_iteration)
+        else:
+            num_steps = int(self._throughputs[job_id][worker_type] *
+                            self._time_per_iteration)
+        return min(num_steps,
+                   self._get_remaining_steps(single_job_id))
+
     def _get_job_steps_and_finish_times(self, job_id, worker_type):
         """Returns the number of steps to execute and and latest finish time(s)
            for a job or job pair."""
         max_finish_time = None
         all_num_steps = []
         for i, single_job_id in enumerate(job_id.singletons()):
-            # NOTE: This should already be updated to the min between num steps
-            # and remaining steps.
-            num_steps = self._num_steps_per_iteration[single_job_id][worker_type]
+            num_steps = self._get_num_steps(job_id, worker_type, single_job_id)
             all_num_steps.append(num_steps)
             if job_id.is_pair():
-                throughput = \
-                        self._throughputs[job_id][worker_type][i]
+                throughput = self._throughputs[job_id][worker_type][i]
             else:
                 throughput = self._throughputs[job_id][worker_type]
             if throughput <= 0.0:
@@ -638,10 +631,11 @@ class Scheduler:
                 print(worker_type)
                 raise Exception("Throughput should not be less than 0!")
             else:
-                finish_time = (self._current_timestamp + \
+                execution_time = num_steps / throughput
+                finish_time = (self._get_current_timestamp() + \
                                 (num_steps / throughput))
             if (max_finish_time is None or
-                    finish_time > max_finish_time):
+                finish_time > max_finish_time):
                 max_finish_time = finish_time
             self._running_jobs.add(single_job_id)
         return all_num_steps, max_finish_time
@@ -880,6 +874,8 @@ class Scheduler:
         last_job_arrival_time = None
         next_job_arrival_time = 0
         no_dispatched_or_running_jobs = False
+        current_round_start_time = 0
+        current_round_end_time = None
         while True:
             if (jobs_to_complete is not None and
                   jobs_to_complete.issubset(completed_jobs)):
@@ -917,6 +913,9 @@ class Scheduler:
                     if (len(running_jobs) > 0 and
                         -running_jobs[0][0] > max_timestamp):
                         max_timestamp = -running_jobs[0][0]
+                        if current_round_end_time is not None:
+                            current_round_start_time = current_round_end_time
+                        current_round_end_time = max_timestamp
                     if max_timestamp > 0:
                         self._current_timestamp = max_timestamp
                     else:
@@ -963,7 +962,12 @@ class Scheduler:
                     if finish_time <= self._current_timestamp:
                         all_execution_times = []
                         for single_job_id in job_id.singletons():
-                            execution_time = finish_time - self._per_job_latest_timestamps[single_job_id]
+                            if self._schedule_in_rounds:
+                                start_time = current_round_start_time
+                            else:
+                                start_time = \
+                                    self._per_job_latest_timestamps[single_job_id]
+                            execution_time = finish_time - start_time
                             all_execution_times.append(execution_time)
                             self._per_job_latest_timestamps[single_job_id] = \
                                     finish_time
@@ -1080,7 +1084,8 @@ class Scheduler:
                 if job_id is None:
                     continue
                 worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-                num_steps = self._num_steps_per_iteration[job_id][worker_type]
+                # TODO: Support packing.
+                num_steps = self._get_num_steps(job_id, worker_type)
                 self._worker_connections[worker_id].run(
                     [(job_id[0], self._jobs[job_id].command,
                       self._jobs[job_id].num_steps_arg,
@@ -1104,7 +1109,8 @@ class Scheduler:
                 scheduled_jobs = self._schedule_jobs_on_workers()
                 for (job_id, worker_ids) in scheduled_jobs:
                     worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                    num_steps = self._num_steps_per_iteration[job_id][worker_type]
+                    # TODO: Support packing.
+                    num_steps = self._get_num_steps(job_id, worker_type)
                     for worker_id in worker_ids:
                         self._worker_connections[worker_id].run(
                             [(job_id[0], self._jobs[job_id].command,
@@ -1309,7 +1315,6 @@ class Scheduler:
                     self._throughputs[merged_job_id] = {}
                     self._steps_run_so_far[merged_job_id] = {}
                     self._job_time_so_far[merged_job_id] = {}
-                    self._num_steps_per_iteration[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
                 # The single-job IDs for job pairs are stored in sorted order,
@@ -1327,7 +1332,6 @@ class Scheduler:
                             worker_type)
 
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
-                self._num_steps_per_iteration[merged_job_id][worker_type] = 0
 
     def _compute_throughput(self, job_types, worker_type):
         if isinstance(job_types, list):
@@ -1636,32 +1640,6 @@ class Scheduler:
         else:
             return time.time()
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
-    def _initialize_num_steps_per_iteration(self, job_id, worker_type):
-        if self._emulate:
-            throughput = self._throughputs[job_id][worker_type]
-            num_steps = int(throughput * self._time_per_iteration)
-        else:
-            num_steps = min(DEFAULT_NUM_STEPS,
-                            self._get_remaining_steps(job_id))
-        self._num_steps_per_iteration[job_id][worker_type] = num_steps
-
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
-    def _update_num_steps_per_iteration(self, job_id, worker_type,
-                                        num_steps, execution_time):
-        # Adjust the number of steps in each iteration such that the
-        # new number of steps will more closely align with the
-        # desired wall-clock time per iteration.
-        # TODO(keshav2): Use num_steps instead?
-        old_steps = self._num_steps_per_iteration[job_id][worker_type]
-        new_steps = max(1, old_steps * (self._time_per_iteration / execution_time))
-        new_steps = int(EMA_ALPHA * new_steps + (1 - EMA_ALPHA) * old_steps)
-        new_steps = min(new_steps, self._get_remaining_steps(job_id))
-        self._num_steps_per_iteration[job_id][worker_type] = new_steps
-        print(('[DEBUG] Job %s steps per iteration on worker type %s: '
-               '%d -> %d') % (job_id, worker_type,
-                              old_steps, new_steps))
-
     """
     ======================================================================
        Callback methods called by workers.
@@ -1806,10 +1784,6 @@ class Scheduler:
 
                 # TODO: fix this for job pairs.
                 if not self._emulate and not job_id.is_pair():
-                    self._update_num_steps_per_iteration(single_job_id,
-                                                         worker_type,
-                                                         num_steps,
-                                                         execution_time)
                     old_throughput = self._throughputs[job_id][worker_type]
                     self._update_throughput(job_id, worker_type,
                                             all_num_steps[0],
