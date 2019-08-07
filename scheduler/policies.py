@@ -116,7 +116,6 @@ class PolicyWithPacking(Policy):
             # Normalize.
             if normalize:
                 all_m[i] /= normalizing_factors[single_job_id]
-                #all_m.append(m / normalizing_factors[single_job_id])
         return all_m, masks, (job_ids, single_job_ids, worker_types)
 
     def unflatten(self, m, index):
