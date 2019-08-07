@@ -962,8 +962,12 @@ class Scheduler:
                     if finish_time <= self._current_timestamp:
                         all_execution_times = []
                         for single_job_id in job_id.singletons():
-                            execution_time = \
-                                    finish_time - current_round_start_time
+                            if self._schedule_in_rounds:
+                                start_time = current_round_start_time
+                            else:
+                                start_time = \
+                                    self._per_job_latest_timestamps[single_job_id]
+                            execution_time = finish_time - start_time
                             all_execution_times.append(execution_time)
                             self._per_job_latest_timestamps[single_job_id] = \
                                     finish_time
