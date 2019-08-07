@@ -14,27 +14,7 @@ import job
 from job_id_pair import JobIdPair
 import policies
 import scheduler
-
-def get_policy(policy_name):
-    if policy_name == 'max_min_fairness':
-        policy = policies.MaxMinFairnessPolicy()
-    elif policy_name == 'max_min_fairness_perf':
-        policy = policies.MaxMinFairnessPolicyWithPerf()
-    elif policy_name == 'max_min_fairness_packed':
-        policy = policies.MaxMinFairnessPolicyWithPacking()
-    elif policy_name == 'min_total_duration':
-        policy = policies.MinTotalDurationPolicy()
-    elif policy_name == 'min_total_duration_packed':
-        policy = policies.MinTotalDurationPolicyWithPacking()
-    elif policy_name == 'fifo':
-        policy = policies.FIFOPolicy()
-    elif policy_name == 'fifo_perf':
-        policy = policies.FIFOPolicyWithPerf()
-    elif policy_name == 'fifo_packed':
-        policy = policies.FIFOPolicyWithPacking()
-    else:
-        raise ValueError('Unknown policy!')
-    return policy
+import utils
 
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
@@ -44,7 +24,7 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
     lam_str = 'lambda=%f.log' % (lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stdout(f):
-            policy = get_policy(policy_name)
+            policy = utils.get_policy(policy_name, seed)
             sched = scheduler.Scheduler(
                             policy,
                             schedule_in_rounds=schedule_in_rounds,
@@ -319,7 +299,7 @@ if __name__=='__main__':
                         default=['1:0:0', '1:1:0', '1:1:1', '2:1:0'],
                         help=('List of cluster ratios to sweep in the form '
                               '#v100s:#p100s:#k80s'))
-    parser.add_argument('-d', '--seeds', type=int, nargs='+',
+    parser.add_argument('--seeds', type=int, nargs='+',
                         default=[0, 1, 42, 1234, 10],
                         help='List of random seeds')
     parser.add_argument('-i', '--interval', type=int, default=1920,

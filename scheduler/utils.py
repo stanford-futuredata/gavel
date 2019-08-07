@@ -1,41 +1,30 @@
 import json
 import os
 
-
-def read_all_throughputs(directory_name, worker_types=["k80", "p100", "v100", "v100_1_22", "v100_04_04"]):
-    all_throughputs = {}
-
-    directory = os.fsencode(directory_name)
-    for file in os.listdir(directory):
-        file_name = os.fsdecode(file)
-        worker_type = file_name.rstrip(".log")
-        if worker_type in worker_types:
-            with open(os.path.join(directory_name, file_name), 'r') as f:
-                job_types = None
-                job_throughputs = None
-                for line in f:
-                    # NOTE: Some of this parsing code is incredibly ugly, but
-                    # it gets the job done :(
-                    line = line.strip()
-                    if line != "":
-                        if line.startswith("("):
-                            job_types = line.lstrip("(").rstrip(")").split(", ")
-                        elif line.startswith("["):
-                            throughputs = [
-                                float(x) for x in line.lstrip("[").rstrip("]").split(", ")]
-                        else:
-                            try:
-                                throughputs = [float(line)]
-                            except:
-                                job_types = [line]
-                    else:
-                        job_types = tuple(job_types)
-                        if job_types not in all_throughputs:
-                            all_throughputs[job_types] = {}
-                        all_throughputs[job_types][worker_type] = tuple(throughputs)
-    return all_throughputs
+import policies
 
 def read_all_throughputs_json(throughputs_file):
     with open(throughputs_file, 'r') as f:
         throughputs = json.load(f)
     return throughputs
+
+def get_policy(policy_name, seed=None):
+    if policy_name == 'max_min_fairness':
+        policy = policies.MaxMinFairnessPolicy()
+    elif policy_name == 'max_min_fairness_perf':
+        policy = policies.MaxMinFairnessPolicyWithPerf()
+    elif policy_name == 'max_min_fairness_packed':
+        policy = policies.MaxMinFairnessPolicyWithPacking()
+    elif policy_name == 'min_total_duration':
+        policy = policies.MinTotalDurationPolicy()
+    elif policy_name == 'min_total_duration_packed':
+        policy = policies.MinTotalDurationPolicyWithPacking()
+    elif policy_name == 'fifo':
+        policy = policies.FIFOPolicy(seed=seed)
+    elif policy_name == 'fifo_perf':
+        policy = policies.FIFOPolicyWithPerf()
+    elif policy_name == 'fifo_packed':
+        policy = policies.FIFOPolicyWithPacking()
+    else:
+        raise ValueError('Unknown policy!')
+    return policy

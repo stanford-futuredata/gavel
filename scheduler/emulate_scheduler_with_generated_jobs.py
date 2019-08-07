@@ -7,31 +7,11 @@ import job
 from job_id_pair import JobIdPair
 import policies
 import scheduler
-
-def get_policy(policy_name):
-    if policy_name == 'max_min_fairness':
-        policy = policies.MaxMinFairnessPolicy()
-    elif policy_name == 'max_min_fairness_perf':
-        policy = policies.MaxMinFairnessPolicyWithPerf()
-    elif policy_name == 'max_min_fairness_packed':
-        policy = policies.MaxMinFairnessPolicyWithPacking()
-    elif policy_name == 'min_total_duration':
-        policy = policies.MinTotalDurationPolicy()
-    elif policy_name == 'min_total_duration_packed':
-        policy = policies.MinTotalDurationPolicyWithPacking()
-    elif policy_name == 'fifo':
-        policy = policies.FIFOPolicy()
-    elif policy_name == 'fifo_perf':
-        policy = policies.FIFOPolicyWithPerf()
-    elif policy_name == 'fifo_packed':
-        policy = policies.FIFOPolicyWithPacking()
-    else:
-        raise ValueError('Unknown policy!')
-    return policy
+import utils
 
 def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
             lam, seed, interval, jobs_to_complete, fixed_job_duration):
-    policy = get_policy(policy_name)
+    policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
                     schedule_in_rounds=schedule_in_rounds,
@@ -107,7 +87,7 @@ if __name__=='__main__':
                                  'max_min_fairness', 'max_min_fairness_perf',
                                  'max_min_fairness_packed'],
                         help='Policy')
-    parser.add_argument('-d', '--seed', type=int, nargs='+',
+    parser.add_argument('--seed', type=int, nargs='+',
                         default=0, help='Random seed')
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
