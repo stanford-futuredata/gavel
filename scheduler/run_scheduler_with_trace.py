@@ -7,27 +7,7 @@ import datetime
 import job
 import policies
 import scheduler
-
-def get_policy(policy_name):
-    if policy_name == 'max_min_fairness':
-        policy = policies.MaxMinFairnessPolicy()
-    elif policy_name == 'max_min_fairness_perf':
-        policy = policies.MaxMinFairnessPolicyWithPerf()
-    elif policy_name == 'max_min_fairness_packed':
-        policy = policies.MaxMinFairnessPolicyWithPacking()
-    elif policy_name == 'min_total_duration':
-        policy = policies.MinTotalDurationPolicy()
-    elif policy_name == 'min_total_duration_packed':
-        policy = policies.MinTotalDurationPolicyWithPacking()
-    elif policy_name == 'fifo':
-        policy = policies.FIFOPolicy()
-    elif policy_name == 'fifo_perf':
-        policy = policies.FIFOPolicyWithPerf()
-    elif policy_name == 'fifo_packed':
-        policy = policies.FIFOPolicyWithPacking()
-    else:
-        raise ValueError('Unknown policy!')
-    return policy
+import utils
 
 def parse_trace(trace_file):
     jobs = []
@@ -50,8 +30,10 @@ def main(args):
     job_queue = queue.Queue()
     for job in jobs:
         job_queue.put(job)
-    policy = get_policy(args.policy)
-    sched = scheduler.Scheduler(policy, schedule_in_rounds=args.schedule_in_rounds)
+    policy = utils.get_policy(args.policy, args.seed)
+    sched = scheduler.Scheduler(policy,
+                                schedule_in_rounds=args.schedule_in_rounds,
+                                seed=args.seed)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -81,4 +63,6 @@ if __name__=='__main__':
                                  'max_min_fairness_packed', 'min_total_duration',
                                  'min_total_duration_packed', 'fifo'],
                         help='Scheduler policy')
+    parser.add_argument('-d', '--seed', type=int, default=None,
+                        help='Random seed')
     main(parser.parse_args())

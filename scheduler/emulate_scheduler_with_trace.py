@@ -7,27 +7,7 @@ import datetime
 import job
 import policies
 import scheduler
-
-def get_policy(policy_name):
-    if policy_name == 'max_min_fairness':
-        policy = policies.MaxMinFairnessPolicy()
-    elif policy_name == 'max_min_fairness_perf':
-        policy = policies.MaxMinFairnessPolicyWithPerf()
-    elif policy_name == 'max_min_fairness_packed':
-        policy = policies.MaxMinFairnessPolicyWithPacking()
-    elif policy_name == 'min_total_duration':
-        policy = policies.MinTotalDurationPolicy()
-    elif policy_name == 'min_total_duration_packed':
-        policy = policies.MinTotalDurationPolicyWithPacking()
-    elif policy_name == 'fifo':
-        policy = policies.FIFOPolicy()
-    elif policy_name == 'fifo_perf':
-        policy = policies.FIFOPolicyWithPerf()
-    elif policy_name == 'fifo_packed':
-        policy = policies.FIFOPolicyWithPacking()
-    else:
-        raise ValueError('Unknown policy!')
-    return policy
+import utils
 
 def parse_trace(trace_file):
     jobs = []
@@ -48,12 +28,13 @@ def parse_trace(trace_file):
 
 def main(args):
     jobs, arrival_times = parse_trace(args.trace_file)
-    policy = get_policy(args.policy)
+    policy = utils.get_policy(args.policy, args.seed)
 
     sched = scheduler.Scheduler(policy,
                                 schedule_in_rounds=args.schedule_in_rounds,
                                 throughputs_file=args.throughputs_file,
-                                emulate=True)
+                                emulate=True,
+                                seed=args.seed)
 
     cluster_spec = {key_value.split(':')[0]: int(key_value.split(':')[1])
                     for key_value in args.cluster_spec.split(',')}
@@ -69,9 +50,11 @@ if __name__=='__main__':
     parser.add_argument('-r', '--schedule_in_rounds', action='store_true',
                         help='Use rounds for scheduling')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
-                        choices=['isolated', 'max_min_fairness',
-                                 'max_min_fairness_packed', 'min_total_duration',
-                                 'min_total_duration_packed', 'fifo'],
+                        choices=['max_min_fairness', 'max_min_fairness_perf',
+                                 'max_min_fairness_packed',
+                                 'min_total_duration',
+                                 'min_total_duration_packed', 'fifo',
+                                 'fifo_perf', 'fifo_packed'],
                         help='Scheduler policy')
     parser.add_argument('-i', '--ideal', action='store_true',
                         help='Use allocation returned by policy ideally')
@@ -81,5 +64,7 @@ if __name__=='__main__':
     parser.add_argument('-c', '--cluster_spec', type=str,
                         default='k80:4,p100:4,v100:4',
                         help='Cluster specification')
+    parser.add_argument('-d', '--seed', type=int, default=None,
+                        help='Random seed')
 
     main(parser.parse_args())
