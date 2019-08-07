@@ -69,9 +69,11 @@ class PolicyWithPacking(Policy):
             [cluster_spec[worker_type] for worker_type in worker_types]
 
         single_job_ids = set()
+        sorted_single_job_ids = []
         for job_id in job_ids:
             if not job_id.is_pair():
                 single_job_ids.add(job_id)
+                sorted_single_job_ids.append(job_id)
 
         # Compute normalizing factor for each individual job, this normalizing
         # factor will be used to normalize throughputs for the same job in job
@@ -91,7 +93,7 @@ class PolicyWithPacking(Policy):
         all_m = np.zeros(shape, dtype=float)
         masks = np.zeros(shape, dtype=float)
         # Compute the throughput matrix and mask for each individual job.
-        for i, single_job_id in enumerate(sorted(list(single_job_ids))):
+        for i, single_job_id in enumerate(sorted_single_job_ids):
             # Each throughput matrix and mask has dimension
             # (num_app_combinations x num_worker_types).
             for j, job_id in enumerate(job_ids):
