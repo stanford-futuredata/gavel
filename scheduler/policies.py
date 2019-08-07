@@ -91,7 +91,7 @@ class PolicyWithPacking(Policy):
         all_m = np.zeros(shape, dtype=float)
         masks = np.zeros(shape, dtype=float)
         # Compute the throughput matrix and mask for each individual job.
-        for i, single_job_id in enumerate(single_job_ids):
+        for i, single_job_id in enumerate(sorted(list(single_job_ids))):
             # Each throughput matrix and mask has dimension
             # (num_app_combinations x num_worker_types).
             for j, job_id in enumerate(job_ids):
