@@ -31,13 +31,18 @@ MAX_FAILED_ATTEMPTS = 5
 class Scheduler:
 
     def __init__(self, policy, schedule_in_rounds, emulate=False,
-                 throughputs_file=None, seed=42, time_per_iteration=1920):
+                 throughputs_file=None, seed=42, time_per_iteration=1920,
+                 predict_throughputs=False):
 
         print('Running scheduler with policy=%s, schedule_in_rounds=%r, '
                'seed=%d, time_per_iteration=%d' % (policy.name,
                                                    schedule_in_rounds,
                                                    seed,
                                                    time_per_iteration))
+
+        if not predict_throughputs and throughputs_file is None:
+            raise ValueError('Throughputs file must be provided if not '
+                             'predicting throughputs.')
 
         # Flag to control whether scheduling should occur in rounds.
         self._schedule_in_rounds = schedule_in_rounds
@@ -81,7 +86,8 @@ class Scheduler:
         self._scheduler_lock = threading.Lock()
         # List of available worker IDs.
         self._available_worker_ids = queue.Queue()
-        # Throughputs for all current incomplete applications.
+        # Measured/predicted throughputs for all current incomplete
+        # applications.
         self._throughputs = {}
         # Allocations for all current incomplete applications.
         self._allocation = {}
@@ -112,13 +118,15 @@ class Scheduler:
         # Timestamp when data structures recording elapsed time was last reset.
         self._last_reset_time = 0
         # Flag indicating when to update the allocation.
-        self._need_to_update_allocation = False
+        eelf._need_to_update_allocation = False
         # Throughputs for all job types (pre-measured).
         if throughputs_file is not None:
-            self._all_throughputs = utils.read_all_throughputs_json(
+            self._oracle_throughputs = utils.read_all_throughputs_json(
                 throughputs_file)
         else:
-            self._all_throughputs = {}
+            self._oracle_throughputs = {}
+        # Flag to control whether to predict throughputs in real-time.
+        self._predict_throughputs = predict_throughputs
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -773,7 +781,9 @@ class Scheduler:
             run_time = fixed_job_duration
         else:
             run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
-        num_steps = run_time * self._all_throughputs['v100'][job_type]['null']
+        # Use the oracle throughputs to determine the job's runtime.
+        throughput = self._oracle_throughputs['v100'][job_type]['null']
+        num_steps = run_time * throughput
         assert(run_time > 0)
         assert(num_steps > 0)
         if job_template.needs_data_dir:
@@ -836,7 +846,7 @@ class Scheduler:
             remaining_jobs = len(jobs)
             queued_jobs = []
         else:
-            if self._all_throughputs is None:
+            if self._oracle_throughputs is None:
                 raise ValueError('Scheduler must be initialized with a '
                                  'throughputs file.')
             elif lam is None:
@@ -1352,16 +1362,21 @@ class Scheduler:
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
 
     def _compute_throughput(self, job_types, worker_type):
-        if isinstance(job_types, list):
-            if self._emulate:
-                return self._all_throughputs[worker_type][job_types[0]][job_types[1]]
-            else:
-                return (DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0)
+        if self._predict_throughputs:
+            # TODO
+            pass
         else:
-            if self._emulate:
-                return self._all_throughputs[worker_type][job_types]["null"]
+            worker_throughputs = self._oracle_throughputs[worker_type]
+            if isinstance(job_types, list):
+                if self._emulate:
+                    return worker_throughputs[job_types[0]][job_types[1]]
+                else:
+                    return (DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0)
             else:
-                return DEFAULT_THROUGHPUT
+                if self._emulate:
+                    return worker_throughputs[worker_type][job_types]["null"]
+                else:
+                    return DEFAULT_THROUGHPUT
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
