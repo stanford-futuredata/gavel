@@ -39,7 +39,8 @@ def main(args):
     cluster_spec = {key_value.split(':')[0]: int(key_value.split(':')[1])
                     for key_value in args.cluster_spec.split(',')}
     sched.emulate(cluster_spec, arrival_times, jobs,
-                  ideal=args.ideal)
+                  ideal=args.ideal,
+                  debug=args.debug)
     sched.get_average_jct()
     sched.get_cluster_utilization()
 
@@ -66,5 +67,6 @@ if __name__=='__main__':
                         help='Cluster specification')
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')
-
+    parser.add_argument('-d', '--debug', action='store_true', default=False,
+                        help='Debug')
     main(parser.parse_args())

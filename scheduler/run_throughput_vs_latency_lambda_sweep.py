@@ -299,8 +299,9 @@ def main(args):
                                               args.timeout, args.verbose))
                         experiment_id += 1
     if len(all_args_list) > 0:
-        print('[%s] Running %d total experiments...' % (datetime.datetime.now(),
-                                                        len(all_args_list)))
+        current_time = datetime.datetime.now()
+        print('[%s] Running %d total experiment(s)...' % (current_time,
+                                                          len(all_args_list)))
         with multiprocessing.Pool(args.processes) as p:
             if automatic_sweep:
                 p.map(run_automatic_sweep_helper, all_args_list)

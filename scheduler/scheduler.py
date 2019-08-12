@@ -793,7 +793,8 @@ class Scheduler:
 
     def emulate(self, cluster_spec, arrival_times=None, jobs=None,
                 ideal=False, lam=None, jobs_to_complete=None,
-                measurement_window=None, fixed_job_duration=None):
+                measurement_window=None, fixed_job_duration=None,
+                debug=False):
         """Emulates the scheduler execution.
 
            Emulation can be performed using a trace or with continuously
@@ -877,6 +878,8 @@ class Scheduler:
         current_round_start_time = 0
         current_round_end_time = None
         while True:
+            if debug:
+                input('Press Enter to continue...')
             if (jobs_to_complete is not None and
                   jobs_to_complete.issubset(completed_jobs)):
                 break

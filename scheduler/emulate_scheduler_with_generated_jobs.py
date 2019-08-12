@@ -10,7 +10,7 @@ import scheduler
 import utils
 
 def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
-            lam, seed, interval, jobs_to_complete, fixed_job_duration):
+            lam, seed, interval, jobs_to_complete, fixed_job_duration, debug):
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -31,7 +31,8 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
 
     sched.emulate(cluster_spec, lam=lam,
                   jobs_to_complete=jobs_to_complete,
-                  fixed_job_duration=fixed_job_duration)
+                  fixed_job_duration=fixed_job_duration,
+                  debug=debug)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
     
@@ -44,7 +45,7 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
 def main(args):
     schedule_in_rounds = True
     throughputs_file = 'combined_throughputs.json'
-    num_gpus = args.cluster_spec.split('|')
+    num_gpus = args.cluster_spec.split(':')
     cluster_spec = {
             'v100': int(num_gpus[0]),
             'p100': int(num_gpus[1]),
@@ -59,7 +60,8 @@ def main(args):
         emulate(args.policy, schedule_in_rounds, throughputs_file,
                 cluster_spec, args.lam, args.seed,
                 args.interval, jobs_to_complete,
-                args.fixed_job_duration)
+                args.fixed_job_duration,
+                args.debug)
     
     else:
         with open('/dev/null', 'w') as f:
@@ -67,7 +69,8 @@ def main(args):
                 emulate(args.policy, schedule_in_rounds, throughputs_file,
                         cluster_spec, args.lam, args.seed,
                         args.interval, jobs_to_complete,
-                        args.fixed_job_duration)
+                        args.fixed_job_duration,
+                        args.debug)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -75,9 +78,9 @@ if __name__=='__main__':
 
     parser.add_argument('-g', '--gpus', type=int, default=25,
                         help='Number of v100 GPUs')
-    parser.add_argument('-c', '--cluster_spec', type=str, default='25|0|0',
-                        help=('Cluster specification in the form of'
-                              '#v100s|#p100s|#k80s'))
+    parser.add_argument('-c', '--cluster_spec', type=str, default='25:0:0',
+                        help=('Cluster specification in the form of '
+                              '#v100s:#p100s:#k80s'))
     parser.add_argument('-s', '--window-start', type=int, default=0,
                         help='Measurement window start (job ID)')
     parser.add_argument('-e', '--window-end', type=int, default=5000,
@@ -98,6 +101,8 @@ if __name__=='__main__':
                               'specified value (in seconds)'))
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Verbose')
+    parser.add_argument('-d', '--debug', action='store_true', default=False,
+                        help='Debug')
     args = parser.parse_args()
     main(args)
 
