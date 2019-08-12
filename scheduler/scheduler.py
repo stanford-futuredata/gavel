@@ -118,13 +118,13 @@ class Scheduler:
         # Timestamp when data structures recording elapsed time was last reset.
         self._last_reset_time = 0
         # Flag indicating when to update the allocation.
-        eelf._need_to_update_allocation = False
+        self._need_to_update_allocation = False
         # Throughputs for all job types (pre-measured).
         if throughputs_file is not None:
             self._oracle_throughputs = utils.read_all_throughputs_json(
                 throughputs_file)
         else:
-            self._oracle_throughputs = {}
+            self._oracle_throughputs = None
         # Flag to control whether to predict throughputs in real-time.
         self._predict_throughputs = predict_throughputs
         # Currently running jobs.
@@ -224,13 +224,14 @@ class Scheduler:
             self._total_steps_run[job_id] = 0
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
-                self._throughputs[job_id][worker_type] = \
-                    self._compute_throughput(job.job_type, worker_type)
+                    #self._throughputs[job_id][worker_type] = \
+                    #    self._compute_throughput(job.job_type, worker_type)
                 if self._job_packing:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
                 self._job_time_so_far[job_id][worker_type] = \
                         (self._time_per_iteration / 2.0)
+            self._compute_throughput(job)
             self._per_job_start_timestamps[job_id] = current_timestamp
             self._per_job_latest_timestamps[job_id] = None
             if self._schedule_in_rounds:
@@ -893,6 +894,7 @@ class Scheduler:
         current_round_end_time = None
         num_completed_jobs = 0
         while True:
+            print('throughputs:', self._throughputs)
             if debug:
                 input('Press Enter to continue...')
             if (jobs_to_complete is not None and
@@ -1345,6 +1347,7 @@ class Scheduler:
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
+                """
                 # The single-job IDs for job pairs are stored in sorted order,
                 # so make sure the co-located throughputs match the order of the
                 # single-job IDs.
@@ -1358,12 +1361,124 @@ class Scheduler:
                         self._compute_throughput(
                             [other_job.job_type, job.job_type],
                             worker_type)
-
+                """
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
 
+    def predict_colocated_throughputs(self, job_id, job_type):
+        # TODO: support non-emulated mode.
+        num_jobs = len(self._throughputs)
+        throughputs_matrix = np.zeros((num_jobs, num_jobs),
+                                      dtype=np.float32)
+        mask = np.zeros((num_jobs, num_jobs))
+        # Populate the throughputs matrix with all existing
+        # measured throughput data.
+        # TODO: cache this?
+        all_job_ids = sorted(list(self._jobs.keys()))
+        for i, job_id_0 in enumerate(all_job_ids):
+            for j, job_id_1 in enumerate(all_job_ids):
+                if j < i:
+                    break
+                if self._throughputs_mask[job_id_0][job_id_1]:
+                    mask[i][j] = 1.0
+                    merged_job_id =\
+                        job_id_pair.JobIdPair(job_id_0,
+                                              job_id_1)
+                    colocated_throughput =\
+                        self._oracle_throughputs[merged_job_id][worker_type]
+                    job_id_0_index =\
+                            merged_job_id.index(job_id_0)
+                    throughputs_matrix[i][j] =\
+                        colocated_throughput[job_id_0_index]
+                    throughputs_matrix[i][j] =\
+                        colocated_throughput[1 - job_id_0_index]
+        # Pick additional co-located throughputs to measure.
+        # TODO: make this a command line argument.
+        i = all_job_ids.index(job_id)
+        assert (i == num_jobs - 1)
+        for j in range(int(all_job_ids * .5)):
+            # TODO: use a separate RNG.
+            other_job_id = random.choice(all_job_ids)
+            merged_job_id = job_id_pair.JobIdPair(job_id,
+                                                  other_job_id)
+            colocated_throughput =\
+                self._oracle_throughputs[merged_job_id][worker_type]
+            job_id_index = merged_job_id.index(job_id)
+            throughputs_matrix[i][j] =\
+                colocated_throughput[job_id_index]
+            throughputs_matrix[i][j] =\
+                colocated_throughput[1 - job_id_index]
+            self._throughputs_mask[job_id][other_job_id] = True
+            self._throughputs_mask[other_job_id][job_id] = True
+            mask[i][j] = 1.0
+        # Predict the remaining co-locatd throughputs.
+        predicted_throughputs =\
+            matrix_completion.svt_solve(throughputs_matrix,
+                                        mask)
+        # Update the throughputs data structure with the
+        # predicted throughputs.
+        for i in range(num_jobs):
+            for j in range(num_jobs):
+                if j < i:
+                    break
+                if not self._throughputs_mask[job_id_0][job_id_1]:
+                    merged_job_id = \
+                            job_id.JobIdPair(all_job_ids[i],
+                                             all_job_ids[j])
+                    self._throughputs[merged_job_id][worker_type] =\
+                        (predicted_throughputs[i][j],
+                         predicted_throughputs[j][i])
+
+    def _compute_throughput(self, job):
+        job_id = job.job_id
+        job_type = job.job_type
+
+        self._throughputs[job_id] = {}
+
+        if self._emulate:
+            if self._predict_throughputs:
+                for worker_type in self._worker_types:
+                    worker_throughputs = self._oracle_throughputs[worker_type]
+                    self._throughputs[job_id][worker_type] =\
+                        worker_throughputs[job_type]['null']
+                    if self._job_packing:
+                        self._predict_colocated_throughputs(job_id, job_type)
+            else:
+                for worker_type in self._worker_types:
+                    worker_throughputs = self._oracle_throughputs[worker_type]
+                    self._throughputs[job_id][worker_type] =\
+                        worker_throughputs[job_type]['null']
+                    if self._job_packing:
+                        for other_job_id in self._jobs:
+                            if other_job_id == job_id:
+                                continue
+                            other_job_type = self._jobs[other_job_id].job_type
+                            merged_job_id = \
+                                    job_id_pair.JobIdPair(job_id[0],
+                                                          other_job_id[0])
+                            if merged_job_id not in self._throughputs:
+                                self._throughputs[merged_job_id] = {}
+                            # The single-job IDs for job pairs are stored in
+                            # sorted order, so make sure the co-located
+                            # throughputs match the order of the single-job IDs.
+                            if job_id < other_job_id:
+                                colocated_throughputs =\
+                                    worker_throughputs[job_type][other_job_type]
+                            else:
+                                colocated_throughputs =\
+                                    worker_throughputs[other_job_type][job_type]
+                            self._throughputs[merged_job_id][worker_type] =\
+                                colocated_throughputs
+        else:
+            if self._predict_throughputs:
+                # TODO
+                pass
+            else:
+                # TODO
+                pass
+
+    """
     def _compute_throughput(self, job_types, worker_type):
         if self._predict_throughputs:
-            # TODO
             pass
         else:
             worker_throughputs = self._oracle_throughputs[worker_type]
@@ -1377,7 +1492,7 @@ class Scheduler:
                     return worker_throughputs[worker_type][job_types]["null"]
                 else:
                     return DEFAULT_THROUGHPUT
-
+    """
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
         """Reset _time_run_so_far so that all jobs receive new fair allocation
