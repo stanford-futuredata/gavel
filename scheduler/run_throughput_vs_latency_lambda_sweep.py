@@ -16,6 +16,37 @@ import policies
 import scheduler
 import utils
 
+cutoff_throughputs = {
+    '1:0:0': {
+        'fifo': 0.8,
+        'fifo_perf': 0.8,
+        'fifo_packing': 0.8,
+        'max_min_fairness': 0.8,
+        'max_min_fairness_perf': 0.8,
+    },
+    '1:1:0': {
+        'fifo': 0.55,
+        'fifo_perf': 0.55,
+        'fifo_packing': 0.65,
+        'max_min_fairness': 0.55,
+        'max_min_fairness_perf': 0.6,
+    },
+    '2:1:0': {
+        'fifo': 0.6,
+        'fifo_perf': 0.6,
+        'fifo_packing': 0.7,
+        'max_min_fairness': 0.6,
+        'max_min_fairness_perf': 0.65,
+    },
+    '1:1:1': {
+        'fifo': 0.45,
+        'fifo_perf': 0.45,
+        'fifo_packing': 0.48,
+        'max_min_fairness': 0.45,
+        'max_min_fairness_perf': 0.5,
+    },
+}
+
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
                          jobs_to_complete, fixed_job_duration, log_dir, timeout,
@@ -197,7 +228,16 @@ def main(args):
         jobs_to_complete.add(JobIdPair(i, None))
 
     all_args_list = []
-    for ratio in ratios:
+    for ratio_str in args.ratios:
+        ratio = {}
+        x = ratio_str.split(':')
+        if len(x) != 3:
+            raise ValueError('Invalid cluster ratio %s' % (ratio_str))
+        ratio = {
+            'v100': int(x[0]),
+            'p100': int(x[1]),
+            'k80': int(x[2])
+            }
         cluster_spec = {}
         total_gpu_fraction = sum([ratio[gpu_type] for gpu_type in ratio])
         for gpu_type in ratio:
@@ -241,6 +281,17 @@ def main(args):
                 if throughputs[0] == 0.0:
                     throughputs = throughputs[1:]
                 for throughput in throughputs:
+                    if (ratio_str in cutoff_throughputs and
+                        policy_name in cutoff_throughputs[ratio_str]):
+                        cutoff_throughput = \
+                                cutoff_throughputs[ratio_str][policy_name]
+                        if throughput >= cutoff_throughput:
+                            print('Throughput of %f is too high for policy %s '
+                                  'with cluster ratio %s.' % (throughput,
+                                                              policy_name,
+                                                              ratio_str))
+                            continue
+
                     lam = 3600.0 / throughput
                     for seed in args.seeds:
                         seed_str = 'seed=%d' % (seed)
