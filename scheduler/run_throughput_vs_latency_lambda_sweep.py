@@ -203,16 +203,6 @@ def main(args):
     throughputs_file = 'combined_throughputs.json'
     num_v100s = args.gpus
     policy_names = args.policies
-    ratios = []
-    for ratio in args.ratios:
-        x = ratio.split(':')
-        if len(x) != 3:
-            raise ValueError('Invalid cluster ratio %s' % (ratio))
-        ratios.append({
-            'v100': int(x[0]),
-            'p100': int(x[1]),
-            'k80': int(x[2])
-            })
     job_range = (args.window_start, args.window_end)
     experiment_id = 0
 
