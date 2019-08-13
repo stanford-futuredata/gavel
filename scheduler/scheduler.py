@@ -896,7 +896,7 @@ class Scheduler:
         current_round_end_time = None
         num_completed_jobs = 0
         while True:
-            print('throughputs:', self._throughputs)
+            #print('throughputs:', self._throughputs)
             if debug:
                 input('Press Enter to continue...')
             if (jobs_to_complete is not None and
@@ -1387,6 +1387,7 @@ class Scheduler:
                 merged_job_id = job_id_pair.JobIdPair(job_id_0[0], job_id_1[0])
                 if i == j or self._throughputs_mask[merged_job_id][worker_type]:
                     mask[i][j] = 1.0
+                    mask[j][i] = 1.0
                     colocated_throughputs =\
                         self._oracle_throughputs[worker_type][job_0_type][job_1_type]
                     throughputs_matrix[i][j] = colocated_throughputs[0]
@@ -1395,12 +1396,15 @@ class Scheduler:
         # TODO: make this a command line argument.
         i = all_job_ids.index(job_id)
         assert (i == num_jobs - 1)
-        if num_jobs < 10:
+        if num_jobs < 2:
             num_jobs_to_measure = num_jobs
         else:
-            num_jobs_to_measure = int(num_jobs / 1.1)
+            num_jobs_to_measure = int(num_jobs / 2)
         job_id_indexes_to_measure = random.sample(list(range(num_jobs)),
                                                   num_jobs_to_measure)
+        #print('i:', i)
+        #print('num_jobs:', num_jobs)
+        #print('job_id_indexes_to_measure:', job_id_indexes_to_measure)
         for j in job_id_indexes_to_measure:
             # TODO: use a separate RNG.
             other_job_id = all_job_ids[j]
@@ -1414,6 +1418,7 @@ class Scheduler:
             if i != j:
                 self._throughputs_mask[merged_job_id][worker_type] = True
             mask[i][j] = 1.0
+            mask[j][i] = 1.0
         print('mask:\n', mask)
         if num_jobs_to_measure < num_jobs:
             # Predict the remaining co-locatd throughputs.
@@ -1950,6 +1955,12 @@ class Scheduler:
                     self._update_throughput(job_id, worker_type,
                                             all_num_steps[0],
                                             all_execution_times[0])
+                elif (self._emulate and self._predict_throughputs and
+                      job_id.is_pair()):
+                    # Indicate that the throughput for this JobIdPair
+                    # has been measured and no longer needs to be
+                    # predicted.
+                    self._throughputs_mask[job_id][worker_type] = True
 
                 # If we just ran co-located jobs, use the maximum of the
                 # individual execution times.
