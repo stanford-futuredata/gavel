@@ -9,8 +9,9 @@ import policies
 import scheduler
 import utils
 
-def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
-            lam, seed, interval, jobs_to_complete, fixed_job_duration, debug):
+def emulate(policy_name, schedule_in_rounds, predict_throughputs,
+            throughputs_file, cluster_spec, lam, seed, interval,
+            jobs_to_complete, fixed_job_duration, debug):
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -18,6 +19,7 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
                     throughputs_file=throughputs_file,
                     seed=seed,
                     time_per_iteration=interval,
+                    predict_throughputs=predict_throughputs,
                     emulate=True)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
@@ -35,7 +37,7 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
                   debug=debug)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
-    
+
     current_time = datetime.datetime.now()
     print('[%s] Results: average JCT=%f, utilization=%f' % (current_time,
                                                             average_jct,
@@ -57,16 +59,17 @@ def main(args):
         jobs_to_complete.add(JobIdPair(i, None))
 
     if args.verbose:
-        emulate(args.policy, schedule_in_rounds, throughputs_file,
-                cluster_spec, args.lam, args.seed,
+        emulate(args.policy, schedule_in_rounds, args.predict_throughputs,
+                throughputs_file, cluster_spec, args.lam, args.seed,
                 args.interval, jobs_to_complete,
                 args.fixed_job_duration,
                 args.debug)
-    
+
     else:
         with open('/dev/null', 'w') as f:
             with contextlib.redirect_stdout(f):
-                emulate(args.policy, schedule_in_rounds, throughputs_file,
+                emulate(args.policy, schedule_in_rounds,
+                        args.predict_throughputs,throughputs_file,
                         cluster_spec, args.lam, args.seed,
                         args.interval, jobs_to_complete,
                         args.fixed_job_duration,
@@ -99,6 +102,8 @@ if __name__=='__main__':
     parser.add_argument('-f', '--fixed-job-duration', type=int, default=None,
                         help=('If set, fixes the duration of all jobs to the '
                               'specified value (in seconds)'))
+    parser.add_argument('--predict_throughputs', action='store_true',
+                        default=False, help='Predict throughputs online')
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Verbose')
     parser.add_argument('-d', '--debug', action='store_true', default=False,

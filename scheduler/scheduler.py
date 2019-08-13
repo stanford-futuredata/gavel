@@ -11,6 +11,7 @@ import time
 import datetime
 import random
 import math
+import matrix_completion
 
 # TODO: clean these up
 from job import Job
@@ -127,6 +128,7 @@ class Scheduler:
             self._oracle_throughputs = None
         # Flag to control whether to predict throughputs in real-time.
         self._predict_throughputs = predict_throughputs
+        self._throughputs_mask = {}
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -1347,6 +1349,7 @@ class Scheduler:
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
+                    self._throughputs_mask[merged_job_id] = {}
                 """
                 # The single-job IDs for job pairs are stored in sorted order,
                 # so make sure the co-located throughputs match the order of the
@@ -1363,10 +1366,11 @@ class Scheduler:
                             worker_type)
                 """
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
+                self._throughputs_mask[merged_job_id][worker_type] = False
 
-    def predict_colocated_throughputs(self, job_id, job_type):
+    def _predict_colocated_throughputs(self, job_id, job_type, worker_type):
         # TODO: support non-emulated mode.
-        num_jobs = len(self._throughputs)
+        num_jobs = len(self._jobs)
         throughputs_matrix = np.zeros((num_jobs, num_jobs),
                                       dtype=np.float32)
         mask = np.zeros((num_jobs, num_jobs))
@@ -1375,58 +1379,67 @@ class Scheduler:
         # TODO: cache this?
         all_job_ids = sorted(list(self._jobs.keys()))
         for i, job_id_0 in enumerate(all_job_ids):
+            job_0_type = self._jobs[job_id_0].job_type
             for j, job_id_1 in enumerate(all_job_ids):
                 if j < i:
-                    break
-                if self._throughputs_mask[job_id_0][job_id_1]:
+                    continue
+                job_1_type = self._jobs[job_id_1].job_type
+                merged_job_id = job_id_pair.JobIdPair(job_id_0[0], job_id_1[0])
+                if i == j or self._throughputs_mask[merged_job_id][worker_type]:
                     mask[i][j] = 1.0
-                    merged_job_id =\
-                        job_id_pair.JobIdPair(job_id_0,
-                                              job_id_1)
-                    colocated_throughput =\
-                        self._oracle_throughputs[merged_job_id][worker_type]
-                    job_id_0_index =\
-                            merged_job_id.index(job_id_0)
-                    throughputs_matrix[i][j] =\
-                        colocated_throughput[job_id_0_index]
-                    throughputs_matrix[i][j] =\
-                        colocated_throughput[1 - job_id_0_index]
+                    colocated_throughputs =\
+                        self._oracle_throughputs[worker_type][job_0_type][job_1_type]
+                    throughputs_matrix[i][j] = colocated_throughputs[0]
+                    throughputs_matrix[j][i] = colocated_throughputs[1]
         # Pick additional co-located throughputs to measure.
         # TODO: make this a command line argument.
         i = all_job_ids.index(job_id)
         assert (i == num_jobs - 1)
-        for j in range(int(all_job_ids * .5)):
+        if num_jobs < 10:
+            num_jobs_to_measure = num_jobs
+        else:
+            num_jobs_to_measure = int(num_jobs / 1.1)
+        job_id_indexes_to_measure = random.sample(list(range(num_jobs)),
+                                                  num_jobs_to_measure)
+        for j in job_id_indexes_to_measure:
             # TODO: use a separate RNG.
-            other_job_id = random.choice(all_job_ids)
-            merged_job_id = job_id_pair.JobIdPair(job_id,
-                                                  other_job_id)
-            colocated_throughput =\
-                self._oracle_throughputs[merged_job_id][worker_type]
-            job_id_index = merged_job_id.index(job_id)
-            throughputs_matrix[i][j] =\
-                colocated_throughput[job_id_index]
-            throughputs_matrix[i][j] =\
-                colocated_throughput[1 - job_id_index]
-            self._throughputs_mask[job_id][other_job_id] = True
-            self._throughputs_mask[other_job_id][job_id] = True
+            other_job_id = all_job_ids[j]
+            other_job_type = self._jobs[other_job_id].job_type
+            merged_job_id = job_id_pair.JobIdPair(job_id[0],
+                                                  other_job_id[0])
+            colocated_throughputs =\
+                self._oracle_throughputs[worker_type][job_type][other_job_type]
+            throughputs_matrix[i][j] = colocated_throughputs[0]
+            throughputs_matrix[j][i] = colocated_throughputs[1]
+            if i != j:
+                self._throughputs_mask[merged_job_id][worker_type] = True
             mask[i][j] = 1.0
-        # Predict the remaining co-locatd throughputs.
-        predicted_throughputs =\
-            matrix_completion.svt_solve(throughputs_matrix,
-                                        mask)
+        print('mask:\n', mask)
+        if num_jobs_to_measure < num_jobs:
+            # Predict the remaining co-locatd throughputs.
+            predicted_throughputs =\
+                matrix_completion.svt_solve(throughputs_matrix,
+                                            mask)
         # Update the throughputs data structure with the
         # predicted throughputs.
         for i in range(num_jobs):
             for j in range(num_jobs):
-                if j < i:
-                    break
-                if not self._throughputs_mask[job_id_0][job_id_1]:
-                    merged_job_id = \
-                            job_id.JobIdPair(all_job_ids[i],
-                                             all_job_ids[j])
+                if j <= i:
+                    continue
+                merged_job_id = job_id_pair.JobIdPair(all_job_ids[i][0],
+                                                      all_job_ids[j][0])
+                if not self._throughputs_mask[merged_job_id]:
                     self._throughputs[merged_job_id][worker_type] =\
-                        (predicted_throughputs[i][j],
-                         predicted_throughputs[j][i])
+                        [predicted_throughputs[i][j],
+                         predicted_throughputs[j][i]]
+                else:
+                    job_0_type = self._jobs[all_job_ids[i]].job_type
+                    job_1_type = self._jobs[all_job_ids[j]].job_type
+                    colocated_throughputs =\
+                        self._oracle_throughputs[worker_type][job_0_type][job_1_type]
+                    self._throughputs[merged_job_id][worker_type] =\
+                        colocated_throughputs
+
 
     def _compute_throughput(self, job):
         job_id = job.job_id
@@ -1441,7 +1454,8 @@ class Scheduler:
                     self._throughputs[job_id][worker_type] =\
                         worker_throughputs[job_type]['null']
                     if self._job_packing:
-                        self._predict_colocated_throughputs(job_id, job_type)
+                        self._predict_colocated_throughputs(job_id, job_type,
+                                                            worker_type)
             else:
                 for worker_type in self._worker_types:
                     worker_throughputs = self._oracle_throughputs[worker_type]
