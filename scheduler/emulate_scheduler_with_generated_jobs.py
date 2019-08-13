@@ -10,6 +10,7 @@ import scheduler
 import utils
 
 def emulate(policy_name, schedule_in_rounds, predict_throughputs,
+            completion_algorithm, measurement_percentage,
             throughputs_file, cluster_spec, lam, seed, interval,
             jobs_to_complete, fixed_job_duration, debug):
     policy = utils.get_policy(policy_name, seed=seed)
@@ -21,6 +22,9 @@ def emulate(policy_name, schedule_in_rounds, predict_throughputs,
                     time_per_iteration=interval,
                     predict_throughputs=predict_throughputs,
                     emulate=True)
+    if predict_throughputs:
+        sched.set_throughput_prediction_config(measurement_percentage,
+                                               completion_algorithm)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
@@ -60,6 +64,7 @@ def main(args):
 
     if args.verbose:
         emulate(args.policy, schedule_in_rounds, args.predict_throughputs,
+                args.completion_algorithm, args.measurement_percentage,
                 throughputs_file, cluster_spec, args.lam, args.seed,
                 args.interval, jobs_to_complete,
                 args.fixed_job_duration,
@@ -69,7 +74,8 @@ def main(args):
         with open('/dev/null', 'w') as f:
             with contextlib.redirect_stdout(f):
                 emulate(args.policy, schedule_in_rounds,
-                        args.predict_throughputs,throughputs_file,
+                        args.predict_throughputs, args.completion_algorithm,
+                        args.measurement_percentage, throughputs_file,
                         cluster_spec, args.lam, args.seed,
                         args.interval, jobs_to_complete,
                         args.fixed_job_duration,
@@ -104,6 +110,14 @@ if __name__=='__main__':
                               'specified value (in seconds)'))
     parser.add_argument('--predict_throughputs', action='store_true',
                         default=False, help='Predict throughputs online')
+    parser.add_argument('--completion_algorithm', type=str,
+                        choices=['NN', 'SVT', 'PMF', 'BMF'],
+                        default='SVT',
+                        help=('Matrix completion algorithm for throughput '
+                              'prediction'))
+    parser.add_argument('--measurement_percentage', type=float, default=0.5,
+                        help=('Percentage of job pairs to actually measure '
+                              'when a new job arrives'))
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Verbose')
     parser.add_argument('-d', '--debug', action='store_true', default=False,

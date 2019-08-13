@@ -28,6 +28,8 @@ DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
+MATRIX_COMPLETION_DEFAULT_MU = 1e-2
+MATRIX_COMPLETION_DEFAULT_K = 10
 
 class Scheduler:
 
@@ -164,6 +166,17 @@ class Scheduler:
 
         self._interarrival_time_generator = random.Random()
         self._interarrival_time_generator.seed(seed+3)
+
+        self._throughput_prediction_generator = random.Random()
+        self._throughput_prediction_generator.seed(seed+4)
+
+
+    def set_throughput_prediction_config(self, measurement_percentage,
+                                         completion_algo):
+        self._throughput_prediction_config = {
+            'measurement_percentage': measurement_percentage,
+            'completion_algo': completion_algo
+        }
 
 
     def start_scheduling_thread(self):
@@ -1374,6 +1387,10 @@ class Scheduler:
         throughputs_matrix = np.zeros((num_jobs, num_jobs),
                                       dtype=np.float32)
         mask = np.zeros((num_jobs, num_jobs))
+        measurement_percentage =\
+            self._throughput_prediction_config['measurement_percentage']
+        completion_algo = self._throughput_prediction_config['completion_algo']
+
         # Populate the throughputs matrix with all existing
         # measured throughput data.
         # TODO: cache this?
@@ -1396,17 +1413,15 @@ class Scheduler:
         # TODO: make this a command line argument.
         i = all_job_ids.index(job_id)
         assert (i == num_jobs - 1)
+        # TODO: make this configurable?
         if num_jobs < 2:
             num_jobs_to_measure = num_jobs
         else:
-            num_jobs_to_measure = int(num_jobs / 2)
-        job_id_indexes_to_measure = random.sample(list(range(num_jobs)),
-                                                  num_jobs_to_measure)
-        #print('i:', i)
-        #print('num_jobs:', num_jobs)
-        #print('job_id_indexes_to_measure:', job_id_indexes_to_measure)
+            num_jobs_to_measure = int(num_jobs * measurement_percentage)
+        job_id_indexes_to_measure =\
+            self._throughput_prediction_generator.sample(list(range(num_jobs)),
+                                                         num_jobs_to_measure)
         for j in job_id_indexes_to_measure:
-            # TODO: use a separate RNG.
             other_job_id = all_job_ids[j]
             other_job_type = self._jobs[other_job_id].job_type
             merged_job_id = job_id_pair.JobIdPair(job_id[0],
@@ -1419,12 +1434,29 @@ class Scheduler:
                 self._throughputs_mask[merged_job_id][worker_type] = True
             mask[i][j] = 1.0
             mask[j][i] = 1.0
-        print('mask:\n', mask)
         if num_jobs_to_measure < num_jobs:
             # Predict the remaining co-locatd throughputs.
-            predicted_throughputs =\
-                matrix_completion.svt_solve(throughputs_matrix,
-                                            mask)
+            if completion_algo == 'NN':
+                predicted_throughptus =\
+                    matrix_completion.nuclear_norm_solve(throughputs_matrix,
+                                                         mask,
+                                                         mu=DEFAULT_MATRIX_COMPlETION_MU)
+            elif completion_algo == 'SVT':
+                predicted_throughputs =\
+                    matrix_completion.svt_solve(throughputs_matrix,
+                                                mask)
+            elif completion_algo == 'PMF':
+                predicted_throughputs =\
+                    matrix_completion.pmf_solve(throughputs_matrix,
+                                                mask,
+                                                k=DEFAULT_MATRIX_COMPLETION_K,
+                                                MU=DEFAULT_MATRIX_COMPLETION_MU)
+            elif completion_algo == 'BMF':
+                predicted_throughputs =\
+                        matrix_completion.biased_mf_solve(throughputs_matrix,
+                                                          mask,
+                                                          k=DEFAULT_MATRIX_COMPLETION_K,
+                                                          mu=DEFAULT_MATRIX_COMPLETION_MU)
         # Update the throughputs data structure with the
         # predicted throughputs.
         for i in range(num_jobs):
