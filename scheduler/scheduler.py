@@ -12,6 +12,7 @@ import datetime
 import random
 import math
 import matrix_completion
+import warnings
 
 # TODO: clean these up
 from job import Job
@@ -28,8 +29,8 @@ DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
-MATRIX_COMPLETION_DEFAULT_MU = 1e-2
-MATRIX_COMPLETION_DEFAULT_K = 10
+DEFAULT_MATRIX_COMPLETION_MU = 1e-2
+DEFAULT_MATRIX_COMPLETION_K = 10
 
 class Scheduler:
 
@@ -643,13 +644,21 @@ class Scheduler:
            for a job or job pair."""
         max_finish_time = None
         all_num_steps = []
+        job_types = []
+        for single_job_id in job_id.singletons():
+            job_types.append(self._jobs[single_job_id].job_type)
+        if job_id.is_pair():
+            worker_throughputs = self._oracle_throughputs[worker_type]
+            colocated_throughputs =\
+                worker_throughputs[job_types[0]][job_types[1]]
         for i, single_job_id in enumerate(job_id.singletons()):
             num_steps = self._get_num_steps(job_id, worker_type, single_job_id)
             all_num_steps.append(num_steps)
             if job_id.is_pair():
-                throughput = self._throughputs[job_id][worker_type][i]
+                throughput = colocated_throughputs[i]
             else:
-                throughput = self._throughputs[job_id][worker_type]
+                throughput =\
+                    self._oracle_throughputs[worker_type][job_types[0]]['null']
             if throughput <= 0.0:
                 print(single_job_id)
                 print(worker_type)
@@ -909,7 +918,6 @@ class Scheduler:
         current_round_end_time = None
         num_completed_jobs = 0
         while True:
-            #print('throughputs:', self._throughputs)
             if debug:
                 input('Press Enter to continue...')
             if (jobs_to_complete is not None and
@@ -1363,25 +1371,66 @@ class Scheduler:
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
                     self._throughputs_mask[merged_job_id] = {}
-                """
-                # The single-job IDs for job pairs are stored in sorted order,
-                # so make sure the co-located throughputs match the order of the
-                # single-job IDs.
-                if job_id [0] == merged_job_id[0]:
-                    self._throughputs[merged_job_id][worker_type] = \
-                        self._compute_throughput(
-                            [job.job_type, other_job.job_type],
-                            worker_type)
-                else:
-                    self._throughputs[merged_job_id][worker_type] = \
-                        self._compute_throughput(
-                            [other_job.job_type, job.job_type],
-                            worker_type)
-                """
                 self._steps_run_so_far[merged_job_id][worker_type] = 0
                 self._throughputs_mask[merged_job_id][worker_type] = False
 
+    def _run_matrix_completion_algorithm(self, completion_algo,
+                                         throughputs_matrix, mask):
+        """Runs the specified matrix completion algorithm on the specified data.
+
+           Args:
+               completion_algo: Indicates which completion algorithm to use.
+               throughputs_matrix: A 2D matrix where rows and columns are jobs
+                                   and cell [i, j] represents the throughput
+                                   achieved by job i when run with job j.
+               mask: A 2D binary matrix where a value of 0 indicates that the
+                     corresponding cell in the matrix should be predicted.
+
+           Returns:
+               The predicted throughputs matrix.
+        """
+        mu = DEFAULT_MATRIX_COMPLETION_MU
+        k = DEFAULT_MATRIX_COMPLETION_K
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            try:
+                if completion_algo == 'NN':
+                    predicted_throughptus =\
+                        matrix_completion.nuclear_norm_solve(throughputs_matrix,
+                                                             mask,
+                                                             mu=mu)
+                elif completion_algo == 'SVT':
+                    predicted_throughputs =\
+                        matrix_completion.svt_solve(throughputs_matrix,
+                                                    mask)
+                elif completion_algo == 'PMF':
+                    predicted_throughputs =\
+                        matrix_completion.pmf_solve(throughputs_matrix,
+                                                    mask,
+                                                    k=k,
+                                                    mu=mu)
+                elif completion_algo == 'BMF':
+                    predicted_throughputs =\
+                        matrix_completion.biased_mf_solve(throughputs_matrix,
+                                                          mask,
+                                                          k=k,
+                                                          mu=mu)
+            except np.linalg.LinAlgError as e:
+                print('WARNING: could not predict throughputs!')
+                return None
+        return predicted_throughputs
+
+
     def _predict_colocated_throughputs(self, job_id, job_type, worker_type):
+        """Uses a matrix completion algorithm to predict co-located throughputs.
+
+           NOTE: Currently only works in emulation mode.
+
+           Args:
+               job_id: The ID of the newly arrived job.
+               job_type: The type of the newly arrived job.
+               worker_type: The worker type to use when computing throughputs.
+        """
         # TODO: support non-emulated mode.
         num_jobs = len(self._jobs)
         throughputs_matrix = np.zeros((num_jobs, num_jobs),
@@ -1409,12 +1458,13 @@ class Scheduler:
                         self._oracle_throughputs[worker_type][job_0_type][job_1_type]
                     throughputs_matrix[i][j] = colocated_throughputs[0]
                     throughputs_matrix[j][i] = colocated_throughputs[1]
-        # Pick additional co-located throughputs to measure.
-        # TODO: make this a command line argument.
-        i = all_job_ids.index(job_id)
-        assert (i == num_jobs - 1)
+
+        # Pick additional co-located throughputs to measure for the newly
+        # arrived job.
+        i = num_jobs - 1
+        assert(i == all_job_ids.index(job_id))
         # TODO: make this configurable?
-        if num_jobs < 2:
+        if num_jobs <= 2:
             num_jobs_to_measure = num_jobs
         else:
             num_jobs_to_measure = int(num_jobs * measurement_percentage)
@@ -1432,31 +1482,20 @@ class Scheduler:
             throughputs_matrix[j][i] = colocated_throughputs[1]
             if i != j:
                 self._throughputs_mask[merged_job_id][worker_type] = True
+                self._throughputs[merged_job_id][worker_type] =\
+                    colocated_throughputs
             mask[i][j] = 1.0
             mask[j][i] = 1.0
+
+        # Predict the remaining co-located throughputs.
         if num_jobs_to_measure < num_jobs:
-            # Predict the remaining co-locatd throughputs.
-            if completion_algo == 'NN':
-                predicted_throughptus =\
-                    matrix_completion.nuclear_norm_solve(throughputs_matrix,
-                                                         mask,
-                                                         mu=DEFAULT_MATRIX_COMPlETION_MU)
-            elif completion_algo == 'SVT':
-                predicted_throughputs =\
-                    matrix_completion.svt_solve(throughputs_matrix,
-                                                mask)
-            elif completion_algo == 'PMF':
-                predicted_throughputs =\
-                    matrix_completion.pmf_solve(throughputs_matrix,
-                                                mask,
-                                                k=DEFAULT_MATRIX_COMPLETION_K,
-                                                MU=DEFAULT_MATRIX_COMPLETION_MU)
-            elif completion_algo == 'BMF':
-                predicted_throughputs =\
-                        matrix_completion.biased_mf_solve(throughputs_matrix,
-                                                          mask,
-                                                          k=DEFAULT_MATRIX_COMPLETION_K,
-                                                          mu=DEFAULT_MATRIX_COMPLETION_MU)
+            predicted_throughputs =\
+                self._run_matrix_completion_algorithm(completion_algo,
+                                                      throughputs_matrix,
+                                                      mask)
+            if predicted_throughputs is None:
+                predicted_throughputs = throughputs_matrix
+
         # Update the throughputs data structure with the
         # predicted throughputs.
         for i in range(num_jobs):
@@ -1465,20 +1504,18 @@ class Scheduler:
                     continue
                 merged_job_id = job_id_pair.JobIdPair(all_job_ids[i][0],
                                                       all_job_ids[j][0])
-                if not self._throughputs_mask[merged_job_id]:
+                if mask[i][j] == 0.0:
                     self._throughputs[merged_job_id][worker_type] =\
-                        [predicted_throughputs[i][j],
-                         predicted_throughputs[j][i]]
-                else:
-                    job_0_type = self._jobs[all_job_ids[i]].job_type
-                    job_1_type = self._jobs[all_job_ids[j]].job_type
-                    colocated_throughputs =\
-                        self._oracle_throughputs[worker_type][job_0_type][job_1_type]
-                    self._throughputs[merged_job_id][worker_type] =\
-                        colocated_throughputs
+                        [max(0, predicted_throughputs[i][j]),
+                         max(0, predicted_throughputs[j][i])]
 
 
     def _compute_throughput(self, job):
+        """Updates the throughput matrix given the arrival of a new job.
+
+           Args:
+               job: The newly arrived job.
+        """
         job_id = job.job_id
         job_type = job.job_type
 
@@ -1527,23 +1564,6 @@ class Scheduler:
                 # TODO
                 pass
 
-    """
-    def _compute_throughput(self, job_types, worker_type):
-        if self._predict_throughputs:
-            pass
-        else:
-            worker_throughputs = self._oracle_throughputs[worker_type]
-            if isinstance(job_types, list):
-                if self._emulate:
-                    return worker_throughputs[job_types[0]][job_types[1]]
-                else:
-                    return (DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0)
-            else:
-                if self._emulate:
-                    return worker_throughputs[worker_type][job_types]["null"]
-                else:
-                    return DEFAULT_THROUGHPUT
-    """
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
         """Reset _time_run_so_far so that all jobs receive new fair allocation
