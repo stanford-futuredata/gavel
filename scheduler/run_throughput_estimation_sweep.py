@@ -16,13 +16,20 @@ import policies
 import scheduler
 import utils
 
+cutoff_throughputs = {
+    '1:0:0': {
+        'fifo_packing': 0.8,
+        'min_total_duration_packing': 0.8,
+    }
+}
+
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
                          jobs_to_complete, fixed_job_duration, log_dir, timeout,
                          completion_algo, measurement_percentage, verbose):
     f = io.StringIO()
     measurement_percentage_str =\
-        'measurement_percentage=%2f.log' % (measurement_percentage)
+        'lam=%2f.log' % (lam)
     with open(os.path.join(log_dir, measurement_percentage_str), 'w') as f:
         with contextlib.redirect_stdout(f):
             policy = utils.get_policy(policy_name, seed)
@@ -103,9 +110,11 @@ def main(args):
     measurement_percentages =\
         np.linspace(0.0, 1.0, num=args.num_measurement_percentages,
                     endpoint=True)[1:]
-
-    with open(throughputs_file, 'r') as f:
-        throughputs = json.load(f)
+    throughputs = list(np.linspace(args.throughput_lower_bound,
+                                   args.throughput_upper_bound,
+                                   num=args.num_data_points))
+    if throughputs[0] == 0.0:
+        throughputs = throughputs[1:]
 
     raw_logs_dir = os.path.join(args.log_dir, 'raw_logs')
     if not os.path.isdir(raw_logs_dir):
@@ -155,32 +164,54 @@ def main(args):
                 if not os.path.isdir(raw_logs_completion_algo_subdir):
                     os.mkdir(raw_logs_completion_algo_subdir)
 
-                for seed in args.seeds:
-                    seed_str = 'seed=%d' % (seed)
-                    raw_logs_seed_subdir = \
-                            os.path.join(raw_logs_completion_algo_subdir,
-                                         seed_str)
-                    if not os.path.isdir(raw_logs_seed_subdir):
-                        os.mkdir(raw_logs_seed_subdir)
+                for measurement_percentage in measurement_percentages:
+                    measurement_percentage_str =\
+                        'measurement_percentage=%f' % (measurement_percentage)
+                    raw_logs_measurement_percentage_subdir =\
+                        os.path.join(raw_logs_completion_algo_subdir,
+                                     measurement_percentage_str)
+                    if not os.path.isdir(raw_logs_measurement_percentage_subdir):
+                        os.mkdir(raw_logs_measurement_percentage_subdir)
+                    for throughput in throughputs:
+                        if (ratio_str in cutoff_throughputs and
+                            policy_name in cutoff_throughputs[ratio_str]):
+                            cutoff_throughput = \
+                                cutoff_throughputs[ratio_str][policy_name]
+                            if throughput >= cutoff_throughput:
+                                print('Throughput of %f is too high for '
+                                      'policy %s with cluster '
+                                      'ratio %s.' % (throughput, policy_name,
+                                                     ratio_str))
+                                continue
+                        lam = 3600.0 / throughput
+                        for seed in args.seeds:
+                            seed_str = 'seed=%d' % (seed)
+                            raw_logs_seed_subdir = \
+                                os.path.join(raw_logs_measurement_percentage_subdir,
+                                             seed_str)
+                            if not os.path.isdir(raw_logs_seed_subdir):
+                                os.mkdir(raw_logs_seed_subdir)
 
-                    for measurement_percentage in measurement_percentages:
-                        all_args_list.append((experiment_id, policy_name,
-                                              schedule_in_rounds,
-                                              throughputs_file, cluster_spec,
-                                              args.lam, seed, args.interval,
-                                              jobs_to_complete,
-                                              args.fixed_job_duration,
-                                              raw_logs_seed_subdir,
-                                              args.timeout,
-                                              completion_algo,
-                                              measurement_percentage,
-                                              args.verbose))
-                        experiment_id += 1
+                            all_args_list.append((experiment_id, policy_name,
+                                                  schedule_in_rounds,
+                                                  throughputs_file,
+                                                  cluster_spec,
+                                                  lam, seed, args.interval,
+                                                  jobs_to_complete,
+                                                  args.fixed_job_duration,
+                                                  raw_logs_seed_subdir,
+                                                  args.timeout,
+                                                  completion_algo,
+                                                  measurement_percentage,
+                                                  args.verbose))
+                            experiment_id += 1
 
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
         print('[%s] Running %d total experiment(s)...' % (current_time,
                                                           len(all_args_list)))
+        all_args_list = sorted(all_args_list, key=lambda x: (x[5], x[13]),
+                               reverse=True)
         with multiprocessing.Pool(args.processes) as p:
             p.map(emulate_with_timeout_helper, all_args_list)
     else:
@@ -213,8 +244,14 @@ if __name__=='__main__':
                         default=['1:0:0', '1:1:0', '1:1:1', '2:1:0'],
                         help=('List of cluster ratios to sweep in the form '
                               '#v100s:#p100s:#k80s'))
-    parser.add_argument('--lam', type=float, default=4096,
-                        help='Lambda value to fix for all experiments.')
+    parser.add_argument('-a', '--throughput-lower-bound', type=float,
+                        default=None,
+                        help='Lower bound for throughput interval to sweep')
+    parser.add_argument('-b', '--throughput-upper-bound', type=float,
+                        default=None,
+                        help='Upper bound for throughput interval to sweep')
+    parser.add_argument('-n', '--num-data-points', type=int, default=20,
+                             help='Number of data points to sweep through')
     parser.add_argument('--seeds', type=int, nargs='+',
                         default=[0, 1, 42, 1234, 10],
                         help='List of random seeds')
@@ -228,7 +265,7 @@ if __name__=='__main__':
                         default=['SVT', 'NN', 'PMF', 'BMF'],
                         help=('Matrix completion algorithm for throughput '
                               'prediction'))
-    parser.add_argument('--num_measurement_percentages', type=int, default=20,
+    parser.add_argument('--num_measurement_percentages', type=int, default=10,
                         help=('Number job pair measurement percentages '
                               'to sweep.'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
