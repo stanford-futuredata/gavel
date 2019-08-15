@@ -1,0 +1,2785 @@
+{
+    "v100": {},
+    "A3C": {
+        "null": 8.233033211429207,
+        "A3C": [
+            5.814298855758112,
+            5.814298855758112
+        ],
+        "CycleGAN": [
+            6.662313936932983,
+            3.595755979528551
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            3.195817348867517,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            2.256558445352842,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            1.793493073750115,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            1.8252909127202013,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            3.4846959353768874,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.20651027364331678,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            -0.33142994888839433,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.0010893549552975373
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.09474247439104758
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            14.033006904442272
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            2.2108667213436464
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            3.8538581249416426
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            17.370696132038503
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            8.08767264699428
+        ],
+        "ResNet-50 (batch size 128)": [
+            1.2347937429955818,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -0.7660579547000843,
+            8.534692877890473
+        ],
+        "ResNet-50 (batch size 32)": [
+            1.1544048459493441,
+            8.266548467295966
+        ],
+        "ResNet-50 (batch size 64)": [
+            1.2809299195116286,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            -0.27133184296719265,
+            -0.5236656673006713
+        ],
+        "Transformer (batch size 16)": [
+            1.4483138675761122,
+            2.2501244711775414
+        ],
+        "Transformer (batch size 256)": [
+            0.4884078724853494,
+            0.7285736255479602
+        ],
+        "Transformer (batch size 32)": [
+            1.4097843446113556,
+            0.3547025746919751
+        ],
+        "Transformer (batch size 64)": [
+            1.321942281009088,
+            2.566472548794448
+        ]
+    },
+    "CycleGAN": {
+        "null": 4.918494739402234,
+        "A3C": [
+            3.595755979528551,
+            6.662313936932983
+        ],
+        "CycleGAN": [
+            3.003663302261414,
+            3.003663302261414
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.6837898655696188,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            1.3071665125518879,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            1.4795965332663148,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -0.1562989448083434,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            2.919744601309676,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            1.589323281731848,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.031370176641566286,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.009242802672958529
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0036301613341976602
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            9.956968517038119
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            13.457136679825604
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            2.7615900184756637
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            16.736053737846596
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            14.957454981553985
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.8075939595783062,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.41246743989951956,
+            10.255398322575484
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.8095401021717785,
+            11.768723682356978
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.8760828837389466,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            -0.6080681731937486,
+            -0.21007540432047886
+        ],
+        "Transformer (batch size 16)": [
+            0.491817730987496,
+            1.8225406948292884
+        ],
+        "Transformer (batch size 256)": [
+            0.1658533119234598,
+            0.6027013638382883
+        ],
+        "Transformer (batch size 32)": [
+            0.478733893992774,
+            -0.9227698337289069
+        ],
+        "Transformer (batch size 64)": [
+            0.44890452801533504,
+            2.246742506772234
+        ]
+    },
+    "LM (batch size 10)": {
+        "null": 143.3605131584025,
+        "A3C": [
+            0.0,
+            0.0
+        ],
+        "CycleGAN": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            0.0
+        ]
+    },
+    "LM (batch size 20)": {
+        "null": 107.9508715706423,
+        "A3C": [
+            0.0,
+            3.195817348867517
+        ],
+        "CycleGAN": [
+            0.0,
+            0.6837898655696188
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.000869068841831216
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.1728150569506155
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            -0.6176621902763424
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            13.910554201562308
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -1.078370157361603
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            14.5366155270455
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            28.279478483183684
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            5.242049808542758
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            9.732387362768419
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            0.05076512535968064
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            -1.473736391139805
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            0.46395727149520505
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            -2.6392564960576967
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            -0.21869552248628896
+        ]
+    },
+    "LM (batch size 40)": {
+        "null": 71.72303675816012,
+        "A3C": [
+            0.0,
+            2.256558445352842
+        ],
+        "CycleGAN": [
+            0.0,
+            1.3071665125518879
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.018608548482678056
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.026386193901430707
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            7.677241629788726
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            2.3457080426429293
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.2534239795778768
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            33.851442401246864
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            8.898950917887962
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            3.3500221655719615
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            4.097330934265355
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            1.151667571715025
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            -0.25891895257301356
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            0.17487603490284448
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            -0.61145932268506
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            0.3670464489506034
+        ]
+    },
+    "LM (batch size 5)": {
+        "null": 167.12285773375763,
+        "A3C": [
+            0.0,
+            1.793493073750115
+        ],
+        "CycleGAN": [
+            0.0,
+            1.4795965332663148
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.022804389164621373
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.2419754789023279
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            5.565634159214418
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -1.8604957223858758
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            13.494063428149708
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            1.195335077309986
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            -3.113761365417357
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            2.4747326504977027
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            -3.785655473491037
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            -1.5201957334283347
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            -1.309931078722485
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            -0.7021092404134712
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            0.1059052785854274
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            0.1672195410016769
+        ]
+    },
+    "LM (batch size 80)": {
+        "null": 43.90361072741378,
+        "A3C": [
+            0.0,
+            1.8252909127202013
+        ],
+        "CycleGAN": [
+            0.0,
+            -0.1562989448083434
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.02556207623473944
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.04419101816767842
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            -3.013399092260463
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            28.807031650092558
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -0.4190784438148411
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            2.492198104031859
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            9.047499014803034
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            3.2270887339724537
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            -3.2058822490795666
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            0.2716026087804728
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            -0.5497234475870808
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            -0.2799558298155509
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            -2.377723594688532
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            -0.3379864392475649
+        ]
+    },
+    "Recommendation (batch size 1024)": {
+        "null": 0.47997973329981225,
+        "A3C": [
+            0.0,
+            3.4846959353768874
+        ],
+        "CycleGAN": [
+            0.0,
+            2.919744601309676
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0940650793086574
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.06836280992463398
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            22.212662468838115
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -7.201186584173013
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            2.9959096590705316
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            19.4922164170973
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            -0.9600249929556838
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            4.789166047045671
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            2.293602345554525
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            -0.5442610124245345
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            3.50778180743222
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            1.3849490104902396
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            -0.9988792336887394
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            0.4458178776109165
+        ]
+    },
+    "Recommendation (batch size 2048)": {
+        "null": 0.5675318418131742,
+        "A3C": [
+            0.0,
+            0.20651027364331678
+        ],
+        "CycleGAN": [
+            0.0,
+            1.589323281731848
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.04009828268049325
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.39392363237604916
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            4.5335394317768305
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -7.003238401983919
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            8.637795295115309
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            -4.442733440354667
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            -17.812734441085663
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            -0.3198774698309341
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            -6.435225088010146
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            -0.5115289976907107
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            0.8041589777163628
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            -0.8181473192859895
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            2.3292630421196177
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            1.902290802853879
+        ]
+    },
+    "Recommendation (batch size 4096)": {
+        "null": 0.6244083613498694,
+        "A3C": [
+            0.0,
+            -0.33142994888839433
+        ],
+        "CycleGAN": [
+            0.0,
+            0.031370176641566286
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.14180452426888143
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.0669395261328586
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            10.413645243476742
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            6.762665227162758
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -1.3589605633310815
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            5.23049589998683
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            -0.14954092226075372
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            -0.5872379683780722
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            -6.422250702303287
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            0.06104806848422583
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            1.6933185307465315
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            0.8102763592573302
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            -2.703512492656959
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            -2.444933496608891
+        ]
+    },
+    "Recommendation (batch size 512)": {
+        "null": 0.33148208257478157,
+        "A3C": [
+            -0.0010893549552975373,
+            0.0
+        ],
+        "CycleGAN": [
+            -0.009242802672958529,
+            0.0
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            -0.000869068841831216,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.018608548482678056,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            -0.022804389164621373,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.02556207623473944,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0940650793086574,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            -0.04009828268049325,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.14180452426888143,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 128)": [
+            -0.03523174750664744,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -0.06480960512417788,
+            0.0
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.04052925908190787,
+            0.0
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.02636365730459892,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0006468531201516284,
+            0.0
+        ],
+        "Transformer (batch size 16)": [
+            -0.021276428265137638,
+            0.0
+        ],
+        "Transformer (batch size 256)": [
+            -0.007174946878368553,
+            0.0
+        ],
+        "Transformer (batch size 32)": [
+            -0.020710411015837118,
+            0.0
+        ],
+        "Transformer (batch size 64)": [
+            -0.019419968794205114,
+            0.0
+        ]
+    },
+    "Recommendation (batch size 8192)": {
+        "null": 0.6023546957515021,
+        "A3C": [
+            0.09474247439104758,
+            0.0
+        ],
+        "CycleGAN": [
+            0.0036301613341976602,
+            0.0
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            -0.1728150569506155,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            -0.026386193901430707,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.2419754789023279,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -0.04419101816767842,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.06836280992463398,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.39392363237604916,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            -0.0669395261328586,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.04576156863289326,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.09321512600957417,
+            0.0
+        ],
+        "ResNet-50 (batch size 32)": [
+            -0.06831622632137804,
+            0.0
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.01935066820121565,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            -0.04729724796772043,
+            0.0
+        ],
+        "Transformer (batch size 16)": [
+            -0.035590334607500135,
+            0.0
+        ],
+        "Transformer (batch size 256)": [
+            -0.012001956202892952,
+            0.0
+        ],
+        "Transformer (batch size 32)": [
+            -0.034643524219723255,
+            0.0
+        ],
+        "Transformer (batch size 64)": [
+            -0.03248492551663265,
+            0.0
+        ]
+    },
+    "ResNet-18 (batch size 128)": {
+        "null": 30.287504836881368,
+        "A3C": [
+            14.033006904442272,
+            0.0
+        ],
+        "CycleGAN": [
+            9.956968517038119,
+            0.0
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            -0.6176621902763424,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            7.677241629788726,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            5.565634159214418,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -3.013399092260463,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            22.212662468838115,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            4.5335394317768305,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            10.413645243476742,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.7112118219507503,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -2.650930437950971,
+            0.0
+        ],
+        "ResNet-50 (batch size 32)": [
+            7.669086450447841,
+            0.0
+        ],
+        "ResNet-50 (batch size 64)": [
+            6.519761129729163,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            -2.952430612989011,
+            0.0
+        ],
+        "Transformer (batch size 16)": [
+            0.8412090674886191,
+            0.0
+        ],
+        "Transformer (batch size 256)": [
+            0.2836768604964647,
+            0.0
+        ],
+        "Transformer (batch size 32)": [
+            0.8188303657378279,
+            0.0
+        ],
+        "Transformer (batch size 64)": [
+            0.7678099743272261,
+            0.0
+        ]
+    },
+    "ResNet-18 (batch size 16)": {
+        "null": 77.31737353972872,
+        "A3C": [
+            2.2108667213436464,
+            0.0
+        ],
+        "CycleGAN": [
+            13.457136679825604,
+            0.0
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            13.910554201562308,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            2.3457080426429293,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            -1.8604957223858758,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            28.807031650092558,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            -7.201186584173013,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            -7.003238401983919,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            6.762665227162758,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 128)": [
+            -1.2885111272870506,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -15.079749434247487,
+            0.0
+        ],
+        "ResNet-50 (batch size 32)": [
+            -3.7046465153633674,
+            0.0
+        ],
+        "ResNet-50 (batch size 64)": [
+            -2.6482666312139385,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            3.3135121995426866,
+            0.0
+        ],
+        "Transformer (batch size 16)": [
+            -2.809834876046191,
+            0.0
+        ],
+        "Transformer (batch size 256)": [
+            -0.9475470093658586,
+            0.0
+        ],
+        "Transformer (batch size 32)": [
+            -2.735084782294097,
+            0.0
+        ],
+        "Transformer (batch size 64)": [
+            -2.5646647515126384,
+            0.0
+        ]
+    },
+    "ResNet-18 (batch size 256)": {
+        "null": 16.98737109878475,
+        "A3C": [
+            3.8538581249416426,
+            0.0
+        ],
+        "CycleGAN": [
+            2.7615900184756637,
+            0.0
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            -1.078370157361603,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.2534239795778768,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            13.494063428149708,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -0.4190784438148411,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            2.9959096590705316,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            8.637795295115309,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            -1.3589605633310815,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.14359607568828264,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.15129236493286438,
+            0.0
+        ],
+        "ResNet-50 (batch size 32)": [
+            -2.0928041855318247,
+            0.0
+        ],
+        "ResNet-50 (batch size 64)": [
+            -1.3584574211339233,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            -4.669986390691354,
+            0.0
+        ],
+        "Transformer (batch size 16)": [
+            -0.7473791287014636,
+            0.0
+        ],
+        "Transformer (batch size 256)": [
+            -0.2520350445859767,
+            0.0
+        ],
+        "Transformer (batch size 32)": [
+            -0.7274965867004806,
+            0.0
+        ],
+        "Transformer (batch size 64)": [
+            -0.6821670994752599,
+            0.0
+        ]
+    },
+    "ResNet-18 (batch size 32)": {
+        "null": 65.80540708735272,
+        "A3C": [
+            17.370696132038503,
+            0.0
+        ],
+        "CycleGAN": [
+            16.736053737846596,
+            0.0
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            14.5366155270455,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            33.851442401246864,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            1.195335077309986,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            2.492198104031859,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            19.4922164170973,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            -4.442733440354667,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            5.23049589998683,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 128)": [
+            1.4866835250716304,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -4.120111158389006,
+            0.0
+        ],
+        "ResNet-50 (batch size 32)": [
+            2.458646899779611,
+            0.0
+        ],
+        "ResNet-50 (batch size 64)": [
+            -0.892872990485999,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            16.81868144484564,
+            0.0
+        ],
+        "Transformer (batch size 16)": [
+            3.8154246295229624,
+            0.0
+        ],
+        "Transformer (batch size 256)": [
+            1.2866571726280638,
+            0.0
+        ],
+        "Transformer (batch size 32)": [
+            3.713922811322751,
+            0.0
+        ],
+        "Transformer (batch size 64)": [
+            3.4825124931041627,
+            0.0
+        ]
+    },
+    "ResNet-18 (batch size 64)": {
+        "null": 48.88418054077558,
+        "A3C": [
+            8.08767264699428,
+            0.0
+        ],
+        "CycleGAN": [
+            14.957454981553985,
+            0.0
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            28.279478483183684,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            8.898950917887962,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            -3.113761365417357,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            9.047499014803034,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            -0.9600249929556838,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            -17.812734441085663,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            -0.14954092226075372,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 128)": [
+            -0.5422666563940168,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -10.886755484065336,
+            0.0
+        ],
+        "ResNet-50 (batch size 32)": [
+            3.9931843201374613,
+            0.0
+        ],
+        "ResNet-50 (batch size 64)": [
+            -3.752585945889626,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            1.0788882823353996,
+            0.0
+        ],
+        "Transformer (batch size 16)": [
+            5.548003542808778,
+            0.0
+        ],
+        "Transformer (batch size 256)": [
+            1.870926369999725,
+            0.0
+        ],
+        "Transformer (batch size 32)": [
+            5.4004098929123705,
+            0.0
+        ],
+        "Transformer (batch size 64)": [
+            5.063916477373486,
+            0.0
+        ]
+    },
+    "ResNet-50 (batch size 128)": {
+        "null": 2.8459812117650305,
+        "A3C": [
+            0.0,
+            1.2347937429955818
+        ],
+        "CycleGAN": [
+            0.0,
+            0.8075939595783062
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.03523174750664744
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.04576156863289326
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.7112118219507503
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -1.2885111272870506
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.14359607568828264
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            1.4866835250716304
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            -0.5422666563940168
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            1.793792647633633
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            2.7456019034901553
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            0.15319202646043834
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            -0.0242105441130486
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            0.09391747809592271
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            1.5819927285809283
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            1.7205044137544914
+        ]
+    },
+    "ResNet-50 (batch size 16)": {
+        "null": 17.37438936466519,
+        "A3C": [
+            8.534692877890473,
+            -0.7660579547000843
+        ],
+        "CycleGAN": [
+            10.255398322575484,
+            0.41246743989951956
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            5.242049808542758,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            3.3500221655719615,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            2.4747326504977027,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            3.2270887339724537,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            4.789166047045671,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            -0.3198774698309341,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            -0.5872379683780722,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.06480960512417788
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.09321512600957417
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            -2.650930437950971
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -15.079749434247487
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            0.15129236493286438
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            -4.120111158389006
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            -10.886755484065336
+        ],
+        "ResNet-50 (batch size 128)": [
+            1.793792647633633,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -1.5022327406703302,
+            -1.5022327406703302
+        ],
+        "ResNet-50 (batch size 32)": [
+            1.653770820338441,
+            0.8028189263207826
+        ],
+        "ResNet-50 (batch size 64)": [
+            1.8444834875638012,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            -0.2106190548088868,
+            0.945876531412677
+        ],
+        "Transformer (batch size 16)": [
+            2.2980991032640654,
+            -1.8185861903715965
+        ],
+        "Transformer (batch size 256)": [
+            0.7749768326558585,
+            -0.2137878643471817
+        ],
+        "Transformer (batch size 32)": [
+            2.2369627265733656,
+            5.827466348299924
+        ],
+        "Transformer (batch size 64)": [
+            2.0975801161374914,
+            2.6317724925373827
+        ]
+    },
+    "ResNet-50 (batch size 32)": {
+        "null": 9.920583420101398,
+        "A3C": [
+            8.266548467295966,
+            1.1544048459493441
+        ],
+        "CycleGAN": [
+            11.768723682356978,
+            0.8095401021717785
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            9.732387362768419,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            4.097330934265355,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            -3.785655473491037,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -3.2058822490795666,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            2.293602345554525,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            -6.435225088010146,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            -6.422250702303287,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.04052925908190787
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.06831622632137804
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            7.669086450447841
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -3.7046465153633674
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -2.0928041855318247
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            2.458646899779611
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            3.9931843201374613
+        ],
+        "ResNet-50 (batch size 128)": [
+            2.7456019034901553,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.8028189263207826,
+            1.653770820338441
+        ],
+        "ResNet-50 (batch size 32)": [
+            2.928231121880768,
+            2.928231121880768
+        ],
+        "ResNet-50 (batch size 64)": [
+            3.870745096517253,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            6.947752069006702,
+            -0.3222344515548213
+        ],
+        "Transformer (batch size 16)": [
+            8.737681139498218,
+            1.1655970061251817
+        ],
+        "Transformer (batch size 256)": [
+            2.946565900760057,
+            1.133935574680691
+        ],
+        "Transformer (batch size 32)": [
+            8.505232432308519,
+            -0.4460746574522684
+        ],
+        "Transformer (batch size 64)": [
+            7.975281045682163,
+            0.32599788641657146
+        ]
+    },
+    "ResNet-50 (batch size 64)": {
+        "null": 5.4575999796347645,
+        "A3C": [
+            0.0,
+            1.2809299195116286
+        ],
+        "CycleGAN": [
+            0.0,
+            0.8760828837389466
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.0,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.02636365730459892
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            0.01935066820121565
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            6.519761129729163
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -2.6482666312139385
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -1.3584574211339233
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            -0.892872990485999
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            -3.752585945889626
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.0,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.0,
+            1.8444834875638012
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.0,
+            3.870745096517253
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.0,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.0,
+            -0.3714060311627076
+        ],
+        "Transformer (batch size 16)": [
+            0.0,
+            3.7953731078356303
+        ],
+        "Transformer (batch size 256)": [
+            0.0,
+            0.40311442665213787
+        ],
+        "Transformer (batch size 32)": [
+            0.0,
+            -1.2508490829736345
+        ],
+        "Transformer (batch size 64)": [
+            0.0,
+            0.024360681790206676
+        ]
+    },
+    "Transformer (batch size 128)": {
+        "null": 5.771210833383417,
+        "A3C": [
+            -0.5236656673006713,
+            -0.27133184296719265
+        ],
+        "CycleGAN": [
+            -0.21007540432047886,
+            -0.6080681731937486
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.05076512535968064,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            1.151667571715025,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            -1.5201957334283347,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            0.2716026087804728,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            -0.5442610124245345,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            -0.5115289976907107,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.06104806848422583,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            0.0006468531201516284
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.04729724796772043
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            -2.952430612989011
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            3.3135121995426866
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -4.669986390691354
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            16.81868144484564
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            1.0788882823353996
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.15319202646043834,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            0.945876531412677,
+            -0.2106190548088868
+        ],
+        "ResNet-50 (batch size 32)": [
+            -0.3222344515548213,
+            6.947752069006702
+        ],
+        "ResNet-50 (batch size 64)": [
+            -0.3714060311627076,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            3.280621031297368,
+            3.280621031297368
+        ],
+        "Transformer (batch size 16)": [
+            0.38919686164905765,
+            -1.1576459582838874
+        ],
+        "Transformer (batch size 256)": [
+            0.13124697307091102,
+            -0.303732044319323
+        ],
+        "Transformer (batch size 32)": [
+            0.37884304970647076,
+            2.0093699626793398
+        ],
+        "Transformer (batch size 64)": [
+            0.35523776894506226,
+            0.6104115536342258
+        ]
+    },
+    "Transformer (batch size 16)": {
+        "null": 12.845652425203205,
+        "A3C": [
+            2.2501244711775414,
+            1.4483138675761122
+        ],
+        "CycleGAN": [
+            1.8225406948292884,
+            0.491817730987496
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            -1.473736391139805,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            -0.25891895257301356,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            -1.309931078722485,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -0.5497234475870808,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            3.50778180743222,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            0.8041589777163628,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            1.6933185307465315,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.021276428265137638
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.035590334607500135
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.8412090674886191
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -2.809834876046191
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -0.7473791287014636
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            3.8154246295229624
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            5.548003542808778
+        ],
+        "ResNet-50 (batch size 128)": [
+            -0.0242105441130486,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -1.8185861903715965,
+            2.2980991032640654
+        ],
+        "ResNet-50 (batch size 32)": [
+            1.1655970061251817,
+            8.737681139498218
+        ],
+        "ResNet-50 (batch size 64)": [
+            3.7953731078356303,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            -1.1576459582838874,
+            0.38919686164905765
+        ],
+        "Transformer (batch size 16)": [
+            0.6277430364660308,
+            0.6277430364660308
+        ],
+        "Transformer (batch size 256)": [
+            0.21169074450759695,
+            0.19394622207043008
+        ],
+        "Transformer (batch size 32)": [
+            0.6110431758343224,
+            0.11094764195577099
+        ],
+        "Transformer (batch size 64)": [
+            0.5729697685642385,
+            0.6312216724269429
+        ]
+    },
+    "Transformer (batch size 256)": {
+        "null": 1.6017021404396434,
+        "A3C": [
+            0.7285736255479602,
+            0.4884078724853494
+        ],
+        "CycleGAN": [
+            0.6027013638382883,
+            0.1658533119234598
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            0.46395727149520505,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.17487603490284448,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            -0.7021092404134712,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -0.2799558298155509,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            1.3849490104902396,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            -0.8181473192859895,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            0.8102763592573302,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.007174946878368553
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.012001956202892952
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.2836768604964647
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -0.9475470093658586
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -0.2520350445859767
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            1.2866571726280638
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            1.870926369999725
+        ],
+        "ResNet-50 (batch size 128)": [
+            0.09391747809592271,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            -0.2137878643471817,
+            0.7749768326558585
+        ],
+        "ResNet-50 (batch size 32)": [
+            1.133935574680691,
+            2.946565900760057
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.40311442665213787,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            -0.303732044319323,
+            0.13124697307091102
+        ],
+        "Transformer (batch size 16)": [
+            0.19394622207043008,
+            0.21169074450759695
+        ],
+        "Transformer (batch size 256)": [
+            0.06540354533545945,
+            0.06540354533545945
+        ],
+        "Transformer (batch size 32)": [
+            0.18878666682174625,
+            0.03741433606209253
+        ],
+        "Transformer (batch size 64)": [
+            0.17702358372495725,
+            0.21286382806832035
+        ]
+    },
+    "Transformer (batch size 32)": {
+        "null": 12.475277737306772,
+        "A3C": [
+            0.3547025746919751,
+            1.4097843446113556
+        ],
+        "CycleGAN": [
+            -0.9227698337289069,
+            0.478733893992774
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            -2.6392564960576967,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            -0.61145932268506,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.1059052785854274,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -2.377723594688532,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            -0.9988792336887394,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            2.3292630421196177,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            -2.703512492656959,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.020710411015837118
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.034643524219723255
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.8188303657378279
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -2.735084782294097
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -0.7274965867004806
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            3.713922811322751
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            5.4004098929123705
+        ],
+        "ResNet-50 (batch size 128)": [
+            1.5819927285809283,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            5.827466348299924,
+            2.2369627265733656
+        ],
+        "ResNet-50 (batch size 32)": [
+            -0.4460746574522684,
+            8.505232432308519
+        ],
+        "ResNet-50 (batch size 64)": [
+            -1.2508490829736345,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            2.0093699626793398,
+            0.37884304970647076
+        ],
+        "Transformer (batch size 16)": [
+            0.11094764195577099,
+            0.6110431758343224
+        ],
+        "Transformer (batch size 256)": [
+            0.03741433606209253,
+            0.18878666682174625
+        ],
+        "Transformer (batch size 32)": [
+            0.10799609960412898,
+            0.10799609960412898
+        ],
+        "Transformer (batch size 64)": [
+            0.10126698512184604,
+            0.6144292695727652
+        ]
+    },
+    "Transformer (batch size 64)": {
+        "null": 9.568023720783357,
+        "A3C": [
+            2.566472548794448,
+            1.321942281009088
+        ],
+        "CycleGAN": [
+            2.246742506772234,
+            0.44890452801533504
+        ],
+        "LM (batch size 10)": [
+            0.0,
+            0.0
+        ],
+        "LM (batch size 20)": [
+            -0.21869552248628896,
+            0.0
+        ],
+        "LM (batch size 40)": [
+            0.3670464489506034,
+            0.0
+        ],
+        "LM (batch size 5)": [
+            0.1672195410016769,
+            0.0
+        ],
+        "LM (batch size 80)": [
+            -0.3379864392475649,
+            0.0
+        ],
+        "Recommendation (batch size 1024)": [
+            0.4458178776109165,
+            0.0
+        ],
+        "Recommendation (batch size 2048)": [
+            1.902290802853879,
+            0.0
+        ],
+        "Recommendation (batch size 4096)": [
+            -2.444933496608891,
+            0.0
+        ],
+        "Recommendation (batch size 512)": [
+            0.0,
+            -0.019419968794205114
+        ],
+        "Recommendation (batch size 8192)": [
+            0.0,
+            -0.03248492551663265
+        ],
+        "ResNet-18 (batch size 128)": [
+            0.0,
+            0.7678099743272261
+        ],
+        "ResNet-18 (batch size 16)": [
+            0.0,
+            -2.5646647515126384
+        ],
+        "ResNet-18 (batch size 256)": [
+            0.0,
+            -0.6821670994752599
+        ],
+        "ResNet-18 (batch size 32)": [
+            0.0,
+            3.4825124931041627
+        ],
+        "ResNet-18 (batch size 64)": [
+            0.0,
+            5.063916477373486
+        ],
+        "ResNet-50 (batch size 128)": [
+            1.7205044137544914,
+            0.0
+        ],
+        "ResNet-50 (batch size 16)": [
+            2.6317724925373827,
+            2.0975801161374914
+        ],
+        "ResNet-50 (batch size 32)": [
+            0.32599788641657146,
+            7.975281045682163
+        ],
+        "ResNet-50 (batch size 64)": [
+            0.024360681790206676,
+            0.0
+        ],
+        "Transformer (batch size 128)": [
+            0.6104115536342258,
+            0.35523776894506226
+        ],
+        "Transformer (batch size 16)": [
+            0.6312216724269429,
+            0.5729697685642385
+        ],
+        "Transformer (batch size 256)": [
+            0.21286382806832035,
+            0.17702358372495725
+        ],
+        "Transformer (batch size 32)": [
+            0.6144292695727652,
+            0.10126698512184604
+        ],
+        "Transformer (batch size 64)": [
+            0.5761448786421911,
+            0.5761448786421911
+        ]
+    }
+}
