@@ -39,10 +39,12 @@ class Scheduler:
                  predict_throughputs=False):
 
         print('Running scheduler with policy=%s, schedule_in_rounds=%r, '
-               'seed=%d, time_per_iteration=%d' % (policy.name,
-                                                   schedule_in_rounds,
-                                                   seed,
-                                                   time_per_iteration))
+               'seed=%d, time_per_iteration=%d, '
+               'predict_throughputs=%s' % (policy.name,
+                                           schedule_in_rounds,
+                                           seed,
+                                           time_per_iteration,
+                                           predict_throughputs))
 
         if not predict_throughputs and throughputs_file is None:
             raise ValueError('Throughputs file must be provided if not '
@@ -526,6 +528,8 @@ class Scheduler:
                      self._throughputs[job_id][worker_type][1] <= 0)) or
                     (not job_id.is_pair() and
                      self._throughputs[job_id][worker_type] <= 0)):
+                        print('WARNING: job %s has 0 throughput on '
+                              'worker type %s priority' % (job_id, worker_type))
                         continue
                 else:
                     new_priority = 0
@@ -658,11 +662,14 @@ class Scheduler:
                 throughput = colocated_throughputs[i]
             else:
                 throughput =\
-                    self._oracle_throughputs[worker_type][job_types[0]]['null']
+                    self._oracle_throughputs[worker_type][job_types[i]]['null']
             if throughput <= 0.0:
-                print(single_job_id)
-                print(worker_type)
-                raise Exception("Throughput should not be less than 0!")
+                if self._predict_throughputs:
+                    finish_time = self._get_current_timestamp()
+                else:
+                    print(single_job_id)
+                    print(worker_type)
+                    raise Exception("Throughput should not be less than 0!")
             else:
                 execution_time = num_steps / throughput
                 finish_time = (self.get_current_timestamp() + \
@@ -1391,6 +1398,7 @@ class Scheduler:
         """
         mu = DEFAULT_MATRIX_COMPLETION_MU
         k = DEFAULT_MATRIX_COMPLETION_K
+        predicted_throughputs = None
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             try:
@@ -1417,6 +1425,7 @@ class Scheduler:
                                                           mu=mu)
             except np.linalg.LinAlgError as e:
                 print('WARNING: could not predict throughputs!')
+                print(e)
                 return None
         return predicted_throughputs
 
