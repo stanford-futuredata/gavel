@@ -48,6 +48,7 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                               num_total_jobs=num_total_jobs)
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
+                makespan = sched.get_current_timestamp()
             else:
                 try:
                     func_timeout(timeout, sched.emulate,
@@ -59,6 +60,7 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                                  })
                     average_jct = sched.get_average_jct()
                     utilization = sched.get_cluster_utilization()
+                    makespan = sched.get_current_timestamp()
                 except FunctionTimedOut:
                     average_jct = float('inf')
                     utilization = 1.0
@@ -66,10 +68,12 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
     if verbose:
         current_time = datetime.datetime.now()
         print('[%s] [Experiment ID: %2d] '
-              'Results: average JCT=%f, utilization=%f' % (current_time,
-                                                           experiment_id,
-                                                           average_jct,
-                                                           utilization),
+              'Results: average JCT=%f, utilization=%f, makespan=%f' % (
+                  current_time,
+                  experiment_id,
+                  average_jct,
+                  utilization,
+                  makespan),
               file=sys.stderr)
 
     return average_jct, utilization
