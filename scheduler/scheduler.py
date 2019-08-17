@@ -883,7 +883,6 @@ class Scheduler:
         current_round_end_time = None
         num_completed_jobs = 0
         while True:
-            print("Number of remaining jobs: %d" % remaining_jobs)
             if debug:
                 input('Press Enter to continue...')
             if (jobs_to_complete is not None and

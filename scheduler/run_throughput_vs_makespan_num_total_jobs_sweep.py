@@ -8,7 +8,6 @@ import numpy as np
 import os
 import sys
 
-import job
 from job_id_pair import JobIdPair
 import scheduler
 import utils
