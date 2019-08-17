@@ -1,10 +1,8 @@
 import argparse
 import datetime
 import json
-import io
 import contextlib
 from func_timeout import func_timeout, FunctionTimedOut
-import matplotlib.pyplot as plt
 import multiprocessing
 import numpy as np
 import os
@@ -12,47 +10,16 @@ import sys
 
 import job
 from job_id_pair import JobIdPair
-import policies
 import scheduler
 import utils
 
-cutoff_throughputs = {
-    '1:0:0': {
-        'fifo': 0.8,
-        'fifo_perf': 0.8,
-        'fifo_packing': 0.8,
-        'max_min_fairness': 0.8,
-        'max_min_fairness_perf': 0.8,
-    },
-    '1:1:0': {
-        'fifo': 0.55,
-        'fifo_perf': 0.55,
-        'fifo_packing': 0.65,
-        'max_min_fairness': 0.55,
-        'max_min_fairness_perf': 0.6,
-    },
-    '2:1:0': {
-        'fifo': 0.6,
-        'fifo_perf': 0.6,
-        'fifo_packing': 0.7,
-        'max_min_fairness': 0.6,
-        'max_min_fairness_perf': 0.65,
-    },
-    '1:1:1': {
-        'fifo': 0.45,
-        'fifo_perf': 0.45,
-        'fifo_packing': 0.48,
-        'max_min_fairness': 0.45,
-        'max_min_fairness_perf': 0.5,
-    },
-}
 
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
-                         jobs_to_complete, fixed_job_duration, log_dir, timeout,
-                         verbose):
-    lam_str = 'lambda=%f.log' % (lam)
-    with open(os.path.join(log_dir, lam_str), 'w') as f:
+                         jobs_to_complete, fixed_job_duration, num_total_jobs,
+                         log_dir, timeout, verbose):
+    num_total_jobs_str = 'num_total_jobs=%d.log' % (num_total_jobs)
+    with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
         with contextlib.redirect_stdout(f):
             policy = utils.get_policy(policy_name, seed)
             sched = scheduler.Scheduler(
@@ -70,15 +37,16 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                 current_time = datetime.datetime.now()
                 print('[%s] [Experiment ID: %2d] '
                       'Configuration: cluster_spec=%s, policy=%s, '
-                       'seed=%d, lam=%f' % (current_time, experiment_id,
-                                            cluster_spec_str, policy.name,
-                                            seed, lam),
+                       'seed=%d, num_total_jobs=%d' % (current_time, experiment_id,
+                                                       cluster_spec_str, policy.name,
+                                                       seed, num_total_jobs),
                       file=sys.stderr)
 
             if timeout is None:
                 sched.emulate(cluster_spec, lam=lam,
                               jobs_to_complete=jobs_to_complete,
-                              fixed_job_duration=fixed_job_duration)
+                              fixed_job_duration=fixed_job_duration,
+                              num_total_jobs=num_total_jobs)
                 average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
@@ -89,6 +57,7 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                                     'lam': lam,
                                     'jobs_to_complete': jobs_to_complete,
                                     'fixed_job_duration': fixed_job_duration,
+                                    'num_total_jobs': num_total_jobs
                                  })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -110,94 +79,15 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
 def emulate_with_timeout_helper(args):
     emulate_with_timeout(*args)
 
-def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
-                        cluster_spec, seed, interval, jobs_to_complete,
-                        fixed_job_duration, log_dir, timeout, verbose):
-    all_lams = []
-    average_jcts = []
-    utilizations = []
-
-    # Sweep all power of 2 lambdas until utilization == 1.0.
-    lam = 32768
-    while True:
-        all_lams.append(lam)
-        average_jct, utilization = \
-                emulate_with_timeout(policy_name,
-                                     schedule_in_rounds,
-                                     throughputs_file, cluster_spec,
-                                     lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration, log_dir, timeout,
-                                     verbose)
-
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if utilization < args.utilization_threshold:
-            lam /= 2
-        else:
-            break
-
-    # Find the knee of the throughput vs latency plot.
-    lams = np.linspace(lam * 2, lam, num=10)[1:]
-    for lam in lams:
-        all_lams.append(lam)
-        average_jct, utilization = \
-                emulate_with_timeout(policy_name,
-                                     schedule_in_rounds,
-                                     throughputs_file, cluster_spec,
-                                     lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration, log_dir, timeout,
-                                     verbose)
-
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if utilization >= args.utilization_threshold:
-            knee = lam
-            break
-
-    # Extend the throughput vs latency plot until the latency under
-    # high load is an order of magnitude larger than the latency
-    # under low load.
-    i = 1
-    while True:
-        lam = knee * (1.0 - i * .05)
-        all_lams.append(lam)
-        average_jct, utilization = \
-                emulate_with_timeout(policy_name,
-                                     schedule_in_rounds,
-                                     throughputs_file, cluster_spec,
-                                     lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration, log_dir, timeout,
-                                     verbose)
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if np.max(average_jcts) / np.min(average_jcts) >= 10:
-            break
-
-    print('knee at lamda=', knee, file=sys.stderr)
-    print('final lambda=', lam, file=sys.stderr)
-    for lam, average_jct, utilization in \
-            zip(all_lams, average_jcts, utilizations):
-        print('Lambda=%f,Average JCT=%f,'
-              'Utilization=%f' % (lam, average_jct, utilization),
-              file=sys.stderr)
-
-def run_automatic_sweep_helper(args):
-    run_automatic_sweep(*args)
-
 def main(args):
     if args.window_start >= args.window_end:
         raise ValueError('Window start must be < than window end.')
-    if ((args.throughput_lower_bound is None and
-         args.throughput_upper_bound is not None) or
-        (args.throughput_lower_bound is not None and
-         args.throughput_upper_bound is None)):
+    if ((args.num_total_jobs_lower_bound is None and
+         args.num_total_jobs_upper_bound is not None) or
+        (args.num_total_jobs_lower_bound is not None and
+         args.num_total_jobs_upper_bound is None)):
         raise ValueError('If throughput range is not None, both '
                          'bounds must be specified.')
-    elif (args.throughput_lower_bound is not None and
-          args.throughput_upper_bound is not None):
-        automatic_sweep = False
-    else:
-        automatic_sweep = True
     schedule_in_rounds = True
     throughputs_file = 'combined_throughputs.json'
     num_v100s = args.gpus
@@ -247,75 +137,47 @@ def main(args):
             if not os.path.isdir(raw_logs_policy_subdir):
                 os.mkdir(raw_logs_policy_subdir)
 
-            if automatic_sweep:
+            lower_bound = args.num_total_jobs_lower_bound
+            upper_bound = args.num_total_jobs_upper_bound
+            step = (upper_bound - lower_bound) // args.num_data_points
+            all_num_total_jobs = list(np.arange(lower_bound,
+                                                upper_bound,
+                                                step=step))
+            if all_num_total_jobs[0] == 0:
+                all_num_total_jobs = all_num_total_jobs[1:]
+            for num_total_jobs in all_num_total_jobs:
+                lam = 0.0  # All jobs are added at the start of the trace.
                 for seed in args.seeds:
                     seed_str = 'seed=%d' % (seed)
-                    raw_logs_seed_subdir = os.path.join(raw_logs_policy_subdir,
-                                                        seed_str)
+                    raw_logs_seed_subdir = \
+                            os.path.join(raw_logs_policy_subdir, seed_str)
                     if not os.path.isdir(raw_logs_seed_subdir):
                         os.mkdir(raw_logs_seed_subdir)
                     all_args_list.append((experiment_id, policy_name,
                                           schedule_in_rounds,
                                           throughputs_file, cluster_spec,
-                                          seed, args.interval,
+                                          lam, seed, args.interval,
                                           jobs_to_complete,
                                           args.fixed_job_duration,
+                                          num_total_jobs,
                                           raw_logs_seed_subdir,
                                           args.timeout, args.verbose))
                     experiment_id += 1
-            else:
-                throughputs = list(np.linspace(args.throughput_lower_bound,
-                                               args.throughput_upper_bound,
-                                               num=args.num_data_points))
-                if throughputs[0] == 0.0:
-                    throughputs = throughputs[1:]
-                for throughput in throughputs:
-                    if (ratio_str in cutoff_throughputs and
-                        policy_name in cutoff_throughputs[ratio_str]):
-                        cutoff_throughput = \
-                                cutoff_throughputs[ratio_str][policy_name]
-                        if throughput >= cutoff_throughput:
-                            print('Throughput of %f is too high for policy %s '
-                                  'with cluster ratio %s.' % (throughput,
-                                                              policy_name,
-                                                              ratio_str))
-                            continue
-
-                    lam = 3600.0 / throughput
-                    for seed in args.seeds:
-                        seed_str = 'seed=%d' % (seed)
-                        raw_logs_seed_subdir = \
-                                os.path.join(raw_logs_policy_subdir, seed_str)
-                        if not os.path.isdir(raw_logs_seed_subdir):
-                            os.mkdir(raw_logs_seed_subdir)
-                        all_args_list.append((experiment_id, policy_name,
-                                              schedule_in_rounds,
-                                              throughputs_file, cluster_spec,
-                                              lam, seed, args.interval,
-                                              jobs_to_complete,
-                                              args.fixed_job_duration,
-                                              raw_logs_seed_subdir,
-                                              args.timeout, args.verbose))
-                        experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
         print('[%s] Running %d total experiment(s)...' % (current_time,
                                                           len(all_args_list)))
         with multiprocessing.Pool(args.processes) as p:
-            if automatic_sweep:
-                p.map(run_automatic_sweep_helper, all_args_list)
-            else:
-                # Sort args in order of decreasing lambda to prioritize
-                # short-running jobs.
-                all_args_list.sort(key=lambda x: x[5], reverse=True)
-                p.map(emulate_with_timeout_helper, all_args_list)
+            # Sort args in order of decreasing lambda to prioritize
+            # short-running jobs.
+            all_args_list.sort(key=lambda x: x[5], reverse=True)
+            p.map(emulate_with_timeout_helper, all_args_list)
     else:
         raise ValueError('No work to be done!')
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
             description='Sweep through lambda values')
-    automatic = parser.add_argument_group('Automatic sweep')
     fixed_range = parser.add_argument_group('Sweep over fixed range')
 
     parser.add_argument('-g', '--gpus', type=int, default=25,
@@ -350,19 +212,13 @@ if __name__=='__main__':
                               'specified value (in seconds)'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
-    fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
+    fixed_range.add_argument('-a', '--num-total-jobs-lower-bound', type=int,
                              default=None,
-                             help=('Lower bound for throughput interval to '
-                                   'sweep'))
-    fixed_range.add_argument('-b', '--throughput-upper-bound', type=float,
+                             help='Lower bound for num_total_jobs to sweep')
+    fixed_range.add_argument('-b', '--num-total-jobs-upper-bound', type=int,
                              default=None,
-                             help=('Upper bound for throughput interval to '
-                                   'sweep'))
+                             help='Upper bound for num_total_jobs to sweep')
     fixed_range.add_argument('-n', '--num-data-points', type=int, default=20,
                              help='Number of data points to sweep through')
-    automatic.add_argument('-u', '--utilization-threshold', type=float,
-                           default=.98,
-                           help=('Utilization threshold to use when '
-                                 'automatically sweeping lambdas'))
     args = parser.parse_args()
     main(args)

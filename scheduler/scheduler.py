@@ -794,7 +794,7 @@ class Scheduler:
     def emulate(self, cluster_spec, arrival_times=None, jobs=None,
                 ideal=False, lam=None, jobs_to_complete=None,
                 measurement_window=None, fixed_job_duration=None,
-                debug=False):
+                num_total_jobs=None, debug=False):
         """Emulates the scheduler execution.
 
            Emulation can be performed using a trace or with continuously
@@ -823,6 +823,7 @@ class Scheduler:
                                 exclusive with `jobs_to_complete`.
             fixed_job_duration: If set, all generated jobs will have this
                                 duration if run exclusively on a v100.
+            num_total_jobs: If set, only `num_total_jobs` jobs will be generated.
             Returns:
                 If `measurement_window` is specified, returns the jobs
                 collected in the window. Otherwise returns None.
@@ -852,6 +853,7 @@ class Scheduler:
                              '\'measurement_window\' must be set.')
 
         running_jobs = []
+        num_jobs_generated = 0
         completed_jobs = set()
         jobs_to_measure = set()
 
@@ -1005,7 +1007,11 @@ class Scheduler:
                         break
             else:
                 while next_job_arrival_time <= self._current_timestamp:
+                    if num_total_jobs is not None:
+                        if num_jobs_generated > num_total_jobs:
+                            break
                     job = self._generate_job(fixed_job_duration=fixed_job_duration)
+                    num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
                     if (measurement_window is not None and
@@ -1014,8 +1020,11 @@ class Scheduler:
                         jobs_to_measure.add(job_id)
 
                     last_job_arrival_time = next_job_arrival_time
-                    arrival_time_delta = \
-                            self._sample_arrival_time_delta(1.0 / lam)
+                    if lam == 0.0:
+                        arrival_time_delta = 0.0
+                    else:
+                        arrival_time_delta = \
+                                self._sample_arrival_time_delta(1.0 / lam)
                     next_job_arrival_time = \
                             arrival_time_delta + last_job_arrival_time
 
