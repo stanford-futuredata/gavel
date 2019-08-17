@@ -830,6 +830,8 @@ class Scheduler:
         """
 
         from_trace = arrival_times is not None and jobs is not None
+        if num_total_jobs is not None:
+            remaining_jobs = num_total_jobs
         if from_trace:
             remaining_jobs = len(jobs)
             queued_jobs = []
@@ -848,9 +850,9 @@ class Scheduler:
             raise ValueError('Only one of \'jobs_to_complete\' or '
                              '\'measurement_window\' can be set.')
         if (not from_trace and jobs_to_complete is None and
-            measurement_window is None):
-            raise ValueError('One of \'jobs_to_complete\' or '
-                             '\'measurement_window\' must be set.')
+            num_total_jobs is None and measurement_window is None):
+            raise ValueError('One of \'jobs_to_complete\', '
+                             '\'measurement_window\', or \'num_total_jobs\' must be set.')
 
         running_jobs = []
         num_jobs_generated = 0
@@ -879,6 +881,7 @@ class Scheduler:
         no_dispatched_or_running_jobs = False
         current_round_start_time = 0
         current_round_end_time = None
+        num_completed_jobs = 0
         while True:
             if debug:
                 input('Press Enter to continue...')
@@ -888,6 +891,9 @@ class Scheduler:
             elif (measurement_window is not None and
                   self._current_timestamp >= measurement_window[1] and
                   jobs_to_measure.issubset(completed_jobs)):
+                break
+            elif (num_total_jobs is not None and
+                    remaining_jobs == 0):
                 break
             elif from_trace:
                 if remaining_jobs == 0:
@@ -901,12 +907,12 @@ class Scheduler:
             if ideal:
                 first_job_id_to_depart = self._emulate_ideal(queued_jobs)
                 if first_job_id_to_depart is not None:
-                    # first_job_id_to_depart should have no steps remaining.
+                    # First_job_id_to_depart should have no steps remaining.
                     assert(self._get_remaining_steps(first_job_id_to_depart) /
                         self._jobs[first_job_id_to_depart].total_steps <= 0.01)
                     self._per_job_latest_timestamps[first_job_id_to_depart] = \
                         self._get_current_timestamp()
-                   # Remove job and update remaining_jobs counter.
+                    # Remove job and update remaining_jobs counter.
                     self.remove_job(first_job_id_to_depart[0])
                     remaining_jobs -= 1
 
@@ -985,7 +991,7 @@ class Scheduler:
                         for single_job_id in job_id.singletons():
                             if single_job_id not in self._jobs:
                                 completed_jobs.add(single_job_id)
-                                if from_trace:
+                                if from_trace or num_total_jobs is not None:
                                     remaining_jobs -= 1
                         heapq.heappop(running_jobs)
                     else:

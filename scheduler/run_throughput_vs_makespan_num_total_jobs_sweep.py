@@ -16,7 +16,7 @@ import utils
 
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
-                         jobs_to_complete, fixed_job_duration, num_total_jobs,
+                         fixed_job_duration, num_total_jobs,
                          log_dir, timeout, verbose):
     num_total_jobs_str = 'num_total_jobs=%d.log' % (num_total_jobs)
     with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
@@ -44,10 +44,9 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
 
             if timeout is None:
                 sched.emulate(cluster_spec, lam=lam,
-                              jobs_to_complete=jobs_to_complete,
                               fixed_job_duration=fixed_job_duration,
                               num_total_jobs=num_total_jobs)
-                average_jct = sched.get_average_jct(jobs_to_complete)
+                average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
             else:
                 try:
@@ -55,11 +54,10 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                                  args=(cluster_spec,),
                                  kwargs={
                                     'lam': lam,
-                                    'jobs_to_complete': jobs_to_complete,
                                     'fixed_job_duration': fixed_job_duration,
                                     'num_total_jobs': num_total_jobs
                                  })
-                    average_jct = sched.get_average_jct(jobs_to_complete)
+                    average_jct = sched.get_average_jct()
                     utilization = sched.get_cluster_utilization()
                 except FunctionTimedOut:
                     average_jct = float('inf')
@@ -80,8 +78,6 @@ def emulate_with_timeout_helper(args):
     emulate_with_timeout(*args)
 
 def main(args):
-    if args.window_start >= args.window_end:
-        raise ValueError('Window start must be < than window end.')
     if ((args.num_total_jobs_lower_bound is None and
          args.num_total_jobs_upper_bound is not None) or
         (args.num_total_jobs_lower_bound is not None and
@@ -92,7 +88,6 @@ def main(args):
     throughputs_file = 'combined_throughputs.json'
     num_v100s = args.gpus
     policy_names = args.policies
-    job_range = (args.window_start, args.window_end)
     experiment_id = 0
 
     with open(throughputs_file, 'r') as f:
@@ -101,10 +96,6 @@ def main(args):
     raw_logs_dir = os.path.join(args.log_dir, 'raw_logs')
     if not os.path.isdir(raw_logs_dir):
         os.mkdir(raw_logs_dir)
-
-    jobs_to_complete = set()
-    for i in range(job_range[0], job_range[1]):
-        jobs_to_complete.add(JobIdPair(i, None))
 
     all_args_list = []
     for ratio_str in args.ratios:
@@ -157,7 +148,6 @@ def main(args):
                                           schedule_in_rounds,
                                           throughputs_file, cluster_spec,
                                           lam, seed, args.interval,
-                                          jobs_to_complete,
                                           args.fixed_job_duration,
                                           num_total_jobs,
                                           raw_logs_seed_subdir,
@@ -184,10 +174,6 @@ if __name__=='__main__':
                         help='Number of v100 GPUs')
     parser.add_argument('-l', '--log-dir', type=str, default='logs',
                         help='Log directory')
-    parser.add_argument('-s', '--window-start', type=int, default=0,
-                        help='Measurement window start (job ID)')
-    parser.add_argument('-e', '--window-end', type=int, default=5000,
-                        help='Measurement window end (job ID)')
     parser.add_argument('-t', '--timeout', type=int, default=None,
                         help='Timeout (in seconds) for each run')
     parser.add_argument('-j', '--processes', type=int, default=None,
