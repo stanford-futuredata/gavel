@@ -591,7 +591,6 @@ class Scheduler:
             if x.value[i] > 0.9:
                 scheduled_jobs_on_worker_type.append((job_ids[i],
                                                       scale_factors[i]))
-        print(scheduled_jobs_on_worker_type)
 
         return scheduled_jobs_on_worker_type
 
@@ -1839,21 +1838,23 @@ class Scheduler:
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
-                    self._running_jobs.remove(single_job_id)
-                    self._steps_run_so_far[single_job_id][worker_type] += \
-                            num_steps
-                    self._total_steps_run[single_job_id] += num_steps
-                    if (self._total_steps_run[single_job_id] <
-                         self._jobs[single_job_id].total_steps):
-                        if not self._schedule_in_rounds:
-                            self._add_to_queue(single_job_id)
-                    else:
-                        finish_time = \
-                                self._per_job_latest_timestamps[single_job_id]
-                        print(('%s]\t[Job succeeded]\t'
-                               'Job ID: %s') % (finish_time,
-                                                single_job_id))
-                        to_remove.append(single_job_id)
+                    if single_job_id in self._running_jobs:
+                        self._running_jobs.remove(single_job_id)
+                        self._steps_run_so_far[single_job_id][worker_type] += \
+                                num_steps
+                        self._total_steps_run[single_job_id] += num_steps
+                        if (self._total_steps_run[single_job_id] <
+                             self._jobs[single_job_id].total_steps):
+                            if not self._schedule_in_rounds:
+                                self._add_to_queue(single_job_id)
+                        else:
+                            finish_time = \
+                                    self._per_job_latest_timestamps[single_job_id]
+                            print(('%s]\t[Job succeeded]\t'
+                                   'Job ID: %s') % (finish_time,
+                                                    single_job_id))
+                            to_remove.append(single_job_id)
+
                     if not self._emulate:
                         # NOTE: We update the timestamp before calling this
                         # function in emulation.
@@ -1870,8 +1871,10 @@ class Scheduler:
                 # If we just ran co-located jobs, use the maximum of the
                 # individual execution times.
                 max_execution_time = np.max(all_execution_times)
-                self._job_time_so_far[job_id][worker_type] += \
-                        max_execution_time
+
+                if job_id in self._job_time_so_far:
+                    self._job_time_so_far[job_id][worker_type] += \
+                            max_execution_time
                 self._worker_time_so_far[worker_type] += max_execution_time
                 self._cumulative_worker_time_so_far[worker_id] += \
                         max_execution_time
