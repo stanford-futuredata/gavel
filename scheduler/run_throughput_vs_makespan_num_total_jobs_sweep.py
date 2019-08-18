@@ -85,7 +85,7 @@ def main(args):
          args.num_total_jobs_upper_bound is not None) or
         (args.num_total_jobs_lower_bound is not None and
          args.num_total_jobs_upper_bound is None)):
-        raise ValueError('If throughput range is not None, both '
+        raise ValueError('If num_total_jobs range is not None, both '
                          'bounds must be specified.')
     schedule_in_rounds = True
     throughputs_file = 'combined_throughputs.json'
@@ -161,9 +161,9 @@ def main(args):
         print('[%s] Running %d total experiment(s)...' % (current_time,
                                                           len(all_args_list)))
         with multiprocessing.Pool(args.processes) as p:
-            # Sort args in order of decreasing lambda to prioritize
+            # Sort args in order of increasing num_total_jobs to prioritize
             # short-running jobs.
-            all_args_list.sort(key=lambda x: x[5], reverse=True)
+            all_args_list.sort(key=lambda x: x[9])
             p.map(emulate_with_timeout_helper, all_args_list)
     else:
         raise ValueError('No work to be done!')
