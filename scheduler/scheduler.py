@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import heapq
+import cvxpy as cp
 import numpy as np
 import os
 # from preconditions import preconditions
@@ -513,6 +514,86 @@ class Scheduler:
 
         return scheduled_jobs_on_worker_type
 
+    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    def _schedule_jobs_on_workers_helper_v3(self, worker_type,
+                                            already_scheduled_jobs):
+        """Solves a Knapsack-like ILP problem to determine which applications /
+           jobs should run on the specified worker_type in the upcoming round.
+            Returns:
+             A list of job IDs to schedule on the passed-in worker_type in
+             the upcoming round.
+        """
+
+        # Get the job combinations that don't overlap with already scheduled
+        # jobs.
+        already_scheduled_jobs_set = set(already_scheduled_jobs)
+        job_ids = []
+        priorities = []
+        scale_factors = []
+        for job_id in self._priorities[worker_type]:
+            if (job_id not in already_scheduled_jobs_set and
+                (not job_id.is_pair() or
+                 (job_id.singletons()[0] not in already_scheduled_jobs_set and
+                  job_id.singletons()[1] not in already_scheduled_jobs_set))):
+                job_ids.append(job_id)
+                priorities.append(self._priorities[worker_type][job_id])
+                if job_id.is_pair():
+                    scale_factors.append(1)  # TODO: Fix this! Not necessarily true.
+                else:
+                    scale_factors.append(self._jobs[job_id].scale_factor)
+
+        if len(job_ids) == 0:
+            return []
+
+        single_job_ids = []
+        for job_id in job_ids:
+            if not job_id.is_pair():
+                single_job_ids.append(job_id)
+
+        masks = []
+        for single_job_id in single_job_ids:
+            mask = []
+            # Each mask has dimension (num_job_combinations,).
+            for job_id in job_ids:
+                if job_id in single_job_ids:
+                    if job_id != single_job_id:
+                        mask.append(0.0)
+                    else:
+                        mask.append(1.0)
+                else:
+                    if not single_job_id.overlaps_with(job_id):
+                        mask.append(0.0)
+                    else:
+                        mask.append(1.0)
+            masks.append(mask)
+
+        priorities = np.array(priorities)
+        scale_factors = np.array(scale_factors)
+
+        x = cp.Variable(len(job_ids), boolean=True)
+        objective = cp.Maximize(cp.sum(cp.multiply(priorities, x)))
+
+        num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
+        constraints = [
+            cp.sum(cp.multiply(scale_factors, x)) <= num_workers,
+        ]
+        for mask in masks:
+            constraints.append(cp.sum(cp.multiply(mask, x)) <= 1)
+
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve(solver='ECOS_BB')
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Assignment of jobs to available workers in round not optimal!')
+
+        scheduled_jobs_on_worker_type = []
+        for i in range(len(job_ids)):
+            if x.value[i] > 0.9:
+                scheduled_jobs_on_worker_type.append((job_ids[i],
+                                                      scale_factors[i]))
+        print(scheduled_jobs_on_worker_type)
+
+        return scheduled_jobs_on_worker_type
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers(self):
@@ -544,14 +625,9 @@ class Scheduler:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
             scheduled_jobs_on_worker_type = \
-                    self._schedule_jobs_on_workers_helper_v2(
+                    self._schedule_jobs_on_workers_helper_v3(
                             worker_type, already_scheduled_jobs)
-            """
-            # TODO: Return to this when we have a viable solution for packing.
-            scheduled_jobs_on_worker_type = \
-                self._schedule_jobs_on_workers_helper(worker_type,
-                                                      already_scheduled_jobs)
-            """
+
             for (job_id, scale_factor) in scheduled_jobs_on_worker_type:
                 # Make sure a job is only scheduled on a single worker_type in
                 # a given round.
@@ -585,12 +661,11 @@ class Scheduler:
                 for x in worker_types:
                     allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
                 print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
-                       'Worker type: %s\tWorker ID: %d\t'
+                       'Worker type: %s\tWorker ID(s): %s\t'
                        'Priority: %f\tDeficit: %f\t'
                        'Allocation: %s') % (self._get_current_timestamp(),
                                            job_id, worker_type,
-                                           worker_ids[worker_id_ptrs[0]],
-                                           # tuple([worker_ids[i] for i in worker_id_ptrs]),
+                                           tuple([worker_ids[i] for i in worker_id_ptrs]),
                                            self._priorities[worker_type][job_id],
                                            self._deficits[worker_type][job_id],
                                            allocation_str))
