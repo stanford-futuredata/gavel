@@ -634,12 +634,18 @@ class Scheduler:
     def _get_num_steps(self, job_id, worker_type, single_job_id=None):
         if job_id.is_pair():
             assert(single_job_id is not None)
+            job_types = []
+            for x in job_id.singletons():
+                job_types.append(self._jobs[x].job_type)
+            colocated_throughput =\
+                self._oracle_throughputs[worker_type][job_types[0]][job_types[1]]
             index = job_id.as_tuple().index(single_job_id[0])
-            num_steps = int(self._throughputs[job_id][worker_type][index] *
-                            self._time_per_iteration)
+            throughput = colocated_throughput[index]
         else:
-            num_steps = int(self._throughputs[job_id][worker_type] *
-                            self._time_per_iteration)
+            job_type = self._jobs[job_id].job_type
+            throughput =\
+                self._oracle_throughputs[worker_type][job_type]['null']
+        num_steps = int(throughput * self._time_per_iteration)
         return min(num_steps,
                    self._get_remaining_steps(single_job_id))
 
