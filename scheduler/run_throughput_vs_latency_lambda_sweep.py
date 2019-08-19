@@ -23,6 +23,7 @@ cutoff_throughputs = {
         'fifo_packing': 0.8,
         'max_min_fairness': 0.8,
         'max_min_fairness_perf': 0.8,
+        'max_min_fairness_packed': 1.2,
     },
     '1:1:0': {
         'fifo': 0.55,
@@ -30,6 +31,7 @@ cutoff_throughputs = {
         'fifo_packing': 0.65,
         'max_min_fairness': 0.55,
         'max_min_fairness_perf': 0.6,
+        'max_min_fairness_packed': 0.9,
     },
     '2:1:0': {
         'fifo': 0.6,
@@ -37,6 +39,7 @@ cutoff_throughputs = {
         'fifo_packing': 0.7,
         'max_min_fairness': 0.6,
         'max_min_fairness_perf': 0.65,
+        'max_min_fairness_packed': 1.0,
     },
     '1:1:1': {
         'fifo': 0.45,
@@ -44,6 +47,7 @@ cutoff_throughputs = {
         'fifo_packing': 0.48,
         'max_min_fairness': 0.45,
         'max_min_fairness_perf': 0.5,
+        'max_min_fairness_packed': 0.75,
     },
 }
 
