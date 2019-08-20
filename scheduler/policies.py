@@ -130,6 +130,66 @@ class PolicyWithPacking(Policy):
         return d
 
 
+class LeastAttainedServicePolicy(Policy):
+
+    def __init__(self):
+        self._name = 'LeastAttainedService'
+
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if throughputs is None: return None
+        (m, n) = throughputs.shape
+
+        # max(m, n) is to make sure that the returned allocation is a
+        # probability distribution. We want each term to be the same
+        # so that different applications just robin through the different
+        # worker types based on attained service on the different GPU
+        # types.
+        allocation = np.full((m, n), 1.0 / float(max(m, n)))
+        return super().unflatten(allocation, index)
+
+
+class LeastAttainedServicePolicyWithPerf(Policy):
+
+    def __init__(self):
+        self._name = 'LeastAttainedService_Perf'
+
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if throughputs is None: return None
+        (m, n) = throughputs.shape
+
+        # max(m, n) is to make sure that the returned allocation is a
+        # probability distribution. We want each term to be the same
+        # so that different applications just robin through the different
+        # worker types based on attained service on the different GPU
+        # types.
+        allocation = np.full((m, n), 1.0 / float(max(m, n)))
+        return super().unflatten(allocation, index)
+
+
+class LeastAttainedServicePolicyWithPacking(PolicyWithPacking):
+
+    def __init__(self):
+        self._name = 'LeastAttainedService_Packing'
+
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if throughputs is None: return None
+        (m, n) = throughputs.shape
+
+        # max(m, n) is to make sure that the returned allocation is a
+        # probability distribution. We want each term to be the same
+        # so that different applications just robin through the different
+        # worker types based on attained service on the different GPU
+        # types.
+        allocation = np.full((m, n), 1.0 / float(max(m, n)))
+        return super().unflatten(allocation, index)
+
+
 class MaxMinFairnessPolicy(Policy):
 
     def __init__(self):
