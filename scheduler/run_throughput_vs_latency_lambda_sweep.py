@@ -119,7 +119,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
     while True:
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(policy_name,
+                emulate_with_timeout(experiment_id,
+                                     policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
@@ -138,7 +139,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
     for lam in lams:
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(policy_name,
+                emulate_with_timeout(experiment_id,
+                                     policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
@@ -159,7 +161,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
         lam = knee * (1.0 - i * .05)
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(policy_name,
+                emulate_with_timeout(experiment_id,
+                                     policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
@@ -193,7 +196,7 @@ def main(args):
     else:
         automatic_sweep = True
     schedule_in_rounds = True
-    throughputs_file = 'combined_throughputs.json'
+    throughputs_file = args.throughputs_file
     num_v100s = args.gpus
     policy_names = args.policies
     job_range = (args.window_start, args.window_end)
@@ -320,6 +323,9 @@ if __name__=='__main__':
                         help='Number of v100 GPUs')
     parser.add_argument('-l', '--log-dir', type=str, default='logs',
                         help='Log directory')
+    parser.add_argument('--throughputs_file', type=str,
+                        default='combined_throughputs.json',
+                        help='Throughputs file')
     parser.add_argument('-s', '--window-start', type=int, default=0,
                         help='Measurement window start (job ID)')
     parser.add_argument('-e', '--window-end', type=int, default=5000,
