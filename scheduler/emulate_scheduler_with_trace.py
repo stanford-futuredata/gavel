@@ -50,13 +50,14 @@ if __name__=='__main__':
                         help='Trace file')
     parser.add_argument('-r', '--schedule_in_rounds', action='store_true',
                         help='Use rounds for scheduling')
-    parser.add_argument('-p', '--policy', type=str, default='fifo',
-                        choices=['max_min_fairness', 'max_min_fairness_perf',
-                                 'max_min_fairness_packed',
-                                 'min_total_duration',
-                                 'min_total_duration_packed', 'fifo',
-                                 'fifo_perf', 'fifo_packed'],
-                        help='Scheduler policy')
+    parser.add_argument('-p', '--policy', type=str, required=True,
+                        choices=['fifo', 'fifo_perf', 'fifo_packed',
+                                 'max_min_fairness', 'max_min_fairness_perf',
+                                 'max_min_fairness_packed', 'min_total_duration',
+                                 'min_total_duration_packed',
+                                 'least_attained_service',
+                                 'least_attained_service_perf'],
+                        help='Policy')
     parser.add_argument('-i', '--ideal', action='store_true',
                         help='Use allocation returned by policy ideally')
     parser.add_argument('-f', '--throughputs_file', type=str,

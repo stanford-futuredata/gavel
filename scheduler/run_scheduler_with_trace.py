@@ -58,11 +58,14 @@ if __name__=='__main__':
                         help='Trace file')
     parser.add_argument('-r', '--schedule_in_rounds', action='store_true',
                         help='Use rounds for scheduling')
-    parser.add_argument('-p', '--policy', type=str, default='fifo',
-                        choices=['isolated', 'max_min_fairness',
+    parser.add_argument('-p', '--policy', type=str, required=True,
+                        choices=['fifo', 'fifo_perf', 'fifo_packed',
+                                 'max_min_fairness', 'max_min_fairness_perf',
                                  'max_min_fairness_packed', 'min_total_duration',
-                                 'min_total_duration_packed', 'fifo'],
-                        help='Scheduler policy')
+                                 'min_total_duration_packed',
+                                 'least_attained_service',
+                                 'least_attained_service_perf'],
+                        help='Policy')
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')
     main(parser.parse_args())
