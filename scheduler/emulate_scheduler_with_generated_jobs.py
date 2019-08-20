@@ -88,7 +88,10 @@ if __name__=='__main__':
     parser.add_argument('-p', '--policy', type=str, required=True,
                         choices=['fifo', 'fifo_perf', 'fifo_packed',
                                  'max_min_fairness', 'max_min_fairness_perf',
-                                 'max_min_fairness_packed'],
+                                 'max_min_fairness_packed', 'min_total_duration',
+                                 'min_total_duration_packed',
+                                 'least_attained_service',
+                                 'least_attained_service_perf'],
                         help='Policy')
     parser.add_argument('--seed', type=int, nargs='+',
                         default=0, help='Random seed')

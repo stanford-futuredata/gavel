@@ -85,6 +85,8 @@ class Scheduler:
         self._throughputs = {}
         # Allocations for all current incomplete applications.
         self._allocation = {}
+        # Fraction of time each application runs on each worker type.
+        self._fractions = {}
         # Iterations run on each worker_id, for all current incomplete
         # applications.
         self._steps_run_so_far = {}
@@ -1284,17 +1286,21 @@ class Scheduler:
         """
 
         if self._policy.name.startswith("MinTotalDuration"):
-            # TODO: Need to fix this for packed policies.
             num_steps_remaining = {
                 job_id: self._get_remaining_steps(job_id)
                 for job_id in self._jobs}
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, num_steps_remaining, self._cluster_spec)
+        elif self._policy.name.startswith("LeastAttainedService"):
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, self._fractions, self._cluster_spec)
         else:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, self._cluster_spec)
         if unflattened_allocation is None:
             return None
+
+        # Clamp small allocations to zero.
         for job_id in unflattened_allocation:
             for worker_type in unflattened_allocation[job_id]:
                 threshold = float(len(self._worker_type_to_worker_id_mapping[worker_type])) / \
@@ -1514,14 +1520,14 @@ class Scheduler:
         """
 
         # Stores the fraction of time spent running a job for each worker.
-        fractions = {}
+        self._fractions = {}
 
         for worker_type in self._worker_types:
-            fractions[worker_type] = {}
+            self._fractions[worker_type] = {}
             for job_id in self._job_time_so_far:
                 fraction = self._job_time_so_far[job_id][worker_type] / \
                         self._worker_time_so_far[worker_type]
-                fractions[worker_type][job_id] = fraction
+                self._fractions[worker_type][job_id] = fraction
             for i in range(self._per_worker_type_job_queue[worker_type].size()):
                 queued_job = self._per_worker_type_job_queue[worker_type][i]
                 job_id = queued_job.job_id
@@ -1534,7 +1540,7 @@ class Scheduler:
                     new_priority = INFINITY
                     steps_run = None
                 else:
-                    new_priority = fractions[worker_type][job_id] /\
+                    new_priority = self._fractions[worker_type][job_id] /\
                             self._allocation[job_id][worker_type]
                     steps_run = self._steps_run_so_far[job_id][worker_type]
                 # Use negative deficit and allocation here to sort in
@@ -1569,14 +1575,14 @@ class Scheduler:
             self._need_to_update_allocation = False
 
         # Stores the fraction of time spent running a job for each worker.
-        fractions = {}
+        self._fractions = {}
 
         for worker_type in self._worker_types:
-            fractions[worker_type] = {}
+            self._fractions[worker_type] = {}
             for job_id in self._job_time_so_far:
                 fraction = self._job_time_so_far[job_id][worker_type] / \
                          self._worker_time_so_far[worker_type]
-                fractions[worker_type][job_id] = fraction
+                self._fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 # Don't use inf so 2*new_priority > new_priority.
                 #
@@ -1591,9 +1597,9 @@ class Scheduler:
                       (not job_id.is_pair() and
                        self._throughputs[job_id][worker_type] == 0)):
                     new_priority = 0
-                elif fractions[worker_type][job_id] > 0.0:
+                elif self._fractions[worker_type][job_id] > 0.0:
                     new_priority = self._allocation[job_id][worker_type] /\
-                            fractions[worker_type][job_id]
+                            self._fractions[worker_type][job_id]
                 self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):
