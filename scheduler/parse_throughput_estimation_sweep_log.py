@@ -8,7 +8,14 @@ class Experiment:
         self._seed = int(config['seed'])
         self._lam = float(config['lam'])
         self._completion_algo = config['completion_algo']
-        self._measurement_percentage = float(config['measurement_percentage'])
+        if 'measurement_percentage' in config:
+            self._measurement_percentage =\
+                float(config['measurement_percentage'])
+        elif 'drop_prob' in config:
+            self._drop_prob = float(config['drop_prob'])
+        else:
+            raise ValueError('Could not find measurement_percentage or '
+                             'drop_prob in config')
         self._average_jct = None
         self._utilization = None
 
@@ -17,21 +24,30 @@ class Experiment:
         self._utilization = float(results['utilization'])
 
     def __str__(self):
+        if hasattr(self, '_measurement_percentage'):
+            x = self._measurement_percentage
+        elif hasattr(self, '_drop_prob'):
+            x = self._drop_prob
+        else:
+            raise ValueError('Could not find measurement_percentage or '
+                             'drop_prob')
+
         if not self._average_jct and not self._utilization:
             return '%d,%s,%f,%s,%f,%d,' % (self._experiment_id,
                                            self._policy,
                                            self._lam,
                                            self._completion_algo,
-                                           self._measurement_percentage,
+                                           x,
                                            self._seed)
-        return '%d,%s,%f,%s,%f,%d,%f,%f' % (self._experiment_id,
-                                            self._policy,
-                                            self._lam,
-                                            self._completion_algo,
-                                            self._measurement_percentage,
-                                            self._seed,
-                                            self._average_jct,
-                                            self._utilization)
+        else:
+            return '%d,%s,%f,%s,%f,%d,%f,%f' % (self._experiment_id,
+                                                self._policy,
+                                                self._lam,
+                                                self._completion_algo,
+                                                x,
+                                                self._seed,
+                                                self._average_jct,
+                                                self._utilization)
 
 def main(args):
     experiments = {}
@@ -63,15 +79,22 @@ def main(args):
             except ValueError as e:
                 print(e)
 
+    if args.drop_prob:
+        x = 'Drop Probability'
+    else:
+        x = 'Measurement Percentage'
     print('Experiment ID,Policy,Lambda,Completion Algorithm,'
-          'Measurement Percentage,Seed,Average JCT,Utilization')
+          '%s,Seed,Average JCT,Utilization' % (x))
     for experiment_id in sorted(list(experiments.keys())):
         print(experiments[experiment_id])
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
         description='Parse throughput estimation sweep log')
-    parser.add_argument('-f', '--log_file', type=str, required=True,
+    parser.add_argument('-l', '--log_file', type=str, required=True,
                         help='Log file to parse')
+    parser.add_argument('-d', '--drop_prob', action='store_true',
+                        default=False,
+                        help='Parse drop probability')
     args = parser.parse_args()
     main(args)
