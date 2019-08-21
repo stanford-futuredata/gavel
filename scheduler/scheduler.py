@@ -204,7 +204,7 @@ class Scheduler:
         """
 
         with self._scheduler_lock:
-            current_timestamp = self._get_current_timestamp()
+            current_timestamp = self.get_current_timestamp()
             job_id = job_id_pair.JobIdPair(self._job_id_counter, None)
             self._job_id_counter += 1
             job._job_id = job_id
@@ -231,7 +231,7 @@ class Scheduler:
                 self._add_to_queue(job_id)
             self._need_to_update_allocation = True
             if timestamp is None:
-                timestamp = self._get_current_timestamp()
+                timestamp = self.get_current_timestamp()
             self._per_job_start_timestamps[job_id] = timestamp
             print('%s]\t[Job dispatched]\tJob ID: %s' % (timestamp, job_id))
 
@@ -357,7 +357,7 @@ class Scheduler:
                 raise ValueError('num_steps should be greater'
                                  'than 0, is %d' % (num_steps))
             self._per_job_latest_timestamps[single_job_id] = \
-                    self._get_current_timestamp()
+                    self.get_current_timestamp()
         worker_types = []
         for x in self._allocation[job_id]:
             worker_types.append(x)
@@ -368,7 +368,7 @@ class Scheduler:
         print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                'Worker type: %s\tWorker ID: %d\t'
                'Priority: %f\tDeficit: %f\t'
-               'Allocation:%s') % (self._get_current_timestamp(),
+               'Allocation:%s') % (self.get_current_timestamp(),
                                    job_id, worker_type,
                                    worker_id,
                                    priority,
@@ -575,7 +575,7 @@ class Scheduler:
                         raise ValueError('Num steps should be greater'
                                          'than 0, is %d' % (num_steps))
                     self._per_job_latest_timestamps[single_job_id] = \
-                        self._get_current_timestamp()
+                        self.get_current_timestamp()
                     self._running_jobs.add(single_job_id)
                 worker_types = []
                 for x in self._allocation[job_id]:
@@ -587,7 +587,7 @@ class Scheduler:
                 print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                        'Worker type: %s\tWorker ID: %d\t'
                        'Priority: %f\tDeficit: %f\t'
-                       'Allocation: %s') % (self._get_current_timestamp(),
+                       'Allocation: %s') % (self.get_current_timestamp(),
                                            job_id, worker_type,
                                            worker_ids[worker_id_ptrs[0]],
                                            # tuple([worker_ids[i] for i in worker_id_ptrs]),
@@ -632,7 +632,7 @@ class Scheduler:
                 raise Exception("Throughput should not be less than 0!")
             else:
                 execution_time = num_steps / throughput
-                finish_time = (self._get_current_timestamp() + \
+                finish_time = (self.get_current_timestamp() + \
                                 (num_steps / throughput))
             if (max_finish_time is None or
                 finish_time > max_finish_time):
@@ -794,7 +794,7 @@ class Scheduler:
     def emulate(self, cluster_spec, arrival_times=None, jobs=None,
                 ideal=False, lam=None, jobs_to_complete=None,
                 measurement_window=None, fixed_job_duration=None,
-                debug=False):
+                num_total_jobs=None, debug=False):
         """Emulates the scheduler execution.
 
            Emulation can be performed using a trace or with continuously
@@ -823,12 +823,15 @@ class Scheduler:
                                 exclusive with `jobs_to_complete`.
             fixed_job_duration: If set, all generated jobs will have this
                                 duration if run exclusively on a v100.
+            num_total_jobs: If set, only `num_total_jobs` jobs will be generated.
             Returns:
                 If `measurement_window` is specified, returns the jobs
                 collected in the window. Otherwise returns None.
         """
 
         from_trace = arrival_times is not None and jobs is not None
+        if num_total_jobs is not None:
+            remaining_jobs = num_total_jobs
         if from_trace:
             remaining_jobs = len(jobs)
             queued_jobs = []
@@ -847,11 +850,12 @@ class Scheduler:
             raise ValueError('Only one of \'jobs_to_complete\' or '
                              '\'measurement_window\' can be set.')
         if (not from_trace and jobs_to_complete is None and
-            measurement_window is None):
-            raise ValueError('One of \'jobs_to_complete\' or '
-                             '\'measurement_window\' must be set.')
+            num_total_jobs is None and measurement_window is None):
+            raise ValueError('One of \'jobs_to_complete\', '
+                             '\'measurement_window\', or \'num_total_jobs\' must be set.')
 
         running_jobs = []
+        num_jobs_generated = 0
         completed_jobs = set()
         jobs_to_measure = set()
 
@@ -877,6 +881,7 @@ class Scheduler:
         no_dispatched_or_running_jobs = False
         current_round_start_time = 0
         current_round_end_time = None
+        num_completed_jobs = 0
         while True:
             if debug:
                 input('Press Enter to continue...')
@@ -886,6 +891,9 @@ class Scheduler:
             elif (measurement_window is not None and
                   self._current_timestamp >= measurement_window[1] and
                   jobs_to_measure.issubset(completed_jobs)):
+                break
+            elif (num_total_jobs is not None and
+                    remaining_jobs <= 0):
                 break
             elif from_trace:
                 if remaining_jobs == 0:
@@ -899,12 +907,12 @@ class Scheduler:
             if ideal:
                 first_job_id_to_depart = self._emulate_ideal(queued_jobs)
                 if first_job_id_to_depart is not None:
-                    # first_job_id_to_depart should have no steps remaining.
+                    # First_job_id_to_depart should have no steps remaining.
                     assert(self._get_remaining_steps(first_job_id_to_depart) /
                         self._jobs[first_job_id_to_depart].total_steps <= 0.01)
                     self._per_job_latest_timestamps[first_job_id_to_depart] = \
-                        self._get_current_timestamp()
-                   # Remove job and update remaining_jobs counter.
+                        self.get_current_timestamp()
+                    # Remove job and update remaining_jobs counter.
                     self.remove_job(first_job_id_to_depart[0])
                     remaining_jobs -= 1
 
@@ -983,7 +991,7 @@ class Scheduler:
                         for single_job_id in job_id.singletons():
                             if single_job_id not in self._jobs:
                                 completed_jobs.add(single_job_id)
-                                if from_trace:
+                                if from_trace or num_total_jobs is not None:
                                     remaining_jobs -= 1
                         heapq.heappop(running_jobs)
                     else:
@@ -1005,7 +1013,11 @@ class Scheduler:
                         break
             else:
                 while next_job_arrival_time <= self._current_timestamp:
+                    if num_total_jobs is not None:
+                        if num_jobs_generated > num_total_jobs:
+                            break
                     job = self._generate_job(fixed_job_duration=fixed_job_duration)
+                    num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
                     if (measurement_window is not None and
@@ -1014,8 +1026,11 @@ class Scheduler:
                         jobs_to_measure.add(job_id)
 
                     last_job_arrival_time = next_job_arrival_time
-                    arrival_time_delta = \
-                            self._sample_arrival_time_delta(1.0 / lam)
+                    if lam == 0.0:
+                        arrival_time_delta = 0.0
+                    else:
+                        arrival_time_delta = \
+                                self._sample_arrival_time_delta(1.0 / lam)
                     next_job_arrival_time = \
                             arrival_time_delta + last_job_arrival_time
 
@@ -1159,7 +1174,7 @@ class Scheduler:
         """Computes the utilization of the cluster."""
         with self._scheduler_lock:
             utilizations = []
-            current_timestamp = self._get_current_timestamp()
+            current_timestamp = self.get_current_timestamp()
             for worker_id in self._cumulative_worker_time_so_far:
                 total_runtime = (current_timestamp -
                                  self._worker_start_times[worker_id])
@@ -1234,7 +1249,7 @@ class Scheduler:
         """
         print('')
         print('=' * 80)
-        print('Allocation\t(Current_time: %f)' % (self._get_current_timestamp()))
+        print('Allocation\t(Current_time: %f)' % (self.get_current_timestamp()))
         print('-' * 80)
         for job_id in sorted(list(self._allocation.keys())):
             allocation_str = 'Job ID %s:' % (job_id)
@@ -1254,7 +1269,7 @@ class Scheduler:
         """
         print('')
         print('=' * 80)
-        print('Deficits\t(Current_time: %f)' % (self._get_current_timestamp()))
+        print('Deficits\t(Current_time: %f)' % (self.get_current_timestamp()))
         print('-' * 80)
         for job_id in sorted(list(self._jobs.keys())):
             deficit_str = 'Job ID %s:' % (job_id)
@@ -1355,7 +1370,7 @@ class Scheduler:
 
         Requires self._scheduler_lock to be held when calling this function.
         """
-        current_time = self._get_current_timestamp()
+        current_time = self.get_current_timestamp()
         elapsed_time_since_last_reset = current_time - self._last_reset_time
         for worker_type in self._worker_types:
             self._worker_time_so_far[worker_type] = 0.0
@@ -1637,7 +1652,7 @@ class Scheduler:
         return self._jobs[job_id].total_steps - steps_run_so_far
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
-    def _get_current_timestamp(self):
+    def get_current_timestamp(self):
         if self._emulate:
             return self._current_timestamp
         else:
@@ -1715,7 +1730,7 @@ class Scheduler:
                 self._worker_connections[worker_id] = \
                     scheduler_client.SchedulerRpcClient(ip_addr, port)
 
-            self._worker_start_times[worker_id] = self._get_current_timestamp()
+            self._worker_start_times[worker_id] = self.get_current_timestamp()
             self._need_to_update_allocation = True
 
         return worker_id
@@ -1740,7 +1755,7 @@ class Scheduler:
         to_remove = []
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-            current_timestamp = self._get_current_timestamp()
+            current_timestamp = self.get_current_timestamp()
 
             if np.min(all_execution_times) < 0:
                 # Micro-task failed.
@@ -1783,7 +1798,7 @@ class Scheduler:
                         # NOTE: We update the timestamp before calling this
                         # function in emulation.
                         self._per_job_latest_timestamps[single_job_id] = \
-                                self._get_current_timestamp()
+                                self.get_current_timestamp()
 
                 # TODO: fix this for job pairs.
                 if not self._emulate and not job_id.is_pair():

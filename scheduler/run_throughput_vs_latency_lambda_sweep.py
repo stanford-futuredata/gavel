@@ -1,18 +1,14 @@
 import argparse
 import datetime
 import json
-import io
 import contextlib
 from func_timeout import func_timeout, FunctionTimedOut
-import matplotlib.pyplot as plt
 import multiprocessing
 import numpy as np
 import os
 import sys
 
-import job
 from job_id_pair import JobIdPair
-import policies
 import scheduler
 import utils
 
@@ -55,7 +51,6 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
                          jobs_to_complete, fixed_job_duration, log_dir, timeout,
                          verbose):
-    f = io.StringIO()
     lam_str = 'lambda=%f.log' % (lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stdout(f):
