@@ -112,9 +112,6 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
 
     return average_jct, utilization
 
-def emulate_with_timeout_helper(args):
-    emulate_with_timeout(*args)
-
 def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
                         cluster_spec, seed, interval, jobs_to_complete,
                         fixed_job_duration, log_dir, timeout, verbose):
@@ -185,9 +182,6 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
         print('Lambda=%f,Average JCT=%f,'
               'Utilization=%f' % (lam, average_jct, utilization),
               file=sys.stderr)
-
-def run_automatic_sweep_helper(args):
-    run_automatic_sweep(*args)
 
 def main(args):
     if args.window_start >= args.window_end:
@@ -308,14 +302,14 @@ def main(args):
                                                           len(all_args_list)))
         with multiprocessing.Pool(args.processes) as p:
             if automatic_sweep:
-                results = [p.apply_async(run_automatic_sweep_helper, args=args_list)
+                results = [p.apply_async(run_automatic_sweep, args_list)
                            for args_list in all_args_list]
                 results = [result.get() for result in results]
             else:
                 # Sort args in order of decreasing lambda to prioritize
                 # short-running jobs.
                 all_args_list.sort(key=lambda x: x[5], reverse=True)
-                results = [p.apply_async(emulate_with_timeout_helper, args=args_list)
+                results = [p.apply_async(emulate_with_timeout, args_list)
                            for args_list in all_args_list]
                 results = [result.get() for result in results]
     else:
