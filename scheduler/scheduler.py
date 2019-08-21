@@ -600,9 +600,24 @@ class Scheduler:
                 for single_job_id in job_id.singletons():
                     num_steps = self._get_num_steps(job_id, worker_type,
                                                     single_job_id)
-                    if num_steps <= 0:
-                        raise ValueError('Num steps should be greater'
-                                         'than 0, is %d' % (num_steps))
+                    if num_steps < 0:
+                        raise ValueError('Num steps should be greater than 0, '
+                                         'is %d for job %s' % (num_steps,
+                                                               job_id))
+                    elif num_steps == 0:
+                        throughput = self._throughputs[job_id][worker_type]
+                        job_types = []
+                        for x in job_id.singletons():
+                            job_types.append(self._jobs[x].job_type)
+                        oracle_throughput =\
+                            self._oracle_throughputs[worker_type][job_types[0]][job_types[1]]
+                        print('WARNING: Scheduling job %s '
+                              'with 0 steps (throughput: [%f, %f], '
+                              'oracle throughput: [%f, %f]' % (job_id,
+                                                               throughput[0],
+                                                               throughput[1],
+                                                               oracle_throughput[0],
+                                                               oracle_throughput[1]))
                     self._per_job_latest_timestamps[single_job_id] = \
                         self.get_current_timestamp()
                     self._running_jobs.add(single_job_id)
@@ -1436,15 +1451,14 @@ class Scheduler:
         return predicted_throughputs
 
 
-    def _predict_colocated_throughputs(self, job_id, job_type, worker_type):
+    def _predict_colocated_throughputs(self, worker_type, job_id=None):
         """Uses a matrix completion algorithm to predict co-located throughputs.
 
            NOTE: Currently only works in emulation mode.
 
            Args:
-               job_id: The ID of the newly arrived job.
-               job_type: The type of the newly arrived job.
                worker_type: The worker type to use when computing throughputs.
+               job_id: If specified, the ID of a newly arrived job.
         """
         # TODO: support non-emulated mode.
         num_jobs = len(self._jobs)
@@ -1454,6 +1468,15 @@ class Scheduler:
         measurement_percentage =\
             self._throughput_prediction_config['measurement_percentage']
         completion_algo = self._throughput_prediction_config['completion_algo']
+
+        """
+        print('Predicting throughputs!')
+        print('Measured throughputs for these jobs:')
+        for x in sorted(list(self._throughputs_mask.keys())):
+            if self._throughputs_mask[x][worker_type]:
+                print(x)
+        print('')
+        """
 
         # Populate the throughputs matrix with all existing
         # measured throughput data.
@@ -1473,37 +1496,42 @@ class Scheduler:
                         self._oracle_throughputs[worker_type][job_0_type][job_1_type]
                     throughputs_matrix[i][j] = colocated_throughputs[0]
                     throughputs_matrix[j][i] = colocated_throughputs[1]
+                    if i != j:
+                        self._throughputs[merged_job_id][worker_type] =\
+                            colocated_throughputs
 
-        # Pick additional co-located throughputs to measure for the newly
-        # arrived job.
-        i = num_jobs - 1
-        assert(i == all_job_ids.index(job_id))
-        # TODO: make this configurable?
-        if num_jobs <= 2:
-            num_jobs_to_measure = num_jobs
-        else:
-            num_jobs_to_measure = int(num_jobs * measurement_percentage)
-        job_id_indexes_to_measure =\
-            self._throughput_prediction_generator.sample(list(range(num_jobs)),
-                                                         num_jobs_to_measure)
-        for j in job_id_indexes_to_measure:
-            other_job_id = all_job_ids[j]
-            other_job_type = self._jobs[other_job_id].job_type
-            merged_job_id = job_id_pair.JobIdPair(job_id[0],
-                                                  other_job_id[0])
-            colocated_throughputs =\
-                self._oracle_throughputs[worker_type][job_type][other_job_type]
-            throughputs_matrix[i][j] = colocated_throughputs[0]
-            throughputs_matrix[j][i] = colocated_throughputs[1]
-            if i != j:
-                self._throughputs_mask[merged_job_id][worker_type] = True
-                self._throughputs[merged_job_id][worker_type] =\
-                    colocated_throughputs
-            mask[i][j] = 1.0
-            mask[j][i] = 1.0
+        if job_id is not None:
+            job_type = self._jobs[job_id].job_type
+            # Pick additional co-located throughputs to measure for the newly
+            # arrived job.
+            i = num_jobs - 1
+            assert(i == all_job_ids.index(job_id))
+            # TODO: make this configurable?
+            if num_jobs <= 2:
+                num_jobs_to_measure = num_jobs
+            else:
+                num_jobs_to_measure = int(num_jobs * measurement_percentage)
+            job_id_indexes_to_measure =\
+                self._throughput_prediction_generator.sample(list(range(num_jobs)),
+                                                             num_jobs_to_measure)
+            for j in job_id_indexes_to_measure:
+                other_job_id = all_job_ids[j]
+                other_job_type = self._jobs[other_job_id].job_type
+                merged_job_id = job_id_pair.JobIdPair(job_id[0],
+                                                      other_job_id[0])
+                colocated_throughputs =\
+                    self._oracle_throughputs[worker_type][job_type][other_job_type]
+                throughputs_matrix[i][j] = colocated_throughputs[0]
+                throughputs_matrix[j][i] = colocated_throughputs[1]
+                if i != j:
+                    self._throughputs_mask[merged_job_id][worker_type] = True
+                    self._throughputs[merged_job_id][worker_type] =\
+                        colocated_throughputs
+                mask[i][j] = 1.0
+                mask[j][i] = 1.0
 
         # Predict the remaining co-located throughputs.
-        if num_jobs_to_measure < num_jobs:
+        if np.min(mask) == 0:
             predicted_throughputs =\
                 self._run_matrix_completion_algorithm(completion_algo,
                                                       throughputs_matrix,
@@ -1543,8 +1571,8 @@ class Scheduler:
                     self._throughputs[job_id][worker_type] =\
                         worker_throughputs[job_type]['null']
                     if self._job_packing:
-                        self._predict_colocated_throughputs(job_id, job_type,
-                                                            worker_type)
+                        self._predict_colocated_throughputs(worker_type,
+                                                            job_id=job_id)
             else:
                 for worker_type in self._worker_types:
                     worker_throughputs = self._oracle_throughputs[worker_type]
@@ -1796,6 +1824,10 @@ class Scheduler:
 
         if self._need_to_update_allocation:
             self._reset_time_run_so_far()
+            if (self._emulate and self._predict_throughputs and
+                self._job_packing):
+                for worker_type in self._worker_types:
+                    self._predict_colocated_throughputs(worker_type)
             self._allocation = self._get_allocation()
             self._need_to_update_allocation = False
 
@@ -1973,16 +2005,21 @@ class Scheduler:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             current_timestamp = self.get_current_timestamp()
 
-            if np.min(all_execution_times) < 0:
+            if np.min(all_execution_times) <= 0:
                 # Micro-task failed.
-                self._num_failures_per_job[job_id] += 1
                 print(('%s]\t[Micro-task failed]\t'
                        'Job ID: %s') % (current_timestamp,
                                         job_id))
-                if self._num_failures_per_job[job_id] >= MAX_FAILED_ATTEMPTS:
-                    print(('%s]\t[Job failed]\t'
-                           'Job ID: %s') % (current_timestamp, job_id))
-                    to_remove.append(job_id)
+                if (self._emulate and self._predict_throughputs and
+                    job_id.is_pair()):
+                    self._throughputs_mask[job_id][worker_type] = True
+                if not job_id.is_pair():
+                    self._num_failures_per_job[job_id] += 1
+                    if (self._num_failures_per_job[job_id] >=
+                        MAX_FAILED_ATTEMPTS):
+                        print(('%s]\t[Job failed]\t'
+                               'Job ID: %s') % (current_timestamp, job_id))
+                        to_remove.append(job_id)
 
             else:
                 print(('%s]\t[Micro-task succeeded]\t'
