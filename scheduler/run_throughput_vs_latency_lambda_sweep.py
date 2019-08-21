@@ -308,12 +308,16 @@ def main(args):
                                                           len(all_args_list)))
         with multiprocessing.Pool(args.processes) as p:
             if automatic_sweep:
-                p.map(run_automatic_sweep_helper, all_args_list)
+                results = [p.apply_async(run_automatic_sweep_helper, args=args_list)
+                           for args_list in all_args_list]
+                results = [result.get() for result in results]
             else:
                 # Sort args in order of decreasing lambda to prioritize
                 # short-running jobs.
                 all_args_list.sort(key=lambda x: x[5], reverse=True)
-                p.map(emulate_with_timeout_helper, all_args_list)
+                results = [p.apply_async(emulate_with_timeout_helper, args=args_list)
+                           for args_list in all_args_list]
+                results = [result.get() for result in results]
     else:
         raise ValueError('No work to be done!')
 
