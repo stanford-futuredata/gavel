@@ -77,9 +77,6 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
 
     return average_jct, utilization
 
-def emulate_with_timeout_helper(args):
-    emulate_with_timeout(*args)
-
 def main(args):
     if ((args.num_total_jobs_lower_bound is None and
          args.num_total_jobs_upper_bound is not None) or
@@ -164,7 +161,9 @@ def main(args):
             # Sort args in order of increasing num_total_jobs to prioritize
             # short-running jobs.
             all_args_list.sort(key=lambda x: x[9])
-            p.map(emulate_with_timeout_helper, all_args_list)
+            results = [p.apply_async(emulate_with_timeout, args_list)
+                       for args_list in all_args_list]
+            results = [result.get() for result in results]
     else:
         raise ValueError('No work to be done!')
 
