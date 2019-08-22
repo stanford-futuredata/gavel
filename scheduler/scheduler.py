@@ -134,6 +134,8 @@ class Scheduler:
         # Flag to control whether to predict throughputs in real-time.
         self._predict_throughputs = predict_throughputs
         self._throughputs_mask = {}
+        self._jobs_to_profile = {}
+        self._job_pairs_to_profile = {}
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -504,6 +506,26 @@ class Scheduler:
         scheduled_jobs_on_worker_type = []
         num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
 
+        if self._predict_throughputs:
+            while (len(self._job_pairs_to_profile[worker_type]) > 0 and
+                   len(scheduled_jobs_on_worker_type) < num_workers):
+                job_pair_to_profile = self._job_pairs_to_profile[worker_type].pop()
+                assert (job_pair_to_profile[0] != job_pair_to_profile[1])
+                already_scheduled = False
+                if job_pair_to_profile.is_pair():
+                    for single_job_id in job_pair_to_profile.singletons():
+                        if (single_job_id in already_scheduled_jobs_set):
+                            already_scheduled = True
+                            break
+                elif job_id in already_scheduled_jobs_set():
+                    already_scheduled = True
+                if not already_scheduled:
+                    scheduled_jobs_on_worker_type.append((job_pair_to_profile, 1))
+                    already_scheduled_jobs_set.add(job_pair_to_profile)
+                    for single_job_id in job_pair_to_profile.singletons():
+                        already_scheduled_jobs_set.add(single_job_id)
+                        self._jobs_to_profile[worker_type].remove(single_job_id)
+
         entries = []
         for job_id in self._priorities[worker_type]:
             entries.append((job_id, self._priorities[worker_type][job_id],
@@ -529,7 +551,7 @@ class Scheduler:
                     (not job_id.is_pair() and
                      self._throughputs[job_id][worker_type] <= 0)):
                         print('WARNING: job %s has 0 throughput on '
-                              'worker type %s priority' % (job_id, worker_type))
+                              'worker type %s' % (job_id, worker_type))
                         continue
                 else:
                     new_priority = 0
@@ -1448,10 +1470,32 @@ class Scheduler:
                 print('WARNING: could not predict throughputs!')
                 print(e)
                 return None
+            except ValueError as e:
+                print('WARNING: misconfigured throughputs!')
+                print(e)
+                return None
         return predicted_throughputs
 
 
-    def _predict_colocated_throughputs(self, worker_type, job_id=None):
+    def _compute_rmse(self, worker_type, throughputs_hat, mask):
+        num_jobs = len(self._jobs)
+        true = np.zeros((num_jobs, num_jobs), dtype=np.float32)
+        all_job_ids = sorted(list(self._jobs.keys()))
+        for i, job_id_0 in enumerate(all_job_ids):
+            for j, job_id_1 in enumerate(all_job_ids):
+                if j < i:
+                    continue
+                job_0_type = self._jobs[job_id_0].job_type
+                job_1_type = self._jobs[job_id_1].job_type
+                true[i][j] =\
+                    self._oracle_throughputs[worker_type][job_0_type][job_1_type][0] / self._oracle_throughputs[worker_type][job_0_type]['null']
+                true[j][i] =\
+                    self._oracle_throughputs[worker_type][job_0_type][job_1_type][1] / self._oracle_throughputs[worker_type][job_1_type]['null'] 
+        pred = np.multiply(throughputs_hat, (1 - mask))
+        cnt = np.sum(1 - mask)
+        return (np.linalg.norm(pred - true, "fro") ** 2 / cnt) ** 0.5
+
+    def _predict_colocated_throughputs(self, worker_type):
         """Uses a matrix completion algorithm to predict co-located throughputs.
 
            NOTE: Currently only works in emulation mode.
@@ -1482,6 +1526,7 @@ class Scheduler:
         # measured throughput data.
         # TODO: cache this?
         all_job_ids = sorted(list(self._jobs.keys()))
+        unmeasured_job_pairs = []
         for i, job_id_0 in enumerate(all_job_ids):
             job_0_type = self._jobs[job_id_0].job_type
             for j, job_id_1 in enumerate(all_job_ids):
@@ -1494,12 +1539,33 @@ class Scheduler:
                     mask[j][i] = 1.0
                     colocated_throughputs =\
                         self._oracle_throughputs[worker_type][job_0_type][job_1_type]
-                    throughputs_matrix[i][j] = colocated_throughputs[0]
-                    throughputs_matrix[j][i] = colocated_throughputs[1]
+                    throughputs_matrix[i][j] = colocated_throughputs[0] / self._oracle_throughputs[worker_type][job_0_type]['null']
+                    throughputs_matrix[j][i] = colocated_throughputs[1] / self._oracle_throughputs[worker_type][job_1_type]['null']
                     if i != j:
                         self._throughputs[merged_job_id][worker_type] =\
                             colocated_throughputs
+                elif i != j and not self._throughputs_mask[merged_job_id][worker_type]:
+                    unmeasured_job_pairs.append(merged_job_id)
 
+        num_job_pairs_to_measure =\
+            min(self._cluster_spec[worker_type],
+                int(num_jobs * num_jobs * measurement_percentage))
+        unscheduled_jobs = set(all_job_ids)
+        for i in range(num_job_pairs_to_measure):
+            if len(unscheduled_jobs) < 2:
+                break
+            job_ids = np.random.choice(list(unscheduled_jobs), 2, replace=False)
+            merged_job_id = job_id_pair.JobIdPair(job_ids[0][0], job_ids[1][0])
+            if (not self._throughputs_mask[merged_job_id][worker_type] and
+                not job_ids[0] in self._jobs_to_profile[worker_type] and
+                not job_ids[1] in self._jobs_to_profile[worker_type]):
+                self._job_pairs_to_profile[worker_type].add(merged_job_id)
+                self._jobs_to_profile[worker_type].add(job_ids[0])
+                self._jobs_to_profile[worker_type].add(job_ids[1])
+                unscheduled_jobs.remove(job_ids[0])
+                unscheduled_jobs.remove(job_ids[1])
+
+        """
         if job_id is not None:
             job_type = self._jobs[job_id].job_type
             # Pick additional co-located throughputs to measure for the newly
@@ -1515,20 +1581,31 @@ class Scheduler:
                 self._throughput_prediction_generator.sample(list(range(num_jobs)),
                                                              num_jobs_to_measure)
             for j in job_id_indexes_to_measure:
+                if i == j:
+                    continue
                 other_job_id = all_job_ids[j]
                 other_job_type = self._jobs[other_job_id].job_type
                 merged_job_id = job_id_pair.JobIdPair(job_id[0],
                                                       other_job_id[0])
-                colocated_throughputs =\
-                    self._oracle_throughputs[worker_type][job_type][other_job_type]
-                throughputs_matrix[i][j] = colocated_throughputs[0]
-                throughputs_matrix[j][i] = colocated_throughputs[1]
-                if i != j:
-                    self._throughputs_mask[merged_job_id][worker_type] = True
-                    self._throughputs[merged_job_id][worker_type] =\
-                        colocated_throughputs
-                mask[i][j] = 1.0
-                mask[j][i] = 1.0
+                self._jobs_to_profile[worker_type].append(merged_job_id)
+        """
+        print('Profiling these jobs in the next round:', self._job_pairs_to_profile[worker_type])
+        """
+        if job_id[0] < other_job_id[0]:
+            colocated_throughputs =\
+                self._oracle_throughputs[worker_type][job_type][other_job_type]
+        else:
+            colocated_throughputs =\
+                self._oracle_throughputs[worker_type][other_job_type][job_type]
+        throughputs_matrix[i][j] = colocated_throughputs[0]
+        throughputs_matrix[j][i] = colocated_throughputs[1]
+        if i != j:
+            self._throughputs_mask[merged_job_id][worker_type] = True
+            self._throughputs[merged_job_id][worker_type] =\
+                colocated_throughputs
+        mask[i][j] = 1.0
+        mask[j][i] = 1.0
+        """
 
         # Predict the remaining co-located throughputs.
         if np.min(mask) == 0:
@@ -1552,6 +1629,34 @@ class Scheduler:
                         [max(0, predicted_throughputs[i][j]),
                          max(0, predicted_throughputs[j][i])]
 
+        print('Predicted throughputs:')
+        for x in sorted(list(self._throughputs.keys())):
+            if not x.is_pair() or x[0] == x[1]:
+                continue
+            job_types = []
+            for single_job_id in x.singletons():
+                job_types.append(self._jobs[single_job_id].job_type)
+            oracle_throughput =\
+                self._oracle_throughputs[worker_type][job_types[0]][job_types[1]]
+            if self._throughputs_mask[x][worker_type]:
+                if not self._throughputs[x][worker_type] == oracle_throughput:
+                    print('Predicted throughput: [%f, %f]' % (self._throughputs[x][worker_type][0],
+                                                              self._throughputs[x][worker_type][1]))
+                    print('Oracle throughputs: [%f, %f]' % (oracle_throughput[0] / self._oracle_throughputs[worker_type][job_types[0]]['null'],
+                                                            oracle_throughput[1] / self._oracle_throughputs[worker_type][job_types[1]]['null']))
+                    raise ValueError('Throughputs for job %s are incorrect!' % (x))
+                print('Job %s: Using oracle throughput [%f, %f]' % (x, oracle_throughput[0] / self._oracle_throughputs[worker_type][job_types[0]]['null'],
+                                                                    oracle_throughput[1] / self._oracle_throughputs[worker_type][job_types[1]]['null']))
+            else:
+                print('Job %s: Predicted throughput=[%f, %f], '
+                      'oracle throughput=[%f, %f]' % (x,
+                                                      self._throughputs[x][worker_type][0],
+                                                      self._throughputs[x][worker_type][1],
+                                                      oracle_throughput[0] / self._oracle_throughputs[worker_type][job_types[0]]['null'],
+                                                      oracle_throughput[1] / self._oracle_throughputs[worker_type][job_types[1]]['null']))
+        print('RMSE: %f' % (self._compute_rmse(worker_type, throughputs_matrix,
+                                               mask)))
+        print('')
 
     def _compute_throughput(self, job):
         """Updates the throughput matrix given the arrival of a new job.
@@ -1568,11 +1673,11 @@ class Scheduler:
             if self._predict_throughputs:
                 for worker_type in self._worker_types:
                     worker_throughputs = self._oracle_throughputs[worker_type]
+                    # TODO: consider moving this to self._jobs_to_profile first
                     self._throughputs[job_id][worker_type] =\
                         worker_throughputs[job_type]['null']
-                    if self._job_packing:
-                        self._predict_colocated_throughputs(worker_type,
-                                                            job_id=job_id)
+                    #if self._job_packing:
+                    #    self._predict_colocated_throughputs(worker_type)
             else:
                 for worker_type in self._worker_types:
                     worker_throughputs = self._oracle_throughputs[worker_type]
@@ -1949,13 +2054,13 @@ class Scheduler:
                         job_queue.JobQueue()
                 self._priorities[worker_type] = {}
                 self._deficits[worker_type] = {}
+                self._jobs_to_profile[worker_type] = set()
+                self._job_pairs_to_profile[worker_type] = set()
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
                             (self._time_per_iteration / 2.0)
-                    self._throughputs[job_id][worker_type] = \
-                        self._compute_throughput(self._jobs[job_id],
-                                                 worker_type)
+                    #self._compute_throughput(worker_type)
                     if self._job_packing:
                         self._populate_job_combination_metadata(job_id,
                                                                 worker_type)
