@@ -22,6 +22,8 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 parser.add_argument('-d', '--data_dir', required=True, type=str,
                     help='Data directory')
+parser.add_argument('-b', '--batch_size', default=2048, type=int,
+                    help='Batch size')
 args = parser.parse_args()
 
 data_dir = args.data_dir #'/home/keshavsanthanam/data/ml-20m/pro_sg/'
@@ -86,7 +88,7 @@ try:
       trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
                       loss='logistic', user_based=False)
       trainer.train(train_dataset=train_dataset, val_dataset=val_tr_dataset,
-                    batch_size=2048, lr=1e-3, weight_decay=2e-5,
+                    batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
                     num_epochs=epochs_per_iteration, negative_sampling=True,
                     lr_milestones=[60, 80], num_data_workers=mp.cpu_count() if use_cuda else 0,
                     model_checkpoint_prefix=model_checkpoint,
