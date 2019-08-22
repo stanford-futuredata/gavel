@@ -172,16 +172,23 @@ class Scheduler:
         self._interarrival_time_generator = random.Random()
         self._interarrival_time_generator.seed(seed+3)
 
-        self._throughput_prediction_generator = random.Random()
+        self._throughput_prediction_generator = np.random.RandomState()
         self._throughput_prediction_generator.seed(seed+4)
 
 
     def set_throughput_prediction_config(self, measurement_percentage,
                                          completion_algo):
-        self._throughput_prediction_config = {
-            'measurement_percentage': measurement_percentage,
-            'completion_algo': completion_algo
-        }
+        if measurement_percentage < 0.0 or measurement_percentage > 1.0:
+            raise ValueError('Throughput prediction measurement percentage '
+                             'must be between 0.0 and '
+                             '1.0, was %f' % (measurement_percentage))
+        if measurement_percentage == 1.0:
+            self._predict_throughputs = False
+        else:
+            self._throughput_prediction_config = {
+                'measurement_percentage': measurement_percentage,
+                'completion_algo': completion_algo,
+            }
 
 
     def start_scheduling_thread(self):
@@ -708,7 +715,7 @@ class Scheduler:
                     self._oracle_throughputs[worker_type][job_types[i]]['null']
             if throughput <= 0.0:
                 if self._predict_throughputs:
-                    finish_time = self._get_current_timestamp()
+                    finish_time = self.get_current_timestamp()
                 else:
                     print(single_job_id)
                     print(worker_type)
@@ -1493,7 +1500,10 @@ class Scheduler:
                     self._oracle_throughputs[worker_type][job_0_type][job_1_type][1] / self._oracle_throughputs[worker_type][job_1_type]['null'] 
         pred = np.multiply(throughputs_hat, (1 - mask))
         cnt = np.sum(1 - mask)
-        return (np.linalg.norm(pred - true, "fro") ** 2 / cnt) ** 0.5
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            rmse = (np.linalg.norm(pred - true, "fro") ** 2 / cnt) ** 0.5
+        return rmse
 
     def _predict_colocated_throughputs(self, worker_type):
         """Uses a matrix completion algorithm to predict co-located throughputs.
@@ -1512,6 +1522,8 @@ class Scheduler:
         measurement_percentage =\
             self._throughput_prediction_config['measurement_percentage']
         completion_algo = self._throughput_prediction_config['completion_algo']
+        num_profiling_machines =\
+            int(measurement_percentage * self._cluster_spec[worker_type])
 
         """
         print('Predicting throughputs!')
@@ -1530,11 +1542,11 @@ class Scheduler:
         for i, job_id_0 in enumerate(all_job_ids):
             job_0_type = self._jobs[job_id_0].job_type
             for j, job_id_1 in enumerate(all_job_ids):
-                if j < i:
+                if j <= i:
                     continue
                 job_1_type = self._jobs[job_id_1].job_type
                 merged_job_id = job_id_pair.JobIdPair(job_id_0[0], job_id_1[0])
-                if i == j or self._throughputs_mask[merged_job_id][worker_type]:
+                if self._throughputs_mask[merged_job_id][worker_type]:
                     mask[i][j] = 1.0
                     mask[j][i] = 1.0
                     colocated_throughputs =\
@@ -1547,23 +1559,21 @@ class Scheduler:
                 elif i != j and not self._throughputs_mask[merged_job_id][worker_type]:
                     unmeasured_job_pairs.append(merged_job_id)
 
-        num_job_pairs_to_measure =\
-            min(self._cluster_spec[worker_type],
-                int(num_jobs * num_jobs * measurement_percentage))
-        unscheduled_jobs = set(all_job_ids)
-        for i in range(num_job_pairs_to_measure):
-            if len(unscheduled_jobs) < 2:
-                break
-            job_ids = np.random.choice(list(unscheduled_jobs), 2, replace=False)
+        unscheduled_jobs = set(all_job_ids) - self._jobs_to_profile[worker_type]
+        seen_job_pairs = set()
+        while (len(unscheduled_jobs) >= 2 and
+               len(self._job_pairs_to_profile[worker_type]) < num_profiling_machines):
+            job_ids = self._throughput_prediction_generator.choice(list(unscheduled_jobs), 2, replace=False)
             merged_job_id = job_id_pair.JobIdPair(job_ids[0][0], job_ids[1][0])
-            if (not self._throughputs_mask[merged_job_id][worker_type] and
-                not job_ids[0] in self._jobs_to_profile[worker_type] and
-                not job_ids[1] in self._jobs_to_profile[worker_type]):
+            if (not self._throughputs_mask[merged_job_id][worker_type]):
                 self._job_pairs_to_profile[worker_type].add(merged_job_id)
                 self._jobs_to_profile[worker_type].add(job_ids[0])
                 self._jobs_to_profile[worker_type].add(job_ids[1])
                 unscheduled_jobs.remove(job_ids[0])
                 unscheduled_jobs.remove(job_ids[1])
+            elif merged_job_id in seen_job_pairs:
+                break
+            seen_job_pairs.add(merged_job_id)
 
         """
         if job_id is not None:
