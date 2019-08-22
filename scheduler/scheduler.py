@@ -589,7 +589,20 @@ class Scheduler:
         scheduled_jobs_on_worker_type = []
         for i in range(len(job_ids)):
             if x.value[i] > 0.9:
-                scheduled_jobs_on_worker_type.append((job_ids[i],
+                job_id = job_ids[i]
+
+                # Don't schedule jobs with 0 throughput.
+                if ((job_id.is_pair() and
+                    (self._throughputs[job_id][worker_type][0] <= 0 or
+                     self._throughputs[job_id][worker_type][1] <= 0)) or
+                    (not job_id.is_pair() and
+                     self._throughputs[job_id][worker_type] <= 0)):
+                        continue
+                if self._priorities[worker_type][job_id] == 0.0:
+                    print('WARNING: scheduling job %s with 0 priority' % (job_id))
+                assert(job_id not in already_scheduled_jobs_set)
+                already_scheduled_jobs_set.add(job_id)
+                scheduled_jobs_on_worker_type.append((job_id,
                                                       scale_factors[i]))
 
         return scheduled_jobs_on_worker_type
