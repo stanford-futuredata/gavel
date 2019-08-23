@@ -49,6 +49,26 @@ class Experiment:
                                                 self._average_jct,
                                                 self._utilization)
 
+def group_experiments_by_completion_algos(experiments):
+    exp_by_algo = {}
+    for experiment in experiments:
+        if experiment._completion_algo not in exp_by_algo:
+            exp_by_algo[experiment._completion_algo] = []
+        exp_by_algo[experiment._completion_algo].append(experiment)
+    return exp_by_algo
+
+
+            
+def plot(exp_by_algo, measurement_percentage,
+         completion_algos=['BMF', 'PMF', 'SVT']):
+    for completion_algo in completion_algos:
+        x = []
+        y = []
+        for experiment in exp_by_algo[completion_algo]:
+            x.append(experiment._lam)
+            y.append(experiment._average_jct)
+        plt.plot(x, y, label=completion_algo)
+
 def main(args):
     experiments = {}
     with open(args.log_file) as f:
@@ -79,6 +99,7 @@ def main(args):
             except ValueError as e:
                 print(e)
 
+    """
     if args.drop_prob:
         x = 'Drop Probability'
     else:
@@ -87,6 +108,7 @@ def main(args):
           '%s,Seed,Average JCT,Utilization' % (x))
     for experiment_id in sorted(list(experiments.keys())):
         print(experiments[experiment_id])
+    """
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
