@@ -502,11 +502,8 @@ class Scheduler:
                     (not job_id.is_pair() and
                      self._throughputs[job_id][worker_type] <= 0)):
                         continue
-                else:
-                    new_priority = 0
                 if self._priorities[worker_type][job_id] == 0.0:
                     print('WARNING: scheduling job %s with 0 priority' % (job_id))
-                already_scheduled_jobs_set.add(job_id)
                 for single_job_id in job_id.singletons():
                     already_scheduled_jobs_set.add(single_job_id)
                 scheduled_jobs_on_worker_type.append((job_id, 1))
