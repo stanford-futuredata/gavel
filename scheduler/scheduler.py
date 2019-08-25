@@ -464,7 +464,8 @@ class Scheduler:
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper_v2(self, worker_type,
-                                            already_scheduled_jobs):
+                                            already_scheduled_jobs,
+                                            num_workers_used=0):
         """Greedily selects the jobs to run in the next round by iterating
            through the job list in sorted priority order.
 
@@ -476,7 +477,7 @@ class Scheduler:
         """
         already_scheduled_jobs_set = set(already_scheduled_jobs)
         scheduled_jobs_on_worker_type = []
-        num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
+        num_workers = len(self._worker_type_to_worker_id_mapping[worker_type]) - num_workers_used
 
         entries = []
         for job_id in self._priorities[worker_type]:
@@ -552,19 +553,15 @@ class Scheduler:
 
         masks = []
         for single_job_id in single_job_ids:
-            mask = []
+            mask = np.zeros(len(job_ids))
             # Each mask has dimension (num_job_combinations,).
-            for job_id in job_ids:
+            for i, job_id in enumerate(job_ids):
                 if job_id in single_job_ids:
-                    if job_id != single_job_id:
-                        mask.append(0.0)
-                    else:
-                        mask.append(1.0)
+                    if job_id == single_job_id:
+                        mask[i] = 1.0
                 else:
-                    if not single_job_id.overlaps_with(job_id):
-                        mask.append(0.0)
-                    else:
-                        mask.append(1.0)
+                    if single_job_id.overlaps_with(job_id):
+                        mask[i] = 1.0
             masks.append(mask)
 
         priorities = np.array(priorities)
@@ -583,10 +580,8 @@ class Scheduler:
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='ECOS_BB')
 
-        if cvxprob.status != "optimal":
-            print('WARNING: Assignment of jobs to available workers in round not optimal!')
-
         scheduled_jobs_on_worker_type = []
+        num_workers_used = 0
         for i in range(len(job_ids)):
             if x.value[i] > 0.9:
                 job_id = job_ids[i]
@@ -604,6 +599,15 @@ class Scheduler:
                 already_scheduled_jobs_set.add(job_id)
                 scheduled_jobs_on_worker_type.append((job_id,
                                                       scale_factors[i]))
+                num_workers_used += scale_factors[i]
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Assignment of jobs to available workers in round '
+                  'not optimal (cvxprob.status=%s)!' % cvxprob.status)
+            # Fall back to _v2 scheduler, when assignment is non-optimal.
+            scheduled_jobs_on_worker_type.extend(self._schedule_jobs_on_workers_helper_v2(
+                worker_type, list(already_scheduled_jobs),
+                num_workers_used=num_workers_used))
 
         return scheduled_jobs_on_worker_type
 
