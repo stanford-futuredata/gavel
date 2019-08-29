@@ -434,13 +434,12 @@ class FIFOPolicy(Policy):
                         queue.sort()
                 if len(queue) > 0:
                     job_id_to_schedule = queue.pop(0)
-                    if (scale_factors[job_id_to_schedule] >
+                    if (scale_factors[job_id_to_schedule] <=
                             available_workers[worker_type]):
-                        continue
-                    worker_type = self._allocation[scheduled_job_id]
-                    self._allocation[job_id_to_schedule] = worker_type
-                    available_workers[worker_type] -= \
-                        scale_factors[job_id_to_schedule]
+                        worker_type = self._allocation[scheduled_job_id]
+                        self._allocation[job_id_to_schedule] = worker_type
+                        available_workers[worker_type] -= \
+                            scale_factors[job_id_to_schedule]
                 del self._allocation[scheduled_job_id]
                 del self._scale_factors[scheduled_job_id]
             else:
