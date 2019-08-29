@@ -36,8 +36,12 @@ def main(args):
                                 emulate=True,
                                 seed=args.seed)
 
-    cluster_spec = {key_value.split(':')[0]: int(key_value.split(':')[1])
-                    for key_value in args.cluster_spec.split(',')}
+    num_gpus = args.cluster_spec.split(':')
+    cluster_spec = {
+            'v100': int(num_gpus[0]),
+            'p100': int(num_gpus[1]),
+            'k80': int(num_gpus[2]),
+        }
     sched.emulate(cluster_spec, arrival_times, jobs,
                   ideal=args.ideal,
                   debug=args.debug)
@@ -62,9 +66,9 @@ if __name__=='__main__':
     parser.add_argument('--throughputs_file', type=str,
                         default='oracle_throughputs.json',
                         help='Oracle throughputs file')
-    parser.add_argument('-c', '--cluster_spec', type=str,
-                        default='k80:4,p100:4,v100:4',
-                        help='Cluster specification')
+    parser.add_argument('-c', '--cluster_spec', type=str, default='25:0:0',
+                        help=('Cluster specification in the form of '
+                              '#v100s:#p100s:#k80s'))
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')
     parser.add_argument('-d', '--debug', action='store_true', default=False,

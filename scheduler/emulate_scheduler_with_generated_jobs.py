@@ -75,9 +75,6 @@ def main(args):
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
             description='Emulate scheduler with generated jobs')
-
-    parser.add_argument('-g', '--gpus', type=int, default=25,
-                        help='Number of v100 GPUs')
     parser.add_argument('-c', '--cluster_spec', type=str, default='25:0:0',
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))

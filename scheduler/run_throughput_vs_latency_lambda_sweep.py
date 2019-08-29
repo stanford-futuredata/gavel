@@ -317,7 +317,7 @@ if __name__=='__main__':
     fixed_range = parser.add_argument_group('Sweep over fixed range')
 
     parser.add_argument('-g', '--gpus', type=int, default=25,
-                        help='Number of v100 GPUs')
+                        help='Total number of GPUs')
     parser.add_argument('-l', '--log-dir', type=str, default='logs',
                         help='Log directory')
     parser.add_argument('-s', '--window-start', type=int, default=0,
