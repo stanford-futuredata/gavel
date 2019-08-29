@@ -59,9 +59,9 @@ if __name__=='__main__':
                         help='Scheduler policy')
     parser.add_argument('-i', '--ideal', action='store_true',
                         help='Use allocation returned by policy ideally')
-    parser.add_argument('-f', '--throughputs_file', type=str,
-                        default='combined_throughputs.json',
-                        help='Throughputs file')
+    parser.add_argument('--throughputs_file', type=str,
+                        default='oracle_throughputs.json',
+                        help='Oracle throughputs file')
     parser.add_argument('-c', '--cluster_spec', type=str,
                         default='k80:4,p100:4,v100:4',
                         help='Cluster specification')

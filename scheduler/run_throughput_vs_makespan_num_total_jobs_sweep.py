@@ -85,7 +85,7 @@ def main(args):
         raise ValueError('If num_total_jobs range is not None, both '
                          'bounds must be specified.')
     schedule_in_rounds = True
-    throughputs_file = 'combined_throughputs.json'
+    throughputs_file = args.throughputs_file
     num_v100s = args.gpus
     policy_names = args.policies
     experiment_id = 0
@@ -198,6 +198,9 @@ if __name__=='__main__':
     parser.add_argument('-f', '--fixed-job-duration', type=int, default=None,
                         help=('If set, fixes the duration of all jobs to the '
                               'specified value (in seconds)'))
+    parser.add_argument('--throughputs_file', type=str,
+                        default='oracle_throughputs.json',
+                        help='Oracle throughputs file')
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     fixed_range.add_argument('-a', '--num-total-jobs-lower-bound', type=int,

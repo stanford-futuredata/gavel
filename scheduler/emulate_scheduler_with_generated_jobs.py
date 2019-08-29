@@ -44,7 +44,7 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
 
 def main(args):
     schedule_in_rounds = True
-    throughputs_file = 'combined_throughputs.json'
+    throughputs_file = args.throughputs_file
     num_gpus = args.cluster_spec.split(':')
     cluster_spec = {
             'v100': int(num_gpus[0]),
@@ -90,8 +90,7 @@ if __name__=='__main__':
                                  'max_min_fairness', 'max_min_fairness_perf',
                                  'max_min_fairness_packed'],
                         help='Policy')
-    parser.add_argument('--seed', type=int, nargs='+',
-                        default=0, help='Random seed')
+    parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
     parser.add_argument('-l', '--lam', type=float, required=True,
@@ -99,6 +98,9 @@ if __name__=='__main__':
     parser.add_argument('-f', '--fixed-job-duration', type=int, default=None,
                         help=('If set, fixes the duration of all jobs to the '
                               'specified value (in seconds)'))
+    parser.add_argument('--throughputs_file', type=str,
+                        default='oracle_throughputs.json',
+                        help='Oracle throughputs file')
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Verbose')
     parser.add_argument('-d', '--debug', action='store_true', default=False,
