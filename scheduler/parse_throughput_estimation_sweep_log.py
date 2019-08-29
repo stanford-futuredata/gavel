@@ -58,7 +58,7 @@ def group_experiments_by_completion_algos(experiments):
     return exp_by_algo
 
 
-            
+
 def plot(exp_by_algo, measurement_percentage,
          completion_algos=['BMF', 'PMF', 'SVT']):
     for completion_algo in completion_algos:
@@ -100,6 +100,49 @@ def main(args):
                 print(e)
 
     """
+    algo_wins = {}
+    all_lams = set()
+    all_seeds = set()
+    all_completion_algos = set()
+    experiment_index = {}
+    for experiment_id in experiments:
+        if experiments[experiment_id]._measurement_percentage == 1.0:
+            continue
+        all_lams.add(experiments[experiment_id]._lam)
+        all_seeds.add(experiments[experiment_id]._seed)
+        all_completion_algos.add(experiments[experiment_id]._completion_algo)
+
+    for lam in all_lams:
+        experiment_index[lam] = {}
+        for seed in all_seeds:
+            experiment_index[lam][seed] = {}
+            for completion_algo in all_completion_algos:
+                experiment_index[lam][seed][completion_algo] = None
+                for experiment_id in experiments:
+                    experiment = experiments[experiment_id]
+                    if (experiment._lam == lam and experiment._seed == seed and
+                        experiment._completion_algo == completion_algo):
+                        experiment_index[lam][seed][completion_algo] =\
+                                experiment
+    for lam in all_lams:
+        for seed in all_seeds:
+            results = []
+            best_algo = None
+            best_jct = float('inf')
+            for completion_algo in all_completion_algos:
+                experiment = experiment_index[lam][seed][completion_algo]
+                if experiment is None or experiment._average_jct is None:
+                    continue
+                elif best_algo is None or experiment._average_jct < best_jct:
+                    best_algo = completion_algo
+                    best_jct = experiment._average_jct
+            if best_algo is not None:
+                if best_algo not in algo_wins:
+                    algo_wins[best_algo] = 0
+                algo_wins[best_algo] += 1
+    import json
+    print(json.dumps(algo_wins, indent=4))
+    """
     if args.drop_prob:
         x = 'Drop Probability'
     else:
@@ -108,7 +151,6 @@ def main(args):
           '%s,Seed,Average JCT,Utilization' % (x))
     for experiment_id in sorted(list(experiments.keys())):
         print(experiments[experiment_id])
-    """
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(

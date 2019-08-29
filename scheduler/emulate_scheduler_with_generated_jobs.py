@@ -50,7 +50,7 @@ def emulate(policy_name, schedule_in_rounds, predict_throughputs,
 
 def main(args):
     schedule_in_rounds = True
-    throughputs_file = 'combined_throughputs.json'
+    throughputs_file = args.throughputs_file
     num_gpus = args.cluster_spec.split(':')
     cluster_spec = {
             'v100': int(num_gpus[0]),
@@ -117,6 +117,9 @@ if __name__=='__main__':
     parser.add_argument('--measurement_percentage', type=float, default=0.5,
                         help=('Percentage of job pairs to actually measure '
                               'when a new job arrives'))
+    parser.add_argument('--throughputs_file', type=str,
+                        default='combined_throughputs.json',
+                        help='Throughputs file')
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Verbose')
     parser.add_argument('-d', '--debug', action='store_true', default=False,

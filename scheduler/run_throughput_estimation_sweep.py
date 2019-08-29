@@ -94,22 +94,17 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
 
     return average_jct, utilization
 
-def emulate_with_timeout_helper(args):
-    emulate_with_timeout(*args)
-
 def main(args):
     if args.window_start >= args.window_end:
         raise ValueError('Window start must be < than window end.')
 
     schedule_in_rounds = True
-    throughputs_file = 'combined_throughputs.json'
+    throughputs_file = args.throughputs_file
     num_v100s = args.gpus
     policy_names = args.policies
     job_range = (args.window_start, args.window_end)
     experiment_id = 0
-    measurement_percentages =\
-        np.linspace(0.0, 1.0, num=args.num_measurement_percentages,
-                    endpoint=True)[1:]
+    measurement_percentages = args.measurement_percentages
     throughputs = list(np.linspace(args.throughput_lower_bound,
                                    args.throughput_upper_bound,
                                    num=args.num_data_points))
@@ -155,7 +150,7 @@ def main(args):
             if not os.path.isdir(raw_logs_policy_subdir):
                 os.mkdir(raw_logs_policy_subdir)
 
-            for completion_algo in args.completion_algorithms:
+            for i, completion_algo in enumerate(args.completion_algorithms):
                 completion_algo_str =\
                     'completion_algo=%s' % (completion_algo)
                 raw_logs_completion_algo_subdir =\
@@ -165,6 +160,8 @@ def main(args):
                     os.mkdir(raw_logs_completion_algo_subdir)
 
                 for measurement_percentage in measurement_percentages:
+                    if i > 0 and measurement_percentage == 1.0:
+                        continue
                     measurement_percentage_str =\
                         'measurement_percentage=%f' % (measurement_percentage)
                     raw_logs_measurement_percentage_subdir =\
@@ -212,8 +209,11 @@ def main(args):
                                                           len(all_args_list)))
         all_args_list = sorted(all_args_list, key=lambda x: (x[5], x[13]),
                                reverse=True)
+        results = []
         with multiprocessing.Pool(args.processes) as p:
-            p.map(emulate_with_timeout_helper, all_args_list)
+            for args_list in all_args_list:
+                results.append(p.apply_async(emulate_with_timeout, args_list))
+            results = [result.get() for result in results]
     else:
         raise ValueError('No work to be done!')
 
@@ -265,9 +265,12 @@ if __name__=='__main__':
                         default=['SVT', 'NN', 'PMF', 'BMF'],
                         help=('Matrix completion algorithm for throughput '
                               'prediction'))
-    parser.add_argument('--num_measurement_percentages', type=int, default=10,
-                        help=('Number job pair measurement percentages '
+    parser.add_argument('--measurement_percentages', type=float, nargs='+',
+                        help=('List of job pair measurement percentages '
                               'to sweep.'))
+    parser.add_argument('--throughputs_file', type=str,
+                        default='combined_throughputs.json',
+                        help='Throughputs file')
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     args = parser.parse_args()

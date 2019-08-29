@@ -1,7 +1,7 @@
 from job_template import JobTemplate
 
 # TODO: Figure out a better way of toggling between the two tables.
-THROUGHPUT_ESTIMATION = False
+THROUGHPUT_ESTIMATION = True
 
 if THROUGHPUT_ESTIMATION:
     JobTable = [

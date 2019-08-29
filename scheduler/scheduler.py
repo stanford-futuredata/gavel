@@ -1618,7 +1618,7 @@ class Scheduler:
         """
 
         # Predict the remaining co-located throughputs.
-        if np.min(mask) == 0:
+        if num_jobs > 0 and np.min(mask) == 0:
             predicted_throughputs =\
                 self._run_matrix_completion_algorithm(completion_algo,
                                                       throughputs_matrix,
@@ -1639,6 +1639,7 @@ class Scheduler:
                         [max(0, predicted_throughputs[i][j]),
                          max(0, predicted_throughputs[j][i])]
 
+        """
         print('Predicted throughputs:')
         for x in sorted(list(self._throughputs.keys())):
             if not x.is_pair() or x[0] == x[1]:
@@ -1664,6 +1665,7 @@ class Scheduler:
                                                       self._throughputs[x][worker_type][1],
                                                       oracle_throughput[0] / self._oracle_throughputs[worker_type][job_types[0]]['null'],
                                                       oracle_throughput[1] / self._oracle_throughputs[worker_type][job_types[1]]['null']))
+        """
         print('RMSE: %f' % (self._compute_rmse(worker_type, throughputs_matrix,
                                                mask)))
         print('')
