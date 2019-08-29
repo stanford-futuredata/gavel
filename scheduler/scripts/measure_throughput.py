@@ -36,155 +36,149 @@ class Job:
         return self._needs_data_dir
 
 job_table = [
+    Job(model='ResNet-50 (batch size 16)',
+        command=('cd %s/gpusched/workloads/pytorch/'
+                 'image_classification/imagenet && python '
+                 'main.py -j 4 -a resnet50 -b 16 %s/data/imagenet/pytorch '
+                 '--num_minibatches'),
+        num_steps=500),
+    Job(model='ResNet-50 (batch size 32)',
+        command=('cd %s/gpusched/workloads/pytorch/'
+                 'image_classification/imagenet && python '
+                 'main.py -j 4 -a resnet50 -b 32 %s/data/imagenet/pytorch '
+                 '--num_minibatches'),
+        num_steps=500),
+    Job(model='ResNet-50 (batch size 64)',
+        command=('cd %s/gpusched/workloads/pytorch/'
+                 'image_classification/imagenet && python '
+                 'main.py -j 4 -a resnet50 -b 64 %s/data/imagenet/pytorch '
+                 '--num_minibatches'),
+        num_steps=500),
+    Job(model='ResNet-50 (batch size 128)',
+        command=('cd %s/gpusched/workloads/pytorch/'
+                 'image_classification/imagenet && python '
+                 'main.py -j 4 -a resnet50 -b 128 %s/data/imagenet/pytorch '
+                 '--num_minibatches'),
+        num_steps=500),
     Job(model='ResNet-18 (batch size 16)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/cifar10 && python3 '
+                 'image_classification/cifar10 && python '
                  'main.py --data_dir=%s/data/cifar10 --batch_size 16 '
                  '--num_steps'),
         num_steps=5000),
     Job(model='ResNet-18 (batch size 32)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/cifar10 && python3 '
+                 'image_classification/cifar10 && python '
                  'main.py --data_dir=%s/data/cifar10 --batch_size 32 '
                  '--num_steps'),
         num_steps=5000),
     Job(model='ResNet-18 (batch size 64)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/cifar10 && python3 '
+                 'image_classification/cifar10 && python '
                  'main.py --data_dir=%s/data/cifar10 --batch_size 64 '
                  '--num_steps'),
         num_steps=5000),
     Job(model='ResNet-18 (batch size 128)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/cifar10 && python3 '
+                 'image_classification/cifar10 && python '
                  'main.py --data_dir=%s/data/cifar10 --batch_size 128 '
                  '--num_steps'),
         num_steps=5000),
     Job(model='ResNet-18 (batch size 256)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/cifar10 && python3 '
+                 'image_classification/cifar10 && python '
                  'main.py --data_dir=%s/data/cifar10 --batch_size 256 '
                  '--num_steps'),
         num_steps=5000),
-    Job(model='ResNet-50 (batch size 16)',
-        command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/imagenet && python3 '
-                 'main.py -j 4 -a resnet50 -b 16 %s/data/imagenet '
-                 '--num_minibatches'),
-        num_steps=500),
-    Job(model='ResNet-50 (batch size 32)',
-        command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/imagenet && python3 '
-                 'main.py -j 4 -a resnet50 -b 32 %s/data/imagenet '
-                 '--num_minibatches'),
-        num_steps=500),
-    Job(model='ResNet-50 (batch size 64)',
-        command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/imagenet && python3 '
-                 'main.py -j 4 -a resnet50 -b 64 %s/data/imagenet '
-                 '--num_minibatches'),
-        num_steps=500),
-    Job(model='ResNet-50 (batch size 128)',
-        command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/imagenet && python3 '
-                 'main.py -j 4 -a resnet50 -b 128 %s/data/imagenet '
-                 '--num_minibatches'),
-        num_steps=500),
-    Job(model='ResNet-50 (batch size 256)',
-        command=('cd %s/gpusched/workloads/pytorch/'
-                 'image_classification/imagenet && python3 '
-                 'main.py -j 4 -a resnet50 -b 256 %s/data/imagenet '
-                 '--num_minibatches'),
-        num_steps=500),
     Job(model='Transformer (batch size 16)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'translation && python3 train.py -data '
+                 'translation && python train.py -data '
                  '%s/data/translation/multi30k.atok.low.pt -batch_size 16 '
                  '-proj_share_weight -step'),
         num_steps=100),
     Job(model='Transformer (batch size 32)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'translation && python3 train.py -data '
+                 'translation && python train.py -data '
                  '%s/data/translation/multi30k.atok.low.pt -batch_size 32 '
                  '-proj_share_weight -step'),
         num_steps=100),
     Job(model='Transformer (batch size 64)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'translation && python3 train.py -data '
+                 'translation && python train.py -data '
                  '%s/data/translation/multi30k.atok.low.pt -batch_size 64 '
                  '-proj_share_weight -step'),
         num_steps=100),
     Job(model='Transformer (batch size 128)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'translation && python3 train.py -data '
+                 'translation && python train.py -data '
                  '%s/data/translation/multi30k.atok.low.pt -batch_size 128 '
                  '-proj_share_weight -step'),
         num_steps=100),
     Job(model='Transformer (batch size 256)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'translation && python3 train.py -data '
+                 'translation && python train.py -data '
                  '%s/data/translation/multi30k.atok.low.pt -batch_size 256 '
                  '-proj_share_weight -step'),
         num_steps=100),
     Job(model='A3C',
         command=('cd %s/gpusched/workloads/pytorch/rl && '
-                 'python3 main.py --env PongDeterministic-v4 --workers 4 '
+                 'python main.py --env PongDeterministic-v4 --workers 4 '
                  '--amsgrad True --max-steps'),
         num_steps=2000,
         needs_data_dir=False),
     Job(model='LM (batch size 5)',
         command=('cd %s/gpusched/workloads/pytorch/'
                  'language_modeling && python main.py --cuda --data '
-                 '%s/data/wikitext2 --batch_size 5 --steps'),
+                 '%s/data/wikitext-2 --batch_size 5 --steps'),
         num_steps=1000),
     Job(model='LM (batch size 10)',
         command=('cd %s/gpusched/workloads/pytorch/'
                  'language_modeling && python main.py --cuda --data '
-                 '%s/data/wikitext2 --batch_size 10 --steps'),
+                 '%s/data/wikitext-2 --batch_size 10 --steps'),
         num_steps=1000),
     Job(model='LM (batch size 20)',
         command=('cd %s/gpusched/workloads/pytorch/'
                  'language_modeling && python main.py --cuda --data '
-                 '%s/data/wikitext2 --batch_size 20 --steps'),
+                 '%s/data/wikitext-2 --batch_size 20 --steps'),
         num_steps=1000),
     Job(model='LM (batch size 40)',
         command=('cd %s/gpusched/workloads/pytorch/'
                  'language_modeling && python main.py --cuda --data '
-                 '%s/data/wikitext2 --batch_size 40 --steps'),
+                 '%s/data/wikitext-2 --batch_size 40 --steps'),
         num_steps=1000),
     Job(model='LM (batch size 80)',
         command=('cd %s/gpusched/workloads/pytorch/'
                  'language_modeling && python main.py --cuda --data '
-                 '%s/data/wikitext2 --batch_size 80 --steps'),
+                 '%s/data/wikitext-2 --batch_size 80 --steps'),
         num_steps=1000),
     Job(model='Recommendation (batch size 512)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'recommendation/scripts/ml-20m && python3 train.py '
+                 'recommendation/scripts/ml-20m && python train.py '
                  '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 512 -n '),
         num_steps=50),
     Job(model='Recommendation (batch size 1024)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'recommendation/scripts/ml-20m && python3 train.py '
+                 'recommendation/scripts/ml-20m && python train.py '
                  '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 1024 -n '),
         num_steps=50),
     Job(model='Recommendation (batch size 2048)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'recommendation/scripts/ml-20m && python3 train.py '
+                 'recommendation/scripts/ml-20m && python train.py '
                  '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 2048 -n '),
         num_steps=50),
     Job(model='Recommendation (batch size 4096)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'recommendation/scripts/ml-20m && python3 train.py '
+                 'recommendation/scripts/ml-20m && python train.py '
                  '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 4096 -n '),
         num_steps=50),
     Job(model='Recommendation (batch size 8192)',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'recommendation/scripts/ml-20m && python3 train.py '
+                 'recommendation/scripts/ml-20m && python train.py '
                  '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 8192 -n '),
         num_steps=50),
     Job(model='CycleGAN',
         command=('cd %s/gpusched/workloads/pytorch/'
-                 'cyclegan && python3 cyclegan.py --dataset_path '
+                 'cyclegan && python cyclegan.py --dataset_path '
                  '%s/data/monet2photo --decay_epoch 0 '
                  '--n_steps'),
         num_steps=500),
@@ -194,19 +188,19 @@ job_table = [
 job_table = [
     Job(model='ResNet-18',
         command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'image_classification/cifar10 && python3 '
+                 'image_classification/cifar10 && python '
                  'main.py --data_dir=/home/keshavsanthanam/data/cifar10 '
                  '--num_steps'),
         num_steps=4000),
     Job(model='ResNet-50',
         command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'image_classification/imagenet && python3 '
+                 'image_classification/imagenet && python '
                  'main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/ '
                  '--num_minibatches'),
         num_steps=300),
     Job(model='A3C',
         command=('cd /home/%s/gpusched/workloads/pytorch/rl && '
-                 'python3 main.py --env PongDeterministic-v4 --workers 4 '
+                 'python main.py --env PongDeterministic-v4 --workers 4 '
                  '--amsgrad True --max-steps'),
         num_steps=1000),
     Job(model='LM',
@@ -216,17 +210,17 @@ job_table = [
         num_steps=1000),
     Job(model='Recommendation',
         command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'recommendation/scripts/ml-20m && python3 train.py -n'),
+                 'recommendation/scripts/ml-20m && python train.py -n'),
         num_steps=100),
     Job(model='Transformer',
         command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'translation && python3 train.py -data '
+                 'translation && python train.py -data '
                  '/home/keshavsanthanam/data/translation/multi30k.atok.low.pt '
                  '-proj_share_weight -step'),
         num_steps=1000),
     Job(model='CycleGAN',
         command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'cyclegan && python3 cyclegan.py --dataset_path '
+                 'cyclegan && python cyclegan.py --dataset_path '
                  '/home/keshavsanthanam/data/monet2photo --decay_epoch 0 '
                  '--n_steps'),
         num_steps=1000),
@@ -356,6 +350,11 @@ def main(args):
             job1 = job_table[i]
             job2 = job_table[j]
 
+            if ('A3C' not in job1.model and 'A3C' not in job2.model and
+                'LM' not in job1.model and 'LM' not in job2.model and
+                'Transformer (batch size 16)' not in job1.model and
+                'Transformer (batch size 16)' not in job2.model):
+                continue
             if ((job1.model in throughputs and
                  job2.model in throughputs[job1.model]) or
                 (job2.model in throughputs and
@@ -412,7 +411,7 @@ if __name__=='__main__':
                         action='store_true', default=False,
                         help='Measure isolated throughputs')
     parser.add_argument('-r', '--run_dir', type=str,
-                        default='/lfs/1/keshav/workspace',
+                        default='/lfs/1/keshav2/workspace',
                         help='Directory to run from')
     args = parser.parse_args()
     main(args)
