@@ -12,7 +12,6 @@ import utils
 def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
             lam, seed, interval, jobs_to_complete, fixed_job_duration,
             generate_multi_gpu_jobs, debug):
-    print('seed=', seed, file=sys.stderr)
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
