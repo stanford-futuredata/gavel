@@ -15,7 +15,7 @@ import utils
 
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
-                         fixed_job_duration, num_total_jobs,
+                         fixed_job_duration, generate_multi_gpu_jobs, num_total_jobs,
                          log_dir, timeout, verbose):
     num_total_jobs_str = 'num_total_jobs=%d.log' % (num_total_jobs)
     with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
@@ -44,6 +44,7 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
             if timeout is None:
                 sched.emulate(cluster_spec, lam=lam,
                               fixed_job_duration=fixed_job_duration,
+                              generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                               num_total_jobs=num_total_jobs)
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
@@ -55,6 +56,7 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                                  kwargs={
                                     'lam': lam,
                                     'fixed_job_duration': fixed_job_duration,
+                                    'generate_multi_gpu_jobs': generate_multi_gpu_jobs,
                                     'num_total_jobs': num_total_jobs
                                  })
                     average_jct = sched.get_average_jct()
@@ -149,6 +151,7 @@ def main(args):
                                           throughputs_file, cluster_spec,
                                           lam, seed, args.interval,
                                           args.fixed_job_duration,
+                                          args.generate_multi_gpu_jobs,
                                           num_total_jobs,
                                           raw_logs_seed_subdir,
                                           args.timeout, args.verbose))
@@ -201,6 +204,9 @@ if __name__=='__main__':
     parser.add_argument('--throughputs_file', type=str,
                         default='oracle_throughputs.json',
                         help='Oracle throughputs file')
+    parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true', default=False,
+                        help=('If set, generates multi-GPU jobs according to '
+                              'a pre-defined distribution'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     fixed_range.add_argument('-a', '--num-total-jobs-lower-bound', type=int,

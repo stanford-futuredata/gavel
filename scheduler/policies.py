@@ -341,6 +341,7 @@ class FIFOPolicy(Policy):
         self._name = 'FIFO'
         self._mode = mode
         self._allocation = {}
+        self._scale_factors = {}
         if mode == 'base':
             self._rng = random.Random()
             if seed is not None:
@@ -348,7 +349,7 @@ class FIFOPolicy(Policy):
         elif mode == 'packing':
             self._packing_threshold = packing_threshold
 
-    def _pack(self, queue, throughputs):
+    def _pack(self, queue, throughputs, scale_factors):
         while len(queue) > 0:
             # Only make a packing decision if combined normalized
             # throughput would provide a signficant gain.
@@ -362,6 +363,9 @@ class FIFOPolicy(Policy):
                 assert scheduled_job_id != job_id_to_schedule
                 assert scheduled_job_id in throughputs
                 if scheduled_job_id.is_pair():
+                    continue
+                if (scale_factors[scheduled_job_id] !=\
+                        scale_factors[job_id_to_schedule]):
                     continue
                 worker_type = self._allocation[scheduled_job_id]
                 merged_job_id = \
@@ -396,9 +400,13 @@ class FIFOPolicy(Policy):
                 self._allocation[merged_job_id] = worker_type
 
 
-    def get_allocation(self, throughputs, cluster_spec):
+    def get_allocation(self, throughputs, scale_factors, cluster_spec):
         available_workers = copy.deepcopy(cluster_spec)
         queue = []
+
+        # Update the internal representation of scale_factors.
+        for job_id in scale_factors:
+            self._scale_factors[job_id] = scale_factors[job_id]
 
         # Reset the allocation when running in performance-aware mode.
         if self._mode != 'base':
@@ -426,12 +434,19 @@ class FIFOPolicy(Policy):
                         queue.sort()
                 if len(queue) > 0:
                     job_id_to_schedule = queue.pop(0)
-                    worker_type = self._allocation[scheduled_job_id]
-                    self._allocation[job_id_to_schedule] = worker_type
-                    available_workers[worker_type] -= 1
+                    if (scale_factors[job_id_to_schedule] <=
+                            available_workers[worker_type]):
+                        worker_type = self._allocation[scheduled_job_id]
+                        self._allocation[job_id_to_schedule] = worker_type
+                        available_workers[worker_type] -= \
+                            scale_factors[job_id_to_schedule]
                 del self._allocation[scheduled_job_id]
+                del self._scale_factors[scheduled_job_id]
             else:
-                available_workers[worker_type] -= 1
+                # Job has not completed, subtract its allocated workers
+                # from available_workers.
+                available_workers[worker_type] -= \
+                    scale_factors[scheduled_job_id]
 
         # Find all available workers.
         available_worker_types = []
@@ -443,28 +458,38 @@ class FIFOPolicy(Policy):
         # Allocate resources to as many jobs as possible.
         while len(queue) > 0 and len(available_worker_types) > 0:
             job_id_to_schedule = queue.pop(0)
+            scale_factor = scale_factors[job_id_to_schedule]
+            available_worker_types_with_scale_factor = []
+            original_available_worker_types_mapping = []
+            for i, worker_type in enumerate(available_worker_types):
+                if available_workers[worker_type] >= scale_factor:
+                    available_worker_types_with_scale_factor.append(worker_type)
+                    original_available_worker_types_mapping.append(i)
+            if len(available_worker_types_with_scale_factor) == 0:
+                break
             if self._mode == 'base':
-                worker_type_idx = \
-                        self._rng.randrange(len(available_worker_types))
+                worker_type_idx = self._rng.randrange(
+                        len(available_worker_types_with_scale_factor))
             else:
                 # Find the worker_type with best performance for this job.
                 worker_type = None
                 worker_type_idx = None
                 max_throughput = -1
-                for i, x in enumerate(available_worker_types):
+                for i, x in enumerate(available_worker_types_with_scale_factor):
                     throughput = throughputs[job_id_to_schedule][x]
                     if throughput > max_throughput:
                         max_throughput = throughput
                         worker_type = x
                         worker_type_idx = i
-            worker_type = available_worker_types[worker_type_idx]
             self._allocation[job_id_to_schedule] = worker_type
-            available_workers[worker_type] -= 1
+            available_workers[worker_type] -= scale_factors[job_id_to_schedule]
             if available_workers[worker_type] == 0:
+                worker_type_idx =\
+                    original_available_worker_types_mapping[worker_type_idx]
                 available_worker_types.pop(worker_type_idx)
 
         if self._mode == 'packing':
-            self._pack(queue, throughputs)
+            self._pack(queue, throughputs, scale_factors)
 
         # Construct output allocation.
         final_allocation = {}
@@ -482,8 +507,9 @@ class FIFOPolicyWithPerf(Policy):
         self._packing = packing
         self._policy = FIFOPolicy(mode='perf')
 
-    def get_allocation(self, throughputs, cluster_spec):
-        return self._policy.get_allocation(throughputs, cluster_spec)
+    def get_allocation(self, throughputs, scale_factors, cluster_spec):
+        return self._policy.get_allocation(throughputs, scale_factors,
+                                           cluster_spec)
 
 class FIFOPolicyWithPacking(PolicyWithPacking):
     def __init__(self, packing_threshold=1.5):
@@ -491,5 +517,6 @@ class FIFOPolicyWithPacking(PolicyWithPacking):
         self._policy = FIFOPolicy(mode='packing',
                                   packing_threshold=packing_threshold)
 
-    def get_allocation(self, throughputs, cluster_spec):
-        return self._policy.get_allocation(throughputs, cluster_spec)
+    def get_allocation(self, throughputs, scale_factors, cluster_spec):
+        return self._policy.get_allocation(throughputs, scale_factors,
+                                           cluster_spec)

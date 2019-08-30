@@ -49,8 +49,8 @@ cutoff_throughputs = {
 
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
-                         jobs_to_complete, fixed_job_duration, log_dir, timeout,
-                         verbose):
+                         jobs_to_complete, fixed_job_duration, generate_multi_gpu_jobs,
+                         log_dir, timeout, verbose):
     lam_str = 'lambda=%f.log' % (lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stdout(f):
@@ -78,7 +78,8 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
             if timeout is None:
                 sched.emulate(cluster_spec, lam=lam,
                               jobs_to_complete=jobs_to_complete,
-                              fixed_job_duration=fixed_job_duration)
+                              fixed_job_duration=fixed_job_duration,
+                              generate_multi_gpu_jobs=generate_multi_gpu_jobs)
                 average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
@@ -89,6 +90,7 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                                     'lam': lam,
                                     'jobs_to_complete': jobs_to_complete,
                                     'fixed_job_duration': fixed_job_duration,
+                                    'generate_multi_gpu_jobs': generate_multi_gpu_jobs,
                                  })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -107,9 +109,10 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
 
     return average_jct, utilization
 
-def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
+def run_automatic_sweep(experiment_id, policy_name, schedule_in_rounds, throughputs_file,
                         cluster_spec, seed, interval, jobs_to_complete,
-                        fixed_job_duration, log_dir, timeout, verbose):
+                        fixed_job_duration, generate_multi_gpu_jobs, log_dir, timeout,
+                        verbose):
     all_lams = []
     average_jcts = []
     utilizations = []
@@ -119,12 +122,12 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
     while True:
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(policy_name,
+                emulate_with_timeout(experiment_id, policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration, log_dir, timeout,
-                                     verbose)
+                                     fixed_job_duration, generate_multi_gpu_jobs,
+                                     log_dir, timeout, verbose)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -138,12 +141,12 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
     for lam in lams:
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(policy_name,
+                emulate_with_timeout(experiment_id, policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration, log_dir, timeout,
-                                     verbose)
+                                     fixed_job_duration, generate_multi_gpu_jobs, log_dir,
+                                     timeout, verbose)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -163,8 +166,8 @@ def run_automatic_sweep(policy_name, schedule_in_rounds, throughputs_file,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration, log_dir, timeout,
-                                     verbose)
+                                     fixed_job_duration, generate_multi_gpu_jobs, log_dir,
+                                     timeout, verbose)
         average_jcts.append(average_jct)
         utilizations.append(utilization)
         if np.max(average_jcts) / np.min(average_jcts) >= 10:
@@ -254,6 +257,7 @@ def main(args):
                                           seed, args.interval,
                                           jobs_to_complete,
                                           args.fixed_job_duration,
+                                          args.generate_multi_gpu_jobs,
                                           raw_logs_seed_subdir,
                                           args.timeout, args.verbose))
                     experiment_id += 1
@@ -288,6 +292,7 @@ def main(args):
                                               lam, seed, args.interval,
                                               jobs_to_complete,
                                               args.fixed_job_duration,
+                                              args.generate_multi_gpu_jobs,
                                               raw_logs_seed_subdir,
                                               args.timeout, args.verbose))
                         experiment_id += 1
@@ -349,6 +354,9 @@ if __name__=='__main__':
     parser.add_argument('--throughputs_file', type=str,
                         default='oracle_throughputs.json',
                         help='Oracle throughputs file')
+    parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true', default=False,
+                        help=('If set, generates multi-GPU jobs according to '
+                              'a pre-defined distribution'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,

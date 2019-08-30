@@ -475,7 +475,9 @@ class Scheduler:
         """
         already_scheduled_jobs_set = set(already_scheduled_jobs)
         scheduled_jobs_on_worker_type = []
-        num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
+        num_workers = len(
+            self._worker_type_to_worker_id_mapping[worker_type])
+        num_workers_left = num_workers
 
         entries = []
         for job_id in self._priorities[worker_type]:
@@ -488,7 +490,7 @@ class Scheduler:
                                   reverse=True)
 
         for job_id, *_ in sorted_job_queue:
-            if len(scheduled_jobs_on_worker_type) == num_workers:
+            if num_workers_left == 0:
                 break
             # Don't schedule jobs that have already been scheduled.
             if (job_id not in already_scheduled_jobs_set and
@@ -503,9 +505,27 @@ class Scheduler:
                      self._throughputs[job_id][worker_type] <= 0) or
                     self._priorities[worker_type][job_id] <= 0.0):
                         continue
+
+                # Make sure job fits in remanining number of workers.
+                # If not, move onto next job.
+                if job_id.is_pair():
+                    scale_factor = \
+                        self._jobs[job_id.singletons()[0]].scale_factor
+                    other_scale_factor = \
+                        self._jobs[job_id.singletons()[1]].scale_factor
+                    # Only pack jobs with the same scale_factor.
+                    if scale_factor != other_scale_factor:
+                        continue
+                else:
+                    scale_factor = self._jobs[job_id].scale_factor
+                if scale_factor > num_workers_left:
+                    continue
+                num_workers_left -= scale_factor
+
                 for single_job_id in job_id.singletons():
                     already_scheduled_jobs_set.add(single_job_id)
-                scheduled_jobs_on_worker_type.append((job_id, 1))
+                scheduled_jobs_on_worker_type.append((job_id,
+                                                      scale_factor))
 
         return scheduled_jobs_on_worker_type
 
@@ -542,12 +562,7 @@ class Scheduler:
             scheduled_jobs_on_worker_type = \
                     self._schedule_jobs_on_workers_helper_v2(
                             worker_type, already_scheduled_jobs)
-            """
-            # TODO: Return to this when we have a viable solution for packing.
-            scheduled_jobs_on_worker_type = \
-                self._schedule_jobs_on_workers_helper(worker_type,
-                                                      already_scheduled_jobs)
-            """
+
             for (job_id, scale_factor) in scheduled_jobs_on_worker_type:
                 # Make sure a job is only scheduled on a single worker_type in
                 # a given round.
@@ -581,12 +596,12 @@ class Scheduler:
                 for x in worker_types:
                     allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
                 print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
-                       'Worker type: %s\tWorker ID: %d\t'
+                       'Worker type: %s\tWorker ID(s): %s\t'
                        'Priority: %f\tDeficit: %f\t'
                        'Allocation: %s') % (self.get_current_timestamp(),
                                            job_id, worker_type,
-                                           worker_ids[worker_id_ptrs[0]],
-                                           # tuple([worker_ids[i] for i in worker_id_ptrs]),
+                                           ",".join(["%d" % worker_ids[i]
+                                                     for i in worker_id_ptrs]),
                                            self._priorities[worker_type][job_id],
                                            self._deficits[worker_type][job_id],
                                            allocation_str))
@@ -760,7 +775,8 @@ class Scheduler:
            to the specified rate parameter."""
         return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
-    def _generate_job(self, fixed_job_duration=None, run_dir='/tmp'):
+    def _generate_job(self, fixed_job_duration=None, generate_multi_gpu_jobs=False,
+                      run_dir='/tmp'):
         """Generates a new job for emulation."""
         job_template = self._job_generator.choice(JobTable)
         job_type = job_template.model
@@ -776,6 +792,15 @@ class Scheduler:
             command = job_template.command % (run_dir, run_dir)
         else:
             command = job_template.command % (run_dir)
+        scale_factor = 1
+        if generate_multi_gpu_jobs:  # Copies Philly distribution.
+            r = self._job_generator.uniform(0, 1)
+            if 0.8 <= r <= 0.85:
+                scale_factor = 2
+            elif 0.85 <= r <= 0.95:
+                scale_factor = 4
+            elif 0.95 <= r:
+                scale_factor = 8
 
         job = Job(job_id=None,
                   job_type=job_type,
@@ -783,14 +808,14 @@ class Scheduler:
                   num_steps_arg=job_template.num_steps_arg,
                   total_steps=num_steps,
                   duration=None,
-                  scale_factor=1)
+                  scale_factor=scale_factor)
 
         return job
 
     def emulate(self, cluster_spec, arrival_times=None, jobs=None,
                 ideal=False, lam=None, jobs_to_complete=None,
                 measurement_window=None, fixed_job_duration=None,
-                num_total_jobs=None, debug=False):
+                num_total_jobs=None, generate_multi_gpu_jobs=False, debug=False):
         """Emulates the scheduler execution.
 
            Emulation can be performed using a trace or with continuously
@@ -820,6 +845,8 @@ class Scheduler:
             fixed_job_duration: If set, all generated jobs will have this
                                 duration if run exclusively on a v100.
             num_total_jobs: If set, only `num_total_jobs` jobs will be generated.
+            generate_multi_gpu_jobs: If set, some jobs will have `scale_factor` greater than
+                          1, according to a pre-defined distribution.
             Returns:
                 If `measurement_window` is specified, returns the jobs
                 collected in the window. Otherwise returns None.
@@ -1012,7 +1039,8 @@ class Scheduler:
                     if num_total_jobs is not None:
                         if num_jobs_generated > num_total_jobs:
                             break
-                    job = self._generate_job(fixed_job_duration=fixed_job_duration)
+                    job = self._generate_job(fixed_job_duration=fixed_job_duration,
+                                             generate_multi_gpu_jobs=generate_multi_gpu_jobs)
                     num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
@@ -1301,6 +1329,13 @@ class Scheduler:
                 for job_id in self._jobs}
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, num_steps_remaining, self._cluster_spec)
+        elif self._policy.name.startswith("FIFO"):
+            scale_factors = {
+                job_id: self._jobs[job_id].scale_factor
+                for job_id in self._jobs
+            }
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, scale_factors, self._cluster_spec)
         else:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, self._cluster_spec)
@@ -1775,21 +1810,24 @@ class Scheduler:
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
-                    self._running_jobs.remove(single_job_id)
-                    self._steps_run_so_far[single_job_id][worker_type] += \
-                            num_steps
-                    self._total_steps_run[single_job_id] += num_steps
-                    if (self._total_steps_run[single_job_id] <
-                         self._jobs[single_job_id].total_steps):
-                        if not self._schedule_in_rounds:
-                            self._add_to_queue(single_job_id)
-                    else:
-                        finish_time = \
-                                self._per_job_latest_timestamps[single_job_id]
-                        print(('%s]\t[Job succeeded]\t'
-                               'Job ID: %s') % (finish_time,
-                                                single_job_id))
-                        to_remove.append(single_job_id)
+                    # Job may be multi-GPU, and have already been removed from
+                    # running_jobs by another worker.
+                    if single_job_id in self._running_jobs:
+                        self._running_jobs.remove(single_job_id)
+                        self._steps_run_so_far[single_job_id][worker_type] += \
+                                num_steps
+                        self._total_steps_run[single_job_id] += num_steps
+                        if (self._total_steps_run[single_job_id] <
+                             self._jobs[single_job_id].total_steps):
+                            if not self._schedule_in_rounds:
+                                self._add_to_queue(single_job_id)
+                        else:
+                            finish_time = \
+                                    self._per_job_latest_timestamps[single_job_id]
+                            print(('%s]\t[Job succeeded]\t'
+                                   'Job ID: %s') % (finish_time,
+                                                    single_job_id))
+                            to_remove.append(single_job_id)
                     if not self._emulate:
                         # NOTE: We update the timestamp before calling this
                         # function in emulation.
@@ -1806,8 +1844,14 @@ class Scheduler:
                 # If we just ran co-located jobs, use the maximum of the
                 # individual execution times.
                 max_execution_time = np.max(all_execution_times)
-                self._job_time_so_far[job_id][worker_type] += \
-                        max_execution_time
+                # Job may be multi-GPU, and have already been marked complete
+                # by another worker.
+                if job_id in self._job_time_so_far:
+                    self._job_time_so_far[job_id][worker_type] += \
+                            max_execution_time
+                # Worker times should be cumulative, even for multi-GPU jobs.
+                # That is, for a job that has a scale_factor s, total time
+                # consumed in this round should be (s * TIME_PER_ITERATION).
                 self._worker_time_so_far[worker_type] += max_execution_time
                 self._cumulative_worker_time_so_far[worker_id] += \
                         max_execution_time
