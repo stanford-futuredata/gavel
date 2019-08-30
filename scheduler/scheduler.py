@@ -562,12 +562,7 @@ class Scheduler:
             scheduled_jobs_on_worker_type = \
                     self._schedule_jobs_on_workers_helper_v2(
                             worker_type, already_scheduled_jobs)
-            """
-            # TODO: Return to this when we have a viable solution for packing.
-            scheduled_jobs_on_worker_type = \
-                self._schedule_jobs_on_workers_helper(worker_type,
-                                                      already_scheduled_jobs)
-            """
+
             for (job_id, scale_factor) in scheduled_jobs_on_worker_type:
                 # Make sure a job is only scheduled on a single worker_type in
                 # a given round.
@@ -1815,8 +1810,8 @@ class Scheduler:
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
-                        # Job may be multi-GPU, and have already been removed from
-                        # running_jobs by another worker.
+                    # Job may be multi-GPU, and have already been removed from
+                    # running_jobs by another worker.
                     if single_job_id in self._running_jobs:
                         self._running_jobs.remove(single_job_id)
                         self._steps_run_so_far[single_job_id][worker_type] += \
@@ -1854,6 +1849,9 @@ class Scheduler:
                 if job_id in self._job_time_so_far:
                     self._job_time_so_far[job_id][worker_type] += \
                             max_execution_time
+                # Worker times should be cumulative, even for multi-GPU jobs.
+                # That is, for a job that has a scale_factor s, total time
+                # consumed in this round should be (s * TIME_PER_ITERATION).
                 self._worker_time_so_far[worker_type] += max_execution_time
                 self._cumulative_worker_time_so_far[worker_id] += \
                         max_execution_time
