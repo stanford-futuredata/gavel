@@ -481,8 +481,6 @@ class FIFOPolicy(Policy):
                         max_throughput = throughput
                         worker_type = x
                         worker_type_idx = i
-            worker_type =\
-                available_worker_types_with_scale_factor[worker_type_idx]
             self._allocation[job_id_to_schedule] = worker_type
             available_workers[worker_type] -= scale_factors[job_id_to_schedule]
             if available_workers[worker_type] == 0:
