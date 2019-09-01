@@ -13,7 +13,7 @@ import scheduler
 import utils
 
 cutoff_throughputs = {
-    '1:0:0': {
+    '25:0:0': {
         'fifo': 0.8,
         'fifo_perf': 0.8,
         'fifo_packing': 0.8,
@@ -21,7 +21,7 @@ cutoff_throughputs = {
         'max_min_fairness_perf': 0.8,
         'max_min_fairness_packed': 1.2,
     },
-    '1:1:0': {
+    '12:12:0': {
         'fifo': 0.7,
         'fifo_perf': 0.7,
         'fifo_packing': 0.8,
@@ -29,7 +29,7 @@ cutoff_throughputs = {
         'max_min_fairness_perf': 0.6,
         'max_min_fairness_packed': 0.9,
     },
-    '2:1:0': {
+    '16:8:0': {
         'fifo': 0.7,
         'fifo_perf': 0.7,
         'fifo_packing': 0.75,
@@ -37,7 +37,7 @@ cutoff_throughputs = {
         'max_min_fairness_perf': 0.75,
         'max_min_fairness_packed': 1.0,
     },
-    '1:1:1': {
+    '8:8:8': {
         'fifo': 0.55,
         'fifo_perf': 0.55,
         'fifo_packing': 0.55,
@@ -197,7 +197,6 @@ def main(args):
         automatic_sweep = True
     schedule_in_rounds = True
     throughputs_file = args.throughputs_file
-    num_v100s = args.gpus
     policy_names = args.policies
     job_range = (args.window_start, args.window_end)
     experiment_id = 0
@@ -214,27 +213,21 @@ def main(args):
         jobs_to_complete.add(JobIdPair(i, None))
 
     all_args_list = []
-    for ratio_str in args.ratios:
-        ratio = {}
-        x = ratio_str.split(':')
-        if len(x) != 3:
-            raise ValueError('Invalid cluster ratio %s' % (ratio_str))
-        ratio = {
-            'v100': int(x[0]),
-            'p100': int(x[1]),
-            'k80': int(x[2])
-            }
-        cluster_spec = {}
-        total_gpu_fraction = sum([ratio[gpu_type] for gpu_type in ratio])
-        for gpu_type in ratio:
-            fraction = ratio[gpu_type] / total_gpu_fraction
-            cluster_spec[gpu_type] = int(fraction * num_v100s)
+    for cluster_spec_str in args.cluster_spec:
+        cluster_spec_str_split = cluster_spec_str.split(':')
+        if len(cluster_spec_str_split) != 3:
+            raise ValueError('Invalid cluster spec %s' % (cluster_spec_str))
+        cluster_spec = {
+            'v100': int(cluster_spec_str_split[0]),
+            'p100': int(cluster_spec_str_split[1]),
+            'k80': int(cluster_spec_str_split[2]),
+        }
 
-        cluster_spec_str = 'v100=%d.p100=%d.k80=%d' % (cluster_spec['v100'],
-                                                       cluster_spec['p100'],
-                                                       cluster_spec['k80'])
         raw_logs_cluster_spec_subdir = os.path.join(raw_logs_dir,
-                                                    cluster_spec_str)
+                                                    'v100=%d.p100=%d.k80=%d' % (
+                                                        cluster_spec['v100'],
+                                                        cluster_spec['p100'],
+                                                        cluster_spec['k80']))
         if not os.path.isdir(raw_logs_cluster_spec_subdir):
             os.mkdir(raw_logs_cluster_spec_subdir)
 
@@ -268,15 +261,15 @@ def main(args):
                 if throughputs[0] == 0.0:
                     throughputs = throughputs[1:]
                 for throughput in throughputs:
-                    if (ratio_str in cutoff_throughputs and
-                        policy_name in cutoff_throughputs[ratio_str]):
+                    if (cluster_spec_str in cutoff_throughputs and
+                        policy_name in cutoff_throughputs[cluster_spec_str]):
                         cutoff_throughput = \
-                                cutoff_throughputs[ratio_str][policy_name]
+                                cutoff_throughputs[cluster_spec_str][policy_name]
                         if throughput >= cutoff_throughput:
                             print('Throughput of %f is too high for policy %s '
-                                  'with cluster ratio %s.' % (throughput,
+                                  'with cluster spec %s.' % (throughput,
                                                               policy_name,
-                                                              ratio_str))
+                                                              cluster_spec_str))
                             continue
 
                     lam = 3600.0 / throughput
@@ -321,8 +314,6 @@ if __name__=='__main__':
     automatic = parser.add_argument_group('Automatic sweep')
     fixed_range = parser.add_argument_group('Sweep over fixed range')
 
-    parser.add_argument('-g', '--gpus', type=int, default=25,
-                        help='Total number of GPUs')
     parser.add_argument('-l', '--log-dir', type=str, default='logs',
                         help='Log directory')
     parser.add_argument('-s', '--window-start', type=int, default=0,
@@ -339,12 +330,12 @@ if __name__=='__main__':
                                  'max_min_fairness', 'max_min_fairness_perf',
                                  'max_min_fairness_packed'],
                         help='List of policies to sweep')
-    parser.add_argument('-r', '--ratios', type=str, nargs='+',
-                        default=['1:0:0', '1:1:0', '1:1:1', '2:1:0'],
-                        help=('List of cluster ratios to sweep in the form '
+    parser.add_argument('-c', '--cluster_spec', type=str, nargs='+',
+                        default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
+                        help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
     parser.add_argument('--seeds', type=int, nargs='+',
-                        default=[0, 1, 42, 1234, 10],
+                        default=[0, 1, 2, 3, 4],
                         help='List of random seeds')
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
