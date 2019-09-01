@@ -180,7 +180,7 @@ if __name__=='__main__':
                                  'max_min_fairness', 'max_min_fairness_perf',
                                  'max_min_fairness_packed'],
                         help='List of policies to sweep')
-    parser.add_argument('-c', '--cluster_spec', type=str, nargs='+',
+    parser.add_argument('-c', '--cluster-spec', type=str, nargs='+',
                         default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
@@ -192,7 +192,7 @@ if __name__=='__main__':
     parser.add_argument('-f', '--fixed-job-duration', type=int, default=None,
                         help=('If set, fixes the duration of all jobs to the '
                               'specified value (in seconds)'))
-    parser.add_argument('--throughputs_file', type=str,
+    parser.add_argument('--throughputs-file', type=str,
                         default='oracle_throughputs.json',
                         help='Oracle throughputs file')
     parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true', default=False,
