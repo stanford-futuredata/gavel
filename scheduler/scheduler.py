@@ -493,39 +493,45 @@ class Scheduler:
             if num_workers_left == 0:
                 break
             # Don't schedule jobs that have already been scheduled.
-            if (job_id not in already_scheduled_jobs_set and
-                (not job_id.is_pair() or
-                 (job_id.singletons()[0] not in already_scheduled_jobs_set and
-                  job_id.singletons()[1] not in already_scheduled_jobs_set))):
-                # Don't schedule jobs with 0 throughput.
-                if ((job_id.is_pair() and
-                    (self._throughputs[job_id][worker_type][0] <= 0 or
-                     self._throughputs[job_id][worker_type][1] <= 0)) or
-                    (not job_id.is_pair() and
-                     self._throughputs[job_id][worker_type] <= 0) or
-                    self._priorities[worker_type][job_id] <= 0.0):
-                        continue
+            if ((not job_id.is_pair() and job_id in already_scheduled_jobs_set) or
+                (job_id.is_pair() and
+                 (job_id.singletons()[0] in already_scheduled_jobs_set or
+                  job_id.singletons()[1] in already_scheduled_jobs_set))):
+                continue
 
-                # Make sure job fits in remanining number of workers.
-                # If not, move onto next job.
-                if job_id.is_pair():
-                    scale_factor = \
-                        self._jobs[job_id.singletons()[0]].scale_factor
-                    other_scale_factor = \
-                        self._jobs[job_id.singletons()[1]].scale_factor
-                    # Only pack jobs with the same scale_factor.
-                    if scale_factor != other_scale_factor:
-                        continue
-                else:
-                    scale_factor = self._jobs[job_id].scale_factor
-                if scale_factor > num_workers_left:
+            # Don't schedule jobs with 0 throughput.
+            if ((job_id.is_pair() and
+                (self._throughputs[job_id][worker_type][0] <= 0 or
+                 self._throughputs[job_id][worker_type][1] <= 0)) or
+                (not job_id.is_pair() and
+                 self._throughputs[job_id][worker_type] <= 0)):
+                continue
+
+            # For FIFO jobs, don't schedule jobs with 0 priority.
+            if (self._policy.name.startswith("FIFO") and
+                self._priorities[worker_type][job_id] <= 0.0):
+                continue
+
+            # Make sure job fits in remaining number of workers.
+            # If not, move onto next job.
+            if job_id.is_pair():
+                scale_factor = \
+                    self._jobs[job_id.singletons()[0]].scale_factor
+                other_scale_factor = \
+                    self._jobs[job_id.singletons()[1]].scale_factor
+                # Only pack jobs with the same scale_factor.
+                if scale_factor != other_scale_factor:
                     continue
-                num_workers_left -= scale_factor
+            else:
+                scale_factor = self._jobs[job_id].scale_factor
+            if scale_factor > num_workers_left:
+                continue
+            num_workers_left -= scale_factor
 
-                for single_job_id in job_id.singletons():
-                    already_scheduled_jobs_set.add(single_job_id)
-                scheduled_jobs_on_worker_type.append((job_id,
-                                                      scale_factor))
+            for single_job_id in job_id.singletons():
+                already_scheduled_jobs_set.add(single_job_id)
+            scheduled_jobs_on_worker_type.append((job_id,
+                                                  scale_factor))
 
         return scheduled_jobs_on_worker_type
 
