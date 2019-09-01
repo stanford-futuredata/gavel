@@ -162,7 +162,7 @@ def run_automatic_sweep(experiment_id, policy_name, schedule_in_rounds, throughp
         lam = knee * (1.0 - i * .05)
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(policy_name,
+                emulate_with_timeout(experiment_id, policy_name,
                                      schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
