@@ -657,125 +657,6 @@ class Scheduler:
             self._running_jobs.add(single_job_id)
         return all_num_steps, max_finish_time
 
-    def _emulate_ideal(self, queued_jobs):
-        """Emulates the passed-in policy ``ideally''.
-
-           Determines the timestamps at which ``events'' occur --
-           ``add_job'' or ``remove_job''. Now, given the time between
-           these events, the amount of time each application / job spends
-           on each worker type can be computed. Note that this method
-           makes no determination whether such a time assignment is actually
-           achievable.
-
-           Args:
-            queued_jobs: A list of jobs sorted by their arrival times
-            into the cluster. All jobs in this list have not occurred
-            yet.
-        """
-
-        # Find the next arrival timestamp (timestamp at which a job is to be
-        # added as specified in the trace).
-        next_arrival_timestamp = None
-        time_to_next_arrival_timestamp = None
-        if len(queued_jobs) > 0:
-            next_arrival_timestamp = queued_jobs[0][0]
-            time_to_next_arrival_timestamp = \
-                next_arrival_timestamp - self._current_timestamp
-
-        # Find the next departure timestamp (timestamp at which a job completes).
-        # Compute departure timestamps for all jobs, and find the minimum.
-        time_to_next_departure_timestamp = None
-        if self._allocation is not None:
-            first_job_id_to_depart = None
-            for job_id in self._allocation:
-                if job_id.is_pair():
-                    continue
-                if job_id not in self._throughputs:  # TODO: Is this needed?
-                    continue
-                # Effective throughput with the computed allocation, which is a
-                # weighted average of the throughputs and allocations.
-                steps_per_time = 0.0
-                for other_job_id in self._allocation:
-                    if not job_id.overlaps_with(other_job_id):
-                        continue
-                    for worker_type in self._allocation[other_job_id]:
-                        # TODO: scale_factor needed here?
-                        if other_job_id.is_pair():
-                            # Determine which part of the tuple corresponds to
-                            # the current job_id.
-                            i = 0
-                            if other_job_id.singletons()[1] == job_id:
-                                i = 1
-                            assert other_job_id.singletons()[i] == job_id
-                            steps_per_time += (
-                                self._allocation[other_job_id][worker_type] *
-                                self._throughputs[other_job_id][worker_type][i])
-                        else:
-                            steps_per_time += (
-                                self._allocation[other_job_id][worker_type] *
-                                self._throughputs[other_job_id][worker_type])
-                # Can now compute the finish_time for this job_id using the
-                # effective throughput computed above.
-                if steps_per_time == 0.0:
-                    true_finish_time = INFINITY
-                else:
-                    true_finish_time = self._get_remaining_steps(job_id) /\
-                        steps_per_time + 1
-                # Only update time_to_next_departure_timestamp if earlier than
-                # time_to_next_arrival_timestamp.
-                if (time_to_next_departure_timestamp is None) or \
-                    (time_to_next_departure_timestamp > true_finish_time):
-                    if time_to_next_arrival_timestamp is None or \
-                        true_finish_time < time_to_next_arrival_timestamp:
-                        time_to_next_departure_timestamp = true_finish_time
-                        first_job_id_to_depart = job_id
-
-            # Now, compute the time to the next event (next_arrival_timestamp if
-            # before next_departure_timestamp, otherwise next_departure_timestamp).
-            next_timestamp = next_arrival_timestamp
-            if time_to_next_departure_timestamp is not None:
-                next_timestamp = self._current_timestamp + \
-                    time_to_next_departure_timestamp
-            time_to_next_timestamp = next_timestamp - self._current_timestamp
-
-            # Update step and time counts for all jobs on the different worker types.
-            steps_run = 0
-            for job_id in self._allocation:
-                if job_id.is_pair():
-                    continue
-                if job_id not in self._throughputs:
-                    continue
-                for other_job_id in self._allocation:
-                    if not job_id.overlaps_with(other_job_id):
-                        continue
-                    for worker_type in self._allocation[other_job_id]:
-                        if other_job_id.is_pair():
-                            # Determine which part of the tuple corresponds to
-                            # the current job_id.
-                            i = 0
-                            if other_job_id.singletons()[1] == job_id:
-                                i = 1
-                            assert other_job_id.singletons()[i] == job_id
-                            throughput = \
-                                self._throughputs[other_job_id][worker_type][i]
-                        elif other_job_id in self._throughputs:
-                            throughput = self._throughputs[other_job_id][worker_type]
-                        else:
-                            raise Exception("other_job_id should be in self._throughputs!")
-                        # TODO: scale_factor needed here?
-                        time_run = (time_to_next_timestamp *
-                                    self._allocation[other_job_id][worker_type])
-                        steps_run = time_run * throughput
-                        self._steps_run_so_far[job_id][worker_type] += steps_run
-                        self._total_steps_run[job_id] += steps_run
-                        self._job_time_so_far[job_id][worker_type] += time_run
-                        self._worker_time_so_far[worker_type] += time_run
-            # TODO: Check if this is updated correctly.
-            self._current_timestamp = next_timestamp
-
-            return first_job_id_to_depart
-        return None
-
     def _sample_arrival_time_delta(self, rate_parameter):
         """Samples job interarrival rate from a Poisson distribution according
            to the specified rate parameter."""
@@ -819,7 +700,7 @@ class Scheduler:
         return job
 
     def emulate(self, cluster_spec, arrival_times=None, jobs=None,
-                ideal=False, lam=None, jobs_to_complete=None,
+                lam=None, jobs_to_complete=None,
                 measurement_window=None, fixed_job_duration=None,
                 num_total_jobs=None, generate_multi_gpu_jobs=False,
                 simulate_steady_state=False, debug=False):
@@ -838,8 +719,6 @@ class Scheduler:
             cluster_spec: A dictionary of worker type to worker count.
             arrival_times: The arrival times of a set of pre-generated jobs.
             jobs: A set of pre-generated jobs.
-            ideal: If True, emulates ideal behavior. This is only available
-                   when running from a trace.
             lam: 1 / the rate parameter to be passed in to the Poisson process
                  used to generate arrival times.
             jobs_to_complete: A set of `JobIdPair`s that must be completed
@@ -878,9 +757,6 @@ class Scheduler:
             elif lam is None:
                 raise ValueError('\'lam\' must be specified when running '
                                  'without trace.')
-        if ideal:
-            if not from_trace:
-                raise ValueError('Can only emulate in ideal mode with a trace.')
         if (jobs_to_complete is not None and
                 measurement_window is not None):
             raise ValueError('Only one of \'jobs_to_complete\' or '
@@ -926,9 +802,6 @@ class Scheduler:
                         measurement_window[0] <= 0):
                         jobs_to_measure.add(job_id)
 
-        if ideal:
-            self._current_timestamp = queued_jobs[0][0]
-
         while True:
             if debug:
                 input('Press Enter to continue...')
@@ -951,103 +824,90 @@ class Scheduler:
                     next_job_arrival_time = None
 
             # Jump to the next event's timestamp.
-            if ideal:
-                first_job_id_to_depart = self._emulate_ideal(queued_jobs)
-                if first_job_id_to_depart is not None:
-                    # First_job_id_to_depart should have no steps remaining.
-                    assert(self._get_remaining_steps(first_job_id_to_depart) /
-                        self._jobs[first_job_id_to_depart].total_steps <= 0.01)
-                    self._per_job_latest_timestamps[first_job_id_to_depart] = \
-                        self.get_current_timestamp()
-                    # Remove job and update remaining_jobs counter.
-                    self.remove_job(first_job_id_to_depart[0])
-                    remaining_jobs -= 1
-
-            else:
-                if self._schedule_in_rounds:
-                    # If scheduling in rounds, find the time when the latest job
-                    # completes, which signals the finishing of the round.
-                    max_timestamp = 0
-                    if (len(running_jobs) > 0 and
-                        -running_jobs[0][0] > max_timestamp):
-                        max_timestamp = -running_jobs[0][0]
-                        if current_round_end_time is not None:
-                            current_round_start_time = current_round_end_time
-                        current_round_end_time = max_timestamp
-                    if max_timestamp > 0:
-                        self._current_timestamp = max_timestamp
-                    else:
-                        self._current_timestamp = next_job_arrival_time
+            if self._schedule_in_rounds:
+                # If scheduling in rounds, find the time when the latest job
+                # completes, which signals the finishing of the round.
+                max_timestamp = 0
+                if (len(running_jobs) > 0 and
+                    -running_jobs[0][0] > max_timestamp):
+                    max_timestamp = -running_jobs[0][0]
+                    if current_round_end_time is not None:
+                        current_round_start_time = current_round_end_time
+                    current_round_end_time = max_timestamp
+                if max_timestamp > 0:
+                    self._current_timestamp = max_timestamp
                 else:
-                    # Otherwise, find the time when the first job completes,
-                    # which signals that a worker is available.
-                    min_timestamp = INFINITY
-                    if (len(running_jobs) > 0 and
-                        running_jobs[0][0] < min_timestamp):
-                        min_timestamp = running_jobs[0][0]
-                    if (next_job_arrival_time is not None and
-                        next_job_arrival_time < min_timestamp):
-                        min_timestamp = next_job_arrival_time
-                    if min_timestamp is not INFINITY:
-                        self._current_timestamp = min_timestamp
-                        no_dispatched_or_running_jobs = False
+                    self._current_timestamp = next_job_arrival_time
+            else:
+                # Otherwise, find the time when the first job completes,
+                # which signals that a worker is available.
+                min_timestamp = INFINITY
+                if (len(running_jobs) > 0 and
+                    running_jobs[0][0] < min_timestamp):
+                    min_timestamp = running_jobs[0][0]
+                if (next_job_arrival_time is not None and
+                    next_job_arrival_time < min_timestamp):
+                    min_timestamp = next_job_arrival_time
+                if min_timestamp is not INFINITY:
+                    self._current_timestamp = min_timestamp
+                    no_dispatched_or_running_jobs = False
+                else:
+                    if no_dispatched_or_running_jobs:
+                        print('ERROR: No newly dispatched or running jobs!')
+                        print('%d remaining jobs' % (remaining_jobs))
+                        print('Completed jobs:')
+                        for i, job_id in enumerate(sorted(completed_jobs)):
+                            print('\t%d) %s' % (i+1, job_id))
+                        print('Per worker type queues:')
+                        for worker_type in self._per_worker_type_job_queue:
+                            print(worker_type + ':')
+                            for jqe in self._per_worker_type_job_queue[worker_type]:
+                                allocation = self._allocation[jqe.job_id][worker_type]
+                                print('%s: Allocation: %10f\t'
+                                      'Priority: %10f' % (jqe.job_id,
+                                                          allocation,
+                                                          jqe.priority))
+                        sys.exit(-1)
                     else:
-                        if no_dispatched_or_running_jobs:
-                            print('ERROR: No newly dispatched or running jobs!')
-                            print('%d remaining jobs' % (remaining_jobs))
-                            print('Completed jobs:')
-                            for i, job_id in enumerate(sorted(completed_jobs)):
-                                print('\t%d) %s' % (i+1, job_id))
-                            print('Per worker type queues:')
-                            for worker_type in self._per_worker_type_job_queue:
-                                print(worker_type + ':')
-                                for jqe in self._per_worker_type_job_queue[worker_type]:
-                                    allocation = self._allocation[jqe.job_id][worker_type]
-                                    print('%s: Allocation: %10f\t'
-                                          'Priority: %10f' % (jqe.job_id,
-                                                              allocation,
-                                                              jqe.priority))
-                            sys.exit(-1)
-                        else:
-                            no_dispatched_or_running_jobs = True
+                        no_dispatched_or_running_jobs = True
 
-                # Check if any jobs have completed.
-                while len(running_jobs) > 0:
-                    (finish_time, job_id, worker_ids, all_num_steps) = \
-                            running_jobs[0]
-                    if self._schedule_in_rounds:
-                        finish_time = (-finish_time)
-                    if finish_time <= self._current_timestamp:
-                        all_execution_times = []
-                        for single_job_id in job_id.singletons():
-                            if self._schedule_in_rounds:
-                                start_time = current_round_start_time
-                            else:
-                                start_time = \
-                                    self._per_job_latest_timestamps[single_job_id]
-                            execution_time = finish_time - start_time
-                            all_execution_times.append(execution_time)
-                            self._per_job_latest_timestamps[single_job_id] = \
-                                    finish_time
-                        # TODO: decide whether to pass in all worker_ids to
-                        # _done_callback.
-                        for worker_id in worker_ids:
-                            self._done_callback(job_id, worker_id,
-                                                all_num_steps,
-                                                all_execution_times)
-                        for single_job_id in job_id.singletons():
-                            if single_job_id not in self._jobs:
-                                completed_jobs.add(single_job_id)
-                                if from_trace or num_total_jobs is not None:
-                                    remaining_jobs -= 1
-                        heapq.heappop(running_jobs)
-                    else:
-                        break
-
+            # Check if any jobs have completed.
+            while len(running_jobs) > 0:
+                (finish_time, job_id, worker_ids, all_num_steps) = \
+                        running_jobs[0]
                 if self._schedule_in_rounds:
-                    # Since we're scheduling in rounds, no jobs should be
-                    # running when scheduling the next round of jobs.
-                    assert(len(running_jobs) == 0)
+                    finish_time = (-finish_time)
+                if finish_time <= self._current_timestamp:
+                    all_execution_times = []
+                    for single_job_id in job_id.singletons():
+                        if self._schedule_in_rounds:
+                            start_time = current_round_start_time
+                        else:
+                            start_time = \
+                                self._per_job_latest_timestamps[single_job_id]
+                        execution_time = finish_time - start_time
+                        all_execution_times.append(execution_time)
+                        self._per_job_latest_timestamps[single_job_id] = \
+                                finish_time
+                    # TODO: decide whether to pass in all worker_ids to
+                    # _done_callback.
+                    for worker_id in worker_ids:
+                        self._done_callback(job_id, worker_id,
+                                            all_num_steps,
+                                            all_execution_times)
+                    for single_job_id in job_id.singletons():
+                        if single_job_id not in self._jobs:
+                            completed_jobs.add(single_job_id)
+                            if from_trace or num_total_jobs is not None:
+                                remaining_jobs -= 1
+                    heapq.heappop(running_jobs)
+                else:
+                    break
+
+            if self._schedule_in_rounds:
+                # Since we're scheduling in rounds, no jobs should be
+                # running when scheduling the next round of jobs.
+                assert(len(running_jobs) == 0)
 
             # Dispatch any newly arrived jobs.
             if from_trace:
@@ -1082,43 +942,42 @@ class Scheduler:
                     next_job_arrival_time = \
                             arrival_time_delta + last_job_arrival_time
 
-            if not ideal:
-                # Schedule jobs until there are no available workers or no jobs
-                # with non-zero allocations on available workers.
-                if self._schedule_in_rounds:
-                    scheduled_jobs = self._schedule_jobs_on_workers()
-                    for (job_id, worker_ids) in scheduled_jobs:
-                        worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                        for worker_id in worker_ids:
-                            self._remove_available_worker_id(worker_id)
-                        all_num_steps, max_finish_time = \
-                                self._get_job_steps_and_finish_times(job_id,
-                                                                     worker_type)
-                        heapq.heappush(running_jobs, (-max_finish_time, job_id,
-                                                      worker_ids,
-                                                      all_num_steps))
-                else:
-                    seen_worker_ids = set()
-                    while True:
-                        worker_id = self._remove_available_worker_id()
-                        if worker_id in seen_worker_ids:
-                            self._add_available_worker_id(worker_id)
-                            break
-                        elif worker_id is None:
-                            break
-                        else:
-                            seen_worker_ids.add(worker_id)
+            # Schedule jobs until there are no available workers or no jobs
+            # with non-zero allocations on available workers.
+            if self._schedule_in_rounds:
+                scheduled_jobs = self._schedule_jobs_on_workers()
+                for (job_id, worker_ids) in scheduled_jobs:
+                    worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
+                    for worker_id in worker_ids:
+                        self._remove_available_worker_id(worker_id)
+                    all_num_steps, max_finish_time = \
+                            self._get_job_steps_and_finish_times(job_id,
+                                                                 worker_type)
+                    heapq.heappush(running_jobs, (-max_finish_time, job_id,
+                                                  worker_ids,
+                                                  all_num_steps))
+            else:
+                seen_worker_ids = set()
+                while True:
+                    worker_id = self._remove_available_worker_id()
+                    if worker_id in seen_worker_ids:
+                        self._add_available_worker_id(worker_id)
+                        break
+                    elif worker_id is None:
+                        break
+                    else:
+                        seen_worker_ids.add(worker_id)
 
-                        job_id = self._schedule_job_on_worker(worker_id)
-                        if job_id is None:
-                            continue
+                    job_id = self._schedule_job_on_worker(worker_id)
+                    if job_id is None:
+                        continue
 
-                        worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-                        all_num_steps, max_finish_time = \
-                                self._get_job_steps_and_finish_times(job_id,
-                                                                     worker_type)
-                        heapq.heappush(running_jobs, (max_finish_time, job_id,
-                                       (worker_id,), all_num_steps))
+                    worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+                    all_num_steps, max_finish_time = \
+                            self._get_job_steps_and_finish_times(job_id,
+                                                                 worker_type)
+                    heapq.heappush(running_jobs, (max_finish_time, job_id,
+                                   (worker_id,), all_num_steps))
 
         print('Total duration: %.3f seconds' % (self._current_timestamp))
         if measurement_window is not None:
