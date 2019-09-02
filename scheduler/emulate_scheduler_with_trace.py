@@ -43,7 +43,6 @@ def main(args):
             'k80': int(num_gpus[2]),
         }
     sched.emulate(cluster_spec, arrival_times, jobs,
-                  ideal=args.ideal,
                   debug=args.debug)
     sched.get_average_jct()
     sched.get_cluster_utilization()
@@ -61,8 +60,6 @@ if __name__=='__main__':
                                  'min_total_duration_packed', 'fifo',
                                  'fifo_perf', 'fifo_packed'],
                         help='Scheduler policy')
-    parser.add_argument('-i', '--ideal', action='store_true',
-                        help='Use allocation returned by policy ideally')
     parser.add_argument('--throughputs_file', type=str,
                         default='oracle_throughputs.json',
                         help='Oracle throughputs file')
