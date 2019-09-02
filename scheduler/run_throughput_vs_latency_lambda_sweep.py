@@ -12,40 +12,6 @@ from job_id_pair import JobIdPair
 import scheduler
 import utils
 
-cutoff_throughputs = {
-    '25:0:0': {
-        'fifo': 0.8,
-        'fifo_perf': 0.8,
-        'fifo_packing': 0.8,
-        'max_min_fairness': 0.8,
-        'max_min_fairness_perf': 0.8,
-        'max_min_fairness_packed': 1.2,
-    },
-    '12:12:0': {
-        'fifo': 0.7,
-        'fifo_perf': 0.7,
-        'fifo_packing': 0.8,
-        'max_min_fairness': 0.7,
-        'max_min_fairness_perf': 0.6,
-        'max_min_fairness_packed': 0.9,
-    },
-    '16:8:0': {
-        'fifo': 0.7,
-        'fifo_perf': 0.7,
-        'fifo_packing': 0.75,
-        'max_min_fairness': 0.75,
-        'max_min_fairness_perf': 0.75,
-        'max_min_fairness_packed': 1.0,
-    },
-    '8:8:8': {
-        'fifo': 0.55,
-        'fifo_perf': 0.55,
-        'fifo_packing': 0.55,
-        'max_min_fairness': 0.55,
-        'max_min_fairness_perf': 0.55,
-        'max_min_fairness_packed': 0.8,
-    },
-}
 
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
@@ -195,6 +161,11 @@ def main(args):
         automatic_sweep = False
     else:
         automatic_sweep = True
+
+    cutoff_throughputs = {}
+    if args.cutoff_throughputs_file is not None:
+        cutoff_throughputs = json.load(open(args.cutoff_throughputs_file, 'r'))
+
     schedule_in_rounds = True
     throughputs_file = args.throughputs_file
     policy_names = args.policies
@@ -330,7 +301,7 @@ if __name__=='__main__':
                                  'max_min_fairness', 'max_min_fairness_perf',
                                  'max_min_fairness_packed'],
                         help='List of policies to sweep')
-    parser.add_argument('-c', '--cluster_spec', type=str, nargs='+',
+    parser.add_argument('-c', '--cluster-spec', type=str, nargs='+',
                         default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
@@ -342,7 +313,10 @@ if __name__=='__main__':
     parser.add_argument('-f', '--fixed-job-duration', type=int, default=None,
                         help=('If set, fixes the duration of all jobs to the '
                               'specified value (in seconds)'))
-    parser.add_argument('--throughputs_file', type=str,
+    parser.add_argument('--cutoff-throughputs-file', type=str, default=None,
+                        help=('If set, uses the attached cutoff_throughputs JSON'
+                              'file in sweep to limit args run'))
+    parser.add_argument('--throughputs-file', type=str,
                         default='oracle_throughputs.json',
                         help='Oracle throughputs file')
     parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true', default=False,
