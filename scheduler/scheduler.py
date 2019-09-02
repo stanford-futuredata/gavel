@@ -821,7 +821,8 @@ class Scheduler:
     def emulate(self, cluster_spec, arrival_times=None, jobs=None,
                 ideal=False, lam=None, jobs_to_complete=None,
                 measurement_window=None, fixed_job_duration=None,
-                num_total_jobs=None, generate_multi_gpu_jobs=False, debug=False):
+                num_total_jobs=None, generate_multi_gpu_jobs=False,
+                simulate_steady_state=False, debug=False):
         """Emulates the scheduler execution.
 
            Emulation can be performed using a trace or with continuously
@@ -850,9 +851,15 @@ class Scheduler:
                                 exclusive with `jobs_to_complete`.
             fixed_job_duration: If set, all generated jobs will have this
                                 duration if run exclusively on a v100.
-            num_total_jobs: If set, only `num_total_jobs` jobs will be generated.
-            generate_multi_gpu_jobs: If set, some jobs will have `scale_factor` greater than
-                          1, according to a pre-defined distribution.
+            num_total_jobs: If set, only `num_total_jobs` jobs will
+                            be generated.
+            generate_multi_gpu_jobs: If set, some jobs will have `scale_factor`
+                                     greater than 1, according to a pre-defined
+                                     distribution.
+            simulate_steady_state: If set, adds as many jobs as there are
+                                   workers before beginning the simulation.
+            debug: If set, pauses the simulation at the start of every loop.
+
             Returns:
                 If `measurement_window` is specified, returns the jobs
                 collected in the window. Otherwise returns None.
@@ -887,6 +894,12 @@ class Scheduler:
         num_jobs_generated = 0
         completed_jobs = set()
         jobs_to_measure = set()
+        last_job_arrival_time = None
+        next_job_arrival_time = 0
+        no_dispatched_or_running_jobs = False
+        current_round_start_time = 0
+        current_round_end_time = None
+        num_completed_jobs = 0
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
@@ -901,16 +914,23 @@ class Scheduler:
 
             for (arrival_time, job) in zip(arrival_times, jobs):
                 queued_jobs.append((arrival_time, job))
+        elif simulate_steady_state:
+            for worker_type in worker_types:
+                for i in range(cluster_spec[worker_type]):
+                    job = self._generate_job(fixed_job_duration=fixed_job_duration,
+                                             generate_multi_gpu_jobs=generate_multi_gpu_jobs)
+                    num_jobs_generated += 1
+                    self._all_jobs.append((0, job))
+                    job_id = self.add_job(job, timestamp=0)
+                    if (measurement_window is not None and
+                        measurement_window[0] <= 0):
+                        jobs_to_measure.add(job_id)
+            last_job_arrival_time = 0.0
+            next_job_arrival_time = self._sample_arrival_time_delta(1.0 / lam)
 
         if ideal:
             self._current_timestamp = queued_jobs[0][0]
 
-        last_job_arrival_time = None
-        next_job_arrival_time = 0
-        no_dispatched_or_running_jobs = False
-        current_round_start_time = 0
-        current_round_end_time = None
-        num_completed_jobs = 0
         while True:
             if debug:
                 input('Press Enter to continue...')
@@ -958,7 +978,12 @@ class Scheduler:
                         current_round_end_time = max_timestamp
                     if max_timestamp > 0:
                         self._current_timestamp = max_timestamp
-                    else:
+                    elif (not simulate_steady_state or
+                          self._current_timestamp > 0):
+                        # When simulating steady state, some jobs have already
+                        # been dispatched at the beginning of the simulation -
+                        # schedule these first before dispatching
+                        # additional jobs.
                         self._current_timestamp = next_job_arrival_time
                 else:
                     # Otherwise, find the time when the first job completes,
@@ -1068,7 +1093,6 @@ class Scheduler:
                 # Schedule jobs until there are no available workers or no jobs
                 # with non-zero allocations on available workers.
                 if self._schedule_in_rounds:
-                    #TODO: Handle packing and multiple jobs.
                     scheduled_jobs = self._schedule_jobs_on_workers()
                     for (job_id, worker_ids) in scheduled_jobs:
                         worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
