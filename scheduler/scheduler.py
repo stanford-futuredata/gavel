@@ -925,8 +925,6 @@ class Scheduler:
                     if (measurement_window is not None and
                         measurement_window[0] <= 0):
                         jobs_to_measure.add(job_id)
-            last_job_arrival_time = 0.0
-            next_job_arrival_time = self._sample_arrival_time_delta(1.0 / lam)
 
         if ideal:
             self._current_timestamp = queued_jobs[0][0]
@@ -978,12 +976,7 @@ class Scheduler:
                         current_round_end_time = max_timestamp
                     if max_timestamp > 0:
                         self._current_timestamp = max_timestamp
-                    elif (not simulate_steady_state or
-                          self._current_timestamp > 0):
-                        # When simulating steady state, some jobs have already
-                        # been dispatched at the beginning of the simulation -
-                        # schedule these first before dispatching
-                        # additional jobs.
+                    else:
                         self._current_timestamp = next_job_arrival_time
                 else:
                     # Otherwise, find the time when the first job completes,
