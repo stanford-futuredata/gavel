@@ -15,8 +15,8 @@ import utils
 
 def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                          throughputs_file, cluster_spec, lam, seed, interval,
-                         fixed_job_duration, generate_multi_gpu_jobs, num_total_jobs,
-                         log_dir, timeout, verbose):
+                         fixed_job_duration, generate_multi_gpu_jobs,
+                         num_total_jobs, log_dir, timeout, verbose):
     num_total_jobs_str = 'num_total_jobs=%d.log' % (num_total_jobs)
     with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
         with contextlib.redirect_stdout(f):
@@ -36,8 +36,10 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
                 current_time = datetime.datetime.now()
                 print('[%s] [Experiment ID: %2d] '
                       'Configuration: cluster_spec=%s, policy=%s, '
-                       'seed=%d, num_total_jobs=%d' % (current_time, experiment_id,
-                                                       cluster_spec_str, policy.name,
+                       'seed=%d, num_total_jobs=%d' % (current_time,
+                                                       experiment_id,
+                                                       cluster_spec_str,
+                                                       policy.name,
                                                        seed, num_total_jobs),
                       file=sys.stderr)
 
@@ -195,7 +197,8 @@ if __name__=='__main__':
     parser.add_argument('--throughputs-file', type=str,
                         default='oracle_throughputs.json',
                         help='Oracle throughputs file')
-    parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true', default=False,
+    parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true',
+                        default=False,
                         help=('If set, generates multi-GPU jobs according to '
                               'a pre-defined distribution'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,

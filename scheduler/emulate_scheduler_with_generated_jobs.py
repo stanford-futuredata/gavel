@@ -11,7 +11,7 @@ import utils
 
 def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
             lam, seed, interval, jobs_to_complete, fixed_job_duration,
-            generate_multi_gpu_jobs, debug):
+            generate_multi_gpu_jobs, simulate_steady_state, debug):
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -34,6 +34,7 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
                   jobs_to_complete=jobs_to_complete,
                   fixed_job_duration=fixed_job_duration,
                   generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                  simulate_steady_state=simulate_steady_state,
                   debug=debug)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
@@ -64,6 +65,7 @@ def main(args):
                 args.interval, jobs_to_complete,
                 args.fixed_job_duration,
                 args.generate_multi_gpu_jobs,
+                args.simulate_steady_state,
                 args.debug)
     
     else:
@@ -74,6 +76,7 @@ def main(args):
                         args.interval, jobs_to_complete,
                         args.fixed_job_duration,
                         args.generate_multi_gpu_jobs,
+                        args.simulate_steady_state,
                         args.debug)
 
 if __name__=='__main__':
@@ -102,9 +105,14 @@ if __name__=='__main__':
     parser.add_argument('--throughputs_file', type=str,
                         default='oracle_throughputs.json',
                         help='Oracle throughputs file')
-    parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true', default=False,
+    parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true',
+                        default=False,
                         help=('If set, generates multi-GPU jobs according to '
                               'a pre-defined distribution'))
+    parser.add_argument('--simulate-steady-state', action='store_true',
+                        default=False,
+                        help=('If set, adds as many jobs as there are workers '
+                              'before beginning the simulation.'))
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Verbose')
     parser.add_argument('-d', '--debug', action='store_true', default=False,
