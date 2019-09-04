@@ -15,7 +15,6 @@ import math
 # TODO: clean these up.
 from job import Job
 import job_id_pair
-import job_queue
 from job_table import JobTable
 from runtime.rpc import scheduler_server, scheduler_client
 import utils
@@ -101,7 +100,6 @@ class Scheduler:
         # Commands to run for all current incomplete applications.
         self._jobs = {}
         # Priority queues for each worker_type.
-        self._per_worker_type_job_queue = {}
         self._priorities = {}
         self._deficits = {}
         # Number of failures per job.
@@ -1180,25 +1178,6 @@ class Scheduler:
         else:
             return self._available_worker_ids.get()
 
-    # @preconditions(lambda self: self._scheduler_lock.locked())
-    def _get_highest_priority(self, job_id):
-        priorities = []
-        for timestamp, worker_id in self._available_worker_ids.queue:
-            if timestamp > self._per_job_latest_timestamps.get(job_id, 0):
-                continue
-            worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-            for i in range(self._per_worker_type_job_queue[worker_type].size()):
-                queued_job = self._per_worker_type_job_queue[worker_type][i]
-                if queued_job.job_id == job_id:
-                    priorities.append((queued_job.priority, worker_id,
-                                       worker_type))
-        priorities.sort(key=lambda x: x[0])
-        if len(priorities) == 0:
-            return INFINITY, None
-        priority = priorities[0][0]
-        worker_id = priorities[0][1]
-        return priority, worker_id
-
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _get_remaining_steps(self, job_id):
         steps_run_so_far = self._total_steps_run[job_id]
@@ -1250,8 +1229,6 @@ class Scheduler:
             self._worker_type_to_worker_id_mapping[worker_type].append(worker_id)
 
             if not found:
-                self._per_worker_type_job_queue[worker_type] = \
-                        job_queue.JobQueue()
                 self._priorities[worker_type] = {}
                 self._deficits[worker_type] = {}
                 for job_id in self._jobs:
