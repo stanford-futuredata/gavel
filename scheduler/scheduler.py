@@ -770,7 +770,8 @@ class Scheduler:
         return job
 
     def simulate(self, cluster_spec, arrival_times=None, jobs=None,
-                 lam=None, jobs_to_complete=None,
+                 measure_steady_state_jobs=False, lam=None,
+                 jobs_to_complete=None,
                  fixed_job_duration=None, num_total_jobs=None,
                  generate_multi_gpu_jobs=False,
                  simulate_steady_state=False, debug=False,
@@ -837,7 +838,6 @@ class Scheduler:
         current_round_start_time = 0
         current_round_end_time = None
         num_completed_jobs = 0
-        checkpoint_complete = False
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
@@ -884,6 +884,9 @@ class Scheduler:
                 elif len(queued_jobs) > 0:
                     next_job_arrival_time = queued_jobs[0][0]
                 else:
+                    if measure_steady_state_jobs and measure_flag:
+                        measure_flag = False
+                        break
                     next_job_arrival_time = None
 
             # Jump to the next event's timestamp.
@@ -923,6 +926,10 @@ class Scheduler:
                     for single_job_id in job_id.singletons():
                         if single_job_id not in self._jobs:
                             completed_jobs.add(single_job_id)
+                            if measure_flag:
+                                if (single_job_id > min_steady_state_job_id or
+                                    single_job_id == min_steady_state_job_id):
+                                    steady_state_jobs.append(single_job_id)
                             if from_trace or num_total_jobs is not None:
                                 remaining_jobs -= 1
                     heapq.heappop(running_jobs)
@@ -994,6 +1001,9 @@ class Scheduler:
                 checkpoint_complete = True
 
         print('Total duration: %.3f seconds' % (self._current_timestamp))
+
+        if measure_steady_state_jobs:
+            return steady_state_jobs
 
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.
