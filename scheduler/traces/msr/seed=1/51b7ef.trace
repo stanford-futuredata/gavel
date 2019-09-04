@@ -1,0 +1,1 @@
+ResNet-18 (batch size 256)	cd %s/gpusched/workloads/pytorch/image_classification/cifar10 && python3 main.py --data_dir=%s/data/cifar10 --batch_size 256 	--num_steps	1	725207	0.000000	1

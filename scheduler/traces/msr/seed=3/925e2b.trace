@@ -1,0 +1,1 @@
+ResNet-50 (batch size 64)	cd %s/gpusched/workloads/pytorch/image_classification/imagenet && python3 main.py -j 4 -a resnet50 -b 64 %s/data/imagenet/pytorch	--num_minibatches	1	56753	0.000000	1
