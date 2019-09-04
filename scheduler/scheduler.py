@@ -39,7 +39,7 @@ class Scheduler:
                                                    seed,
                                                    time_per_iteration))
 
-        # Flag to control whether scheduler runs in emulation mode.
+        # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
         # Initialize seeds.
         self._initialize_seeds(seed)
@@ -510,7 +510,7 @@ class Scheduler:
 
     def _generate_job(self, fixed_job_duration=None, generate_multi_gpu_jobs=False,
                       run_dir='/tmp'):
-        """Generates a new job for emulation."""
+        """Generates a new job for simulation."""
         job_template = self._job_generator.choice(JobTable)
         job_type = job_template.model
         if fixed_job_duration:
@@ -550,10 +550,10 @@ class Scheduler:
                  measurement_window=None, fixed_job_duration=None,
                  num_total_jobs=None, generate_multi_gpu_jobs=False,
                  simulate_steady_state=False, debug=False):
-        """Emulates the scheduler execution.
+        """Simulates the scheduler execution.
 
-           Emulation can be performed using a trace or with continuously
-           generated synthetic data. Emulation is terminated when either
+           Simulation can be performed using a trace or with continuously
+           generated synthetic data. Simulation is terminated when either
                1) All jobs in the specified trace complete.
                2) A specific subset of jobs complete.
                3) All jobs in a specific time window complete.
@@ -568,7 +568,7 @@ class Scheduler:
             lam: 1 / the rate parameter to be passed in to the Poisson process
                  used to generate arrival times.
             jobs_to_complete: A set of `JobIdPair`s that must be completed
-                              before terminating the emulation. Mutually
+                              before terminating the simulation. Mutually
                               exclusive with 'measurement_window'.
             measurement_window: A tuple specifying the beginning and ending
                                 timestamps of the window in which to collect
@@ -877,10 +877,10 @@ class Scheduler:
         return start_times, end_times
 
     def get_all_simulated_jobs(self, job_range):
-        """Returns all the jobs run during emulation.
+        """Returns all the jobs run during simulation.
 
            Debug function used to print all jobs generated during
-           emulation within a specified range.
+           simulation within a specified range.
 
            Args:
                job_range: A tuple specifying which jobs to be printed.
@@ -1348,7 +1348,7 @@ class Scheduler:
                             to_remove.append(single_job_id)
                     if not self._simulate:
                         # NOTE: We update the timestamp before calling this
-                        # function in emulation.
+                        # function in simulation.
                         self._per_job_latest_timestamps[single_job_id] = \
                                 self.get_current_timestamp()
 
