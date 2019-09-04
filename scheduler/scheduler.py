@@ -433,8 +433,13 @@ class Scheduler:
                     num_steps = self._get_num_steps(job_id, worker_type,
                                                     single_job_id)
                     if num_steps <= 0:
-                        raise ValueError('Num steps should be greater'
-                                         'than 0, is %d' % (num_steps))
+                        raise ValueError('Num steps should be greater '
+                                         'than 0, is %d (Job ID: %s, '
+                                         'job_type=%s, '
+                                         'worker_type=%s)' % (num_steps,
+                                                              job_id,
+                                                              self._jobs[job_id].job_type,
+                                                              worker_type))
                     self._per_job_latest_timestamps[single_job_id] = \
                         self.get_current_timestamp()
                     self._running_jobs.add(single_job_id)
