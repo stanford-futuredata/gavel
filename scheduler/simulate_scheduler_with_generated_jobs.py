@@ -9,17 +9,17 @@ import policies
 import scheduler
 import utils
 
-def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
-            lam, seed, interval, jobs_to_complete, fixed_job_duration,
-            generate_multi_gpu_jobs, simulate_steady_state, debug):
+def simulate(policy_name, throughputs_file, cluster_spec,
+             lam, seed, interval, jobs_to_complete,
+             fixed_job_duration, generate_multi_gpu_jobs,
+             simulate_steady_state, debug):
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
-                    schedule_in_rounds=schedule_in_rounds,
                     throughputs_file=throughputs_file,
                     seed=seed,
                     time_per_iteration=interval,
-                    emulate=True)
+                    simulate=True)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
@@ -30,12 +30,12 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
                                 seed, lam),
           file=sys.stderr)
 
-    sched.emulate(cluster_spec, lam=lam,
-                  jobs_to_complete=jobs_to_complete,
-                  fixed_job_duration=fixed_job_duration,
-                  generate_multi_gpu_jobs=generate_multi_gpu_jobs,
-                  simulate_steady_state=simulate_steady_state,
-                  debug=debug)
+    sched.simulate(cluster_spec, lam=lam,
+                   jobs_to_complete=jobs_to_complete,
+                   fixed_job_duration=fixed_job_duration,
+                   generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                   simulate_steady_state=simulate_steady_state,
+                   debug=debug)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
     
@@ -46,7 +46,6 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
           file=sys.stderr)
 
 def main(args):
-    schedule_in_rounds = True
     throughputs_file = args.throughputs_file
     num_gpus = args.cluster_spec.split(':')
     cluster_spec = {
@@ -60,24 +59,24 @@ def main(args):
         jobs_to_complete.add(JobIdPair(i, None))
 
     if args.verbose:
-        emulate(args.policy, schedule_in_rounds, throughputs_file,
-                cluster_spec, args.lam, args.seed,
-                args.interval, jobs_to_complete,
-                args.fixed_job_duration,
-                args.generate_multi_gpu_jobs,
-                args.simulate_steady_state,
-                args.debug)
+        simulate(args.policy, throughputs_file,
+                 cluster_spec, args.lam, args.seed,
+                 args.interval, jobs_to_complete,
+                 args.fixed_job_duration,
+                 args.generate_multi_gpu_jobs,
+                 args.simulate_steady_state,
+                 args.debug)
     
     else:
         with open('/dev/null', 'w') as f:
             with contextlib.redirect_stdout(f):
-                emulate(args.policy, schedule_in_rounds, throughputs_file,
-                        cluster_spec, args.lam, args.seed,
-                        args.interval, jobs_to_complete,
-                        args.fixed_job_duration,
-                        args.generate_multi_gpu_jobs,
-                        args.simulate_steady_state,
-                        args.debug)
+                simulate(args.policy, throughputs_file,
+                         cluster_spec, args.lam, args.seed,
+                         args.interval, jobs_to_complete,
+                         args.fixed_job_duration,
+                         args.generate_multi_gpu_jobs,
+                         args.simulate_steady_state,
+                         args.debug)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
