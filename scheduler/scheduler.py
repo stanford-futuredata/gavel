@@ -600,7 +600,6 @@ class Scheduler:
         running_jobs = []
         num_jobs_generated = 0
         completed_jobs = set()
-        jobs_to_measure = set()
         last_job_arrival_time = None
         next_job_arrival_time = 0
         no_dispatched_or_running_jobs = False
