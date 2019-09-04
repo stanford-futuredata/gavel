@@ -32,7 +32,7 @@ def main(args):
 
     sched = scheduler.Scheduler(policy,
                                 throughputs_file=args.throughputs_file,
-                                emulate=True,
+                                simulate=True,
                                 seed=args.seed)
 
     num_gpus = args.cluster_spec.split(':')
@@ -41,8 +41,8 @@ def main(args):
             'p100': int(num_gpus[1]),
             'k80': int(num_gpus[2]),
         }
-    sched.emulate(cluster_spec, arrival_times, jobs,
-                  debug=args.debug)
+    sched.simulate(cluster_spec, arrival_times, jobs,
+                   debug=args.debug)
     sched.get_average_jct()
     sched.get_cluster_utilization()
 

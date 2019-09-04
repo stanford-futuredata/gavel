@@ -8,7 +8,7 @@ class TestScheduler(unittest.TestCase):
         FNULL = open(os.devnull, 'w')
         subprocess.check_call('python3 run_scheduler_with_trace.py '
                                '-t traces/simple.trace '
-                               '--emulate '
+                               '--simulate '
                                '--worker_types v100 '
                                '-l /tmp/simple.output',
                                cwd='..', stdout=FNULL,

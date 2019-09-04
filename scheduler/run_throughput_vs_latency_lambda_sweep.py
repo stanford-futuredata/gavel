@@ -13,11 +13,11 @@ import scheduler
 import utils
 
 
-def emulate_with_timeout(experiment_id, policy_name,
-                         throughputs_file, cluster_spec, lam, seed, interval,
-                         jobs_to_complete, fixed_job_duration,
-                         generate_multi_gpu_jobs, simulate_steady_state,
-                         log_dir, timeout, verbose):
+def simulate_with_timeout(experiment_id, policy_name,
+                          throughputs_file, cluster_spec, lam, seed, interval,
+                          jobs_to_complete, fixed_job_duration,
+                          generate_multi_gpu_jobs, simulate_steady_state,
+                          log_dir, timeout, verbose):
     lam_str = 'lambda=%f.log' % (lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stdout(f):
@@ -27,7 +27,7 @@ def emulate_with_timeout(experiment_id, policy_name,
                             throughputs_file=throughputs_file,
                             seed=seed,
                             time_per_iteration=interval,
-                            emulate=True)
+                            simulate=True)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                            cluster_spec['p100'],
@@ -42,16 +42,16 @@ def emulate_with_timeout(experiment_id, policy_name,
                       file=sys.stderr)
 
             if timeout is None:
-                sched.emulate(cluster_spec, lam=lam,
-                              jobs_to_complete=jobs_to_complete,
-                              fixed_job_duration=fixed_job_duration,
-                              generate_multi_gpu_jobs=generate_multi_gpu_jobs,
-                              simulate_steady_state=simulate_steady_state)
+                sched.simulate(cluster_spec, lam=lam,
+                               jobs_to_complete=jobs_to_complete,
+                               fixed_job_duration=fixed_job_duration,
+                               generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                               simulate_steady_state=simulate_steady_state)
                 average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
                 try:
-                    func_timeout(timeout, sched.emulate,
+                    func_timeout(timeout, sched.simulate,
                                  args=(cluster_spec,),
                                  kwargs={
                                     'lam': lam,
@@ -91,12 +91,12 @@ def run_automatic_sweep(experiment_id, policy_name,
     while True:
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(experiment_id, policy_name,
-                                     throughputs_file, cluster_spec,
-                                     lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration,
-                                     generate_multi_gpu_jobs,
-                                     simulate_steady_state, log_dir, timeout,
+                simulate_with_timeout(experiment_id, policy_name,
+                                      throughputs_file, cluster_spec,
+                                      lam, seed, interval, jobs_to_complete,
+                                      fixed_job_duration,
+                                      generate_multi_gpu_jobs,
+                                      simulate_steady_state, log_dir, timeout,
                                      verbose)
 
         average_jcts.append(average_jct)
@@ -111,7 +111,7 @@ def run_automatic_sweep(experiment_id, policy_name,
     for lam in lams:
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(experiment_id, policy_name,
+                simulate_with_timeout(experiment_id, policy_name,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
                                      fixed_job_duration,
@@ -133,12 +133,12 @@ def run_automatic_sweep(experiment_id, policy_name,
         lam = knee * (1.0 - i * .05)
         all_lams.append(lam)
         average_jct, utilization = \
-                emulate_with_timeout(experiment_id, policy_name,
-                                     throughputs_file, cluster_spec,
-                                     lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration,
-                                     generate_multi_gpu_jobs,
-                                     simulate_steady_state, log_dir,
+                simulate_with_timeout(experiment_id, policy_name,
+                                      throughputs_file, cluster_spec,
+                                      lam, seed, interval, jobs_to_complete,
+                                      fixed_job_duration,
+                                      generate_multi_gpu_jobs,
+                                      simulate_steady_state, log_dir,
                                      timeout, verbose)
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -278,7 +278,7 @@ def main(args):
                 # Sort args in order of decreasing lambda to prioritize
                 # short-running jobs.
                 all_args_list.sort(key=lambda x: x[5], reverse=True)
-                results = [p.apply_async(emulate_with_timeout, args_list)
+                results = [p.apply_async(simulate_with_timeout, args_list)
                            for args_list in all_args_list]
                 results = [result.get() for result in results]
     else:

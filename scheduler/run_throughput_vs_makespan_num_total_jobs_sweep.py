@@ -13,10 +13,10 @@ import scheduler
 import utils
 
 
-def emulate_with_timeout(experiment_id, policy_name,
-                         throughputs_file, cluster_spec, lam, seed, interval,
-                         fixed_job_duration, generate_multi_gpu_jobs,
-                         num_total_jobs, log_dir, timeout, verbose):
+def simulate_with_timeout(experiment_id, policy_name,
+                          throughputs_file, cluster_spec, lam, seed, interval,
+                          fixed_job_duration, generate_multi_gpu_jobs,
+                          num_total_jobs, log_dir, timeout, verbose):
     num_total_jobs_str = 'num_total_jobs=%d.log' % (num_total_jobs)
     with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
         with contextlib.redirect_stdout(f):
@@ -26,7 +26,7 @@ def emulate_with_timeout(experiment_id, policy_name,
                             throughputs_file=throughputs_file,
                             seed=seed,
                             time_per_iteration=interval,
-                            emulate=True)
+                            simulate=True)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                            cluster_spec['p100'],
@@ -43,16 +43,16 @@ def emulate_with_timeout(experiment_id, policy_name,
                       file=sys.stderr)
 
             if timeout is None:
-                sched.emulate(cluster_spec, lam=lam,
-                              fixed_job_duration=fixed_job_duration,
-                              generate_multi_gpu_jobs=generate_multi_gpu_jobs,
-                              num_total_jobs=num_total_jobs)
+                sched.simulate(cluster_spec, lam=lam,
+                               fixed_job_duration=fixed_job_duration,
+                               generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                               num_total_jobs=num_total_jobs)
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
                 makespan = sched.get_current_timestamp()
             else:
                 try:
-                    func_timeout(timeout, sched.emulate,
+                    func_timeout(timeout, sched.simulate,
                                  args=(cluster_spec,),
                                  kwargs={
                                     'lam': lam,
@@ -156,7 +156,7 @@ def main(args):
             # Sort args in order of increasing num_total_jobs to prioritize
             # short-running jobs.
             all_args_list.sort(key=lambda x: x[9])
-            results = [p.apply_async(emulate_with_timeout, args_list)
+            results = [p.apply_async(simulate_with_timeout, args_list)
                        for args_list in all_args_list]
             results = [result.get() for result in results]
     else:

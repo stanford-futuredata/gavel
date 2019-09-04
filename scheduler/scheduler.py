@@ -30,7 +30,7 @@ MAX_FAILED_ATTEMPTS = 5
 
 class Scheduler:
 
-    def __init__(self, policy, emulate=False, throughputs_file=None,
+    def __init__(self, policy, simulate=False, throughputs_file=None,
                  seed=0, time_per_iteration=1920):
 
         # Scheduling occurs in rounds.
@@ -40,13 +40,13 @@ class Scheduler:
                                                    time_per_iteration))
 
         # Flag to control whether scheduler runs in emulation mode.
-        self._emulate = emulate
+        self._simulate = simulate
         # Initialize seeds.
         self._initialize_seeds(seed)
         # Initialize time in seconds each iteration should run for.
         self._time_per_iteration = time_per_iteration
 
-        # Latest emulated timestamp.
+        # Latest simulated timestamp.
         self._current_timestamp = 0
         # Start and last processed timestamp for each job_id.
         self._per_job_start_timestamps = {}
@@ -132,7 +132,7 @@ class Scheduler:
             'Done': self._done_callback,
         }
 
-        if not self._emulate:
+        if not self._simulate:
             self.server_thread = threading.Thread(
                 target=scheduler_server.serve,
                 args=(port, callbacks))
@@ -303,11 +303,11 @@ class Scheduler:
 
     """
     ======================================================================
-       Scheduler's main schedule() and emulate() methods.
+       Scheduler's main schedule() and simulate() methods.
     ======================================================================
     """
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_type,
                                          already_scheduled_jobs):
         """Greedily selects the jobs to run in the next round by iterating
@@ -382,7 +382,7 @@ class Scheduler:
         return scheduled_jobs_on_worker_type
 
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers(self):
         """Attempts to schedule jobs on as many alive workers as possible.
 
@@ -545,11 +545,11 @@ class Scheduler:
 
         return job
 
-    def emulate(self, cluster_spec, arrival_times=None, jobs=None,
-                lam=None, jobs_to_complete=None,
-                measurement_window=None, fixed_job_duration=None,
-                num_total_jobs=None, generate_multi_gpu_jobs=False,
-                simulate_steady_state=False, debug=False):
+    def simulate(self, cluster_spec, arrival_times=None, jobs=None,
+                 lam=None, jobs_to_complete=None,
+                 measurement_window=None, fixed_job_duration=None,
+                 num_total_jobs=None, generate_multi_gpu_jobs=False,
+                 simulate_steady_state=False, debug=False):
         """Emulates the scheduler execution.
 
            Emulation can be performed using a trace or with continuously
@@ -876,7 +876,7 @@ class Scheduler:
                 for job_id in job_ids]
         return start_times, end_times
 
-    def get_all_emulated_jobs(self, job_range):
+    def get_all_simulated_jobs(self, job_range):
         """Returns all the jobs run during emulation.
 
            Debug function used to print all jobs generated during
@@ -885,7 +885,7 @@ class Scheduler:
            Args:
                job_range: A tuple specifying which jobs to be printed.
         """
-        print('All emulated jobs:')
+        print('All simulated jobs:')
         for arrival_time, job in self._all_jobs[job_range[0]:job_range[1]]:
             print('%s\t%s\t%d\t%f' % (job.job_id,
                                       job.job_type,
@@ -897,7 +897,7 @@ class Scheduler:
     ======================================================================
     """
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _print_allocation(self):
         """Prints the allocation.
 
@@ -917,7 +917,7 @@ class Scheduler:
         print('=' * 80)
         print('')
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _print_deficits(self):
         """Prints the deficit.
 
@@ -937,7 +937,7 @@ class Scheduler:
         print('=' * 80)
         print('')
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _get_allocation(self):
         """Computes the allocation.
 
@@ -983,7 +983,7 @@ class Scheduler:
 
         return unflattened_allocation
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _populate_job_combination_metadata(self, job_id, worker_type):
         """Populate metadata for job combinations involving passed-in job_id."""
 
@@ -1017,17 +1017,17 @@ class Scheduler:
 
     def _compute_throughput(self, job_types, worker_type):
         if isinstance(job_types, list):
-            if self._emulate:
+            if self._simulate:
                 return self._all_throughputs[worker_type][job_types[0]][job_types[1]]
             else:
                 return (DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0)
         else:
-            if self._emulate:
+            if self._simulate:
                 return self._all_throughputs[worker_type][job_types]["null"]
             else:
                 return DEFAULT_THROUGHPUT
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
         """Reset _time_run_so_far so that all jobs receive new fair allocation
         from here on out.
@@ -1073,7 +1073,7 @@ class Scheduler:
         # self._print_deficits()
         self._last_reset_time = current_time
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _add_to_priorities(self, job_id, worker_type=None):
         """Adds a job_id to each worker type's priority list.
         NOTE: Used when scheduling is performed in rounds.
@@ -1096,7 +1096,7 @@ class Scheduler:
                     self._priorities[worker_type][other_job_id] = 0.0
                     self._deficits[worker_type][other_job_id] = 0.0
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _remove_from_priorities(self, job_id):
         """Removes a job_id from each worker type's priority list.
         NOTE: Used when scheduling is performed in rounds.
@@ -1118,7 +1118,7 @@ class Scheduler:
                 if not found:
                     break
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _update_priorities(self):
         """Updates each per-worker priority data structure.
 
@@ -1172,7 +1172,7 @@ class Scheduler:
     def _remove_available_worker_id(self, worker_id=None):
         """Returns the worker_id of the next available worker."""
 
-        if self._emulate:
+        if self._simulate:
             try:
                 return self._available_worker_ids.get_nowait()
             except queue.Empty as e:
@@ -1199,14 +1199,14 @@ class Scheduler:
         worker_id = priorities[0][1]
         return priority, worker_id
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _get_remaining_steps(self, job_id):
         steps_run_so_far = self._total_steps_run[job_id]
         return self._jobs[job_id].total_steps - steps_run_so_far
 
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
+    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def get_current_timestamp(self):
-        if self._emulate:
+        if self._simulate:
             return self._current_timestamp
         else:
             return time.time()
@@ -1276,7 +1276,7 @@ class Scheduler:
             if worker_type not in self._cluster_spec:
                 self._cluster_spec[worker_type] = 0
             self._cluster_spec[worker_type] += 1
-            if not self._emulate:
+            if not self._simulate:
                 self._worker_connections[worker_id] = \
                     scheduler_client.SchedulerRpcClient(ip_addr, port)
 
@@ -1346,14 +1346,14 @@ class Scheduler:
                                    'Job ID: %s') % (finish_time,
                                                     single_job_id))
                             to_remove.append(single_job_id)
-                    if not self._emulate:
+                    if not self._simulate:
                         # NOTE: We update the timestamp before calling this
                         # function in emulation.
                         self._per_job_latest_timestamps[single_job_id] = \
                                 self.get_current_timestamp()
 
                 # TODO: fix this for job pairs.
-                if not self._emulate and not job_id.is_pair():
+                if not self._simulate and not job_id.is_pair():
                     old_throughput = self._throughputs[job_id][worker_type]
                     self._update_throughput(job_id, worker_type,
                                             all_num_steps[0],
