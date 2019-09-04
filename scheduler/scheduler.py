@@ -545,8 +545,8 @@ class Scheduler:
 
     def simulate(self, cluster_spec, arrival_times=None, jobs=None,
                  lam=None, jobs_to_complete=None,
-                 measurement_window=None, fixed_job_duration=None,
-                 num_total_jobs=None, generate_multi_gpu_jobs=False,
+                 fixed_job_duration=None, num_total_jobs=None,
+                 generate_multi_gpu_jobs=False,
                  simulate_steady_state=False, debug=False):
         """Simulates the scheduler execution.
 
@@ -566,12 +566,7 @@ class Scheduler:
             lam: 1 / the rate parameter to be passed in to the Poisson process
                  used to generate arrival times.
             jobs_to_complete: A set of `JobIdPair`s that must be completed
-                              before terminating the simulation. Mutually
-                              exclusive with 'measurement_window'.
-            measurement_window: A tuple specifying the beginning and ending
-                                timestamps of the window in which to collect
-                                jobs for the termination condition. Mutually
-                                exclusive with `jobs_to_complete`.
+                              before terminating the simulation.
             fixed_job_duration: If set, all generated jobs will have this
                                 duration if run exclusively on a v100.
             num_total_jobs: If set, only `num_total_jobs` jobs will
@@ -582,10 +577,6 @@ class Scheduler:
             simulate_steady_state: If set, adds as many jobs as there are
                                    workers before beginning the simulation.
             debug: If set, pauses the simulation at the start of every loop.
-
-            Returns:
-                If `measurement_window` is specified, returns the jobs
-                collected in the window. Otherwise returns None.
         """
 
         from_trace = arrival_times is not None and jobs is not None
@@ -601,19 +592,14 @@ class Scheduler:
             elif lam is None:
                 raise ValueError('\'lam\' must be specified when running '
                                  'without trace.')
-        if (jobs_to_complete is not None and
-                measurement_window is not None):
-            raise ValueError('Only one of \'jobs_to_complete\' or '
-                             '\'measurement_window\' can be set.')
         if (not from_trace and jobs_to_complete is None and
-            num_total_jobs is None and measurement_window is None):
-            raise ValueError('One of \'jobs_to_complete\', '
-                             '\'measurement_window\', or \'num_total_jobs\' must be set.')
+            num_total_jobs is None):
+            raise ValueError('One of \'jobs_to_complete\' '
+                             'or \'num_total_jobs\' must be set.')
 
         running_jobs = []
         num_jobs_generated = 0
         completed_jobs = set()
-        jobs_to_measure = set()
         last_job_arrival_time = None
         next_job_arrival_time = 0
         no_dispatched_or_running_jobs = False
@@ -642,19 +628,12 @@ class Scheduler:
                     num_jobs_generated += 1
                     self._all_jobs.append((0, job))
                     job_id = self.add_job(job, timestamp=0)
-                    if (measurement_window is not None and
-                        measurement_window[0] <= 0):
-                        jobs_to_measure.add(job_id)
 
         while True:
             if debug:
                 input('Press Enter to continue...')
             if (jobs_to_complete is not None and
                   jobs_to_complete.issubset(completed_jobs)):
-                break
-            elif (measurement_window is not None and
-                  self._current_timestamp >= measurement_window[1] and
-                  jobs_to_measure.issubset(completed_jobs)):
                 break
             elif (num_total_jobs is not None and
                     remaining_jobs <= 0):
@@ -733,10 +712,6 @@ class Scheduler:
                     num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
-                    if (measurement_window is not None and
-                        next_job_arrival_time >= measurement_window[0] and
-                        next_job_arrival_time <= measurement_window[1]):
-                        jobs_to_measure.add(job_id)
 
                     last_job_arrival_time = next_job_arrival_time
                     if lam == 0.0:
@@ -762,10 +737,6 @@ class Scheduler:
                                               all_num_steps))
 
         print('Total duration: %.3f seconds' % (self._current_timestamp))
-        if measurement_window is not None:
-            return jobs_to_measure
-        else:
-            return None
 
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.
