@@ -9,13 +9,13 @@ import policies
 import scheduler
 import utils
 
-def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
-            lam, seed, interval, jobs_to_complete, fixed_job_duration,
-            generate_multi_gpu_jobs, simulate_steady_state, debug):
+def emulate(policy_name, throughputs_file, cluster_spec,
+            lam, seed, interval, jobs_to_complete,
+            fixed_job_duration, generate_multi_gpu_jobs,
+            simulate_steady_state, debug):
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
-                    schedule_in_rounds=schedule_in_rounds,
                     throughputs_file=throughputs_file,
                     seed=seed,
                     time_per_iteration=interval,
@@ -46,7 +46,6 @@ def emulate(policy_name, schedule_in_rounds, throughputs_file, cluster_spec,
           file=sys.stderr)
 
 def main(args):
-    schedule_in_rounds = True
     throughputs_file = args.throughputs_file
     num_gpus = args.cluster_spec.split(':')
     cluster_spec = {
@@ -60,7 +59,7 @@ def main(args):
         jobs_to_complete.add(JobIdPair(i, None))
 
     if args.verbose:
-        emulate(args.policy, schedule_in_rounds, throughputs_file,
+        emulate(args.policy, throughputs_file,
                 cluster_spec, args.lam, args.seed,
                 args.interval, jobs_to_complete,
                 args.fixed_job_duration,
@@ -71,7 +70,7 @@ def main(args):
     else:
         with open('/dev/null', 'w') as f:
             with contextlib.redirect_stdout(f):
-                emulate(args.policy, schedule_in_rounds, throughputs_file,
+                emulate(args.policy, throughputs_file,
                         cluster_spec, args.lam, args.seed,
                         args.interval, jobs_to_complete,
                         args.fixed_job_duration,

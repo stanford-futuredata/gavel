@@ -13,7 +13,7 @@ import scheduler
 import utils
 
 
-def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
+def emulate_with_timeout(experiment_id, policy_name,
                          throughputs_file, cluster_spec, lam, seed, interval,
                          fixed_job_duration, generate_multi_gpu_jobs,
                          num_total_jobs, log_dir, timeout, verbose):
@@ -23,7 +23,6 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
             policy = utils.get_policy(policy_name, seed)
             sched = scheduler.Scheduler(
                             policy,
-                            schedule_in_rounds=schedule_in_rounds,
                             throughputs_file=throughputs_file,
                             seed=seed,
                             time_per_iteration=interval,
@@ -88,7 +87,6 @@ def main(args):
          args.num_total_jobs_upper_bound is None)):
         raise ValueError('If num_total_jobs range is not None, both '
                          'bounds must be specified.')
-    schedule_in_rounds = True
     throughputs_file = args.throughputs_file
     policy_names = args.policies
     experiment_id = 0
@@ -142,7 +140,6 @@ def main(args):
                     if not os.path.isdir(raw_logs_seed_subdir):
                         os.mkdir(raw_logs_seed_subdir)
                     all_args_list.append((experiment_id, policy_name,
-                                          schedule_in_rounds,
                                           throughputs_file, cluster_spec,
                                           lam, seed, args.interval,
                                           args.fixed_job_duration,

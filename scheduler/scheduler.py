@@ -12,7 +12,7 @@ import datetime
 import random
 import math
 
-# TODO: clean these up
+# TODO: clean these up.
 from job import Job
 import job_id_pair
 import job_queue
@@ -30,17 +30,14 @@ MAX_FAILED_ATTEMPTS = 5
 
 class Scheduler:
 
-    def __init__(self, policy, schedule_in_rounds, emulate=False,
-                 throughputs_file=None, seed=42, time_per_iteration=1920):
+    def __init__(self, policy, emulate=False, throughputs_file=None,
+                 seed=0, time_per_iteration=1920):
 
-        print('Running scheduler with policy=%s, schedule_in_rounds=%r, '
+        # Scheduling occurs in rounds.
+        print('Running scheduler with policy=%s, schedule_in_rounds=True, '
                'seed=%d, time_per_iteration=%d' % (policy.name,
-                                                   schedule_in_rounds,
                                                    seed,
                                                    time_per_iteration))
-
-        # Flag to control whether scheduling should occur in rounds.
-        self._schedule_in_rounds = schedule_in_rounds
 
         # Flag to control whether scheduler runs in emulation mode.
         self._emulate = emulate
@@ -225,10 +222,7 @@ class Scheduler:
                         (self._time_per_iteration / 2.0)
             self._per_job_start_timestamps[job_id] = current_timestamp
             self._per_job_latest_timestamps[job_id] = None
-            if self._schedule_in_rounds:
-                self._add_to_priorities(job_id)
-            else:
-                self._add_to_queue(job_id)
+            self._add_to_priorities(job_id)
             self._need_to_update_allocation = True
             if timestamp is None:
                 timestamp = self.get_current_timestamp()
@@ -283,11 +277,7 @@ class Scheduler:
                     del self._steps_run_so_far[other_job_id]
                     del self._job_time_so_far[other_job_id]
 
-            if self._schedule_in_rounds:
-                self._remove_from_priorities(job_id)
-            else:
-                self._remove_from_queue(job_id)
-
+            self._remove_from_priorities(job_id)
             self._need_to_update_allocation = True
 
     def num_workers(self):
@@ -318,152 +308,8 @@ class Scheduler:
     """
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
-    def _schedule_job_on_worker(self, worker_id):
-        """Attempts to schedule a job on worker WORKER_ID.
-
-           Args:
-            worker_id: The ID of the worker to schedule a job on.
-
-           Returns:
-            The job ID of the scheduled job, or None if no job was scheduled.
-        """
-
-        worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-        self._update_queue()
-        if self._per_worker_type_job_queue[worker_type].size() == 0:
-            self._add_available_worker_id(worker_id)
-            return None
-
-        queued_job = self._per_worker_type_job_queue[worker_type][0]
-        job_id = queued_job.job_id
-        priority = queued_job.priority
-
-        # TODO: Do we need to include a check along the lines below?
-        # if self._allocation[job_id][worker_type] < threshold:
-        #     self._add_available_worker_id(worker_id)
-        #     return None
-        # threshold here is tuned according to the number of users, etc.
-        # Check is meant to make sure very small allocations don't get
-        # GPU time.
-
-        for single_job_id in job_id.singletons():
-            self._remove_from_queue(single_job_id)
-
-        # Actually execute the scheduled job_id(s) on the right
-        # worker_id.
-        for single_job_id in job_id.singletons():
-            num_steps = self._get_num_steps(job_id, worker_type, single_job_id)
-            if num_steps <= 0:
-                raise ValueError('num_steps should be greater'
-                                 'than 0, is %d' % (num_steps))
-            self._per_job_latest_timestamps[single_job_id] = \
-                    self.get_current_timestamp()
-        worker_types = []
-        for x in self._allocation[job_id]:
-            worker_types.append(x)
-        worker_types = sorted(worker_types)
-        allocation_str = ''
-        for x in worker_types:
-            allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
-        print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
-               'Worker type: %s\tWorker ID: %d\t'
-               'Priority: %f\tDeficit: %f\t'
-               'Allocation:%s') % (self.get_current_timestamp(),
-                                   job_id, worker_type,
-                                   worker_id,
-                                   priority,
-                                   self._deficits[worker_type][job_id],
-                                   allocation_str))
-
-        return job_id
-
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_type,
                                          already_scheduled_jobs):
-        """Solves a Knapsack-like DP problem to determine which applications /
-           jobs should run on the specified worker_type in the upcoming round.
-
-           Returns:
-             A list of job IDs to schedule on the passed-in worker_type in
-             the upcoming round.
-        """
-
-        # Only iterate through job_ids that haven't been scheduled yet.
-        job_ids = []
-        # TODO: Handle job packing.
-        for job_id in self._jobs.keys():
-            if job_id not in already_scheduled_jobs:
-                job_ids.append(job_id)
-
-        num_workers = len(self._worker_type_to_worker_id_mapping[worker_type])
-
-        # DP table initialization.
-        A = []
-        parent_pointers = {}
-        for i in range(len(job_ids)):
-            job = self._jobs[job_ids[i]]
-            job_id = job.job_id
-            scale_factor = job.scale_factor
-            A.append([])
-            for j in range(num_workers):
-                if (j+1) >= scale_factor:
-                    A[-1].append(self._priorities[worker_type][job_id])
-                else:
-                    A[-1].append(0.0)
-
-        # Solve Knapsack-like DP problem to determine which applications to
-        # run on available workers of the passed-in worker_type.
-        if len(A) == 0:
-            return []
-
-        for j in range(len(A[0])):
-            for i in range(len(A)):
-                job = self._jobs[job_ids[i]]
-                job_id = job.job_id
-                scale_factor = job.scale_factor
-                parent_pointer = None
-
-                # If application i is not in the optimal subset of applications
-                # to run on workers of type `worker_type`.
-                if i > 0 and A[i-1][j] >= A[i][j]:
-                    A[i][j] = A[i-1][j]
-                    parent_pointer = (i-1, j)
-
-                # If the optimal subset of applications to run on workers of
-                # type `worker_type` need only `j-1` GPUs instead of `j`.
-                if j > 0 and A[i][j-1] >= A[i][j]:
-                    A[i][j] = A[i][j-1]
-                    parent_pointer = (i, j-1)
-
-                # If application `i` is in the optimal subset of applications
-                # to run on <= j GPUs of type `worker_type`.
-                if (i > 0) and (j >= scale_factor):
-                    new_priority_sum = (A[i-1][j-scale_factor] +
-                        self._priorities[worker_type][job_id])
-                    if new_priority_sum > A[i][j]:
-                        A[i][j] = new_priority_sum
-                        parent_pointer = (i-1, j-scale_factor)
-
-                parent_pointers[(i, j)] = parent_pointer
-
-        # Now route through parent_pointers backward to get the applications
-        # that are active in this round.
-        (i, j) = (len(job_ids)-1, num_workers-1)
-        scheduled_jobs_on_worker_type = []
-        while (i, j) in parent_pointers:
-            if parent_pointers[(i, j)] is None:
-                break
-            (i_prime, j_prime) = parent_pointers[(i, j)]
-            if (i_prime < i) and (j_prime < j):
-                scheduled_jobs_on_worker_type.append((job_ids[i], j-j_prime))
-            (i, j) = (i_prime, j_prime)
-        scheduled_jobs_on_worker_type.append((job_ids[i], j+1))
-
-        return scheduled_jobs_on_worker_type
-
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
-    def _schedule_jobs_on_workers_helper_v2(self, worker_type,
-                                            already_scheduled_jobs):
         """Greedily selects the jobs to run in the next round by iterating
            through the job list in sorted priority order.
 
@@ -566,7 +412,7 @@ class Scheduler:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
             scheduled_jobs_on_worker_type = \
-                    self._schedule_jobs_on_workers_helper_v2(
+                    self._schedule_jobs_on_workers_helper(
                             worker_type, already_scheduled_jobs)
 
             for (job_id, scale_factor) in scheduled_jobs_on_worker_type:
@@ -824,67 +670,29 @@ class Scheduler:
                     next_job_arrival_time = None
 
             # Jump to the next event's timestamp.
-            if self._schedule_in_rounds:
-                # If scheduling in rounds, find the time when the latest job
-                # completes, which signals the finishing of the round.
-                max_timestamp = 0
-                if (len(running_jobs) > 0 and
-                    -running_jobs[0][0] > max_timestamp):
-                    max_timestamp = -running_jobs[0][0]
-                    if current_round_end_time is not None:
-                        current_round_start_time = current_round_end_time
-                    current_round_end_time = max_timestamp
-                if max_timestamp > 0:
-                    self._current_timestamp = max_timestamp
-                else:
-                    self._current_timestamp = next_job_arrival_time
+            # Find the time when the latest job completes, which signals
+            # the finishing of the round.
+            max_timestamp = 0
+            if (len(running_jobs) > 0 and
+                -running_jobs[0][0] > max_timestamp):
+                max_timestamp = -running_jobs[0][0]
+                if current_round_end_time is not None:
+                    current_round_start_time = current_round_end_time
+                current_round_end_time = max_timestamp
+            if max_timestamp > 0:
+                self._current_timestamp = max_timestamp
             else:
-                # Otherwise, find the time when the first job completes,
-                # which signals that a worker is available.
-                min_timestamp = INFINITY
-                if (len(running_jobs) > 0 and
-                    running_jobs[0][0] < min_timestamp):
-                    min_timestamp = running_jobs[0][0]
-                if (next_job_arrival_time is not None and
-                    next_job_arrival_time < min_timestamp):
-                    min_timestamp = next_job_arrival_time
-                if min_timestamp is not INFINITY:
-                    self._current_timestamp = min_timestamp
-                    no_dispatched_or_running_jobs = False
-                else:
-                    if no_dispatched_or_running_jobs:
-                        print('ERROR: No newly dispatched or running jobs!')
-                        print('%d remaining jobs' % (remaining_jobs))
-                        print('Completed jobs:')
-                        for i, job_id in enumerate(sorted(completed_jobs)):
-                            print('\t%d) %s' % (i+1, job_id))
-                        print('Per worker type queues:')
-                        for worker_type in self._per_worker_type_job_queue:
-                            print(worker_type + ':')
-                            for jqe in self._per_worker_type_job_queue[worker_type]:
-                                allocation = self._allocation[jqe.job_id][worker_type]
-                                print('%s: Allocation: %10f\t'
-                                      'Priority: %10f' % (jqe.job_id,
-                                                          allocation,
-                                                          jqe.priority))
-                        sys.exit(-1)
-                    else:
-                        no_dispatched_or_running_jobs = True
+                self._current_timestamp = next_job_arrival_time
 
             # Check if any jobs have completed.
             while len(running_jobs) > 0:
                 (finish_time, job_id, worker_ids, all_num_steps) = \
                         running_jobs[0]
-                if self._schedule_in_rounds:
-                    finish_time = (-finish_time)
+                finish_time = (-finish_time)
                 if finish_time <= self._current_timestamp:
                     all_execution_times = []
                     for single_job_id in job_id.singletons():
-                        if self._schedule_in_rounds:
-                            start_time = current_round_start_time
-                        else:
-                            start_time = \
-                                self._per_job_latest_timestamps[single_job_id]
+                        start_time = current_round_start_time
                         execution_time = finish_time - start_time
                         all_execution_times.append(execution_time)
                         self._per_job_latest_timestamps[single_job_id] = \
@@ -904,10 +712,9 @@ class Scheduler:
                 else:
                     break
 
-            if self._schedule_in_rounds:
-                # Since we're scheduling in rounds, no jobs should be
-                # running when scheduling the next round of jobs.
-                assert(len(running_jobs) == 0)
+            # Since we're scheduling in rounds, no jobs should be
+            # running when scheduling the next round of jobs.
+            assert(len(running_jobs) == 0)
 
             # Dispatch any newly arrived jobs.
             if from_trace:
@@ -944,76 +751,23 @@ class Scheduler:
 
             # Schedule jobs until there are no available workers or no jobs
             # with non-zero allocations on available workers.
-            if self._schedule_in_rounds:
-                scheduled_jobs = self._schedule_jobs_on_workers()
-                for (job_id, worker_ids) in scheduled_jobs:
-                    worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                    for worker_id in worker_ids:
-                        self._remove_available_worker_id(worker_id)
-                    all_num_steps, max_finish_time = \
-                            self._get_job_steps_and_finish_times(job_id,
-                                                                 worker_type)
-                    heapq.heappush(running_jobs, (-max_finish_time, job_id,
-                                                  worker_ids,
-                                                  all_num_steps))
-            else:
-                seen_worker_ids = set()
-                while True:
-                    worker_id = self._remove_available_worker_id()
-                    if worker_id in seen_worker_ids:
-                        self._add_available_worker_id(worker_id)
-                        break
-                    elif worker_id is None:
-                        break
-                    else:
-                        seen_worker_ids.add(worker_id)
-
-                    job_id = self._schedule_job_on_worker(worker_id)
-                    if job_id is None:
-                        continue
-
-                    worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-                    all_num_steps, max_finish_time = \
-                            self._get_job_steps_and_finish_times(job_id,
-                                                                 worker_type)
-                    heapq.heappush(running_jobs, (max_finish_time, job_id,
-                                   (worker_id,), all_num_steps))
+            scheduled_jobs = self._schedule_jobs_on_workers()
+            for (job_id, worker_ids) in scheduled_jobs:
+                worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
+                for worker_id in worker_ids:
+                    self._remove_available_worker_id(worker_id)
+                all_num_steps, max_finish_time = \
+                        self._get_job_steps_and_finish_times(job_id,
+                                                             worker_type)
+                heapq.heappush(running_jobs, (-max_finish_time, job_id,
+                                              worker_ids,
+                                              all_num_steps))
 
         print('Total duration: %.3f seconds' % (self._current_timestamp))
         if measurement_window is not None:
             return jobs_to_measure
         else:
             return None
-
-
-    def _schedule_without_rounds(self):
-        """Schedules jobs on workers without rounds.
-
-        In a loop, schedules the inactive application most in need of an
-        available worker (that is, the application with the highest
-        fraction_allocated/fraction_run ratio).
-
-        Scheduler holds two internal data structures,
-        {(application, worker_type): time_run_on_worker}
-        & {(application, worker_type): allocation_fraction}.
-        As an algorithmic optimization, the scheduler maintains
-        a heap of all currently inactive applications for each
-        worker, sorted by fraction_run/fraction_allocated ratio.
-        """
-
-        while True:
-            worker_id = self._remove_available_worker_id()
-            with self._scheduler_lock:
-                job_id = self._schedule_job_on_worker(worker_id)
-                if job_id is None:
-                    continue
-                worker_type = self._worker_id_to_worker_type_mapping[worker_id]
-                # TODO: Support packing.
-                num_steps = self._get_num_steps(job_id, worker_type)
-                self._worker_connections[worker_id].run(
-                    [(job_id[0], self._jobs[job_id].command,
-                      self._jobs[job_id].num_steps_arg,
-                      num_steps)])
 
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.
@@ -1045,10 +799,7 @@ class Scheduler:
 
     def schedule(self):
         """Schedules jobs on workers."""
-        if self._schedule_in_rounds:
-            self._schedule_with_rounds()
-        else:
-            self._schedule_without_rounds()
+        self._schedule_with_rounds()
 
 
     def get_average_jct(self, job_ids=None):
@@ -1323,41 +1074,6 @@ class Scheduler:
         self._last_reset_time = current_time
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
-    def _add_to_queue(self, job_id, worker_type=None):
-        """Adds a job_id to each worker's queue.
-        NOTE: Used when scheduling is not performed in rounds.
-
-        Requires self._scheduler_lock to be held when calling this function.
-
-        Args:
-            job_id: The job_id to add to the workers' queues.
-        """
-
-        worker_types = self._worker_types
-        if worker_type is not None:
-            worker_types = [worker_type]
-        for worker_type in worker_types:
-            self._per_worker_type_job_queue[worker_type].add_job(
-                                                        priority=INFINITY,
-                                                        allocation=0.0,
-                                                        steps_run=0,
-                                                        job_id=job_id)
-            for other_job_id in self._throughputs:
-                if (other_job_id.is_pair() and
-                    job_id.overlaps_with(other_job_id)):
-                    add_job = True
-                    for single_job_id in other_job_id.singletons():
-                        if single_job_id in self._running_jobs:
-                            add_job = False
-                            break
-                    if add_job:
-                        self._per_worker_type_job_queue[worker_type].add_job(
-                                    priority=INFINITY,
-                                    allocation=0.0,
-                                    steps_run=0,
-                                    job_id=other_job_id)
-
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _add_to_priorities(self, job_id, worker_type=None):
         """Adds a job_id to each worker type's priority list.
         NOTE: Used when scheduling is performed in rounds.
@@ -1365,7 +1081,7 @@ class Scheduler:
         Requires self._scheduler_lock to be held when calling this function.
 
         Args:
-            job_id: The job_id to add to the workers' queues.
+            job_id: The job_id to add to the workers' priority data structures.
         """
 
         worker_types = self._worker_types
@@ -1381,29 +1097,6 @@ class Scheduler:
                     self._deficits[worker_type][other_job_id] = 0.0
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
-    def _remove_from_queue(self, job_id):
-        """Removes a job_id from each worker's queue.
-        NOTE: Used when scheduling is not performed in rounds.
-
-        Requires self._scheduler_lock to be held when calling this function.
-
-        Args:
-           job_id: The job_id to remove from the workers' queues.
-        """
-        for worker_type in self._worker_types:
-            while True:
-                found = False
-                for i in range(self._per_worker_type_job_queue[worker_type].size()):
-                    queued_job = self._per_worker_type_job_queue[worker_type][i]
-                    if job_id.overlaps_with(queued_job.job_id):
-                        if self._per_worker_type_job_queue[worker_type].size() > 0:
-                            self._per_worker_type_job_queue[worker_type].pop(i)
-                            found = True
-                        break
-                if not found:
-                    break
-
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _remove_from_priorities(self, job_id):
         """Removes a job_id from each worker type's priority list.
         NOTE: Used when scheduling is performed in rounds.
@@ -1411,7 +1104,7 @@ class Scheduler:
         Requires self._scheduler_lock to be held when calling this function.
 
         Args:
-           job_id: The job_id to remove from the workers' queues.
+           job_id: The job_id to remove from the workers' priority data structures.
         """
         for worker_type in self._worker_types:
             while True:
@@ -1426,69 +1119,16 @@ class Scheduler:
                     break
 
     # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
-    def _update_queue(self):
-        """Updates each per-worker queue.
-
-        Re-sorts the queue of each worker to compute the next job to run.
-        For a given worker w_i, the next job to be scheduled will be the job
-        that has so far received the smallest fraction of its computed
-        fair allocation.
-        Requires self._scheduler_lock to be held when calling this function.
-
-        NOTE: Used when scheduling is not performed in rounds.
-
-        Args:
-            job_id: The job_id to add to the workers' queues.
-        """
-
-        # Stores the fraction of time spent running a job for each worker.
-        fractions = {}
-
-        for worker_type in self._worker_types:
-            fractions[worker_type] = {}
-            for job_id in self._job_time_so_far:
-                fraction = self._job_time_so_far[job_id][worker_type] / \
-                        self._worker_time_so_far[worker_type]
-                fractions[worker_type][job_id] = fraction
-            for i in range(self._per_worker_type_job_queue[worker_type].size()):
-                queued_job = self._per_worker_type_job_queue[worker_type][i]
-                job_id = queued_job.job_id
-                # If allocation for this job_id and worker_type is 0, or
-                # if the throughput of this job_id pair on this worker_type is
-                # 0, give this job_id pair the lowest possible priority.
-                if self._allocation[job_id][worker_type] == 0.0 or \
-                    self._throughputs[job_id][worker_type] == 0.0 or \
-                    self._throughputs[job_id][worker_type] == [0.0, 0.0]:
-                    new_priority = INFINITY
-                    steps_run = None
-                else:
-                    new_priority = fractions[worker_type][job_id] /\
-                            self._allocation[job_id][worker_type]
-                    steps_run = self._steps_run_so_far[job_id][worker_type]
-                # Use negative deficit and allocation here to sort in
-                # order of highest deficit -> lowest deficit followed by
-                # highest allocation -> lowest allocation.
-                self._per_worker_type_job_queue[worker_type].update_entry(
-                        i, priority=new_priority,
-                        deficit=-self._deficits[worker_type][job_id],
-                        allocation=-self._allocation[job_id][worker_type],
-                        steps_run=steps_run)
-            self._per_worker_type_job_queue[worker_type].heapify()
-
-    # @preconditions(lambda self: self._emulate or self._scheduler_lock.locked())
     def _update_priorities(self):
-        """Updates each per-worker queue.
+        """Updates each per-worker priority data structure.
 
-        Re-sorts the queue of each worker to compute the next job to run.
+        Re-sorts the data structure of each worker to compute the next job to run.
         For a given worker w_i, the next job to be scheduled will be the job
         that has so far received the smallest fraction of its computed
         fair allocation.
         Requires self._scheduler_lock to be held when calling this function.
 
         NOTE: Used when scheduling is performed in rounds.
-
-        Args:
-            job_id: The job_id to add to the workers' queues.
         """
 
         if self._need_to_update_allocation:
@@ -1627,10 +1267,7 @@ class Scheduler:
 
                     self._initialize_num_steps_per_iteration(job_id, worker_type)
                     # Add to relevant priority data structure.
-                    if self._schedule_in_rounds:
-                        self._add_to_priorities(job_id, worker_type=worker_type)
-                    else:
-                        self._add_to_queue(job_id, worker_type=worker_type)
+                    self._add_to_priorities(job_id, worker_type=worker_type)
                 if worker_type not in self._worker_time_so_far:
                     self._worker_time_so_far[worker_type] = 0.0
 
@@ -1701,8 +1338,7 @@ class Scheduler:
                         self._total_steps_run[single_job_id] += num_steps
                         if (self._total_steps_run[single_job_id] <
                              self._jobs[single_job_id].total_steps):
-                            if not self._schedule_in_rounds:
-                                self._add_to_queue(single_job_id)
+                            pass
                         else:
                             finish_time = \
                                     self._per_job_latest_timestamps[single_job_id]

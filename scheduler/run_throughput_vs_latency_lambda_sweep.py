@@ -13,7 +13,7 @@ import scheduler
 import utils
 
 
-def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
+def emulate_with_timeout(experiment_id, policy_name,
                          throughputs_file, cluster_spec, lam, seed, interval,
                          jobs_to_complete, fixed_job_duration,
                          generate_multi_gpu_jobs, simulate_steady_state,
@@ -24,7 +24,6 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
             policy = utils.get_policy(policy_name, seed)
             sched = scheduler.Scheduler(
                             policy,
-                            schedule_in_rounds=schedule_in_rounds,
                             throughputs_file=throughputs_file,
                             seed=seed,
                             time_per_iteration=interval,
@@ -78,7 +77,7 @@ def emulate_with_timeout(experiment_id, policy_name, schedule_in_rounds,
 
     return average_jct, utilization
 
-def run_automatic_sweep(experiment_id, policy_name, schedule_in_rounds,
+def run_automatic_sweep(experiment_id, policy_name,
                         throughputs_file, cluster_spec, seed, interval,
                         jobs_to_complete, fixed_job_duration,
                         generate_multi_gpu_jobs, simulate_steady_state, log_dir,
@@ -93,7 +92,6 @@ def run_automatic_sweep(experiment_id, policy_name, schedule_in_rounds,
         all_lams.append(lam)
         average_jct, utilization = \
                 emulate_with_timeout(experiment_id, policy_name,
-                                     schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
                                      fixed_job_duration,
@@ -114,7 +112,6 @@ def run_automatic_sweep(experiment_id, policy_name, schedule_in_rounds,
         all_lams.append(lam)
         average_jct, utilization = \
                 emulate_with_timeout(experiment_id, policy_name,
-                                     schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
                                      fixed_job_duration,
@@ -137,7 +134,6 @@ def run_automatic_sweep(experiment_id, policy_name, schedule_in_rounds,
         all_lams.append(lam)
         average_jct, utilization = \
                 emulate_with_timeout(experiment_id, policy_name,
-                                     schedule_in_rounds,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
                                      fixed_job_duration,
@@ -176,7 +172,6 @@ def main(args):
     if args.cutoff_throughputs_file is not None:
         cutoff_throughputs = json.load(open(args.cutoff_throughputs_file, 'r'))
 
-    schedule_in_rounds = True
     throughputs_file = args.throughputs_file
     policy_names = args.policies
     job_range = (args.window_start, args.window_end)
@@ -226,7 +221,6 @@ def main(args):
                     if not os.path.isdir(raw_logs_seed_subdir):
                         os.mkdir(raw_logs_seed_subdir)
                     all_args_list.append((experiment_id, policy_name,
-                                          schedule_in_rounds,
                                           throughputs_file, cluster_spec,
                                           seed, args.interval,
                                           jobs_to_complete,
@@ -262,7 +256,6 @@ def main(args):
                         if not os.path.isdir(raw_logs_seed_subdir):
                             os.mkdir(raw_logs_seed_subdir)
                         all_args_list.append((experiment_id, policy_name,
-                                              schedule_in_rounds,
                                               throughputs_file, cluster_spec,
                                               lam, seed, args.interval,
                                               jobs_to_complete,
