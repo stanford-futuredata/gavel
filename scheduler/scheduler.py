@@ -978,7 +978,7 @@ class Scheduler:
                 # single-job IDs.
                 if job_id [0] == merged_job_id[0]:
                     if job.scale_factor != other_job.scale_factor:
-                        self._throughputs[merged_job_id][worker_type] = 0.0
+                        self._throughputs[merged_job_id][worker_type] = (0.0, 0.0)
                     else:
                         self._throughputs[merged_job_id][worker_type] = \
                             self._compute_throughput(
@@ -986,7 +986,7 @@ class Scheduler:
                                 worker_type)
                 else:
                     if job.scale_factor != other_job.scale_factor:
-                        self._throughputs[merged_job_id][worker_type] = 0.0
+                        self._throughputs[merged_job_id][worker_type] = (0.0, 0.0)
                     else:
                         self._throughputs[merged_job_id][worker_type] = \
                             self._compute_throughput(
