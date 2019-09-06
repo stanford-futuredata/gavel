@@ -10,6 +10,8 @@ import worker_to_scheduler_pb2 as w2s_pb2
 import worker_to_scheduler_pb2_grpc as w2s_pb2_grpc
 import common_pb2
 
+from job_id_pair import JobIdPair
+
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
 class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
@@ -44,8 +46,9 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
         try:
-            done_callback(request.job_id, request.worker_id,
-                          request.num_steps, request.execution_time)
+            done_callback(JobIdPair(job0=request.job_id, job1=None),
+                          request.worker_id,
+                          [request.num_steps], [request.execution_time])
         except Exception as e:
             print(e)
         return common_pb2.Empty()

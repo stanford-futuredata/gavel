@@ -31,8 +31,8 @@ def main(args):
     for job in jobs:
         job_queue.put(job)
     policy = utils.get_policy(args.policy, args.seed)
-    sched = scheduler.Scheduler(policy,
-                                seed=args.seed)
+    sched = scheduler.Scheduler(policy, simulate=False, throughputs_file="oracle_throughputs.json",
+                                seed=args.seed, time_per_iteration=10)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -43,7 +43,7 @@ def main(args):
             time.sleep(remaining_time)
         job_id = sched.add_job(job)
 
-    sleep_seconds = 30
+    sleep_seconds = 5
     while not sched.is_done():
         time.sleep(sleep_seconds)
 
@@ -60,6 +60,6 @@ if __name__=='__main__':
                                  'max_min_fairness_packed', 'min_total_duration',
                                  'min_total_duration_packed', 'fifo'],
                         help='Scheduler policy')
-    parser.add_argument('--seed', type=int, default=None,
+    parser.add_argument('--seed', type=int, default=0,
                         help='Random seed')
     main(parser.parse_args())

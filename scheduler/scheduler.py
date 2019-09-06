@@ -22,7 +22,7 @@ import utils
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
 INFINITY = float("inf")
-DEFAULT_THROUGHPUT = INFINITY
+DEFAULT_THROUGHPUT = 10
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
@@ -753,23 +753,29 @@ class Scheduler:
 
         while True:
             with self._scheduler_lock:
-                num_workers = len(self.worker_ids)
+                num_workers = len(self._worker_ids)
+                if num_workers == 0:
+                    time.sleep(5)
+                    continue
                 # Reset available_worker_ids to the desired size.
-                self._available_worker_ids = queue.Queue(self.num_workers)
-                for worker_id in self.worker_ids:
+                self._available_worker_ids = queue.Queue(num_workers)
+                for worker_id in self._worker_ids:
                     self._add_available_worker_id(worker_id)
                 scheduled_jobs = self._schedule_jobs_on_workers()
                 for (job_id, worker_ids) in scheduled_jobs:
                     worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
                     # TODO: Support packing.
-                    num_steps = self._get_num_steps(job_id, worker_type)
+                    num_steps = self._get_num_steps(job_id, worker_type,
+                                                    single_job_id=job_id)
                     for worker_id in worker_ids:
                         self._worker_connections[worker_id].run(
                             [(job_id[0], self._jobs[job_id].command,
                               self._jobs[job_id].num_steps_arg,
                               num_steps)])
                         self._remove_available_worker_id(worker_id)
-            self._wait_until_all_workers_available(num_workers)
+            while not self._available_worker_ids.full():
+                time.sleep(2)
+                continue
 
     def schedule(self):
         """Schedules jobs on workers."""
@@ -999,11 +1005,16 @@ class Scheduler:
         if isinstance(job_types, list):
             if self._simulate:
                 return self._all_throughputs[worker_type][job_types[0]][job_types[1]]
+            elif (job_types[0] in self._all_throughputs[worker_type] and
+		  job_types[1] in self._all_throughputs[worker_type]):
+                return self._all_throughputs[worker_type][job_types[0]][job_types[1]]
             else:
                 return [DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0]
         else:
             if self._simulate:
                 return self._all_throughputs[worker_type][job_types]["null"]
+            elif job_types in self._all_throughputs[worker_type]:
+                return self._all_throughputs[worker_type][job_type]["null"]
             else:
                 return DEFAULT_THROUGHPUT
 
@@ -1162,6 +1173,9 @@ class Scheduler:
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _get_remaining_steps(self, job_id):
+        if job_id not in self._total_steps_run:
+            print('_get_remaining_steps: Job ID: %s not in self._total_steps_run' % (job_id))
+            print('self._total_steps_run:', self._total_steps_run)
         steps_run_so_far = self._total_steps_run[job_id]
         return self._jobs[job_id].total_steps - steps_run_so_far
 
@@ -1217,14 +1231,14 @@ class Scheduler:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
                             (self._time_per_iteration / 2.0)
+                    print('Computing throughput for job %s' % (job_id))
                     self._throughputs[job_id][worker_type] = \
-                        self._compute_throughput(self._jobs[job_id],
+                        self._compute_throughput(self._jobs[job_id].job_type,
                                                  worker_type)
                     if self._job_packing:
                         self._populate_job_combination_metadata(job_id,
                                                                 worker_type)
 
-                    self._initialize_num_steps_per_iteration(job_id, worker_type)
                     # Add to relevant priority data structure.
                     self._add_to_priorities(job_id, worker_type=worker_type)
                 if worker_type not in self._worker_time_so_far:
