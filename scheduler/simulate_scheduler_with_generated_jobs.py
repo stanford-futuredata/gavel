@@ -12,7 +12,8 @@ import utils
 def simulate(policy_name, throughputs_file, cluster_spec,
              lam, seed, interval, jobs_to_complete,
              fixed_job_duration, generate_multi_gpu_jobs,
-             simulate_steady_state, debug):
+             simulate_steady_state, debug,
+             checkpoint_threshold, checkpoint_file):
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -35,7 +36,9 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                    fixed_job_duration=fixed_job_duration,
                    generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                    simulate_steady_state=simulate_steady_state,
-                   debug=debug)
+                   debug=debug,
+                   checkpoint_threshold=checkpoint_threshold,
+                   checkpoint_file=checkpoint_file)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
     
@@ -65,7 +68,8 @@ def main(args):
                  args.fixed_job_duration,
                  args.generate_multi_gpu_jobs,
                  args.simulate_steady_state,
-                 args.debug)
+                 args.debug, args.checkpoint_threshold,
+                 args.checkpoint_file)
     
     else:
         with open('/dev/null', 'w') as f:
@@ -76,7 +80,9 @@ def main(args):
                          args.fixed_job_duration,
                          args.generate_multi_gpu_jobs,
                          args.simulate_steady_state,
-                         args.debug)
+                         args.debug,
+                         args.checkpoint_threshold,
+                         args.checkpoint_file)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -116,5 +122,9 @@ if __name__=='__main__':
                         help='Verbose')
     parser.add_argument('-d', '--debug', action='store_true', default=False,
                         help='Debug')
+    parser.add_argument('--checkpoint_threshold', type=int, default=None,
+                        help='Create checkpoint when this job ID comes in')
+    parser.add_argument('--checkpoint_file', default=None,
+                        help='Load checkpoint located at passed in checkpoint_file')
     args = parser.parse_args()
     main(args)

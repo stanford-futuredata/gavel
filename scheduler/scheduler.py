@@ -506,6 +506,59 @@ class Scheduler:
             self._running_jobs.add(single_job_id)
         return all_num_steps, max_finish_time
 
+
+    def _save_checkpoint(self, checkpoint_file):
+        with open(checkpoint_file, 'wb') as f:
+            import pickle
+            pickle.dump(self._jobs, f)
+            pickle.dump(self._throughputs, f)
+            pickle.dump(self._allocation, f)
+            pickle.dump(self._steps_run_so_far, f)
+            pickle.dump(self._total_steps_run, f)
+            pickle.dump(self._job_time_so_far, f)
+            pickle.dump(self._worker_start_times, f)
+            pickle.dump(self._worker_time_so_far, f)
+            pickle.dump(self._cumulative_worker_time_so_far, f)
+            pickle.dump(self._num_jobs, f)
+            pickle.dump(self._priorities, f)
+            pickle.dump(self._deficits, f)
+            pickle.dump(self._last_reset_time, f)
+            pickle.dump(self._need_to_update_allocation, f)
+            pickle.dump(self._job_generator, f)
+            pickle.dump(self._interarrival_time_generator, f)
+            pickle.dump(self._per_job_start_timestamps, f)
+            pickle.dump(self._per_job_latest_timestamps, f)
+            pickle.dump(self._job_completion_times, f)
+            pickle.dump(self._current_timestamp, f)
+            pickle.dump(self._job_id_counter, f)
+
+
+    def _load_checkpoint(self, checkpoint_file):
+        with open(checkpoint_file, 'rb') as f:
+            import pickle
+            self._jobs = pickle.load(f)
+            self._throughputs = pickle.load(f)
+            self._allocation = pickle.load(f)
+            self._steps_run_so_far = pickle.load(f)
+            self._total_steps_run = pickle.load(f)
+            self._job_time_so_far = pickle.load(f)
+            self._worker_start_times = pickle.load(f)
+            self._worker_time_so_far = pickle.load(f)
+            self._cumulative_worker_time_so_far = pickle.load(f)
+            self._num_jobs = pickle.load(f)
+            self._priorities = pickle.load(f)
+            self._deficits = pickle.load(f)
+            self._last_reset_time = pickle.load(f)
+            self._need_to_update_allocation = pickle.load(f)
+            self._job_generator = pickle.load(f)
+            self._interarrival_time_generator = pickle.load(f)
+            self._per_job_start_timestamps = pickle.load(f)
+            self._per_job_latest_timestamps = pickle.load(f)
+            self._job_completion_times = pickle.load(f)
+            self._current_timestamp = pickle.load(f)
+            self._job_id_counter = pickle.load(f)
+
+
     def _sample_arrival_time_delta(self, rate_parameter):
         """Samples job interarrival rate from a Poisson distribution according
            to the specified rate parameter."""
@@ -552,7 +605,9 @@ class Scheduler:
                  lam=None, jobs_to_complete=None,
                  fixed_job_duration=None, num_total_jobs=None,
                  generate_multi_gpu_jobs=False,
-                 simulate_steady_state=False, debug=False):
+                 simulate_steady_state=False, debug=False,
+                 checkpoint_threshold=None,
+                 checkpoint_file=None):
         """Simulates the scheduler execution.
 
            Simulation can be performed using a trace or with continuously
@@ -611,12 +666,18 @@ class Scheduler:
         current_round_start_time = 0
         current_round_end_time = None
         num_completed_jobs = 0
+        checkpoint_complete = False
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
         for worker_type in worker_types:
             for i in range(cluster_spec[worker_type]):
                 self._register_worker_callback(worker_type)
+
+        if checkpoint_file is not None:
+            self._load_checkpoint(checkpoint_file)
+            next_job_arrival_time = self.get_current_timestamp()
+            current_round_start_time = self.get_current_timestamp()
 
         if from_trace:
             # Add all jobs to the queue.
@@ -662,9 +723,11 @@ class Scheduler:
                     current_round_start_time = current_round_end_time
                 current_round_end_time = max_timestamp
             if max_timestamp > 0:
-                self._current_timestamp = max_timestamp
+                self._current_timestamp = max(max_timestamp,
+                                              self._current_timestamp)
             else:
-                self._current_timestamp = next_job_arrival_time
+                self._current_timestamp = max(next_job_arrival_time,
+                                              self._current_timestamp)
 
             # Check if any jobs have completed.
             while len(running_jobs) > 0:
@@ -727,6 +790,13 @@ class Scheduler:
                     next_job_arrival_time = \
                             arrival_time_delta + last_job_arrival_time
 
+            if checkpoint_threshold is not None and job_id._job0 >= checkpoint_threshold \
+                and not checkpoint_complete:
+                # Create checkpoint.
+                assert(checkpoint_file is not None)
+                self._save_checkpoint(checkpoint_file)
+                checkpoint_complete = True
+
             # Schedule jobs until there are no available workers or no jobs
             # with non-zero allocations on available workers.
             scheduled_jobs = self._schedule_jobs_on_workers()
@@ -774,7 +844,6 @@ class Scheduler:
     def schedule(self):
         """Schedules jobs on workers."""
         self._schedule_with_rounds()
-
 
     def get_average_jct(self, job_ids=None):
         """Computes the average job completion time.
