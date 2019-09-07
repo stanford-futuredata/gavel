@@ -46,7 +46,9 @@ def main(args):
             'k80': int(num_gpus[2]),
         }
     sched.simulate(cluster_spec, arrival_times, jobs,
-                   debug=args.debug)
+                   debug=args.debug,
+                   checkpoint_threshold=args.checkpoint_threshold,
+                   checkpoint_file=args.checkpoint_file)
     sched.get_average_jct()
     sched.get_cluster_utilization()
 
@@ -73,4 +75,8 @@ if __name__=='__main__':
                         help='Run directory')
     parser.add_argument('-d', '--debug', action='store_true', default=False,
                         help='Debug')
+    parser.add_argument('--checkpoint_threshold', type=int, default=None,
+                        help='Create checkpoint when this job ID comes in')
+    parser.add_argument('--checkpoint_file', default=None,
+                        help='Load checkpoint located at passed in checkpoint_file')
     main(parser.parse_args())

@@ -17,8 +17,11 @@ def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, cluster_spec, lam, seed, interval,
                           jobs_to_complete, fixed_job_duration,
                           generate_multi_gpu_jobs, simulate_steady_state,
-                          log_dir, timeout, verbose):
+                          log_dir, timeout, verbose, checkpoint_threshold):
     lam_str = 'lambda=%f.log' % (lam)
+    checkpoint_file = None
+    if checkpoint_threshold is not None:
+        checkpoint_file = os.path.join(log_dir, 'lambda=%f.pickle' % lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stdout(f):
             policy = utils.get_policy(policy_name, seed)
@@ -46,7 +49,9 @@ def simulate_with_timeout(experiment_id, policy_name,
                                jobs_to_complete=jobs_to_complete,
                                fixed_job_duration=fixed_job_duration,
                                generate_multi_gpu_jobs=generate_multi_gpu_jobs,
-                               simulate_steady_state=simulate_steady_state)
+                               simulate_steady_state=simulate_steady_state,
+                               checkpoint_file=checkpoint_file,
+                               checkpoint_threshold=checkpoint_threshold)
                 average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
@@ -59,6 +64,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                     'fixed_job_duration': fixed_job_duration,
                                     'generate_multi_gpu_jobs': generate_multi_gpu_jobs,
                                     'simulate_steady_state': simulate_steady_state,
+                                    'checkpoint_file': checkpoint_file,
+                                    'checkpoint_threshold': checkpoint_threshold
                                  })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -81,7 +88,7 @@ def run_automatic_sweep(experiment_id, policy_name,
                         throughputs_file, cluster_spec, seed, interval,
                         jobs_to_complete, fixed_job_duration,
                         generate_multi_gpu_jobs, simulate_steady_state, log_dir,
-                        timeout, verbose):
+                        timeout, verbose, checkpoint_threshold):
     all_lams = []
     average_jcts = []
     utilizations = []
@@ -97,7 +104,7 @@ def run_automatic_sweep(experiment_id, policy_name,
                                       fixed_job_duration,
                                       generate_multi_gpu_jobs,
                                       simulate_steady_state, log_dir, timeout,
-                                     verbose)
+                                      verbose, checkpoint_threshold)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -117,7 +124,7 @@ def run_automatic_sweep(experiment_id, policy_name,
                                      fixed_job_duration,
                                      generate_multi_gpu_jobs,
                                      simulate_steady_state, log_dir,
-                                     timeout, verbose)
+                                     timeout, verbose, checkpoint_threshold)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -139,7 +146,8 @@ def run_automatic_sweep(experiment_id, policy_name,
                                       fixed_job_duration,
                                       generate_multi_gpu_jobs,
                                       simulate_steady_state, log_dir,
-                                     timeout, verbose)
+                                      timeout, verbose,
+                                      checkpoint_threshold)
         average_jcts.append(average_jct)
         utilizations.append(utilization)
         if np.max(average_jcts) / np.min(average_jcts) >= 10:
@@ -228,7 +236,8 @@ def main(args):
                                           args.generate_multi_gpu_jobs,
                                           args.simulate_steady_state,
                                           raw_logs_seed_subdir,
-                                          args.timeout, args.verbose))
+                                          args.timeout, args.verbose,
+                                          args.checkpoint_threshold))
                     experiment_id += 1
             else:
                 throughputs = list(np.linspace(args.throughput_lower_bound,
@@ -263,7 +272,8 @@ def main(args):
                                               args.generate_multi_gpu_jobs,
                                               args.simulate_steady_state,
                                               raw_logs_seed_subdir,
-                                              args.timeout, args.verbose))
+                                              args.timeout, args.verbose,
+                                              args.checkpoint_threshold))
                         experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
@@ -334,6 +344,9 @@ if __name__=='__main__':
                               'before beginning the simulation.'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
+    parser.add_argument('--checkpoint-threshold', type=int, default=None,
+                        help=('Checkpoint threshold, None if checkpointing is disabled,'
+                              'Checkpoint is created after this job ID is added.'))
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
                              default=None,
                              help=('Lower bound for throughput interval to '
