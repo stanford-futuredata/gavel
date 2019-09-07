@@ -754,9 +754,10 @@ class Scheduler:
         while True:
             with self._scheduler_lock:
                 num_workers = len(self._worker_ids)
-                if num_workers == 0:
-                    time.sleep(5)
-                    continue
+            if num_workers == 0:
+                time.sleep(5)
+                continue
+            with self._scheduler_lock:
                 # Reset available_worker_ids to the desired size.
                 self._available_worker_ids = queue.Queue(num_workers)
                 for worker_id in self._worker_ids:
@@ -1006,7 +1007,7 @@ class Scheduler:
             if self._simulate:
                 return self._all_throughputs[worker_type][job_types[0]][job_types[1]]
             elif (job_types[0] in self._all_throughputs[worker_type] and
-		  job_types[1] in self._all_throughputs[worker_type]):
+                  job_types[1] in self._all_throughputs[worker_type]):
                 return self._all_throughputs[worker_type][job_types[0]][job_types[1]]
             else:
                 return [DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0]
@@ -1014,7 +1015,7 @@ class Scheduler:
             if self._simulate:
                 return self._all_throughputs[worker_type][job_types]["null"]
             elif job_types in self._all_throughputs[worker_type]:
-                return self._all_throughputs[worker_type][job_type]["null"]
+                return self._all_throughputs[worker_type][job_types]["null"]
             else:
                 return DEFAULT_THROUGHPUT
 
@@ -1231,7 +1232,7 @@ class Scheduler:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
                             (self._time_per_iteration / 2.0)
-                    print('Computing throughput for job %s' % (job_id))
+                    print('Computing throughput for job %s with job_type %s' % (job_id, self._jobs[job_id].job_type))
                     self._throughputs[job_id][worker_type] = \
                         self._compute_throughput(self._jobs[job_id].job_type,
                                                  worker_type)
