@@ -11,6 +11,8 @@ import time
 import datetime
 import random
 import math
+import matrix_completion
+import warnings
 
 # TODO: clean these up.
 from job import Job
@@ -26,6 +28,8 @@ DEFAULT_THROUGHPUT = INFINITY
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
+DEFAULT_MATRIX_COMPLETION_K = 10
+DEFAULT_MATRIX_COMPLETION_MU = 1e-2
 
 class Scheduler:
 
@@ -117,11 +121,14 @@ class Scheduler:
                 throughputs_file)
         else:
             self._oracle_throughputs = None
-        self._predict_throughputs = \
+        # Flag to indicate whether throughputs should be estimated online.
+        self._estimate_throughputs = \
             self._job_packing and profiling_percentage > 0
-        if self._predict_throughputs:
+        if self._estimate_throughputs:
             # Percentage of machines to use for profiling co-located jobs.
             self._profiling_percentage = profiling_percentage
+            # Keeps track of which throughput values have been measured.
+            self._throughputs_mask = {}
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -277,6 +284,8 @@ class Scheduler:
                 for other_job_id in to_delete:
                     del self._throughputs[other_job_id]
                     del self._job_time_so_far[other_job_id]
+                    if self._estimate_throughputs:
+                        del self._throughputs_mask[other_job_id]
 
             self._remove_from_priorities(job_id)
             self._need_to_update_allocation = True
@@ -1077,6 +1086,11 @@ class Scheduler:
                         job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
                     self._throughputs[merged_job_id] = {}
+<<<<<<< HEAD
+=======
+                    self._throughputs_mask[merged_job_id] = {}
+                    self._steps_run_so_far[merged_job_id] = {}
+>>>>>>> a8b40ac... Add function for estimating colocated throughputs
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
@@ -1084,8 +1098,9 @@ class Scheduler:
                 # so make sure the co-located throughputs match the order of the
                 # single-job IDs.
                 if (job.scale_factor != other_job.scale_factor or
-                    self._predict_throughputs):
+                    self._estimate_throughputs):
                     self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
+                    self._throughputs_mask[merged_job_id][worker_type] = False
                 else:
                     oracle_throughputs = self._oracle_throughputs[worker_type]
                     if job_id < other_job_id:
@@ -1104,6 +1119,61 @@ class Scheduler:
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
 
+<<<<<<< HEAD
+=======
+    def _estimate_colocated_throughputs(self):
+        all_job_ids = sorted(self._jobs.keys())
+        num_jobs = len(all_job_ids)
+
+        for worker_type in self._worker_types:
+            throughputs_matrix = \
+                np.zeros((num_jobs, num_jobs), dtype=np.float32)
+            mask = np.zeros((num_jobs, num_jobs), dtype=np.float32)
+
+            # Construct the mask and throughputs matrix.
+            for i, job_id_0 in enumerate(all_job_ids):
+                for j, job_id_1 in enumerate(all_job_ids):
+                    if j <= i:
+                        continue
+                    merged_job_id = \
+                        job_id_pair.JobIdPair(job_id_0[0], job_id_1[0])
+                    if self._throughputs_mask[merged_job_id][worker_type]:
+                        mask[i][j] = 1.0
+                        mask[j][i] = 1.0
+                        measured_throughputs = \
+                            self._throughputs[merged_job_id][worker_type]
+                        throughputs_matrix[i][j] = measured_throughputs[0]
+                        throughputs_matrix[j][i] = measured_throughputs[1]
+
+            # Run the matrix completion algorithm.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                k = DEFAULT_MATRIX_COMPLETION_K
+                mu = DEFAULT_MATRIX_COMPLETION_MU
+                try:
+                    estimated_throughputs = \
+                        matrix_completion.pmf_solve(throughputs_matrix,
+                                                    mask,
+                                                    k=k,
+                                                    mu=mu)
+                except np.linalg.LinAlgError as e:
+                    print('WARNING: could not estimate throughputs!')
+                    print(e)
+                    estimated_throughputs = None
+
+            # Insert the estimated throughputs back into the global throughputs
+            # data structure.
+            if estimated_throughputs is not None:
+                for i in range(num_jobs):
+                    for j in range(num_jobs):
+                        if j <= i or mask[i][j]:
+                            continue
+                        merged_job_id = job_id_pair.JobIdPair(all_job_ids[i][0],
+                                                              all_job_ids[j][0])
+                        self._throughputs[merged_job_id][worker_type] = \
+                            [estimated_throughputs[i][j],
+                             estimated_throughputs[j][i]]
+>>>>>>> a8b40ac... Add function for estimating colocated throughputs
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
@@ -1211,6 +1281,8 @@ class Scheduler:
 
         if self._need_to_update_allocation:
             self._reset_time_run_so_far()
+            if self._estimate_throughputs:
+                self._estimate_colocated_throughputs()
             self._allocation = self._get_allocation()
             self._need_to_update_allocation = False
 
