@@ -345,7 +345,8 @@ if __name__=='__main__':
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     parser.add_argument('--checkpoint-threshold', type=int, default=None,
-                        help='Checkpoint threshold, None if checkpointing is disabled')
+                        help=('Checkpoint threshold, None if checkpointing is disabled,'
+                              'Checkpoint is created after this job ID is added.'))
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
                              default=None,
                              help=('Lower bound for throughput interval to '
