@@ -948,12 +948,6 @@ class Scheduler:
                 self._throughputs, self._cluster_spec)
         if unflattened_allocation is None:
             return None
-        for job_id in unflattened_allocation:
-            for worker_type in unflattened_allocation[job_id]:
-                threshold = float(len(self._worker_type_to_worker_id_mapping[worker_type])) / \
-                    (len(self._jobs) * 1000.0)
-                if unflattened_allocation[job_id][worker_type] < threshold:
-                    unflattened_allocation[job_id][worker_type] = 0.0
 
         return unflattened_allocation
 

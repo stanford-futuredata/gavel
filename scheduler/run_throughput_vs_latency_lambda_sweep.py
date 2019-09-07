@@ -277,7 +277,7 @@ def main(args):
             else:
                 # Sort args in order of decreasing lambda to prioritize
                 # short-running jobs.
-                all_args_list.sort(key=lambda x: x[5], reverse=True)
+                all_args_list.sort(key=lambda x: x[4], reverse=True)
                 results = [p.apply_async(simulate_with_timeout, args_list)
                            for args_list in all_args_list]
                 results = [result.get() for result in results]
