@@ -30,15 +30,15 @@ MAX_FAILED_ATTEMPTS = 5
 class Scheduler:
 
     def __init__(self, policy, simulate=False, throughputs_file=None,
-                 seed=0, time_per_iteration=1920, predict_throughputs=False):
+                 seed=0, time_per_iteration=1920, profiling_percentage=0.0):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
                'seed=%d, time_per_iteration=%d, '
-               'predict_throughputs=%s' % (policy.name,
-                                           seed,
-                                           time_per_iteration,
-                                           predict_throughputs))
+               'profiling_percentage=%f' % (policy.name,
+                                            seed,
+                                            time_per_iteration,
+                                            profiling_percentage))
 
         # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
@@ -117,8 +117,11 @@ class Scheduler:
                 throughputs_file)
         else:
             self._oracle_throughputs = None
-        # Flag to control whether to predict throughputs online.
-        self._predict_throughputs = predict_throughputs
+        self._predict_throughputs = \
+            self._job_packing and profiling_percentage > 0
+        if self._predict_throughputs:
+            # Percentage of machines to use for profiling co-located jobs.
+            self._profiling_percentage = profiling_percentage
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -155,6 +158,8 @@ class Scheduler:
         self._interarrival_time_generator = random.Random()
         self._interarrival_time_generator.seed(seed+3)
 
+        self._throughput_estimation_generator = np.random.RandomState()
+        self._throughput_estimation_generator.seed(seed+4)
 
     def start_scheduling_thread(self):
         self.scheduler_thread = threading.Thread(
@@ -216,8 +221,7 @@ class Scheduler:
             self._total_steps_run[job_id] = 0
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
-                self._throughputs[job_id][worker_type] = \
-                    self._compute_throughput(job.job_type, worker_type)
+                self._set_initial_throughput(job_id, worker_type)
                 if self._job_packing:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
@@ -1079,34 +1083,27 @@ class Scheduler:
                 # The single-job IDs for job pairs are stored in sorted order,
                 # so make sure the co-located throughputs match the order of the
                 # single-job IDs.
-                if job_id [0] == merged_job_id[0]:
-                    if job.scale_factor != other_job.scale_factor:
-                        self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
-                    else:
-                        self._throughputs[merged_job_id][worker_type] = \
-                            self._compute_throughput(
-                                [job.job_type, other_job.job_type],
-                                worker_type)
+                if (job.scale_factor != other_job.scale_factor or
+                    self._predict_throughputs):
+                    self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
                 else:
-                    if job.scale_factor != other_job.scale_factor:
-                        self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
+                    oracle_throughputs = self._oracle_throughputs[worker_type]
+                    if job_id < other_job_id:
+                        self._throughputs[merged_job_id][worker_type] = \
+                            oracle_throughputs[job.job_type][other_job.job_type]
                     else:
                         self._throughputs[merged_job_id][worker_type] = \
-                            self._compute_throughput(
-                                [other_job.job_type, job.job_type],
-                                worker_type)
+                            oracle_throughputs[other_job.job_type][job.job_type]
 
-    def _compute_throughput(self, job_types, worker_type):
-        if isinstance(job_types, list):
-            if self._simulate:
-                return self._oracle_throughputs[worker_type][job_types[0]][job_types[1]]
-            else:
-                return [DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0]
+    def _set_initial_throughput(self, job_id, worker_type):
+        assert(not job_id.is_pair())
+        if self._simulate:
+            job_type = self._jobs[job_id].job_type
+            self._throughputs[job_id][worker_type] = \
+                self._oracle_throughputs['v100'][job_type]['null']
         else:
-            if self._simulate:
-                return self._oracle_throughputs[worker_type][job_types]["null"]
-            else:
-                return DEFAULT_THROUGHPUT
+            self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
+
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
@@ -1318,9 +1315,7 @@ class Scheduler:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
                             (self._time_per_iteration / 2.0)
-                    self._throughputs[job_id][worker_type] = \
-                        self._compute_throughput(self._jobs[job_id],
-                                                 worker_type)
+                    self._set_initial_throughput(job_id, worker_type)
                     if self._job_packing:
                         self._populate_job_combination_metadata(job_id,
                                                                 worker_type)
