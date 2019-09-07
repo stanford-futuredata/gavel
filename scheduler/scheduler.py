@@ -682,6 +682,9 @@ class Scheduler:
             num_total_jobs is None):
             raise ValueError('One of \'jobs_to_complete\' '
                              'or \'num_total_jobs\' must be set.')
+        if (checkpoint_file is not None and (from_trace or simulate_steady_state)):
+            raise ValueError('Checkpointing only intended to be used '
+                             'when generating trace on-the-fly.')
 
         running_jobs = []
         num_jobs_generated = 0
