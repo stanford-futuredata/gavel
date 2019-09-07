@@ -264,15 +264,9 @@ class Scheduler:
                 for other_job_id in self._throughputs:
                     if (other_job_id.is_pair() and
                         job_id.overlaps_with(other_job_id)):
-                        for only_other_job_id in other_job_id.singletons():
-                            if only_other_job_id != job_id:
-                                for worker_type in self._worker_types:
-                                    self._steps_run_so_far[only_other_job_id][worker_type] += \
-                                            self._steps_run_so_far[other_job_id][worker_type]
                         to_delete.append(other_job_id)
                 for other_job_id in to_delete:
                     del self._throughputs[other_job_id]
-                    del self._steps_run_so_far[other_job_id]
                     del self._job_time_so_far[other_job_id]
 
             self._remove_from_priorities(job_id)
@@ -1073,7 +1067,6 @@ class Scheduler:
                         job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
                     self._throughputs[merged_job_id] = {}
-                    self._steps_run_so_far[merged_job_id] = {}
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
@@ -1096,8 +1089,6 @@ class Scheduler:
                             self._compute_throughput(
                                 [other_job.job_type, job.job_type],
                                 worker_type)
-
-                self._steps_run_so_far[merged_job_id][worker_type] = 0
 
     def _compute_throughput(self, job_types, worker_type):
         if isinstance(job_types, list):
