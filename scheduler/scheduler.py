@@ -674,7 +674,7 @@ class Scheduler:
             for i in range(cluster_spec[worker_type]):
                 self._register_worker_callback(worker_type)
 
-        if checkpoint_file is not None:
+        if checkpoint_file is not None and checkpoint_threshold is None:
             self._load_checkpoint(checkpoint_file)
             next_job_arrival_time = self.get_current_timestamp()
             current_round_start_time = self.get_current_timestamp()
