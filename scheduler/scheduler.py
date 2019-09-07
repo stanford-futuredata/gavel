@@ -507,15 +507,21 @@ class Scheduler:
         return all_num_steps, max_finish_time
 
 
-    def _save_checkpoint(self, next_job_arrival_time,
+    def _save_checkpoint(self, checkpoint_file, completed_jobs,
+                         last_job_arrival_time,
+                         next_job_arrival_time,
                          current_round_start_time,
-                         running_jobs,
-                         checkpoint_file):
+                         current_round_end_time,
+                         running_jobs):
         with open(checkpoint_file, 'wb') as f:
             import pickle
+            pickle.dump(completed_jobs, f)
+            pickle.dump(last_job_arrival_time, f)
             pickle.dump(next_job_arrival_time, f)
             pickle.dump(current_round_start_time, f)
+            pickle.dump(current_round_end_time, f)
             pickle.dump(running_jobs, f)
+
             pickle.dump(self._jobs, f)
             pickle.dump(self._throughputs, f)
             pickle.dump(self._allocation, f)
@@ -542,9 +548,13 @@ class Scheduler:
     def _load_checkpoint(self, checkpoint_file):
         with open(checkpoint_file, 'rb') as f:
             import pickle
+            completed_jobs = pickle.load(f)
+            last_job_arrival_time = pickle.load(f)
             next_job_arrival_time = pickle.load(f)
             current_round_start_time = pickle.load(f)
+            current_round_end_time = pickle.load(f)
             running_jobs = pickle.load(f)
+
             self._jobs = pickle.load(f)
             self._throughputs = pickle.load(f)
             self._allocation = pickle.load(f)
@@ -567,7 +577,11 @@ class Scheduler:
             self._current_timestamp = pickle.load(f)
             self._job_id_counter = pickle.load(f)
 
-            return (next_job_arrival_time, current_round_start_time,
+            return (completed_jobs,
+                    last_job_arrival_time,
+                    next_job_arrival_time,
+                    current_round_start_time,
+                    current_round_end_time,
                     running_jobs)
 
 
@@ -687,8 +701,12 @@ class Scheduler:
                 self._register_worker_callback(worker_type)
 
         if checkpoint_file is not None and checkpoint_threshold is None:
-            next_job_arrival_time, current_round_start_time, running_jobs = \
-                    self._load_checkpoint(checkpoint_file)
+            (completed_jobs,
+             last_job_arrival_time,
+             next_job_arrival_time,
+             current_round_start_time,
+             current_round_end_time,
+             running_jobs) = self._load_checkpoint(checkpoint_file)
 
         if from_trace:
             # Add all jobs to the queue.
@@ -821,10 +839,13 @@ class Scheduler:
                 and not checkpoint_complete:
                 # Create checkpoint.
                 assert(checkpoint_file is not None)
-                self._save_checkpoint(next_job_arrival_time,
+                self._save_checkpoint(checkpoint_file,
+                                      completed_jobs,
+                                      last_job_arrival_time,
+                                      next_job_arrival_time,
                                       current_round_start_time,
-                                      running_jobs,
-                                      checkpoint_file)
+                                      current_round_end_time,
+                                      running_jobs)
                 checkpoint_complete = True
 
         print('Total duration: %.3f seconds' % (self._current_timestamp))
@@ -860,6 +881,7 @@ class Scheduler:
     def schedule(self):
         """Schedules jobs on workers."""
         self._schedule_with_rounds()
+
 
     def get_average_jct(self, job_ids=None):
         """Computes the average job completion time.
