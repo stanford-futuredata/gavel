@@ -7,7 +7,7 @@ from utils import ensure_shared_grads
 from model import A3Clstm
 from player_util import Agent
 from torch.autograd import Variable
-
+import time
 
 def train(rank, args, shared_model, optimizer, env_conf):
     ptitle('Training Agent: {}'.format(rank))
@@ -108,5 +108,11 @@ def train(rank, args, shared_model, optimizer, env_conf):
         optimizer.step()
         player.clear_actions()
         steps += 1
+
+        if (args.throughput_estimation_interval is not None and
+            steps % args.throughput_estimation_interval == 0 and
+            rank == 0):
+            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), steps))
+
         if steps >= args.max_steps:
           return

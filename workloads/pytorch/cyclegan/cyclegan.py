@@ -42,6 +42,8 @@ parser.add_argument("--checkpoint_interval", type=int, default=-1, help="interva
 parser.add_argument("--n_residual_blocks", type=int, default=9, help="number of residual blocks in generator")
 parser.add_argument("--lambda_cyc", type=float, default=10.0, help="cycle loss weight")
 parser.add_argument("--lambda_id", type=float, default=5.0, help="identity loss weight")
+parser.add_argument('--throughput_estimation_interval', type=int, default=None,
+                    help='Steps between logging steps completed')
 opt = parser.parse_args()
 print(opt)
 
@@ -283,9 +285,16 @@ for epoch in range(opt.epoch, opt.n_epochs):
         if batches_done % opt.sample_interval == 0:
             sample_images(batches_done)
 
+        steps += 1
+
+        if (opt.throughput_estimation_interval is not None and
+            steps % opt.throughput_estimation_interval == 0):
+            print('')
+            sys.stdout.flush()
+            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), steps))
+
         if steps >= opt.n_steps:
           sys.exit(0)
-        steps += 1
 
     # Update learning rates
     lr_scheduler_G.step()
