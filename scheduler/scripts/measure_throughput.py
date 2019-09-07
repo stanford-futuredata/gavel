@@ -184,49 +184,6 @@ job_table = [
         num_steps=500),
 ]
 
-"""
-job_table = [
-    Job(model='ResNet-18',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'image_classification/cifar10 && python '
-                 'main.py --data_dir=/home/keshavsanthanam/data/cifar10 '
-                 '--num_steps'),
-        num_steps=4000),
-    Job(model='ResNet-50',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'image_classification/imagenet && python '
-                 'main.py -j 4 -a resnet50 -b 64 /home/deepakn94/imagenet/ '
-                 '--num_minibatches'),
-        num_steps=300),
-    Job(model='A3C',
-        command=('cd /home/%s/gpusched/workloads/pytorch/rl && '
-                 'python main.py --env PongDeterministic-v4 --workers 4 '
-                 '--amsgrad True --max-steps'),
-        num_steps=1000),
-    Job(model='LM',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'language_modeling && python main.py --cuda --data '
-                 '/home/keshavsanthanam/data/wikitext-2 --steps'),
-        num_steps=1000),
-    Job(model='Recommendation',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'recommendation/scripts/ml-20m && python train.py -n'),
-        num_steps=100),
-    Job(model='Transformer',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'translation && python train.py -data '
-                 '/home/keshavsanthanam/data/translation/multi30k.atok.low.pt '
-                 '-proj_share_weight -step'),
-        num_steps=1000),
-    Job(model='CycleGAN',
-        command=('cd /home/%s/gpusched/workloads/pytorch/'
-                 'cyclegan && python cyclegan.py --dataset_path '
-                 '/home/keshavsanthanam/data/monet2photo --decay_epoch 0 '
-                 '--n_steps'),
-        num_steps=1000),
-]
-"""
-
 
 def enable_mps():
     print('Enabling CUDA MPS')
