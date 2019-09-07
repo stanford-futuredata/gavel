@@ -30,13 +30,15 @@ MAX_FAILED_ATTEMPTS = 5
 class Scheduler:
 
     def __init__(self, policy, simulate=False, throughputs_file=None,
-                 seed=0, time_per_iteration=1920):
+                 seed=0, time_per_iteration=1920, predict_throughputs=False):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
-               'seed=%d, time_per_iteration=%d' % (policy.name,
-                                                   seed,
-                                                   time_per_iteration))
+               'seed=%d, time_per_iteration=%d, '
+               'predict_throughputs=%s' % (policy.name,
+                                           seed,
+                                           time_per_iteration,
+                                           predict_throughputs))
 
         # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
@@ -77,8 +79,6 @@ class Scheduler:
         self._scheduler_lock = threading.Lock()
         # List of available worker IDs.
         self._available_worker_ids = queue.Queue()
-        # Throughputs for all current incomplete applications.
-        self._throughputs = {}
         # Allocations for all current incomplete applications.
         self._allocation = {}
         # Iterations run on each worker_id, for all current incomplete
@@ -108,12 +108,17 @@ class Scheduler:
         self._last_reset_time = 0
         # Flag indicating when to update the allocation.
         self._need_to_update_allocation = False
+        # Measured and predicted throughputs for all current incomplete
+        # applications.
+        self._throughputs = {}
         # Throughputs for all job types (pre-measured).
         if throughputs_file is not None:
-            self._all_throughputs = utils.read_all_throughputs_json(
+            self._oracle_throughputs = utils.read_all_throughputs_json(
                 throughputs_file)
         else:
-            self._all_throughputs = {}
+            self._oracle_throughputs = None
+        # Flag to control whether to predict throughputs online.
+        self._predict_throughputs = predict_throughputs
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -594,7 +599,8 @@ class Scheduler:
             run_time = fixed_job_duration
         else:
             run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
-        num_steps = run_time * self._all_throughputs['v100'][job_type]['null']
+        num_steps = \
+            run_time * self._oracle_throughputs['v100'][job_type]['null']
         assert(run_time > 0)
         assert(num_steps > 0)
         if job_template.needs_data_dir:
@@ -666,7 +672,7 @@ class Scheduler:
             remaining_jobs = len(jobs)
             queued_jobs = []
         else:
-            if self._all_throughputs is None:
+            if self._oracle_throughputs is None:
                 raise ValueError('Scheduler must be initialized with a '
                                  'throughputs file.')
             elif lam is None:
@@ -1093,12 +1099,12 @@ class Scheduler:
     def _compute_throughput(self, job_types, worker_type):
         if isinstance(job_types, list):
             if self._simulate:
-                return self._all_throughputs[worker_type][job_types[0]][job_types[1]]
+                return self._oracle_throughputs[worker_type][job_types[0]][job_types[1]]
             else:
                 return [DEFAULT_THROUGHPUT / 2.0, DEFAULT_THROUGHPUT / 2.0]
         else:
             if self._simulate:
-                return self._all_throughputs[worker_type][job_types]["null"]
+                return self._oracle_throughputs[worker_type][job_types]["null"]
             else:
                 return DEFAULT_THROUGHPUT
 
