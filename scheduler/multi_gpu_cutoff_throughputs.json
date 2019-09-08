@@ -1,0 +1,21 @@
+{
+    "64:0:0": {
+        "fifo": 1.4,
+        "fifo_perf": 1.4,
+        "fifo_packed": 1.4,
+        "max_min_fairness": 1.4,
+        "max_min_fairness_perf": 1.4
+    },
+    "36:36:36": {
+        "fifo": 1.2,
+        "fifo_perf": 1.4,
+        "max_min_fairness": 1.4,
+        "max_min_fairness_perf": 1.6
+    },
+    "48:32:16": {
+        "fifo": 1.4,
+        "fifo_perf": 1.4,
+        "max_min_fairness": 1.6,
+        "max_min_fairness_perf": 1.8
+    }
+}

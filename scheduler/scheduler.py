@@ -264,15 +264,9 @@ class Scheduler:
                 for other_job_id in self._throughputs:
                     if (other_job_id.is_pair() and
                         job_id.overlaps_with(other_job_id)):
-                        for only_other_job_id in other_job_id.singletons():
-                            if only_other_job_id != job_id:
-                                for worker_type in self._worker_types:
-                                    self._steps_run_so_far[only_other_job_id][worker_type] += \
-                                            self._steps_run_so_far[other_job_id][worker_type]
                         to_delete.append(other_job_id)
                 for other_job_id in to_delete:
                     del self._throughputs[other_job_id]
-                    del self._steps_run_so_far[other_job_id]
                     del self._job_time_so_far[other_job_id]
 
             self._remove_from_priorities(job_id)
@@ -506,6 +500,85 @@ class Scheduler:
             self._running_jobs.add(single_job_id)
         return all_num_steps, max_finish_time
 
+
+    def _save_checkpoint(self, checkpoint_file, completed_jobs,
+                         last_job_arrival_time,
+                         next_job_arrival_time,
+                         current_round_start_time,
+                         current_round_end_time,
+                         running_jobs):
+        with open(checkpoint_file, 'wb') as f:
+            import pickle
+            pickle.dump(completed_jobs, f)
+            pickle.dump(last_job_arrival_time, f)
+            pickle.dump(next_job_arrival_time, f)
+            pickle.dump(current_round_start_time, f)
+            pickle.dump(current_round_end_time, f)
+            pickle.dump(running_jobs, f)
+
+            pickle.dump(self._jobs, f)
+            pickle.dump(self._throughputs, f)
+            pickle.dump(self._allocation, f)
+            pickle.dump(self._steps_run_so_far, f)
+            pickle.dump(self._total_steps_run, f)
+            pickle.dump(self._job_time_so_far, f)
+            pickle.dump(self._worker_start_times, f)
+            pickle.dump(self._worker_time_so_far, f)
+            pickle.dump(self._cumulative_worker_time_so_far, f)
+            pickle.dump(self._num_jobs, f)
+            pickle.dump(self._priorities, f)
+            pickle.dump(self._deficits, f)
+            pickle.dump(self._last_reset_time, f)
+            pickle.dump(self._need_to_update_allocation, f)
+            pickle.dump(self._job_generator, f)
+            pickle.dump(self._interarrival_time_generator, f)
+            pickle.dump(self._per_job_start_timestamps, f)
+            pickle.dump(self._per_job_latest_timestamps, f)
+            pickle.dump(self._job_completion_times, f)
+            pickle.dump(self._current_timestamp, f)
+            pickle.dump(self._job_id_counter, f)
+
+
+    def _load_checkpoint(self, checkpoint_file):
+        with open(checkpoint_file, 'rb') as f:
+            import pickle
+            completed_jobs = pickle.load(f)
+            last_job_arrival_time = pickle.load(f)
+            next_job_arrival_time = pickle.load(f)
+            current_round_start_time = pickle.load(f)
+            current_round_end_time = pickle.load(f)
+            running_jobs = pickle.load(f)
+
+            self._jobs = pickle.load(f)
+            self._throughputs = pickle.load(f)
+            self._allocation = pickle.load(f)
+            self._steps_run_so_far = pickle.load(f)
+            self._total_steps_run = pickle.load(f)
+            self._job_time_so_far = pickle.load(f)
+            self._worker_start_times = pickle.load(f)
+            self._worker_time_so_far = pickle.load(f)
+            self._cumulative_worker_time_so_far = pickle.load(f)
+            self._num_jobs = pickle.load(f)
+            self._priorities = pickle.load(f)
+            self._deficits = pickle.load(f)
+            self._last_reset_time = pickle.load(f)
+            self._need_to_update_allocation = pickle.load(f)
+            self._job_generator = pickle.load(f)
+            self._interarrival_time_generator = pickle.load(f)
+            self._per_job_start_timestamps = pickle.load(f)
+            self._per_job_latest_timestamps = pickle.load(f)
+            self._job_completion_times = pickle.load(f)
+            self._current_timestamp = pickle.load(f)
+            self._job_id_counter = pickle.load(f)
+
+            return (completed_jobs,
+                    last_job_arrival_time,
+                    next_job_arrival_time,
+                    current_round_start_time,
+                    current_round_end_time,
+                    running_jobs)
+
+
     def _sample_arrival_time_delta(self, rate_parameter):
         """Samples job interarrival rate from a Poisson distribution according
            to the specified rate parameter."""
@@ -552,7 +625,9 @@ class Scheduler:
                  lam=None, jobs_to_complete=None,
                  fixed_job_duration=None, num_total_jobs=None,
                  generate_multi_gpu_jobs=False,
-                 simulate_steady_state=False, debug=False):
+                 simulate_steady_state=False, debug=False,
+                 checkpoint_threshold=None,
+                 checkpoint_file=None):
         """Simulates the scheduler execution.
 
            Simulation can be performed using a trace or with continuously
@@ -601,6 +676,9 @@ class Scheduler:
             num_total_jobs is None):
             raise ValueError('One of \'jobs_to_complete\' '
                              'or \'num_total_jobs\' must be set.')
+        if (checkpoint_file is not None and (from_trace or simulate_steady_state)):
+            raise ValueError('Checkpointing only intended to be used '
+                             'when generating trace on-the-fly.')
 
         running_jobs = []
         num_jobs_generated = 0
@@ -611,12 +689,21 @@ class Scheduler:
         current_round_start_time = 0
         current_round_end_time = None
         num_completed_jobs = 0
+        checkpoint_complete = False
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
         for worker_type in worker_types:
             for i in range(cluster_spec[worker_type]):
                 self._register_worker_callback(worker_type)
+
+        if checkpoint_file is not None and checkpoint_threshold is None:
+            (completed_jobs,
+             last_job_arrival_time,
+             next_job_arrival_time,
+             current_round_start_time,
+             current_round_end_time,
+             running_jobs) = self._load_checkpoint(checkpoint_file)
 
         if from_trace:
             # Add all jobs to the queue.
@@ -699,11 +786,13 @@ class Scheduler:
             assert(len(running_jobs) == 0)
 
             # Dispatch any newly arrived jobs.
+            last_added_job_id = None
             if from_trace:
                 while len(queued_jobs) > 0:
                     (arrival_time, job) = queued_jobs[0]
                     if arrival_time <= self._current_timestamp:
                         job_id = self.add_job(job, timestamp=arrival_time)
+                        last_added_job_id = job_id
                         queued_jobs.pop(0)
                     else:
                         break
@@ -717,6 +806,7 @@ class Scheduler:
                     num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
+                    last_added_job_id = job_id
 
                     last_job_arrival_time = next_job_arrival_time
                     if lam == 0.0:
@@ -740,6 +830,20 @@ class Scheduler:
                 heapq.heappush(running_jobs, (-max_finish_time, job_id,
                                               worker_ids,
                                               all_num_steps))
+
+            if checkpoint_threshold is not None and last_added_job_id is not None \
+                and last_added_job_id[0] >= checkpoint_threshold \
+                and not checkpoint_complete:
+                # Create checkpoint.
+                assert(checkpoint_file is not None)
+                self._save_checkpoint(checkpoint_file,
+                                      completed_jobs,
+                                      last_job_arrival_time,
+                                      next_job_arrival_time,
+                                      current_round_start_time,
+                                      current_round_end_time,
+                                      running_jobs)
+                checkpoint_complete = True
 
         print('Total duration: %.3f seconds' % (self._current_timestamp))
 
@@ -948,12 +1052,6 @@ class Scheduler:
                 self._throughputs, self._cluster_spec)
         if unflattened_allocation is None:
             return None
-        for job_id in unflattened_allocation:
-            for worker_type in unflattened_allocation[job_id]:
-                threshold = float(len(self._worker_type_to_worker_id_mapping[worker_type])) / \
-                    (len(self._jobs) * 1000.0)
-                if unflattened_allocation[job_id][worker_type] < threshold:
-                    unflattened_allocation[job_id][worker_type] = 0.0
 
         return unflattened_allocation
 
@@ -969,7 +1067,6 @@ class Scheduler:
                         job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
                     self._throughputs[merged_job_id] = {}
-                    self._steps_run_so_far[merged_job_id] = {}
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
@@ -992,8 +1089,6 @@ class Scheduler:
                             self._compute_throughput(
                                 [other_job.job_type, job.job_type],
                                 worker_type)
-
-                self._steps_run_so_far[merged_job_id][worker_type] = 0
 
     def _compute_throughput(self, job_types, worker_type):
         if isinstance(job_types, list):

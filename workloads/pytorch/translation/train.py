@@ -53,7 +53,8 @@ def cal_loss(pred, gold, smoothing):
 
 
 def train_epoch(model, training_data, optimizer, device, smoothing,
-                step=None, cumulative_step=None):
+                step=None, cumulative_step=None,
+                throughput_estimation_interval=None):
     ''' Epoch operation in training phase'''
 
     model.train()
@@ -61,7 +62,7 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
     total_loss = 0
     n_word_total = 0
     n_word_correct = 0
-    done = False 
+    done = False
 
     for batch in tqdm(
             training_data, mininterval=2,
@@ -92,6 +93,11 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
 
         if cumulative_step is not None:
           cumulative_step += 1
+
+          if (throughput_estimation_interval is not None and
+              cumulative_step % throughput_estimation_interval == 0):
+              print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
+                                                         cumulative_step))
           if step is not None and cumulative_step >= step:
               done = True
               break
@@ -163,7 +169,8 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             model, training_data, optimizer, device,
             smoothing=opt.label_smoothing,
             step=opt.step,
-            cumulative_step=cumulative_step)
+            cumulative_step=cumulative_step,
+            throughput_estimation_interval=opt.throughput_estimation_interval)
         print('  - (Training)   ppl: {ppl: 8.5f}, accuracy: {accu:3.3f} %, '\
               'elapse: {elapse:3.3f} min'.format(
                   ppl=math.exp(min(train_loss, 100)), accu=100*train_accu,
@@ -225,6 +232,8 @@ def main():
 
     parser.add_argument('-n_head', type=int, default=8)
     parser.add_argument('-n_layers', type=int, default=6)
+    # NOTE(keshav2): This just refers to the learning rate schedule,
+    #                nothing performance related.
     parser.add_argument('-n_warmup_steps', type=int, default=4000)
 
     parser.add_argument('-dropout', type=float, default=0.1)
@@ -237,6 +246,10 @@ def main():
 
     parser.add_argument('-no_cuda', action='store_true')
     parser.add_argument('-label_smoothing', action='store_true')
+
+    parser.add_argument('--throughput_estimation_interval', type=int,
+                        default=None,
+                        help='Steps between logging steps completed')
 
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda
