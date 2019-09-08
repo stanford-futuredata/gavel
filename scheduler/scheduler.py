@@ -334,6 +334,44 @@ class Scheduler:
     ======================================================================
     """
 
+    def _select_job_combinations_to_profile(self, worker_type, num_workers,
+                                            already_scheduled_jobs):
+        # FInd the predicted throughputs with the highest normalized
+        # co-located throughput.
+        all_job_ids = sorted(self._jobs.keys())
+        scheduled_jobs_on_worker_type = []
+        estimated_jobs = []
+        already_scheduled_jobs_set = set(already_scheduled_jobs)
+        num_workers_left = num_workers
+
+        for merged_job_id in self._throughputs_mask:
+            if not self._throughputs_mask[merged_job_id][worker_type]:
+                throughput = \
+                    min(self._throughputs[merged_job_id][worker_type])
+                estimated_jobs.append((merged_job_id, throughput))
+        estimated_jobs.sort(key=lambda x: x[1], reverse=True)
+
+        num_profiling_machines = int(self._cluster_spec[worker_type] *
+                                     self._profiling_percentage)
+        while (len(scheduled_jobs_on_worker_type) < num_profiling_machines and
+               len(estimated_jobs) > 0):
+            (estimated_job_id, _) = estimated_jobs.pop(0)
+            single_job_ids = estimated_job_id.singletons()
+            if (single_job_ids[0] in already_scheduled_jobs_set or
+                single_job_ids[1] in already_scheduled_jobs_set or
+                self._jobs[single_job_ids[0]].scale_factor > 1):
+                continue
+            scheduled_jobs_on_worker_type.append((estimated_job_id, 1))
+            for single_job_id in single_job_ids:
+                already_scheduled_jobs_set.add(single_job_id)
+            num_workers_left -= 1
+
+        profiled_jobs = [x[0] for x in scheduled_jobs_on_worker_type]
+        print('Profiling these jobs in the next round:', profiled_jobs)
+
+        return scheduled_jobs_on_worker_type, already_scheduled_jobs_set
+
+
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_type,
                                          already_scheduled_jobs):
@@ -346,10 +384,19 @@ class Scheduler:
              A list of job IDs to schedule on the passed-in worker_type in
              the upcoming round.
         """
-        already_scheduled_jobs_set = set(already_scheduled_jobs)
-        scheduled_jobs_on_worker_type = []
         num_workers = len(
             self._worker_type_to_worker_id_mapping[worker_type])
+
+        if self._estimate_throughputs:
+            scheduled_jobs_on_worker_type, already_scheduled_jobs_set = \
+                self._select_job_combinations_to_profile(worker_type,
+                                                         num_workers,
+                                                         already_scheduled_jobs)
+            num_workers -= len(scheduled_jobs_on_worker_type)
+        else:
+            already_scheduled_jobs_set = set(already_scheduled_jobs)
+            scheduled_jobs_on_worker_type = []
+
         num_workers_left = num_workers
 
         entries = []
@@ -357,13 +404,6 @@ class Scheduler:
             entries.append((job_id, self._priorities[worker_type][job_id],
                             self._deficits[worker_type][job_id],
                             self._allocation[job_id][worker_type]))
-
-        if self._estimate_throughputs:
-            num_profiling_machines = int(self._cluster_spec[worker_type] *
-                                         self._profiling_percentage)
-            for i in range(num_profiling_machines):
-                # TODO: select which job pairs to profile.
-                num_workers_left -= 1
 
         sorted_job_queue = sorted(entries,
                                   key=lambda x: (x[1], x[2], x[3]),
@@ -468,7 +508,7 @@ class Scheduler:
                 for single_job_id in job_id.singletons():
                     num_steps = self._get_num_steps(job_id, worker_type,
                                                     single_job_id)
-                    if num_steps <= 0:
+                    if not self._estimate_throughputs and num_steps <= 0:
                         raise ValueError('Num steps should be greater '
                                          'than 0, is %d (Job ID: %s, '
                                          'job_type=%s, '
@@ -519,25 +559,38 @@ class Scheduler:
     def _get_job_steps_and_finish_times(self, job_id, worker_type):
         """Returns the number of steps to execute and and latest finish time(s)
            for a job or job pair."""
-        max_finish_time = None
+        max_finish_time = self.get_current_timestamp()
         all_num_steps = []
-        for i, single_job_id in enumerate(job_id.singletons()):
+        single_job_ids = job_id.singletons()
+        if job_id.is_pair() and self._estimate_throughputs and self._simulate:
+            oracle_throughputs = self._oracle_throughputs[worker_type]
+            job_types = []
+            for single_job_id in single_job_ids:
+                job_types.append(self._jobs[single_job_id].job_type)
+            oracle_throughput = oracle_throughputs[job_types[0]][job_types[1]]
+        for i, single_job_id in enumerate(single_job_ids):
             num_steps = self._get_num_steps(job_id, worker_type, single_job_id)
             all_num_steps.append(num_steps)
             if job_id.is_pair():
-                throughput = self._throughputs[job_id][worker_type][i]
+                if self._estimate_throughputs and self._simulate:
+                    throughput = oracle_throughput[i]
+                else:
+                    throughput = self._throughputs[job_id][worker_type][i]
             else:
                 throughput = self._throughputs[job_id][worker_type]
-            if throughput <= 0.0:
-                print(single_job_id)
-                print(worker_type)
-                raise Exception("Throughput should not be less than 0!")
+            if throughput <= 0:
+                if self._estimate_throughputs:
+                    all_num_steps.append(0)
+                    finish_time = max_finish_time
+                else:
+                    print(single_job_id)
+                    print(worker_type)
+                    raise Exception("Throughput should not be less than 0!")
             else:
                 execution_time = num_steps / throughput
                 finish_time = (self.get_current_timestamp() + \
                                 (num_steps / throughput))
-            if (max_finish_time is None or
-                finish_time > max_finish_time):
+            if finish_time > max_finish_time:
                 max_finish_time = finish_time
             self._running_jobs.add(single_job_id)
         return all_num_steps, max_finish_time
@@ -1165,13 +1218,13 @@ class Scheduler:
                                 self._throughputs[single_job_id][worker_type])
                         measured_throughputs = \
                             self._throughputs[merged_job_id][worker_type]
-                        normalized_throughputs = map(operator.truediv,
-                                                     measured_throughputs,
-                                                     isolated_throughputs)
+                        normalized_throughputs = np.divide(measured_throughputs,
+                                                           isolated_throughputs)
                         throughputs_matrix[i][j] = normalized_throughputs[0]
                         throughputs_matrix[j][i] = normalized_throughputs[1]
-                        isolated_throughputs_map[merged_job_id] = \
-                            isolated_throughputs
+
+            print('original throughputs_matrix:')
+            print(throughputs_matrix)
 
             # Run the matrix completion algorithm.
             with warnings.catch_warnings():
@@ -1193,6 +1246,8 @@ class Scheduler:
             # Insert the estimated throughputs back into the global throughputs
             # data structure.
             if estimated_throughputs is not None:
+                print('estimated_throughputs:')
+                print(estimated_throughputs)
                 for i in range(num_jobs):
                     job_id_0 = all_job_ids[0]
                     for j in range(num_jobs):
@@ -1473,14 +1528,16 @@ class Scheduler:
 
             if np.min(all_execution_times) <= 0:
                 # Micro-task failed.
-                self._num_failures_per_job[job_id] += 1
                 print(('%s]\t[Micro-task failed]\t'
                        'Job ID: %s') % (current_timestamp,
                                         job_id))
-                if self._num_failures_per_job[job_id] >= MAX_FAILED_ATTEMPTS:
-                    print(('%s]\t[Job failed]\t'
-                           'Job ID: %s') % (current_timestamp, job_id))
-                    to_remove.append(job_id)
+                if not job_id.is_pair():
+                    self._num_failures_per_job[job_id] += 1
+                    if (self._num_failures_per_job[job_id] >=
+                        MAX_FAILED_ATTEMPTS):
+                        print(('%s]\t[Job failed]\t'
+                               'Job ID: %s') % (current_timestamp, job_id))
+                        to_remove.append(job_id)
 
             else:
                 print(('%s]\t[Micro-task succeeded]\t'
