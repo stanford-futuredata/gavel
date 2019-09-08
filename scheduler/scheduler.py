@@ -1104,11 +1104,7 @@ class Scheduler:
                         job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
                     self._throughputs[merged_job_id] = {}
-<<<<<<< HEAD
-=======
                     self._throughputs_mask[merged_job_id] = {}
-                    self._steps_run_so_far[merged_job_id] = {}
->>>>>>> a8b40ac... Add function for estimating colocated throughputs
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
@@ -1137,8 +1133,6 @@ class Scheduler:
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
 
-<<<<<<< HEAD
-=======
     def _estimate_colocated_throughputs(self):
         all_job_ids = sorted(self._jobs.keys())
         num_jobs = len(all_job_ids)
@@ -1191,7 +1185,6 @@ class Scheduler:
                         self._throughputs[merged_job_id][worker_type] = \
                             [estimated_throughputs[i][j],
                              estimated_throughputs[j][i]]
->>>>>>> a8b40ac... Add function for estimating colocated throughputs
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
