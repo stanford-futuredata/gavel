@@ -199,7 +199,6 @@ class Scheduler:
             else:
                 old_throughput = [self._throughputs[job_id][worker_type]]
             for i, single_job_id in enumerate(job_id.singletons()):
-                # TODO: fix for job pairs.
                 new_throughput = all_num_steps[i] / all_execution_times[i]
                 if old_throughput != INFINITY:
                     new_throughput *= EMA_ALPHA
@@ -358,6 +357,13 @@ class Scheduler:
             entries.append((job_id, self._priorities[worker_type][job_id],
                             self._deficits[worker_type][job_id],
                             self._allocation[job_id][worker_type]))
+
+        if self._estimate_throughputs:
+            num_profiling_machines = int(self._cluster_spec[worker_type] *
+                                         self._profiling_percentage)
+            for i in range(num_profiling_machines):
+                # TODO: select which job pairs to profile.
+                num_workers_left -= 1
 
         sorted_job_queue = sorted(entries,
                                   key=lambda x: (x[1], x[2], x[3]),
@@ -1104,7 +1110,8 @@ class Scheduler:
                         job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
                     self._throughputs[merged_job_id] = {}
-                    self._throughputs_mask[merged_job_id] = {}
+                    if self._estimate_throughputs:
+                        self._throughputs_mask[merged_job_id] = {}
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
