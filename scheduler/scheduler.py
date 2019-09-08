@@ -176,20 +176,38 @@ class Scheduler:
         self.scheduler_thread.start()
 
 
-    def _update_throughput(self, job_id, worker_type, num_steps,
-                           execution_time):
-        # Adjust the job throughput using an exponential moving average
-        # between the old value and the new measurement.
-        # TODO: fix for job pairs.
-        old_throughput = self._throughputs[job_id][worker_type]
-        new_throughput = num_steps / execution_time
-        if old_throughput != INFINITY:
-            new_throughput *= EMA_ALPHA
-            new_throughput += (1 - EMA_ALPHA) * old_throughput
-        self._throughputs[job_id][worker_type] = new_throughput
-        print(('[DEBUG] Job %s throughput on worker type %s: '
-               '%.3f -> %.3f') % (job_id, worker_type, old_throughput,
-                                  self._throughputs[job_id][worker_type]))
+    def _update_throughput(self, job_id, worker_type, all_num_steps,
+                           all_execution_times):
+        if self._simulate and self._estimate_throughputs:
+            if not job_id.is_pair():
+                # Assume single job throughputs are already populated.
+                return
+            elif (job_id.is_pair() and
+                  not self._throughputs_mask[job_id][worker_type]):
+                self._throughputs_mask[job_id][worker_type] = True
+                oracle_throughputs = self._oracle_throughputs[worker_type]
+                job_types = []
+                for single_job_id in job_id.singletons():
+                    job_types.append(self._jobs[single_job_id].job_type)
+                self._throughputs[job_id][worker_type] = \
+                    oracle_throughputs[job_types[0]][job_types[1]]
+        elif not self._simulate:
+            # Adjust the job throughput using an exponential moving average
+            # between the old value and the new measurement.
+            if job_id.is_pair():
+                old_throughput = self._throughputs[job_id][worker_type]
+            else:
+                old_throughput = [self._throughputs[job_id][worker_type]]
+            for i, single_job_id in enumerate(job_id.singletons()):
+                # TODO: fix for job pairs.
+                new_throughput = all_num_steps[i] / all_execution_times[i]
+                if old_throughput != INFINITY:
+                    new_throughput *= EMA_ALPHA
+                    new_throughput += (1 - EMA_ALPHA) * old_throughput[i]
+                self._throughputs[job_id][worker_type][i] = new_throughput
+            print(('[DEBUG] Job %s throughput on worker type %s: '
+                   '%s -> %s') % (job_id, worker_type, str(old_throughput),
+                                  str(self._throughputs[job_id][worker_type])))
 
     """
     ======================================================================
@@ -1434,7 +1452,7 @@ class Scheduler:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             current_timestamp = self.get_current_timestamp()
 
-            if np.min(all_execution_times) < 0:
+            if np.min(all_execution_times) <= 0:
                 # Micro-task failed.
                 self._num_failures_per_job[job_id] += 1
                 print(('%s]\t[Micro-task failed]\t'
@@ -1479,13 +1497,6 @@ class Scheduler:
                         self._per_job_latest_timestamps[single_job_id] = \
                                 self.get_current_timestamp()
 
-                # TODO: fix this for job pairs.
-                if not self._simulate and not job_id.is_pair():
-                    old_throughput = self._throughputs[job_id][worker_type]
-                    self._update_throughput(job_id, worker_type,
-                                            all_num_steps[0],
-                                            all_execution_times[0])
-
                 # If we just ran co-located jobs, use the maximum of the
                 # individual execution times.
                 max_execution_time = np.max(all_execution_times)
@@ -1500,6 +1511,10 @@ class Scheduler:
                 self._worker_time_so_far[worker_type] += max_execution_time
                 self._cumulative_worker_time_so_far[worker_id] += \
                         max_execution_time
+
+            self._update_throughput(job_id, worker_type,
+                                    all_num_steps,
+                                    all_execution_times)
 
         for single_job_id in to_remove:
             self.remove_job(single_job_id[0])
