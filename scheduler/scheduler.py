@@ -1159,10 +1159,19 @@ class Scheduler:
                     if self._throughputs_mask[merged_job_id][worker_type]:
                         mask[i][j] = 1.0
                         mask[j][i] = 1.0
+                        isolated_throughputs = []
+                        for single_job_id in [job_id_0, job_id_1]:
+                            isolated_throughputs.append(
+                                self._throughputs[single_job_id][worker_type])
                         measured_throughputs = \
                             self._throughputs[merged_job_id][worker_type]
-                        throughputs_matrix[i][j] = measured_throughputs[0]
-                        throughputs_matrix[j][i] = measured_throughputs[1]
+                        normalized_throughputs = map(operator.truediv,
+                                                     measured_throughputs,
+                                                     isolated_throughputs)
+                        throughputs_matrix[i][j] = normalized_throughputs[0]
+                        throughputs_matrix[j][i] = normalized_throughputs[1]
+                        isolated_throughputs_map[merged_job_id] = \
+                            isolated_throughputs
 
             # Run the matrix completion algorithm.
             with warnings.catch_warnings():
@@ -1171,10 +1180,11 @@ class Scheduler:
                 mu = DEFAULT_MATRIX_COMPLETION_MU
                 try:
                     estimated_throughputs = \
-                        matrix_completion.pmf_solve(throughputs_matrix,
-                                                    mask,
-                                                    k=k,
-                                                    mu=mu)
+                        np.clip(matrix_completion.pmf_solve(throughputs_matrix,
+                                                            mask,
+                                                            k=k,
+                                                            mu=mu),
+                                0.0, 1.0)
                 except np.linalg.LinAlgError as e:
                     print('WARNING: could not estimate throughputs!')
                     print(e)
@@ -1184,14 +1194,23 @@ class Scheduler:
             # data structure.
             if estimated_throughputs is not None:
                 for i in range(num_jobs):
+                    job_id_0 = all_job_ids[0]
                     for j in range(num_jobs):
                         if j <= i or mask[i][j]:
                             continue
-                        merged_job_id = job_id_pair.JobIdPair(all_job_ids[i][0],
-                                                              all_job_ids[j][0])
+                        job_id_1 = all_job_ids[1]
+                        merged_job_id = job_id_pair.JobIdPair(job_id_0[0],
+                                                              job_id_1[0])
+                        isolated_throughputs = []
+                        for single_job_id in [job_id_0, job_id_1]:
+                            isolated_throughputs.append(
+                                self._throughputs[single_job_id][worker_type])
+                        job_0_throughput = (isolated_throughputs[0] *
+                                            estimated_throughputs[i][j])
+                        job_1_throughput = (isolated_throughputs[1] *
+                                            estimated_throughputs[j][i])
                         self._throughputs[merged_job_id][worker_type] = \
-                            [estimated_throughputs[i][j],
-                             estimated_throughputs[j][i]]
+                            [job_0_throughput, job_1_throughput]
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
