@@ -394,7 +394,7 @@ class Scheduler:
                 self._throughput_estimation_generator.choice(all_idx,
                                                              size=1,
                                                              p=probabilities)[0]
-            (estimated_job_id, _) = estimated_jobs[idx]
+            (estimated_job_id, _) = estimated_jobs.pop(idx)
             single_job_ids = estimated_job_id.singletons()
             if (single_job_ids[0] in already_scheduled_jobs_set or
                 single_job_ids[1] in already_scheduled_jobs_set or
@@ -654,6 +654,8 @@ class Scheduler:
 
             pickle.dump(self._jobs, f)
             pickle.dump(self._throughputs, f)
+            if self._estimate_throughputs:
+                pickle.dump(self._throughputs_mask, f)
             pickle.dump(self._allocation, f)
             pickle.dump(self._steps_run_so_far, f)
             pickle.dump(self._total_steps_run, f)
@@ -687,6 +689,8 @@ class Scheduler:
 
             self._jobs = pickle.load(f)
             self._throughputs = pickle.load(f)
+            if self._estimate_throughputs:
+                self._throughputs_mask = pickle.load(f)
             self._allocation = pickle.load(f)
             self._steps_run_so_far = pickle.load(f)
             self._total_steps_run = pickle.load(f)
