@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import copy
 import heapq
 import numpy as np
 import os
@@ -102,6 +103,8 @@ class Scheduler:
         # Priority queues for each worker_type.
         self._priorities = {}
         self._deficits = {}
+        # Mapping of job IDs to worker IDs they were on in the previous round.
+        self._prev_worker_mapping = {}
         # Number of failures per job.
         self._num_failures_per_job = {}
         # Timestamp when data structures recording elapsed time was last reset.
@@ -388,9 +391,6 @@ class Scheduler:
              A list of job IDs and tuple of worker IDs for each scheduled job
              in the coming round.
         """
-        # TODO: See if any code needs to be borrowed from _schedule_job_on_worker
-        # from master.
-
         # Update priorities before trying to figure out applications to run
         # in the upcoming round.
         self._update_priorities()
@@ -407,8 +407,11 @@ class Scheduler:
             worker_types.pop(i)
 
         for worker_type in worker_types:
-            worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
-            worker_id_ptr = 0
+            if worker_type not in self._prev_worker_mapping:
+                self._prev_worker_mapping[worker_type] = {}
+
+            remaining_worker_ids = copy.deepcopy(
+                    self._worker_type_to_worker_id_mapping[worker_type])
             scheduled_jobs_on_worker_type = \
                     self._schedule_jobs_on_workers_helper(
                             worker_type, already_scheduled_jobs)
@@ -421,13 +424,16 @@ class Scheduler:
                     for single_job_id in job_id.singletons():
                         already_scheduled_jobs.append(single_job_id)
 
-                # For now, ignore locality. Place job_id on the first
-                # `scale_factor` workers of the desired type.
-                # assert(scale_factor == self._jobs[job_id].scale_factor)
-                worker_id_ptrs = [worker_id_ptr + i for i in range(scale_factor)]
+                if job_id in self._prev_worker_mapping[worker_type]:
+                    for worker_id in self._prev_worker_mapping[worker_type][job_id]:
+                        remaining_worker_ids.remove(worker_id)
+                else:
+                    self._prev_worker_mapping[worker_type][job_id] = \
+                        [remaining_worker_ids[i] for i in range(scale_factor)]
+                    for i in range(scale_factor):
+                        remaining_worker_ids.pop(0)
                 scheduled_jobs.append((job_id,
-                                       tuple([worker_ids[i] for i in worker_id_ptrs])))
-                worker_id_ptr += scale_factor
+                                       tuple(self._prev_worker_mapping[worker_type][job_id])))
 
                 for single_job_id in job_id.singletons():
                     num_steps = self._get_num_steps(job_id, worker_type,
@@ -455,14 +461,23 @@ class Scheduler:
                        'Priority: %f\tDeficit: %f\t'
                        'Allocation: %s') % (self.get_current_timestamp(),
                                            job_id, worker_type,
-                                           ",".join(["%d" % worker_ids[i]
-                                                     for i in worker_id_ptrs]),
+                                           ",".join(["%d" % worker_id for worker_id in
+                                                     self._prev_worker_mapping[worker_type][job_id]]),
                                            self._priorities[worker_type][job_id],
                                            self._deficits[worker_type][job_id],
                                            allocation_str))
-            if worker_id_ptr < len(worker_ids):
+
+            scheduled_jobs_set = set([job_id for (job_id, _) in scheduled_jobs_on_worker_type])
+            job_ids_to_delete = []
+            for job_id in self._prev_worker_mapping[worker_type]:
+                if job_id not in scheduled_jobs_set:
+                    job_ids_to_delete.append(job_id)
+            for job_id in job_ids_to_delete:
+                del self._prev_worker_mapping[worker_type][job_id]
+
+            if len(remaining_worker_ids) > 0:
                 print(('WARNING: %d GPUs of type %s left unused. '
-                       'Number of active jobs: %d') % (len(worker_ids) - worker_id_ptr,
+                       'Number of active jobs: %d') % (len(remaining_worker_ids),
                                                        worker_type,
                                                        len(self._jobs)))
 
@@ -754,7 +769,8 @@ class Scheduler:
         while True:
             with self._scheduler_lock:
                 num_workers = len(self._worker_ids)
-            if num_workers == 0:
+                num_jobs = len(self._jobs)
+            if num_workers == 0 or num_jobs == 0:
                 time.sleep(5)
                 continue
             with self._scheduler_lock:
