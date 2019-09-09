@@ -1,4 +1,5 @@
 cvxpy
+func_timeout
 grpcio
 grpcio-tools
 preconditions
