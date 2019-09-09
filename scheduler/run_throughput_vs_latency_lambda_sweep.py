@@ -14,7 +14,7 @@ import utils
 
 
 def simulate_with_timeout(experiment_id, policy_name,
-                          throughputs_file, cluster_spec, lam, seed, interval,
+                          throughputs_file, cluster_spec, lam, seed, time_per_iteration,
                           jobs_to_complete, fixed_job_duration,
                           generate_multi_gpu_jobs, simulate_steady_state,
                           log_dir, timeout, verbose):
@@ -26,7 +26,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                             policy,
                             throughputs_file=throughputs_file,
                             seed=seed,
-                            time_per_iteration=interval,
+                            time_per_iteration=time_per_iteration,
                             simulate=True)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
@@ -78,7 +78,7 @@ def simulate_with_timeout(experiment_id, policy_name,
     return average_jct, utilization
 
 def run_automatic_sweep(experiment_id, policy_name,
-                        throughputs_file, cluster_spec, seed, interval,
+                        throughputs_file, cluster_spec, seed, time_per_iteration,
                         jobs_to_complete, fixed_job_duration,
                         generate_multi_gpu_jobs, simulate_steady_state, log_dir,
                         timeout, verbose):
@@ -93,7 +93,7 @@ def run_automatic_sweep(experiment_id, policy_name,
         average_jct, utilization = \
                 simulate_with_timeout(experiment_id, policy_name,
                                       throughputs_file, cluster_spec,
-                                      lam, seed, interval, jobs_to_complete,
+                                      lam, seed, time_per_iteration, jobs_to_complete,
                                       fixed_job_duration,
                                       generate_multi_gpu_jobs,
                                       simulate_steady_state, log_dir, timeout,
@@ -113,7 +113,7 @@ def run_automatic_sweep(experiment_id, policy_name,
         average_jct, utilization = \
                 simulate_with_timeout(experiment_id, policy_name,
                                      throughputs_file, cluster_spec,
-                                     lam, seed, interval, jobs_to_complete,
+                                     lam, seed, time_per_iteration, jobs_to_complete,
                                      fixed_job_duration,
                                      generate_multi_gpu_jobs,
                                      simulate_steady_state, log_dir,
@@ -135,7 +135,7 @@ def run_automatic_sweep(experiment_id, policy_name,
         average_jct, utilization = \
                 simulate_with_timeout(experiment_id, policy_name,
                                       throughputs_file, cluster_spec,
-                                      lam, seed, interval, jobs_to_complete,
+                                      lam, seed, time_per_iteration, jobs_to_complete,
                                       fixed_job_duration,
                                       generate_multi_gpu_jobs,
                                       simulate_steady_state, log_dir,
@@ -222,7 +222,7 @@ def main(args):
                         os.mkdir(raw_logs_seed_subdir)
                     all_args_list.append((experiment_id, policy_name,
                                           throughputs_file, cluster_spec,
-                                          seed, args.interval,
+                                          seed, args.time_per_iteration,
                                           jobs_to_complete,
                                           args.fixed_job_duration,
                                           args.generate_multi_gpu_jobs,
@@ -257,7 +257,7 @@ def main(args):
                             os.mkdir(raw_logs_seed_subdir)
                         all_args_list.append((experiment_id, policy_name,
                                               throughputs_file, cluster_spec,
-                                              lam, seed, args.interval,
+                                              lam, seed, args.time_per_iteration,
                                               jobs_to_complete,
                                               args.fixed_job_duration,
                                               args.generate_multi_gpu_jobs,
@@ -313,7 +313,7 @@ if __name__=='__main__':
     parser.add_argument('--seeds', type=int, nargs='+',
                         default=[0, 1, 2, 3, 4],
                         help='List of random seeds')
-    parser.add_argument('-i', '--interval', type=int, default=1920,
+    parser.add_argument('--time-per-iteration', type=int, default=1920,
                         help='Interval length (in seconds)')
     parser.add_argument('-f', '--fixed-job-duration', type=int, default=None,
                         help=('If set, fixes the duration of all jobs to the '

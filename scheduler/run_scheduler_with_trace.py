@@ -32,7 +32,7 @@ def main(args):
         job_queue.put(job)
     policy = utils.get_policy(args.policy, args.seed)
     sched = scheduler.Scheduler(policy, simulate=False, throughputs_file="oracle_throughputs.json",
-                                seed=args.seed, time_per_iteration=10)
+                                seed=args.seed, time_per_iteration=args.time_per_iteration)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -60,6 +60,8 @@ if __name__=='__main__':
                                  'max_min_fairness_packed', 'min_total_duration',
                                  'min_total_duration_packed', 'fifo'],
                         help='Scheduler policy')
+    parser.add_argument('--time_per_iteration', type=int, required=True,
+                        help='Time given to each scheduler round')
     parser.add_argument('--seed', type=int, default=0,
                         help='Random seed')
     main(parser.parse_args())

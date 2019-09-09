@@ -1,5 +1,5 @@
-ResNet-50 (batch size 64)	cd /mnt1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/keshav/data/imagenet/pytorch	--num_minibatches	1000	0	1
-ResNet-50 (batch size 64)	cd /mnt1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/keshav/data/imagenet/pytorch	--num_minibatches	1000	0	1
-ResNet-50 (batch size 64)	cd /mnt1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/keshav/data/imagenet/pytorch	--num_minibatches	1000	0	1
-ResNet-50 (batch size 64)	cd /mnt1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/keshav/data/imagenet/pytorch	--num_minibatches	1000	0	1
-ResNet-50 (batch size 64)	cd /mnt1/keshav/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/keshav/data/imagenet/pytorch	--num_minibatches	1000	0	1
+ResNet-50 (batch size 64)	cd /mnt1/deepak/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/deepak/data/imagenet	--num_minibatches	1000	0	1
+ResNet-50 (batch size 64)	cd /mnt1/deepak/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/deepak/data/imagenet	--num_minibatches	1000	0	1
+ResNet-50 (batch size 64)	cd /mnt1/deepak/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/deepak/data/imagenet	--num_minibatches	1000	0	1
+ResNet-50 (batch size 64)	cd /mnt1/deepak/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/deepak/data/imagenet	--num_minibatches	1000	0	1
+ResNet-50 (batch size 64)	cd /mnt1/deepak/gpusched/workloads/pytorch/image_classification/imagenet && python main.py -j 4 -a resnet50 -b 16 /mnt1/deepak/data/imagenet	--num_minibatches	1000	0	1

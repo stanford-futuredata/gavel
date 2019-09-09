@@ -10,7 +10,7 @@ import scheduler
 import utils
 
 def simulate(policy_name, throughputs_file, cluster_spec,
-             lam, seed, interval, jobs_to_complete,
+             lam, seed, time_per_iteration, jobs_to_complete,
              fixed_job_duration, generate_multi_gpu_jobs,
              simulate_steady_state, debug):
     policy = utils.get_policy(policy_name, seed=seed)
@@ -18,7 +18,7 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                     policy,
                     throughputs_file=throughputs_file,
                     seed=seed,
-                    time_per_iteration=interval,
+                    time_per_iteration=time_per_iteration,
                     simulate=True)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
@@ -61,7 +61,7 @@ def main(args):
     if args.verbose:
         simulate(args.policy, throughputs_file,
                  cluster_spec, args.lam, args.seed,
-                 args.interval, jobs_to_complete,
+                 args.time_per_iteration, jobs_to_complete,
                  args.fixed_job_duration,
                  args.generate_multi_gpu_jobs,
                  args.simulate_steady_state,
@@ -72,7 +72,7 @@ def main(args):
             with contextlib.redirect_stdout(f):
                 simulate(args.policy, throughputs_file,
                          cluster_spec, args.lam, args.seed,
-                         args.interval, jobs_to_complete,
+                         args.time_per_iteration, jobs_to_complete,
                          args.fixed_job_duration,
                          args.generate_multi_gpu_jobs,
                          args.simulate_steady_state,
@@ -94,7 +94,7 @@ if __name__=='__main__':
                                  'max_min_fairness_packed'],
                         help='Policy')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
-    parser.add_argument('-i', '--interval', type=int, default=1920,
+    parser.add_argument('--time-per-iteration', type=int, default=1920,
                         help='Interval length (in seconds)')
     parser.add_argument('-l', '--lam', type=float, required=True,
                         help='Lambda for Poisson arrival rate')
