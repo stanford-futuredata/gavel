@@ -129,6 +129,8 @@ class Scheduler:
             self._profiling_percentage = profiling_percentage
             # Keeps track of which throughput values have been measured.
             self._throughputs_mask = {}
+            # Job combinations that were profiled in the previous round.
+            self._profiled_job_combinations = {}
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -334,10 +336,45 @@ class Scheduler:
     ======================================================================
     """
 
+    def _sample_estimated_job(self, estimated_jobs, threshold=0.4,
+                              high_throughput_mass=0.8,
+                              low_throughput_mass=0.2):
+        num_high_throughput_jobs = 0
+        # Minimum normalized throughput for a job combination to be
+        # considered "high throughput".
+        for x in estimated_jobs:
+            if x[1] >= threshold:
+                num_high_throughput_jobs += 1
+            else:
+                break
+        num_low_throughput_jobs = \
+            len(estimated_jobs) - num_high_throughput_jobs
+        if num_high_throughput_jobs > 0 and num_low_throughput_jobs > 0:
+            high_throughput_prob = \
+                high_throughput_mass / num_high_throughput_jobs
+            low_throughput_prob = low_throughput_mass / num_low_throughput_jobs
+        elif num_high_throughput_jobs > 0 and num_low_throughput_jobs == 0:
+            high_throughput_prob = 1.0 / num_high_throughput_jobs
+            low_throughput_prob = 0.0
+        elif num_high_throughput_jobs == 0 and num_low_throughput_jobs > 0:
+            high_throughput_prob = 0.0
+            low_throughput_prob = 1.0 / num_low_throughput_jobs
+        probabilities = \
+            [high_throughput_prob] * num_high_throughput_jobs
+        probabilities += \
+            ([low_throughput_prob] * num_low_throughput_jobs)
+        all_idx = list(range(len(estimated_jobs)))
+        return self._throughput_estimation_generator.choice(all_idx,
+                                                            size=1,
+                                                            p=probabilities)[0]
+
+
     def _select_job_combinations_to_profile(self, worker_type, num_workers,
                                             already_scheduled_jobs):
-        all_job_ids = sorted(self._jobs.keys())
-        scheduled_jobs_on_worker_type = []
+        all_job_ids = []
+        for job_id in sorted(self._jobs.keys()):
+            if self._jobs[job_id].scale_factor == 1:
+                all_job_ids.append(job_id)
         estimated_jobs = []
         already_scheduled_jobs_set = set(already_scheduled_jobs)
         num_workers_left = num_workers
@@ -345,7 +382,9 @@ class Scheduler:
         # Compute the minimum normalized colocated throughput for every
         # job combination for which the throughput was estimated.
         for merged_job_id in self._throughputs_mask:
-            if not self._throughputs_mask[merged_job_id][worker_type]:
+            if (not self._throughputs_mask[merged_job_id][worker_type] and
+                not merged_job_id in
+                    self._profiled_job_combinations[worker_type]):
                 isolated_throughputs = []
                 for single_job_id in merged_job_id.singletons():
                     isolated_throughputs.append(
@@ -363,53 +402,21 @@ class Scheduler:
         # estimated jobs.
         num_profiling_machines = int(self._cluster_spec[worker_type] *
                                      self._profiling_percentage)
-        while (len(scheduled_jobs_on_worker_type) < num_profiling_machines and
-               len(estimated_jobs) > 0):
-            num_high_throughput_jobs = 0
-            # Minimum normalized throughput for a job combination to be
-            # considered "high throughput".
-            threshold = 0.4
-            for x in estimated_jobs:
-                if x[1] >= threshold:
-                    num_high_throughput_jobs += 1
-                else:
+        num_profiling_jobs_per_machine = 8
+        for i in range(num_profiling_machines):
+            for j in range(num_profiling_jobs_per_machine):
+                if len(estimated_jobs) == 0:
                     break
-            num_low_throughput_jobs = \
-                len(estimated_jobs) - num_high_throughput_jobs
-            if num_high_throughput_jobs > 0 and num_low_throughput_jobs > 0:
-                high_throughput_mass = 0.8 / num_high_throughput_jobs
-                low_throughput_mass = 0.2 / num_low_throughput_jobs
-            elif num_high_throughput_jobs > 0 and num_low_throughput_jobs == 0:
-                high_throughput_mass = 1.0 / num_high_throughput_jobs
-                low_throughput_mass = 0.0
-            elif num_high_throughput_jobs == 0 and num_low_throughput_jobs > 0:
-                high_throughput_mass = 0.0
-                low_throughput_mass = 1.0 / num_low_throughput_jobs
-            probabilities = \
-                [high_throughput_mass] * num_high_throughput_jobs
-            probabilities += \
-                ([low_throughput_mass] * num_low_throughput_jobs)
-            all_idx = list(range(len(estimated_jobs)))
-            idx = \
-                self._throughput_estimation_generator.choice(all_idx,
-                                                             size=1,
-                                                             p=probabilities)[0]
-            (estimated_job_id, _) = estimated_jobs.pop(idx)
-            single_job_ids = estimated_job_id.singletons()
-            if (single_job_ids[0] in already_scheduled_jobs_set or
-                single_job_ids[1] in already_scheduled_jobs_set or
-                self._jobs[single_job_ids[0]].scale_factor > 1):
-                continue
-            scheduled_jobs_on_worker_type.append((estimated_job_id, 1))
-            for single_job_id in single_job_ids:
-                already_scheduled_jobs_set.add(single_job_id)
-            num_workers_left -= 1
-
-        profiled_jobs = [x[0] for x in scheduled_jobs_on_worker_type]
-        print('Profiling these jobs in the next round:', profiled_jobs)
-
-        return scheduled_jobs_on_worker_type, already_scheduled_jobs_set
-
+                idx = self._sample_estimated_job(estimated_jobs)
+                (estimated_job_id, _) = estimated_jobs.pop(idx)
+                single_job_ids = estimated_job_id.singletons()
+                self._profiled_job_combinations[worker_type].add(
+                        estimated_job_id)
+                # If any profiling is done on this machine, it is no longer
+                # available for use for actual work.
+                if j == 0:
+                    num_workers_left -= 1
+        return num_workers_left
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_type,
@@ -425,18 +432,16 @@ class Scheduler:
         """
         num_workers = len(
             self._worker_type_to_worker_id_mapping[worker_type])
+        already_scheduled_jobs_set = set(already_scheduled_jobs)
+        scheduled_jobs_on_worker_type = []
 
         if self._estimate_throughputs:
-            scheduled_jobs_on_worker_type, already_scheduled_jobs_set = \
+            num_workers_left = \
                 self._select_job_combinations_to_profile(worker_type,
                                                          num_workers,
                                                          already_scheduled_jobs)
-            num_workers -= len(scheduled_jobs_on_worker_type)
         else:
-            already_scheduled_jobs_set = set(already_scheduled_jobs)
-            scheduled_jobs_on_worker_type = []
-
-        num_workers_left = num_workers
+            num_workers_left = num_workers
 
         entries = []
         for job_id in self._priorities[worker_type]:
@@ -656,6 +661,7 @@ class Scheduler:
             pickle.dump(self._throughputs, f)
             if self._estimate_throughputs:
                 pickle.dump(self._throughputs_mask, f)
+                pickle.dump(self._profiled_job_combinations, f)
             pickle.dump(self._allocation, f)
             pickle.dump(self._steps_run_so_far, f)
             pickle.dump(self._total_steps_run, f)
@@ -691,6 +697,7 @@ class Scheduler:
             self._throughputs = pickle.load(f)
             if self._estimate_throughputs:
                 self._throughputs_mask = pickle.load(f)
+                self._profiled_job_combinations = pickle.load(f)
             self._allocation = pickle.load(f)
             self._steps_run_so_far = pickle.load(f)
             self._total_steps_run = pickle.load(f)
@@ -1238,6 +1245,23 @@ class Scheduler:
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
 
+    def _record_profiled_throughputs(self):
+        for worker_type in self._profiled_job_combinations:
+            print('Worker type %s profiled job combinations:'
+                  '%s' % (worker_type,
+                          str(self._profiled_job_combinations[worker_type])))
+            for job_id in self._profiled_job_combinations[worker_type]:
+                job_completed = False
+                for single_job_id in job_id.singletons():
+                    if not single_job_id in self._jobs:
+                        job_completed = True
+                        break
+                if job_completed:
+                    continue
+                self._update_throughput(job_id, worker_type,
+                                        None, None)
+            self._profiled_job_combinations[worker_type] = set()
+
     def _estimate_colocated_throughputs(self):
         all_job_ids = sorted(self._jobs.keys())
         num_jobs = len(all_job_ids)
@@ -1414,6 +1438,7 @@ class Scheduler:
         if self._need_to_update_allocation:
             self._reset_time_run_so_far()
             if self._estimate_throughputs:
+                self._record_profiled_throughputs()
                 self._estimate_colocated_throughputs()
             self._allocation = self._get_allocation()
             self._need_to_update_allocation = False
@@ -1515,6 +1540,8 @@ class Scheduler:
             if not found:
                 self._priorities[worker_type] = {}
                 self._deficits[worker_type] = {}
+                if self._estimate_throughputs:
+                    self._profiled_job_combinations[worker_type] = set()
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
