@@ -12,6 +12,7 @@ import utils
 def simulate(policy_name, throughputs_file, cluster_spec,
              lam, seed, interval, jobs_to_complete,
              fixed_job_duration, generate_multi_gpu_jobs,
+             generate_multi_priority_jobs,
              simulate_steady_state, debug,
              checkpoint_threshold, checkpoint_file,
              profiling_percentage):
@@ -37,6 +38,7 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                    jobs_to_complete=jobs_to_complete,
                    fixed_job_duration=fixed_job_duration,
                    generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                   generate_multi_priority_jobs=generate_multi_priority_jobs,
                    simulate_steady_state=simulate_steady_state,
                    debug=debug,
                    checkpoint_threshold=checkpoint_threshold,
@@ -69,6 +71,7 @@ def main(args):
                  args.interval, jobs_to_complete,
                  args.fixed_job_duration,
                  args.generate_multi_gpu_jobs,
+                 args.generate_multi_priority_jobs,
                  args.simulate_steady_state,
                  args.debug, args.checkpoint_threshold,
                  args.checkpoint_file,
@@ -82,6 +85,7 @@ def main(args):
                          args.interval, jobs_to_complete,
                          args.fixed_job_duration,
                          args.generate_multi_gpu_jobs,
+                         args.generate_multi_priority_jobs,
                          args.simulate_steady_state,
                          args.debug,
                          args.checkpoint_threshold,
@@ -98,11 +102,16 @@ if __name__=='__main__':
                         help='Measurement window start (job ID)')
     parser.add_argument('-e', '--window-end', type=int, default=5000,
                         help='Measurement window end (job ID)')
-    parser.add_argument('-p', '--policy', type=str, required=True,
+    parser.add_argument('-p', '--policy', type=str, default='fifo',
                         choices=['fifo', 'fifo_perf', 'fifo_packed',
-                                 'max_min_fairness', 'max_min_fairness_perf',
-                                 'max_min_fairness_packed'],
-                        help='Policy')
+                                 'max_min_fairness',
+                                 'max_min_fairness_perf',
+                                 'max_min_fairness_packed',
+                                 'min_total_duration',
+                                 'min_total_duration_packed',
+                                 'max_sum_throughput_perf',
+                                 'max_sum_throughput_packed'],
+                        help='Scheduler policy')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
@@ -118,6 +127,9 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, generates multi-GPU jobs according to '
                               'a pre-defined distribution'))
+    parser.add_argument('--generate-multi-priority-jobs', action='store_true',
+                        default=False,
+                        help=('If set, generates some jobs with higher priority'))
     parser.add_argument('--simulate-steady-state', action='store_true',
                         default=False,
                         help=('If set, adds as many jobs as there are workers '

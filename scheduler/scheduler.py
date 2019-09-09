@@ -58,6 +58,8 @@ class Scheduler:
         self._per_job_latest_timestamps = {}
         # Job completion times.
         self._job_completion_times = {}
+        # Job priority weights.
+        self._job_priority_weights = {}
         # Queue of events that need to be processed at specific timestamps.
         self._event_queue = []
 
@@ -279,6 +281,8 @@ class Scheduler:
             duration = self._per_job_latest_timestamps[job_id] - \
                 self._per_job_start_timestamps[job_id]
             self._job_completion_times[job_id] = duration
+            self._job_priority_weights[job_id] = \
+                self._jobs[job_id].priority_weight
             print("Job %d completed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n"
                   "Number of active jobs: %d\n" % (
@@ -731,7 +735,9 @@ class Scheduler:
            to the specified rate parameter."""
         return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
-    def _generate_job(self, fixed_job_duration=None, generate_multi_gpu_jobs=False,
+    def _generate_job(self, fixed_job_duration=None,
+                      generate_multi_gpu_jobs=False,
+                      generate_multi_priority_jobs=False,
                       run_dir='/tmp'):
         """Generates a new job for simulation."""
         job_template = self._job_generator.choice(JobTable)
@@ -749,6 +755,7 @@ class Scheduler:
             command = job_template.command % (run_dir, run_dir)
         else:
             command = job_template.command % (run_dir)
+
         scale_factor = 1
         if generate_multi_gpu_jobs:  # Copies Philly distribution.
             r = self._job_generator.uniform(0, 1)
@@ -759,13 +766,20 @@ class Scheduler:
             elif 0.95 <= r:
                 scale_factor = 8
 
+        priority_weight = 1.0
+        if generate_multi_priority_jobs:
+            r = self._job_generator.uniform(0, 1)
+            if 0.0 <= r <= 0.2:
+                priority_weight = 5.0
+
         job = Job(job_id=None,
                   job_type=job_type,
                   command=command,
                   num_steps_arg=job_template.num_steps_arg,
                   total_steps=num_steps,
                   duration=None,
-                  scale_factor=scale_factor)
+                  scale_factor=scale_factor,
+                  priority_weight=priority_weight)
 
         return job
 
@@ -773,6 +787,7 @@ class Scheduler:
                  lam=None, jobs_to_complete=None,
                  fixed_job_duration=None, num_total_jobs=None,
                  generate_multi_gpu_jobs=False,
+                 generate_multi_priority_jobs=False,
                  simulate_steady_state=False, debug=False,
                  checkpoint_threshold=None,
                  checkpoint_file=None):
@@ -802,6 +817,8 @@ class Scheduler:
             generate_multi_gpu_jobs: If set, some jobs will have `scale_factor`
                                      greater than 1, according to a pre-defined
                                      distribution.
+            generate_multi_priority_jobs: If set, 20% of jobs will have a
+                                          priority of 5.0.
             simulate_steady_state: If set, adds as many jobs as there are
                                    workers before beginning the simulation.
             debug: If set, pauses the simulation at the start of every loop.
@@ -863,8 +880,10 @@ class Scheduler:
         elif simulate_steady_state:
             for worker_type in worker_types:
                 for i in range(cluster_spec[worker_type]):
-                    job = self._generate_job(fixed_job_duration=fixed_job_duration,
-                                             generate_multi_gpu_jobs=generate_multi_gpu_jobs)
+                    job = self._generate_job(
+                        fixed_job_duration=fixed_job_duration,
+                        generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                        generate_multi_priority_jobs=generate_multi_priority_jobs)
                     num_jobs_generated += 1
                     self._all_jobs.append((0, job))
                     job_id = self.add_job(job, timestamp=0)
@@ -949,8 +968,10 @@ class Scheduler:
                     if num_total_jobs is not None:
                         if num_jobs_generated > num_total_jobs:
                             break
-                    job = self._generate_job(fixed_job_duration=fixed_job_duration,
-                                             generate_multi_gpu_jobs=generate_multi_gpu_jobs)
+                    job = self._generate_job(
+                        fixed_job_duration=fixed_job_duration,
+                        generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                        generate_multi_priority_jobs=generate_multi_priority_jobs)
                     num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
@@ -1043,13 +1064,27 @@ class Scheduler:
             if job_ids is None:
                 job_ids = sorted([job_id for job_id in self._job_completion_times])
             print('Job completion times:')
+            low_priority_job_completion_times = []
+            high_priority_job_completion_times = []
             for job_id in job_ids:
-                print('Job %s: %.3f' % (job_id,
-                                        self._job_completion_times[job_id]))
+                if self._job_priority_weights[job_id] == 1.0:
+                    print('Job %s: %.3f' % (job_id,
+                                            self._job_completion_times[job_id]))
+                    low_priority_job_completion_times.append(
+                        self._job_completion_times[job_id])
+                else:
+                    print('Job %s (high priority): %.3f' % (job_id,
+                                                            self._job_completion_times[job_id]))
+                    high_priority_job_completion_times.append(
+                        self._job_completion_times[job_id])
             average_job_completion_time = \
                 np.mean([self._job_completion_times[job_id] for job_id in job_ids])
             print('Average job completion time: '
                   '%.3f seconds' % (average_job_completion_time))
+            print('Average job completion time (low priority): '
+                  '%.3f seconds' % (np.mean(low_priority_job_completion_times)))
+            print('Average job completion time (high priority): '
+                  '%.3f seconds' % (np.mean(high_priority_job_completion_times)))
             return average_job_completion_time
 
 
@@ -1181,8 +1216,14 @@ class Scheduler:
             job 0 and for 95% of the time, worker type 'p100' should run job 0.
         """
 
-        if self._policy.name.startswith("MinTotalDuration"):
-            # TODO: Need to fix this for packed policies.
+        if self._policy.name.startswith("MaxMinFairness"):
+            priority_weights = {
+                job_id: self._jobs[job_id].priority_weight
+                for job_id in self._jobs
+            }
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, priority_weights, self._cluster_spec)
+        elif self._policy.name.startswith("MinTotalDuration"):
             num_steps_remaining = {
                 job_id: self._get_remaining_steps(job_id)
                 for job_id in self._jobs}

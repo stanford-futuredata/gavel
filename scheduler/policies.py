@@ -47,7 +47,8 @@ class Policy:
 
 class PolicyWithPacking(Policy):
 
-    def flatten(self, d, cluster_spec, normalize=True):
+    def flatten(self, d, cluster_spec, normalize=True,
+                priority_weights=None):
         """
         Converts a 2-level dict to a NumPy array.
 
@@ -116,6 +117,8 @@ class PolicyWithPacking(Policy):
             # Normalize.
             if normalize:
                 all_m[i] /= normalizing_factors[single_job_id]
+                if priority_weights is not None:
+                    all_m[i] /= priority_weights[single_job_id]
         return all_m, masks, (job_ids, single_job_ids, worker_types)
 
     def unflatten(self, m, index):
@@ -135,14 +138,20 @@ class MaxMinFairnessPolicy(Policy):
     def __init__(self):
         self._name = 'MaxMinFairness'
 
-    def get_allocation(self, unflattened_throughputs, cluster_spec):
+    def get_allocation(self, unflattened_throughputs,
+                       unflattened_priority_weights, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None
         (m, n) = throughputs.shape
-        (_, worker_types) = index
+        (job_ids, worker_types) = index
+
+        priority_weights = np.array(
+            [unflattened_priority_weights[job_id]
+             for job_id in job_ids]).reshape((m, 1))
+        priority_weights /= sum(priority_weights)
         num_workers = [cluster_spec[worker_type] for worker_type in worker_types]
-        allocation = np.full((m, n), 1.0 / float(m))
+        allocation = np.repeat(priority_weights, n, axis=0)
 
         # Give each user 1/m of the cluster (num_workers[i] workers
         # available to each user i).
@@ -162,13 +171,20 @@ class MaxMinFairnessPolicyWithPerf(Policy):
     def __init__(self):
         self._name = 'MaxMinFairness_Perf'
 
-    def get_allocation(self, unflattened_throughputs, cluster_spec):
+    def get_allocation(self, unflattened_throughputs,
+                       unflattened_priority_weights, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None
         (m, n) = throughputs.shape
+        (job_ids, worker_types) = index
+
+        priority_weights = np.array(
+            [1. / unflattened_priority_weights[job_id]
+             for job_id in job_ids])
         scale = 1.0 / throughputs.sum(axis=1)
         throughputs = throughputs * scale.reshape(m, 1)
+        throughputs = throughputs * priority_weights.reshape((m, 1))
 
         x = cp.Variable(throughputs.shape)
         objective = cp.Maximize(cp.min(cp.sum(cp.multiply(throughputs, x),
@@ -192,9 +208,11 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
     def __init__(self):
         self._name = 'MaxMinFairness_Packing'
 
-    def get_allocation(self, unflattened_throughputs, cluster_spec):
+    def get_allocation(self, unflattened_throughputs,
+                       unflattened_priority_weights, cluster_spec):
         all_throughputs, masks, index = self.flatten(unflattened_throughputs,
-                                                     cluster_spec)
+                                                     cluster_spec,
+                                                     unflattened_priority_weights)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         x = cp.Variable(all_throughputs[0].shape)
         objective_terms = []
@@ -204,6 +222,64 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             objective = cp.Maximize(objective_terms[0])
         else:
             objective = cp.Maximize(cp.minimum(*objective_terms))
+        constraints = [
+            x >= 0,
+            cp.sum(x, axis=0) <= self._num_workers,
+        ]
+        for i in range(len(masks)):
+            constraints.append(cp.sum(cp.multiply(x, masks[i])) <= 1)
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve(solver='SCS')
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
+
+        return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
+
+
+class MaxSumThroughputPolicyWithPerf(Policy):
+
+    def __init__(self):
+        self._name = 'MaxSumThroughput_Perf'
+
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if throughputs is None: return None
+        (m, n) = throughputs.shape
+        scale = 1.0 / throughputs.sum(axis=1)
+        throughputs = throughputs * scale.reshape(m, 1)
+
+        x = cp.Variable(throughputs.shape)
+        objective = cp.Maximize(cp.sum(cp.multiply(throughputs, x)))
+        constraints = [
+            x >= 0,
+            cp.sum(x, axis=0) <= self._num_workers,
+            cp.sum(x, axis=1) <= 1,
+        ]
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve(solver='SCS')
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
+
+        return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
+
+
+class MaxSumThroughputPolicyWithPacking(PolicyWithPacking):
+
+    def __init__(self):
+        self._name = 'MaxSumThroughput_Packing'
+
+    def get_allocation(self, unflattened_throughputs, cluster_spec):
+        all_throughputs, masks, index = self.flatten(unflattened_throughputs,
+                                                     cluster_spec)
+        if all_throughputs is None or len(all_throughputs) == 0: return None
+        x = cp.Variable(all_throughputs[0].shape)
+        objective_terms = []
+        for i in range(len(all_throughputs)):
+            objective_terms.append(cp.sum(cp.multiply(all_throughputs[i], x)))
+        objective = cp.Maximize(sum(objective_terms))
         constraints = [
             x >= 0,
             cp.sum(x, axis=0) <= self._num_workers,

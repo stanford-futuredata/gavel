@@ -56,9 +56,14 @@ if __name__=='__main__':
     parser.add_argument('-t', '--trace_file', type=str, required=True,
                         help='Trace file')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
-                        choices=['isolated', 'max_min_fairness',
-                                 'max_min_fairness_packed', 'min_total_duration',
-                                 'min_total_duration_packed', 'fifo'],
+                        choices=['fifo', 'fifo_perf', 'fifo_packed',
+                                 'max_min_fairness',
+                                 'max_min_fairness_perf',
+                                 'max_min_fairness_packed',
+                                 'min_total_duration',
+                                 'min_total_duration_packed',
+                                 'max_sum_throughput_perf',
+                                 'max_sum_throughput_packed'],
                         help='Scheduler policy')
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')

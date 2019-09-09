@@ -58,11 +58,14 @@ if __name__=='__main__':
     parser.add_argument('-t', '--trace_file', type=str, required=True,
                         help='Trace file')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
-                        choices=['max_min_fairness', 'max_min_fairness_perf',
+                        choices=['fifo', 'fifo_perf', 'fifo_packed',
+                                 'max_min_fairness',
+                                 'max_min_fairness_perf',
                                  'max_min_fairness_packed',
                                  'min_total_duration',
-                                 'min_total_duration_packed', 'fifo',
-                                 'fifo_perf', 'fifo_packed'],
+                                 'min_total_duration_packed',
+                                 'max_sum_throughput_perf',
+                                 'max_sum_throughput_packed'],
                         help='Scheduler policy')
     parser.add_argument('--throughputs_file', type=str,
                         default='oracle_throughputs.json',
