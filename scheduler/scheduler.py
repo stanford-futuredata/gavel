@@ -133,6 +133,9 @@ class Scheduler:
             self._throughputs_mask = {}
             # Job combinations that were profiled in the previous round.
             self._profiled_job_combinations = {}
+            # Initialize the throughputs matrix that newly arrived jobs will
+            # be compared against.
+            self._initialize_reference_throughputs(num_reference_models=10)
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -1295,6 +1298,34 @@ class Scheduler:
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
 
+    def _initialize_reference_throughputs(self, num_reference_models):
+        self._reference_throughputs = {}
+        all_worker_types = sorted(self._oracle_throughputs.keys())
+        all_job_types = \
+            sorted(self._oracle_throughputs[all_worker_types[0]].keys())
+        reference_job_types = \
+            self._throughput_estimation_generator.choice(
+                    all_job_types, num_reference_models, replace=False)
+        for worker_type in self._oracle_throughputs:
+            oracle_throughputs = self._oracle_throughputs[worker_type]
+            self._reference_throughputs[worker_type] = \
+                np.zeros((num_reference_models, num_reference_models),
+                         dtype=np.float32)
+            for i, job_type_0 in enumerate(reference_job_types):
+                for j, job_type_1 in enumerate(reference_job_types):
+                    if j < i:
+                        continue
+                    isolated_throughputs = []
+                    for job_type in [job_type_0, job_type_1]:
+                        isolated_throughputs.append(
+                            oracle_throughputs[job_type]['null'])
+                    self._reference_throughputs[worker_type][i][j] = \
+                        (oracle_throughputs[job_type_0][job_type_1][0] /
+                            isolated_throughputs[0])
+                    self._reference_throughputs[worker_type][j][i] = \
+                        (oracle_throughputs[job_type_0][job_type_1][1] /
+                            isolated_throughputs[1])
+
     def _record_profiled_throughputs(self):
         for worker_type in self._profiled_job_combinations:
             print('Worker type %s profiled job combinations:'
@@ -1311,6 +1342,15 @@ class Scheduler:
                 self._update_throughput(job_id, worker_type,
                                         None, None)
             self._profiled_job_combinations[worker_type] = set()
+
+    def _match_job_to_reference_job(self, job_id, worker_type):
+        # 1) Add a row and column to reference throughputs.
+        # 2) Run matrix completion algorithm.
+        # 3) Take the dot product of the new row with every other row and find
+        #    the one with the smallest dot product.
+        # 4) For every pair involving this job, set throughput to be normalized
+        #    throughput of the reference model * isolated throughput
+        #    of the jobs.
 
     def _estimate_colocated_throughputs(self):
         all_job_ids = sorted(self._jobs.keys())
