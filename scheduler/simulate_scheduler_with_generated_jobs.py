@@ -13,14 +13,16 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              lam, seed, interval, jobs_to_complete,
              fixed_job_duration, generate_multi_gpu_jobs,
              simulate_steady_state, debug,
-             checkpoint_threshold, checkpoint_file):
+             checkpoint_threshold, checkpoint_file,
+             profiling_percentage):
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
                     throughputs_file=throughputs_file,
                     seed=seed,
                     time_per_iteration=interval,
-                    simulate=True)
+                    simulate=True,
+                    profiling_percentage=profiling_percentage)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
@@ -69,7 +71,8 @@ def main(args):
                  args.generate_multi_gpu_jobs,
                  args.simulate_steady_state,
                  args.debug, args.checkpoint_threshold,
-                 args.checkpoint_file)
+                 args.checkpoint_file,
+                 args.profiling_percentage)
     
     else:
         with open('/dev/null', 'w') as f:
@@ -82,7 +85,8 @@ def main(args):
                          args.simulate_steady_state,
                          args.debug,
                          args.checkpoint_threshold,
-                         args.checkpoint_file)
+                         args.checkpoint_file,
+                         args.profiling_percentage)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -126,5 +130,8 @@ if __name__=='__main__':
                         help='Create checkpoint when this job ID comes in')
     parser.add_argument('--checkpoint_file', default=None,
                         help='Load checkpoint located at passed in checkpoint_file')
+    parser.add_argument('--profiling_percentage', type=float, default=0.0,
+                        help=('Percentage of machines dedicated to profiling '
+                              'co-located job pairs'))
     args = parser.parse_args()
     main(args)

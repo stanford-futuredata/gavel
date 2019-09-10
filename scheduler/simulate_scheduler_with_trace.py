@@ -37,7 +37,8 @@ def main(args):
     sched = scheduler.Scheduler(policy,
                                 throughputs_file=args.throughputs_file,
                                 simulate=True,
-                                seed=args.seed)
+                                seed=args.seed,
+                                profiling_percentage=args.profiling_percentage)
 
     num_gpus = args.cluster_spec.split(':')
     cluster_spec = {
@@ -78,5 +79,9 @@ if __name__=='__main__':
     parser.add_argument('--checkpoint_threshold', type=int, default=None,
                         help='Create checkpoint when this job ID comes in')
     parser.add_argument('--checkpoint_file', default=None,
-                        help='Load checkpoint located at passed in checkpoint_file')
+                        help=('Load checkpoint located at passed in'
+                              'checkpoint_file'))
+    parser.add_argument('--profiling_percentage', type=float, default=0.0,
+                        help=('Percentage of machines dedicated to profiling '
+                              'co-located job pairs'))
     main(parser.parse_args())
