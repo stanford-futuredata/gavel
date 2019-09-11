@@ -855,7 +855,8 @@ class Scheduler:
 
         if from_trace:
             # Add all jobs to the queue.
-            for i in range(1, len(arrival_times)):
+            n = min(len(arrival_times), 10000)
+            for i in range(1, n):
                 assert(arrival_times[i] >= arrival_times[i-1])
 
             for (arrival_time, job) in zip(arrival_times, jobs):
