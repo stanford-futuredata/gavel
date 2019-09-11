@@ -46,9 +46,22 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
         try:
-            done_callback(JobIdPair(job0=request.job_id, job1=None),
-                          request.worker_id,
-                          [request.num_steps], [request.execution_time])
+            worker_id = None
+            all_job_ids = []
+            all_num_steps = []
+            all_execution_times = []
+            for job_description in request.job_descriptions:
+                if worker_id is None:
+                    worker_id = job_description.worker_id
+                else:
+                    assert(worker_id == job_description.worker_id)
+                all_job_ids.append(job_description.job_id)
+                all_num_steps.append(job_description.num_steps)
+                all_execution_times.append(job_description.execution_time)
+            if len(all_job_ids) == 1:
+                all_job_ids.append(None)
+            done_callback(JobIdPair(job0=all_job_ids[0], job1=all_job_ids[1]),
+                          worker_id, all_num_steps, all_execution_times)
         except Exception as e:
             print(e)
         return common_pb2.Empty()

@@ -38,9 +38,13 @@ message Heartbeat {
     repeated JobState job_state = 2;
 }
 
-message DoneRequest {
+message CompletedJobDescription {
     uint64 worker_id = 1;
     uint64 job_id = 2;
     uint64 num_steps = 3;
     double execution_time = 4;
+}
+
+message DoneRequest {
+    repeated CompletedJobDescription job_descriptions = 1;
 }

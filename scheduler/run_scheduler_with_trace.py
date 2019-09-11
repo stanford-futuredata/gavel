@@ -13,8 +13,8 @@ def parse_trace(trace_file):
     jobs = []
     with open(trace_file, 'r') as f:
         for line in f:
-            job_type, command, num_steps_arg, total_steps, arrival_time, scale_factor = \
-                    line.split('\t')
+            (job_type, command, num_steps_arg, total_steps,
+             arrival_time, scale_factor) = line.split('\t')
             jobs.append((job.Job(job_id=None,
                                  job_type=job_type,
                                  command=command,
@@ -31,8 +31,10 @@ def main(args):
     for job in jobs:
         job_queue.put(job)
     policy = utils.get_policy(args.policy, args.seed)
-    sched = scheduler.Scheduler(policy, simulate=False, throughputs_file="oracle_throughputs.json",
-                                seed=args.seed, time_per_iteration=args.time_per_iteration)
+    sched = scheduler.Scheduler(policy, simulate=False,
+                                throughputs_file="oracle_throughputs.json",
+                                seed=args.seed,
+                                time_per_iteration=args.time_per_iteration)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -47,7 +49,8 @@ def main(args):
     while not sched.is_done():
         time.sleep(sleep_seconds)
 
-    print("Total time taken: %d seconds" % (datetime.datetime.now() - start_time).seconds)
+    print('Total time taken: '
+           '%d seconds' % (datetime.datetime.now() - start_time).seconds)
     sched.get_average_jct()
     sched.get_cluster_utilization()
 
@@ -57,8 +60,10 @@ if __name__=='__main__':
                         help='Trace file')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
                         choices=['isolated', 'max_min_fairness',
-                                 'max_min_fairness_packed', 'min_total_duration',
-                                 'min_total_duration_packed', 'fifo'],
+                                 'max_min_fairness_packed',
+                                 'min_total_duration',
+                                 'min_total_duration_packed', 'fifo',
+                                 'fifo_perf', 'fifo_packed'],
                         help='Scheduler policy')
     parser.add_argument('--time_per_iteration', type=int, required=True,
                         help='Time given to each scheduler round')

@@ -7,11 +7,11 @@ import time
 import os
 
 class Dispatcher:
-    def __init__(self, worker_id, gpu_id, worker_rpc_client):
+    def __init__(self, worker_id, gpu_id, done_callback):
         self._thread_pool = ThreadPool()
         self._worker_id = worker_id
         self._gpu_id = gpu_id
-        self._worker_rpc_client = worker_rpc_client
+        self._done_callback = done_callback
 
     def launch_job(self, job):
         start_time = time.time()
@@ -44,10 +44,10 @@ class Dispatcher:
             execution_time = -1
 
         sys.stdout.flush()
-        self._worker_rpc_client.notify_scheduler(job.job_id,
-                                                 self._worker_id,
-                                                 execution_time,
-                                                 job.total_steps)
+        self._done_callback(job.job_id,
+                            self._worker_id,
+                            job.total_steps,
+                            execution_time)
 
     def dispatch_job(self, job):
         self._thread_pool.apply_async(self.launch_job, (job,))

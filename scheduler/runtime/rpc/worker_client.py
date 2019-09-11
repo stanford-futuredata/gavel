@@ -12,7 +12,7 @@ SLEEP_SECONDS = 5
 
 class WorkerRpcClient:
     """Worker client for sending RPC requests to a scheduler server."""
-  
+
     def __init__(self, worker_type, worker_ip_addr, worker_port,
                  sched_ip_addr, sched_port):
         self._worker_type = worker_type
@@ -54,11 +54,17 @@ class WorkerRpcClient:
         #TODO
         pass
 
-    def notify_scheduler(self, job_id, worker_id, execution_time, num_steps):
+    def notify_scheduler(self, results):
         # Send a Done message.
-        request = w2s_pb2.DoneRequest(job_id=job_id, worker_id=worker_id,
-                                      execution_time=execution_time,
-                                      num_steps=num_steps)
+        request = w2s_pb2.DoneRequest()
+        for result in results:
+            job_id, worker_id, num_steps, execution_time = result
+            job_description = request.job_descriptions.add()
+            job_description.job_id = job_id
+            job_description.worker_id = worker_id
+            job_description.num_steps = num_steps
+            job_description.execution_time = execution_time
+
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
             response = stub.Done(request)

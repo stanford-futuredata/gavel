@@ -9,7 +9,7 @@ service SchedulerToWorker {
     rpc Shutdown (Empty) returns (Empty) {}
 }
 
-message JobDescription {
+message ScheduledJobDescription {
     uint64 job_id = 1;
     string job_type = 2;
     string command = 3;
@@ -20,5 +20,5 @@ message JobDescription {
 }
 
 message RunRequest {
-    repeated JobDescription job_descriptions = 1;
+    repeated ScheduledJobDescription job_descriptions = 1;
 }

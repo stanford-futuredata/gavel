@@ -3,6 +3,8 @@ import socket
 import sys
 import threading
 
+import job_id_pair
+
 from runtime.rpc import dispatcher
 from runtime.rpc import worker_client
 from runtime.rpc import worker_server
@@ -18,6 +20,8 @@ class Worker:
                 self._worker_type, self._worker_ip_addr,
                 self._worker_port, sched_ip_addr, sched_port)
         self._devices = [] # TODO: get devices
+        self._results = {}
+        self._single_job_id_to_job_id_pair_map = {}
 
         print('Starting server at port %d' % (worker_port))
 
@@ -25,7 +29,7 @@ class Worker:
             'Run': self._run_callback,
             'Shutdown': self._shutdown_callback,
         }
-        
+
         self._server_thread = threading.Thread(
             target=worker_server.serve,
             args=(worker_port, callbacks,))
@@ -36,11 +40,11 @@ class Worker:
             self._worker_rpc_client.register_worker(self._devices)
         if error:
             raise RuntimeError(error)
-        
+
         self._dispatcher = dispatcher.Dispatcher(self._worker_id,
                                                  self._gpu_id,
-                                                 self._worker_rpc_client)
-        
+                                                 self._done_callback)
+
         self._server_thread.join()
 
     def _run_callback(self, jobs):
@@ -52,8 +56,27 @@ class Worker:
                 break
             except Exception as e:
               continue
+        if len(jobs) == 1:
+            job_id = job_id_pair.JobIdPair(jobs[0].job_id, None)
+        elif len(jobs) == 2:
+            job_id = job_id_pair.JobIdPair(jobs[0].job_id, jobs[1].job_id)
+        self._results[job_id] = []
         for job in jobs:
+            self._single_job_id_to_job_id_pair_map[job.job_id] = \
+                job_id
             self._dispatcher.dispatch_job(job)
+
+    def _done_callback(self, single_job_id, worker_id, num_steps,
+                       execution_time):
+        job_id = self._single_job_id_to_job_id_pair_map[single_job_id]
+        self._results[job_id].append((single_job_id, worker_id,
+                                      num_steps, execution_time))
+        if ((len(self._results[job_id]) == 1 and job_id[1] is None) or
+            (len(self._results[job_id]) == 2)):
+            self._results[job_id].sort(key=lambda x: x[0])
+            self._worker_rpc_client.notify_scheduler(self._results[job_id])
+            del self._results[job_id]
+            del self._single_job_id_to_job_id_pair_map[single_job_id]
 
     def _shutdown_callback(self):
         self._dispatcher.shutdown()

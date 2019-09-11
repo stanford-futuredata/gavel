@@ -780,15 +780,25 @@ class Scheduler:
                     self._add_available_worker_id(worker_id)
                 scheduled_jobs = self._schedule_jobs_on_workers()
                 for (job_id, worker_ids) in scheduled_jobs:
-                    worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                    # TODO: Support packing.
-                    num_steps = self._get_num_steps(job_id, worker_type,
-                                                    single_job_id=job_id)
+                    worker_type = \
+                        self._worker_id_to_worker_type_mapping[worker_ids[0]]
                     for worker_id in worker_ids:
+                        job_descriptions = []
+                        for single_job_id in job_id.singletons():
+                            num_steps = \
+                                self._get_num_steps(job_id, worker_type,
+                                                    single_job_id=single_job_id)
+                            command = \
+                                self._jobs[single_job_id].command
+                            num_steps_arg = \
+                                self._jobs[single_job_id].num_steps_arg
+                            job_descriptions.append((single_job_id[0],
+                                                     command,
+                                                     num_steps_arg,
+                                                     num_steps))
+
                         self._worker_connections[worker_id].run(
-                            [(job_id[0], self._jobs[job_id].command,
-                              self._jobs[job_id].num_steps_arg,
-                              num_steps)])
+                                job_descriptions)
                         self._remove_available_worker_id(worker_id)
             while not self._available_worker_ids.full():
                 time.sleep(2)
