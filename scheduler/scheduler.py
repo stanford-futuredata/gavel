@@ -13,6 +13,7 @@ import random
 import math
 import matrix_completion
 import warnings
+import sys
 
 # TODO: clean these up.
 from job import Job
@@ -45,6 +46,7 @@ class Scheduler:
                                             time_per_iteration,
                                             profiling_percentage))
 
+        self._num_correct_predictions = 0
         # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
         # Initialize seeds.
@@ -390,8 +392,9 @@ class Scheduler:
                 job_type = self._jobs[job_id].job_type
                 reference_job_type = job_types_to_profile[job_id].pop(0)
                 self._profiled_jobs[worker_type][job_id][reference_job_type] = \
-                    (oracle_throughputs[job_type][reference_job_type][0] / \
-                     oracle_throughputs[job_type]['null'])
+                    oracle_throughputs[job_type][reference_job_type] 
+                    #(oracle_throughputs[job_type][reference_job_type][0] / \
+                    # oracle_throughputs[job_type]['null'])
                 used_profiling_slots += 1
                 if len(job_types_to_profile[job_id]) == 0:
                     completed_jobs.append(job_id)
@@ -1297,11 +1300,13 @@ class Scheduler:
                         isolated_throughputs.append(
                             oracle_throughputs[job_type]['null'])
                     self._reference_throughputs[worker_type][i][j] = \
-                        (oracle_throughputs[job_type_0][job_type_1][0] /
-                            isolated_throughputs[0])
+                        oracle_throughputs[job_type_0][job_type_1][0] 
+                        #(oracle_throughputs[job_type_0][job_type_1][0] /
+                        #    isolated_throughputs[0])
                     self._reference_throughputs[worker_type][j][i] = \
-                        (oracle_throughputs[job_type_0][job_type_1][1] /
-                            isolated_throughputs[1])
+                       oracle_throughputs[job_type_0][job_type_1][1]
+                       #(oracle_throughputs[job_type_0][job_type_1][1] /
+                       #     isolated_throughputs[1])
         noise = \
             self._throughput_estimation_generator.normal(0, 0.05,
                                                         (num_reference_models,
@@ -1310,31 +1315,54 @@ class Scheduler:
         np.clip(self._reference_throughputs[worker_type], 0, 1,
                 out=self._reference_throughputs[worker_type])
 
+    def _cosine_distance(self, a, b):
+        return np.dot(a, b)/(np.linalg.norm(a)*np.linalg.norm(b))
+
+    def _euclidean_distance(self, a, b):
+        return np.linalg.norm(a - b)
+
     def _match_job_to_reference_job(self, job_id, worker_type):
         num_reference_job_types = len(self._reference_job_types)
         oracle_throughputs = self._oracle_throughputs[worker_type]
 
         # Add a row to reference throughputs for the newly arrived job.
+        throughputs_matrix = np.zeros((num_reference_job_types+1,
+                                       num_reference_job_types+1),
+                                      dtype=np.float32)
+        throughputs_matrix[:-1,:-1]= \
+            self._reference_throughputs[worker_type]
+        """
         throughputs_matrix = \
             np.concatenate((self._reference_throughputs[worker_type],
                             np.zeros((1, num_reference_job_types),
                                      dtype=np.float32)),
                            axis=0)
-
+        """
+        
         # Initialize the mask.
+        mask = np.zeros((num_reference_job_types+1, num_reference_job_types+1),
+                         dtype=np.float32)
+        mask[:num_reference_job_types][:num_reference_job_types] = 1.0
+        
+        """
         mask = np.concatenate((np.ones((num_reference_job_types,
                                         num_reference_job_types),
                                        dtype=np.float32),
                                np.zeros((1, num_reference_job_types),
                                         dtype=np.float32)),
                               axis=0)
+        """
 
         # Fill in measured data points.
         for i, reference_job_type in enumerate(self._reference_job_types):
             if reference_job_type in self._profiled_jobs[worker_type][job_id]:
                 throughputs_matrix[-1][i] = \
-                    self._profiled_jobs[worker_type][job_id][reference_job_type]
+                    self._profiled_jobs[worker_type][job_id][reference_job_type][0]
+                throughputs_matrix[i][-1] = \
+                    self._profiled_jobs[worker_type][job_id][reference_job_type][1]
                 mask[-1][i] = 1
+                mask[i][-1] = 1
+
 
         # Run matrix completion algorithm if there are values to estimate.
         if (np.min(mask) == 0):
@@ -1344,11 +1372,11 @@ class Scheduler:
                 mu = DEFAULT_MATRIX_COMPLETION_MU
                 try:
                     estimated_throughputs = \
-                        np.clip(matrix_completion.pmf_solve(throughputs_matrix,
+                        matrix_completion.pmf_solve(throughputs_matrix,
                                                             mask,
                                                             k=k,
-                                                            mu=mu),
-                                0.0, 1.0)
+                                                            mu=mu)#,
+                                #0.0, 1.0)
                     for i in range(len(mask)):
                         for j in range(len(mask[0])):
                             if not mask[i][j]:
@@ -1360,19 +1388,39 @@ class Scheduler:
                     estimated_throughputs = None
 
         # Normalize the estimated throughputs.
-        throughputs_matrix /= np.linalg.norm(throughputs_matrix, ord=2, axis=1,
-                                             keepdims=True)
+        #throughputs_matrix /= np.linalg.norm(throughputs_matrix, ord=2, axis=1,
+        #                                     keepdims=True)
+
+        #print('throughputs_matrix:')
+        #print(throughputs_matrix)
 
         # Measure the distance from the new row to every other row and find
         # the row with the smallest distance.
         distances = []
         for i, reference_job_type in enumerate(self._reference_job_types):
             distances.append((reference_job_type,
-                              np.linalg.norm(throughputs_matrix[i] -
-                                             throughputs_matrix[-1])))
+                #self._cosine_distance(throughputs_matrix[i][:-1], throughputs_matrix[-1][:-1])))
+                self._euclidean_distance(throughputs_matrix[i][:-1], throughputs_matrix[-1][:-1])))
+                                
+            #np.linalg.norm(throughputs_matrix[i][:-1] -
+            #                                 throughputs_matrix[-1][:-1])))
         distances.sort(key=lambda x: x[1])
-        new_job_type = distances[0][0]
-        self._reference_job_map[job_id] = new_job_type
+        predicted_job_type = distances[0][0]
+        self._reference_job_map[job_id] = predicted_job_type
+
+        if predicted_job_type == self._jobs[job_id].job_type:
+            self._num_correct_predictions += 1
+ 
+        print('Job %s: Original job type=%s, '
+              'Predicted job type=%s '
+              '(%d correct predictions)' % (job_id,
+                                            self._jobs[job_id].job_type,
+                                            predicted_job_type,
+                                            self._num_correct_predictions))
+        #print('Job %s: Predicted row: %s' % (job_id, str(throughputs_matrix[-1])))
+        #print('Job type %s oracle row: %s' % (self._jobs[job_id].job_type, self._reference_throughputs[worker_type][list(self._reference_job_types).index(self._jobs[job_id].job_type)]))
+        #print('Original job type: %s' % (self._jobs[job_id].job_type))
+        #print('Predicted job type: %s' % (predicted_job_type))
 
         # Set the throughputs using the oracle throughputs given by the
         # reference models.
@@ -1614,7 +1662,6 @@ class Scheduler:
                 self._priorities[worker_type] = {}
                 self._deficits[worker_type] = {}
                 if self._estimate_throughputs:
-                    self._profiled_job_combinations[worker_type] = set()
                     self._jobs_to_profile[worker_type] = set()
                     self._profiled_jobs[worker_type] = {}
                 for job_id in self._jobs:
