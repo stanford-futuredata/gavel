@@ -34,7 +34,8 @@ DEFAULT_MATRIX_COMPLETION_MU = 1e-2
 class Scheduler:
 
     def __init__(self, policy, simulate=False, throughputs_file=None,
-                 seed=0, time_per_iteration=1920, profiling_percentage=0.0):
+                 seed=0, time_per_iteration=1920, profiling_percentage=0.0,
+                 num_reference_models=26):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -131,13 +132,16 @@ class Scheduler:
             self._profiling_percentage = profiling_percentage
             # Keeps track of which throughput values have been measured.
             self._throughputs_mask = {}
-            # Job combinations that were profiled in the previous round.
-            self._profiled_job_combinations = {}
             # Initialize the throughputs matrix that newly arrived jobs will
             # be compared against.
-            self._initialize_reference_throughputs(num_reference_models=26)
+            self._initialize_reference_throughputs(num_reference_models)
+            # Keeps track of which jobs need to be profiled against
+            # reference jobs.
             self._jobs_to_profile = {}
+            # Keeps track of job throughputs when co-located with
+            # reference jobs.
             self._profiled_jobs = {}
+            # Map from job id to reference job type.
             self._reference_job_map = {}
         # Currently running jobs.
         self._running_jobs = set()
@@ -264,7 +268,6 @@ class Scheduler:
                     self._populate_job_combination_metadata(job_id,
                                                             worker_type)
                 if self._estimate_throughputs:
-                    print('Updating self._jobs_to_profile with job_id %s' % (job_id))
                     self._jobs_to_profile[worker_type].add(job_id)
 
                 self._job_time_so_far[job_id][worker_type] = \
@@ -273,7 +276,7 @@ class Scheduler:
             self._per_job_latest_timestamps[job_id] = None
             self._add_to_priorities(job_id)
             self._need_to_update_allocation = True
-            
+
             if timestamp is None:
                 timestamp = self.get_current_timestamp()
             self._per_job_start_timestamps[job_id] = timestamp
@@ -355,39 +358,6 @@ class Scheduler:
     ======================================================================
     """
 
-    def _sample_estimated_job(self, estimated_jobs, threshold=0.4,
-                              high_throughput_mass=0.8,
-                              low_throughput_mass=0.2):
-        num_high_throughput_jobs = 0
-        # Minimum normalized throughput for a job combination to be
-        # considered "high throughput".
-        for x in estimated_jobs:
-            if x[1] >= threshold:
-                num_high_throughput_jobs += 1
-            else:
-                break
-        num_low_throughput_jobs = \
-            len(estimated_jobs) - num_high_throughput_jobs
-        if num_high_throughput_jobs > 0 and num_low_throughput_jobs > 0:
-            high_throughput_prob = \
-                high_throughput_mass / num_high_throughput_jobs
-            low_throughput_prob = low_throughput_mass / num_low_throughput_jobs
-        elif num_high_throughput_jobs > 0 and num_low_throughput_jobs == 0:
-            high_throughput_prob = 1.0 / num_high_throughput_jobs
-            low_throughput_prob = 0.0
-        elif num_high_throughput_jobs == 0 and num_low_throughput_jobs > 0:
-            high_throughput_prob = 0.0
-            low_throughput_prob = 1.0 / num_low_throughput_jobs
-        probabilities = \
-            [high_throughput_prob] * num_high_throughput_jobs
-        probabilities += \
-            ([low_throughput_prob] * num_low_throughput_jobs)
-        all_idx = list(range(len(estimated_jobs)))
-        return self._throughput_estimation_generator.choice(all_idx,
-                                                            size=1,
-                                                            p=probabilities)[0]
-
-
     def _profile_with_reference_jobs(self, worker_type, num_workers,
                                      num_profiling_jobs_per_machine=8):
         num_workers_left = num_workers
@@ -411,7 +381,7 @@ class Scheduler:
                         len(self._reference_job_types),
                         replace=False).tolist()
         self._jobs_to_profile[worker_type] = set()
-        
+
         # Fill in all profiling slots by round-robining between each job.
         while (used_profiling_slots < available_profiling_slots and
                len(job_types_to_profile) > 0):
@@ -427,59 +397,11 @@ class Scheduler:
                     completed_jobs.append(job_id)
             for completed_job_id in completed_jobs:
                 del job_types_to_profile[completed_job_id]
-        
+
         num_workers_left -= int(math.ceil(used_profiling_slots / \
                                           num_profiling_jobs_per_machine))
         return num_workers_left
 
-    def _select_job_combinations_to_profile(self, worker_type, num_workers,
-                                            already_scheduled_jobs):
-        all_job_ids = []
-        for job_id in sorted(self._jobs.keys()):
-            if self._jobs[job_id].scale_factor == 1:
-                all_job_ids.append(job_id)
-        estimated_jobs = []
-        already_scheduled_jobs_set = set(already_scheduled_jobs)
-        num_workers_left = num_workers
-
-        # Compute the minimum normalized colocated throughput for every
-        # job combination for which the throughput was estimated.
-        for merged_job_id in self._throughputs_mask:
-            if (not self._throughputs_mask[merged_job_id][worker_type] and
-                not merged_job_id in
-                    self._profiled_job_combinations[worker_type]):
-                isolated_throughputs = []
-                for single_job_id in merged_job_id.singletons():
-                    isolated_throughputs.append(
-                        self._throughputs[single_job_id][worker_type])
-                measured_throughputs = \
-                    self._throughputs[merged_job_id][worker_type]
-                normalized_throughputs = np.divide(measured_throughputs,
-                                                   isolated_throughputs)
-                estimated_jobs.append((merged_job_id,
-                                       np.min(normalized_throughputs)))
-        estimated_jobs.sort(key=lambda x: x[1], reverse=True)
-
-        # Select which job combinations to profile by applying a probability
-        # distribution across "high throughput" and "low throughput"
-        # estimated jobs.
-        num_profiling_machines = int(self._cluster_spec[worker_type] *
-                                     self._profiling_percentage)
-        num_profiling_jobs_per_machine = 8
-        for i in range(num_profiling_machines):
-            for j in range(num_profiling_jobs_per_machine):
-                if len(estimated_jobs) == 0:
-                    break
-                idx = self._sample_estimated_job(estimated_jobs)
-                (estimated_job_id, _) = estimated_jobs.pop(idx)
-                single_job_ids = estimated_job_id.singletons()
-                self._profiled_job_combinations[worker_type].add(
-                        estimated_job_id)
-                # If any profiling is done on this machine, it is no longer
-                # available for use for actual work.
-                if j == 0:
-                    num_workers_left -= 1
-        return num_workers_left
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_type,
@@ -501,11 +423,6 @@ class Scheduler:
         if self._estimate_throughputs:
             num_workers_left = self._profile_with_reference_jobs(worker_type,
                                                                  num_workers)
-            """
-                self._select_job_combinations_to_profile(worker_type,
-                                                         num_workers,
-                                                         already_scheduled_jobs)
-            """
         else:
             num_workers_left = num_workers
 
@@ -730,7 +647,9 @@ class Scheduler:
             pickle.dump(self._throughputs, f)
             if self._estimate_throughputs:
                 pickle.dump(self._throughputs_mask, f)
-                pickle.dump(self._profiled_job_combinations, f)
+                pickle.dump(self._jobs_to_profile, f)
+                pickle.dump(self._profiled_jobs, f)
+                pickle.dump(self._reference_job_map, f)
             pickle.dump(self._allocation, f)
             pickle.dump(self._steps_run_so_far, f)
             pickle.dump(self._total_steps_run, f)
@@ -766,6 +685,9 @@ class Scheduler:
             self._throughputs = pickle.load(f)
             if self._estimate_throughputs:
                 self._throughputs_mask = pickle.load(f)
+                self._jobs_to_profile = pickle.load(f)
+                self._profiled_jobs = pickle.load(f)
+                self._reference_job_map = pickle.load(f)
                 self._profiled_job_combinations = pickle.load(f)
             self._allocation = pickle.load(f)
             self._steps_run_so_far = pickle.load(f)
@@ -1327,9 +1249,6 @@ class Scheduler:
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
-                # The single-job IDs for job pairs are stored in sorted order,
-                # so make sure the co-located throughputs match the order of the
-                # single-job IDs.
                 if (job.scale_factor != other_job.scale_factor or
                     self._estimate_throughputs):
                     self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
@@ -1337,6 +1256,9 @@ class Scheduler:
                         self._throughputs_mask[merged_job_id][worker_type] = False
                 else:
                     oracle_throughputs = self._oracle_throughputs[worker_type]
+                    # The single-job IDs for job pairs are stored in sorted
+                    # order so make sure the co-located throughputs match this
+                    # order.
                     if job_id < other_job_id:
                         self._throughputs[merged_job_id][worker_type] = \
                             oracle_throughputs[job.job_type][other_job.job_type]
@@ -1380,13 +1302,6 @@ class Scheduler:
                     self._reference_throughputs[worker_type][j][i] = \
                         (oracle_throughputs[job_type_0][job_type_1][1] /
                             isolated_throughputs[1])
-        for i, reference_job_type in enumerate(self._reference_job_types):
-            if reference_job_type == 'ResNet-18 (batch size 32)':
-                print('ResNet-18 (batch size 32):', self._reference_throughputs[worker_type][i])
-            elif reference_job_type == 'Transformer (batch size 128)':
-                print('Transformer (batch size 128):', self._reference_throughputs[worker_type][i])
-
-        """
         noise = \
             self._throughput_estimation_generator.normal(0, 0.05,
                                                         (num_reference_models,
@@ -1394,21 +1309,6 @@ class Scheduler:
         self._reference_throughputs[worker_type] += noise
         np.clip(self._reference_throughputs[worker_type], 0, 1,
                 out=self._reference_throughputs[worker_type])
-        """
-
-    def _record_profiled_throughputs(self):
-        for worker_type in self._profiled_job_combinations:
-            for job_id in self._profiled_job_combinations[worker_type]:
-                job_completed = False
-                for single_job_id in job_id.singletons():
-                    if not single_job_id in self._jobs:
-                        job_completed = True
-                        break
-                if job_completed:
-                    continue
-                self._update_throughput(job_id, worker_type,
-                                        None, None)
-            self._profiled_job_combinations[worker_type] = set()
 
     def _match_job_to_reference_job(self, job_id, worker_type):
         num_reference_job_types = len(self._reference_job_types)
@@ -1420,7 +1320,7 @@ class Scheduler:
                             np.zeros((1, num_reference_job_types),
                                      dtype=np.float32)),
                            axis=0)
-        
+
         # Initialize the mask.
         mask = np.concatenate((np.ones((num_reference_job_types,
                                         num_reference_job_types),
@@ -1428,14 +1328,14 @@ class Scheduler:
                                np.zeros((1, num_reference_job_types),
                                         dtype=np.float32)),
                               axis=0)
-       
+
         # Fill in measured data points.
         for i, reference_job_type in enumerate(self._reference_job_types):
             if reference_job_type in self._profiled_jobs[worker_type][job_id]:
                 throughputs_matrix[-1][i] = \
                     self._profiled_jobs[worker_type][job_id][reference_job_type]
                 mask[-1][i] = 1
-        
+
         # Run matrix completion algorithm if there are values to estimate.
         if (np.min(mask) == 0):
             with warnings.catch_warnings():
@@ -1480,29 +1380,17 @@ class Scheduler:
             if (job_id == other_job_id or
                 other_job_id not in self._reference_job_map):
                 continue
-            assert(other_job_id in self._throughputs)
             reference_job_types = []
             reference_isolated_throughputs = []
             merged_job_id = job_id_pair.JobIdPair(job_id[0], other_job_id[0])
             true_isolated_throughputs = []
             for i, single_job_id in enumerate(merged_job_id.singletons()):
-                try:
-                    true_isolated_throughputs.append(
-                        self._throughputs[single_job_id][worker_type]) 
-                except KeyError as e:
-                    print('job_id: %s' % (job_id))
-                    print('merged_job_id:', merged_job_id)
-                    print('merged_job_id.singletons(): %r' % (repr(merged_job_id.singletons())))
-                    print('other_job_id:', other_job_id)
-                    print('single_job_id:', single_job_id)
-                    print('worker_type:', worker_type)
-                    print('self._jobs.keys():', sorted(self._jobs.keys()))
-                    print('self._throughputs:', self._throughputs)
-                    raise KeyError(e)
+                true_isolated_throughputs.append(
+                    self._throughputs[single_job_id][worker_type])
                 reference_job_type = self._reference_job_map[single_job_id]
                 reference_job_types.append(reference_job_type)
                 reference_isolated_throughputs.append(
-                    oracle_throughputs[reference_job_type]['null'])        
+                    oracle_throughputs[reference_job_type]['null'])
             reference_colocated_throughputs = \
                 oracle_throughputs[reference_job_types[0]][reference_job_types[1]]
             reference_normalized_throughputs = \
@@ -1511,75 +1399,6 @@ class Scheduler:
             self._throughputs[merged_job_id][worker_type] = \
                 np.multiply(true_isolated_throughputs,
                             reference_normalized_throughputs)
-
-    def _estimate_colocated_throughputs(self):
-        all_job_ids = sorted(self._jobs.keys())
-        num_jobs = len(all_job_ids)
-
-        for worker_type in self._worker_types:
-            throughputs_matrix = \
-                np.zeros((num_jobs, num_jobs), dtype=np.float32)
-            mask = np.zeros((num_jobs, num_jobs), dtype=np.float32)
-
-            # Construct the mask and throughputs matrix.
-            for i, job_id_0 in enumerate(all_job_ids):
-                for j, job_id_1 in enumerate(all_job_ids):
-                    if j <= i:
-                        continue
-                    merged_job_id = \
-                        job_id_pair.JobIdPair(job_id_0[0], job_id_1[0])
-                    if self._throughputs_mask[merged_job_id][worker_type]:
-                        mask[i][j] = 1.0
-                        mask[j][i] = 1.0
-                        isolated_throughputs = []
-                        for single_job_id in [job_id_0, job_id_1]:
-                            isolated_throughputs.append(
-                                self._throughputs[single_job_id][worker_type])
-                        measured_throughputs = \
-                            self._throughputs[merged_job_id][worker_type]
-                        normalized_throughputs = np.divide(measured_throughputs,
-                                                           isolated_throughputs)
-                        throughputs_matrix[i][j] = normalized_throughputs[0]
-                        throughputs_matrix[j][i] = normalized_throughputs[1]
-
-            # Run the matrix completion algorithm.
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                k = DEFAULT_MATRIX_COMPLETION_K
-                mu = DEFAULT_MATRIX_COMPLETION_MU
-                try:
-                    estimated_throughputs = \
-                        np.clip(matrix_completion.pmf_solve(throughputs_matrix,
-                                                            mask,
-                                                            k=k,
-                                                            mu=mu),
-                                0.0, 1.0)
-                except np.linalg.LinAlgError as e:
-                    print('WARNING: could not estimate throughputs!')
-                    print(e)
-                    estimated_throughputs = None
-
-            # Insert the estimated throughputs back into the global throughputs
-            # data structure.
-            if estimated_throughputs is not None:
-                for i in range(num_jobs):
-                    job_id_0 = all_job_ids[i]
-                    for j in range(num_jobs):
-                        if j <= i or mask[i][j]:
-                            continue
-                        job_id_1 = all_job_ids[j]
-                        merged_job_id = job_id_pair.JobIdPair(job_id_0[0],
-                                                              job_id_1[0])
-                        isolated_throughputs = []
-                        for single_job_id in [job_id_0, job_id_1]:
-                            isolated_throughputs.append(
-                                self._throughputs[single_job_id][worker_type])
-                        job_0_throughput = (isolated_throughputs[0] *
-                                            estimated_throughputs[i][j])
-                        job_1_throughput = (isolated_throughputs[1] *
-                                            estimated_throughputs[j][i])
-                        self._throughputs[merged_job_id][worker_type] = \
-                            [job_0_throughput, job_1_throughput]
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
@@ -1690,10 +1509,10 @@ class Scheduler:
             if self._estimate_throughputs:
                 for worker_type in self._jobs_to_profile:
                     for job_id in self._profiled_jobs[worker_type]:
-                       self._match_job_to_reference_job(job_id, worker_type)
+                        if not job_id in self._jobs:
+                            continue
+                        self._match_job_to_reference_job(job_id, worker_type)
                     self._profiled_jobs[worker_type] = {}
-                #self._record_profiled_throughputs()
-                #self._estimate_colocated_throughputs()
             self._allocation = self._get_allocation()
             self._need_to_update_allocation = False
 
