@@ -55,15 +55,13 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
-parser.add_argument('--world-size', default=1, type=int,
-                    help='number of distributed processes')
-parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
+parser.add_argument('--dist-url', default='env://', type=str,
                     help='url used to set up distributed training')
-parser.add_argument('--dist-backend', default='gloo', type=str,
+parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
 parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
-parser.add_argument('--gpu', default=None, type=int,
+parser.add_argument('--local_rank', default=0, type=int,
                     help='GPU id to use.')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
@@ -85,15 +83,10 @@ def main():
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
 
-    if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
-
-    args.distributed = args.world_size > 1
-
+    args.distributed = True
     if args.distributed:
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size)
+        dist.init_process_group(backend=args.dist_backend,
+                                init_method=args.dist_url)
 
     # create model
     if args.pretrained:
@@ -103,20 +96,13 @@ def main():
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
 
-    if args.gpu is not None:
-        model = model.cuda(args.gpu)
-    elif args.distributed:
-        model.cuda()
+    torch.cuda.set_device(args.local_rank)
+    model = model.cuda()
+    if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model)
-    else:
-        if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
-            model.features = torch.nn.DataParallel(model.features)
-            model.cuda()
-        else:
-            model = torch.nn.DataParallel(model).cuda()
 
     # define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda(args.gpu)
+    criterion = nn.CrossEntropyLoss().cuda()
 
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
@@ -219,9 +205,8 @@ def train(train_loader, model, criterion, optimizer, epoch):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        if args.gpu is not None:
-            input = input.cuda(args.gpu, non_blocking=True)
-        target = target.cuda(args.gpu, non_blocking=True)
+        input = input.cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
 
         # compute output
         output = model(input)
@@ -268,9 +253,8 @@ def validate(val_loader, model, criterion):
     with torch.no_grad():
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
-            if args.gpu is not None:
-                input = input.cuda(args.gpu, non_blocking=True)
-            target = target.cuda(args.gpu, non_blocking=True)
+            input = input.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
 
             # compute output
             output = model(input)
