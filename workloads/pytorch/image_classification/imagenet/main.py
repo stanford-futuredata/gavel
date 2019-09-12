@@ -67,6 +67,8 @@ parser.add_argument('--world_size', default=None, type=int,
                     help='World size')
 parser.add_argument('--master_addr', default=None, type=str,
                     help='Master address to use for distributed run')
+parser.add_argument('--master_port', default=None, type=int,
+                    help='Master port to use for distributed run')
 parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
@@ -89,8 +91,11 @@ def main():
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
 
+    args.distributed = False
     if args.master_addr is not None:
         args.distributed = True
+        os.environ['MASTER_ADDR'] = args.master_addr
+        os.environ['MASTER_PORT'] = str(args.master_port)
         dist.init_process_group(backend=args.dist_backend,
                                 init_method=args.dist_url,
                                 world_size=args.world_size,

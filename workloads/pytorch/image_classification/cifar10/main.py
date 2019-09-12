@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
+import torch.distributed as dist
 
 import torchvision
 import torchvision.transforms as transforms
@@ -39,6 +40,8 @@ parser.add_argument('--world_size', default=None, type=int,
                     help='World size')
 parser.add_argument('--master_addr', default=None, type=str,
                     help='Master address to use for distributed run')
+parser.add_argument('--master_port', default=None, type=int,
+                    help='Master port to use for distributed run')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 
@@ -56,8 +59,16 @@ elif args.num_epochs is None and args.num_steps is None:
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
+# Model
+print('==> Building model..')
+net = ResNet18()
+net = net.cuda()
+
+distributed = False
 if args.master_addr is not None:
     distributed = True
+    os.environ['MASTER_ADDR'] = args.master_addr
+    os.environ['MASTER_PORT'] = str(args.master_port)
     dist.init_process_group(backend=args.dist_backend,
                             init_method=args.dist_url,
                             world_size=args.world_size,
@@ -82,18 +93,13 @@ trainset = torchvision.datasets.CIFAR10(root=args.data_dir, train=True, download
 train_sampler = None
 if distributed:
     train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2,
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=2,
                                           sampler=train_sampler)
 
 testset = torchvision.datasets.CIFAR10(root=args.data_dir, train=False, download=False, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-# Model
-print('==> Building model..')
-net = ResNet18()
-net = net.cuda()
 
 if args.resume:
     # Load checkpoint.
