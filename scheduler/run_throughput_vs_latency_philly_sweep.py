@@ -5,6 +5,7 @@ import contextlib
 from func_timeout import func_timeout, FunctionTimedOut
 import multiprocessing
 import numpy as np
+import pickle
 import os
 import sys
 
@@ -17,6 +18,9 @@ def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, cluster_spec, interval,
                           seed, vc, log_dir, trace_dir, run_dir, timeout,
                           verbose):
+    with open('philly_steady_state_jobs', 'rb') as f:
+        philly_steady_state_jobs = pickle.load(f)
+
     input_trace = os.path.join(trace_dir, 'seed=%d' % seed,
                                '%s.trace' % (vc))
     output_file = 'seed=%d.log' % seed
@@ -45,7 +49,8 @@ def simulate_with_timeout(experiment_id, policy_name,
 
             if timeout is None:
                 sched.simulate(cluster_spec, arrival_times=arrival_times,
-                               jobs=jobs)
+                               jobs=jobs,
+                               jobs_to_complete=philly_steady_state_jobs)
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
             else:
@@ -55,6 +60,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                                  kwargs={
                                     'arrival_times': arrival_times,
                                     'jobs': jobs,
+                                    'jobs_to_complete': philly_steady_state_jobs
                                 })
                     average_jct = sched.get_average_jct()
                     utilization = sched.get_cluster_utilization()
@@ -139,7 +145,7 @@ def sweep_cluster_sizes(args):
                                   args.trace_dir, args.run_dir,
                                   args.util_threshold))
             experiment_id += 1
-    
+
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
         print('[%s] Running %d total experiment(s)...' % (current_time,
@@ -172,7 +178,7 @@ def sweep_policies(args):
 
     vc_and_cluster_specs = json.load(open(args.cluster_spec_file, 'r'))
 
-    all_args_list = [] 
+    all_args_list = []
     for vc, cluster_spec_strs in vc_and_cluster_specs.items():
         for cluster_spec_str in cluster_spec_strs:
 
@@ -188,7 +194,7 @@ def sweep_policies(args):
             vc_subdir = os.path.join(policy_log_dir, 'vc=%s' % vc)
             if not os.path.isdir(vc_subdir):
                 os.mkdir(vc_subdir)
-            
+
             cluster_spec_subdir = \
                 os.path.join(vc_subdir,
                              'v100=%d.p100=%d.k80=%d' % (cluster_spec['v100'],
@@ -210,7 +216,7 @@ def sweep_policies(args):
                                           args.trace_dir, args.run_dir,
                                           args.timeout, args.verbose))
                     experiment_id += 1
-    
+
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
         print('[%s] Running %d total experiment(s)...' % (current_time,
