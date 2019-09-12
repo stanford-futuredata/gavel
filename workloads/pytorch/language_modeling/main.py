@@ -4,6 +4,7 @@ import time
 import math
 import os
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.onnx
 
@@ -49,6 +50,22 @@ parser.add_argument('--onnx-export', type=str, default='',
                     help='path to export the final model in onnx format')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
+
+parser.add_argument('--dist-url', default='env://', type=str,
+                            help='url used to set up distributed training')
+parser.add_argument('--dist-backend', default='nccl', type=str,
+                            help='Distributed backend')
+parser.add_argument('--local_rank', default=0, type=int,
+                            help='Local rank')
+parser.add_argument('--rank', default=None, type=int,
+                            help='Rank')
+parser.add_argument('--world_size', default=None, type=int,
+                            help='World size')
+parser.add_argument('--master_addr', default=None, type=str,
+                            help='Master address to use for distributed run')
+parser.add_argument('--master_port', default=None, type=int,
+                            help='Master port to use for distributed run')
+
 args = parser.parse_args()
 
 if args.epochs is not None and args.steps is not None:
@@ -62,7 +79,18 @@ if torch.cuda.is_available():
     if not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
+torch.cuda.set_device(args.local_rank)
 device = torch.device("cuda" if args.cuda else "cpu")
+
+args.distributed = False
+if args.master_addr is not None:
+    args.distributed = True
+    os.environ['MASTER_ADDR'] = args.master_addr
+    os.environ['MASTER_PORT'] = str(args.master_port)
+    dist.init_process_group(backend=args.dist_backend,
+                            init_method=args.dist_url,
+                            world_size=args.world_size,
+                            rank=args.rank)
 
 ###############################################################################
 # Load data
