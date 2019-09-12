@@ -30,9 +30,15 @@ parser.add_argument('--log_interval', type=int, default=100,
 parser.add_argument('--dist-url', default='env://', type=str,
                     help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='nccl', type=str,
-                    help='distributed backend')
+                    help='Distributed backend')
 parser.add_argument('--local_rank', default=0, type=int,
-                    help='GPU id to use.')
+                    help='Local rank')
+parser.add_argument('--rank', default=None, type=int,
+                    help='Rank')
+parser.add_argument('--world_size', default=None, type=int,
+                    help='World size')
+parser.add_argument('--master_addr', default=None, type=str,
+                    help='Master address to use for distributed run')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 
@@ -50,6 +56,14 @@ elif args.num_epochs is None and args.num_steps is None:
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
+if args.master_addr is not None:
+    distributed = True
+    dist.init_process_group(backend=args.dist_backend,
+                            init_method=args.dist_url,
+                            world_size=args.world_size,
+                            rank=args.rank)
+    net = torch.nn.parallel.DistributedDataParallel(net)
+
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
@@ -65,7 +79,9 @@ transform_test = transforms.Compose([
 ])
 
 trainset = torchvision.datasets.CIFAR10(root=args.data_dir, train=True, download=False, transform=transform_train)
-train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
+train_sampler = None
+if distributed:
+    train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2,
                                           sampler=train_sampler)
 
@@ -78,8 +94,6 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 print('==> Building model..')
 net = ResNet18()
 net = net.cuda()
-
-net = torch.nn.parallel.DistributedDataParallel(net)
 
 if args.resume:
     # Load checkpoint.

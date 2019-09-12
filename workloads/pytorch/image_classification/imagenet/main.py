@@ -58,11 +58,17 @@ parser.add_argument('--pretrained', dest='pretrained', action='store_true',
 parser.add_argument('--dist-url', default='env://', type=str,
                     help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='nccl', type=str,
-                    help='distributed backend')
+                    help='Distributed backend')
+parser.add_argument('--local_rank', default=0, type=int,
+                    help='Local rank')
+parser.add_argument('--rank', default=None, type=int,
+                    help='Rank')
+parser.add_argument('--world_size', default=None, type=int,
+                    help='World size')
+parser.add_argument('--master_addr', default=None, type=str,
+                    help='Master address to use for distributed run')
 parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
-parser.add_argument('--local_rank', default=0, type=int,
-                    help='GPU id to use.')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 
@@ -83,10 +89,12 @@ def main():
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
 
-    args.distributed = True
-    if args.distributed:
+    if args.master_addr is not None:
+        args.distributed = True
         dist.init_process_group(backend=args.dist_backend,
-                                init_method=args.dist_url)
+                                init_method=args.dist_url,
+                                world_size=args.world_size,
+                                rank=args.rank)
 
     # create model
     if args.pretrained:
