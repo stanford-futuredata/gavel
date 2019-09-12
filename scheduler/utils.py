@@ -3,6 +3,16 @@ import os
 
 import policies
 
+def get_available_policies():
+    return ['fifo', 'fifo_perf', 'fifo_packed',
+            'max_min_fairness',
+            'max_min_fairness_perf',
+            'max_min_fairness_packed',
+            'min_total_duration',
+            'min_total_duration_packed',
+            'max_sum_throughput_perf',
+            'max_sum_throughput_packed']
+
 def read_all_throughputs_json(throughputs_file):
     with open(throughputs_file, 'r') as f:
         throughputs = json.load(f)
@@ -15,6 +25,10 @@ def get_policy(policy_name, seed=None):
         policy = policies.MaxMinFairnessPolicyWithPerf()
     elif policy_name == 'max_min_fairness_packed':
         policy = policies.MaxMinFairnessPolicyWithPacking()
+    elif policy_name == 'max_sum_throughput_perf':
+        policy = policies.MaxSumThroughputPolicyWithPerf()
+    elif policy_name == 'max_sum_throughput_packed':
+        policy = policies.MaxSumThroughputPolicyWithPacking()
     elif policy_name == 'min_total_duration':
         policy = policies.MinTotalDurationPolicy()
     elif policy_name == 'min_total_duration_packed':
