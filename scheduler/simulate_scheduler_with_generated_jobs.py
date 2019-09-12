@@ -103,14 +103,7 @@ if __name__=='__main__':
     parser.add_argument('-e', '--window-end', type=int, default=5000,
                         help='Measurement window end (job ID)')
     parser.add_argument('-p', '--policy', type=str, default='fifo',
-                        choices=['fifo', 'fifo_perf', 'fifo_packed',
-                                 'max_min_fairness',
-                                 'max_min_fairness_perf',
-                                 'max_min_fairness_packed',
-                                 'min_total_duration',
-                                 'min_total_duration_packed',
-                                 'max_sum_throughput_perf',
-                                 'max_sum_throughput_packed'],
+                        choices=utils.get_available_policies(),
                         help='Scheduler policy')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('-i', '--interval', type=int, default=1920,

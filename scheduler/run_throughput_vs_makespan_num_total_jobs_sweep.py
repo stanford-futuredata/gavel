@@ -175,9 +175,7 @@ if __name__=='__main__':
                         help=('Number of processes to use in pool '
                               '(use as many as available if not specified)'))
     parser.add_argument('-p', '--policies', type=str, nargs='+',
-                        default=['fifo', 'fifo_perf', 'fifo_packed',
-                                 'max_min_fairness', 'max_min_fairness_perf',
-                                 'max_min_fairness_packed'],
+                        default=utils.get_available_policies(),
                         help='List of policies to sweep')
     parser.add_argument('-c', '--cluster-spec', type=str, nargs='+',
                         default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
