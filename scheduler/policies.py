@@ -151,7 +151,7 @@ class MaxMinFairnessPolicy(Policy):
              for job_id in job_ids]).reshape((m, 1))
         priority_weights /= sum(priority_weights)
         num_workers = [cluster_spec[worker_type] for worker_type in worker_types]
-        allocation = np.repeat(priority_weights, n, axis=0)
+        allocation = np.repeat(priority_weights, n, axis=1)
 
         # Give each user 1/m of the cluster (num_workers[i] workers
         # available to each user i).
