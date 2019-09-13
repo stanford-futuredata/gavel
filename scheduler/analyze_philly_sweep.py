@@ -32,17 +32,10 @@ def average_jct_fn(logfile_path, min_job_id=None, max_job_id=None):
     with open(logfile_path, 'r') as f:
         lines = f.readlines()
         for line in lines[-10000:]:
-            m = re.match(r'Job (\d+): (\d+\.\d+)', line)
+            m = re.match(r'Average job completion time: (\d+\.\d+) seconds', line)
             if m is not None:
-                job_id = int(m.group(1))
-                job_completion_time = float(m.group(2))
-                if min_job_id is None or min_job_id <= job_id:
-                    if max_job_id is None or job_id <= max_job_id:
-                        job_completion_times.append(
-                            job_completion_time)
-    if len(job_completion_times) == 0:
-        return None
-    return np.mean(job_completion_times) / 3600
+                return float(m.group(1)) / 3600.0
+    return None
 
 
 if __name__ == '__main__':

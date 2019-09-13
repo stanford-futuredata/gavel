@@ -1227,7 +1227,8 @@ class Scheduler:
                 if (job.scale_factor != other_job.scale_factor or
                     self._estimate_throughputs):
                     self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
-                    self._throughputs_mask[merged_job_id][worker_type] = False
+                    if self._estimate_throughputs:
+                        self._throughputs_mask[merged_job_id][worker_type] = False
                 else:
                     oracle_throughputs = self._oracle_throughputs[worker_type]
                     if job_id < other_job_id:

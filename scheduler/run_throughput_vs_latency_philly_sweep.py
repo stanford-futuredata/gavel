@@ -21,10 +21,26 @@ def simulate_with_timeout(experiment_id, policy_name,
     with open('philly_steady_state_jobs', 'rb') as f:
         philly_steady_state_jobs = pickle.load(f)
 
+    with open('philly_jobs_to_complete', 'rb') as f:
+        jobs_to_complete = pickle.load(f)
+    jobs_to_complete = list(jobs_to_complete)
+
+    for i in range(len(jobs_to_complete)):
+        jobs_to_complete[i] = JobIdPair(jobs_to_complete[i], None)
+    jobs_to_complete = set(jobs_to_complete)
+
     input_trace = os.path.join(trace_dir, 'seed=%d' % seed,
                                '%s.trace' % (vc))
     output_file = 'seed=%d.log' % seed
     jobs, arrival_times = utils.parse_trace(input_trace, run_dir)
+    pruned_jobs, pruned_arrival_times = [], []
+    for job_id, (job, arrival_time) in enumerate(zip(jobs, arrival_times)):
+        if job_id in philly_steady_state_jobs:
+            pruned_jobs.append(job)
+            pruned_arrival_times.append(arrival_time)
+    jobs = pruned_jobs
+    arrival_times = pruned_arrival_times
+
     with open(os.path.join(log_dir, output_file), 'w') as f:
         with contextlib.redirect_stdout(f):
             policy = utils.get_policy(policy_name, seed)
@@ -50,7 +66,7 @@ def simulate_with_timeout(experiment_id, policy_name,
             if timeout is None:
                 sched.simulate(cluster_spec, arrival_times=arrival_times,
                                jobs=jobs,
-                               jobs_to_complete=philly_steady_state_jobs)
+                               jobs_to_complete=jobs_to_complete)
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
             else:
@@ -60,7 +76,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                                  kwargs={
                                     'arrival_times': arrival_times,
                                     'jobs': jobs,
-                                    'jobs_to_complete': philly_steady_state_jobs
+                                    'jobs_to_complete': jobs_to_complete
                                 })
                     average_jct = sched.get_average_jct()
                     utilization = sched.get_cluster_utilization()
