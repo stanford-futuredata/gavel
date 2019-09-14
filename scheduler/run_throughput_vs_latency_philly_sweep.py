@@ -67,7 +67,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                 sched.simulate(cluster_spec, arrival_times=arrival_times,
                                jobs=jobs,
                                jobs_to_complete=jobs_to_complete)
-                average_jct = sched.get_average_jct()
+                average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
                 try:
@@ -78,7 +78,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                                     'jobs': jobs,
                                     'jobs_to_complete': jobs_to_complete
                                 })
-                    average_jct = sched.get_average_jct()
+                    average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
                 except FunctionTimedOut:
                     average_jct = float('inf')
