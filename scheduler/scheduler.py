@@ -1243,7 +1243,7 @@ class Scheduler:
         if self._simulate:
             job_type = self._jobs[job_id].job_type
             self._throughputs[job_id][worker_type] = \
-                self._oracle_throughputs['v100'][job_type]['null']
+                self._oracle_throughputs[worker_type][job_type]['null']
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
 
