@@ -1699,12 +1699,17 @@ class Scheduler:
                 # Divide by scale_factor so that _job_time_so_far is incremented
                 # in total by max_execution_time.
                 if job_id in self._job_time_so_far:
-                    self._job_time_so_far[job_id][worker_type] += \
-                            (max_execution_time / self._jobs[job_id].scale_factor)
-                    self._worker_time_so_far[worker_type] += \
-                            (max_execution_time / self._jobs[job_id].scale_factor)
+                    scale_factor = None
+                    for single_job_id in job_id.singletons():
+                        if single_job_id in self._jobs:
+                            scale_factor = self._jobs[single_job_id].scale_factor
+                    if scale_factor is not None:
+                        self._job_time_so_far[job_id][worker_type] += \
+                            (max_execution_time / scale_factor)
+                        self._worker_time_so_far[worker_type] += \
+                            (max_execution_time / scale_factor)
                 self._cumulative_worker_time_so_far[worker_id] += \
-                        max_execution_time
+                    max_execution_time
 
             self._update_throughput(job_id, worker_type,
                                     all_num_steps,
