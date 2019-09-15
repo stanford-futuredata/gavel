@@ -102,7 +102,7 @@ def run_automatic_sweep(experiment_id, policy_name,
                         generate_multi_gpu_jobs, generate_multi_priority_jobs,
                         simulate_steady_state, log_dir,
                         timeout, verbose, checkpoint_threshold,
-                        profiling_percentage):
+                        profiling_percentage, num_reference_models):
     all_lams = []
     average_jcts = []
     utilizations = []
@@ -120,7 +120,8 @@ def run_automatic_sweep(experiment_id, policy_name,
                                       generate_multi_priority_jobs,
                                       simulate_steady_state, log_dir, timeout,
                                       verbose, checkpoint_threshold,
-                                      profiling_percentage)
+                                      profiling_percentage,
+                                      num_reference_models)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -142,7 +143,7 @@ def run_automatic_sweep(experiment_id, policy_name,
                                      generate_multi_priority_jobs,
                                      simulate_steady_state, log_dir,
                                      timeout, verbose, checkpoint_threshold,
-                                     profiling_percentage)
+                                     profiling_percentage, num_reference_models)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -167,7 +168,8 @@ def run_automatic_sweep(experiment_id, policy_name,
                                       simulate_steady_state, log_dir,
                                       timeout, verbose,
                                       checkpoint_threshold,
-                                      profiling_percentage)
+                                      profiling_percentage,
+                                      num_reference_models)
         average_jcts.append(average_jct)
         utilizations.append(utilization)
         if np.max(average_jcts) / np.min(average_jcts) >= 10:
@@ -243,7 +245,7 @@ def main(args):
                 os.mkdir(raw_logs_policy_subdir)
 
             for profiling_percentage in profiling_percentages:
-                if len(profiling_percentages) > 1 or profiling_percentage > 0.0:
+                if max(profiling_percentages) > 0.0:
                     profiling_percentage_str = \
                         'profiling_percentage=%f' % (profiling_percentage)
                     raw_logs_profiling_subdir = \
@@ -289,7 +291,7 @@ def main(args):
                                                   args.timeout, args.verbose,
                                                   args.checkpoint_threshold,
                                                   profiling_percentage,
-                                                  ))
+                                                  num_reference_models))
                             experiment_id += 1
                     else:
                         throughputs = \
@@ -326,6 +328,7 @@ def main(args):
                                                       jobs_to_complete,
                                                       args.fixed_job_duration,
                                                       args.generate_multi_gpu_jobs,
+                                                      args.generate_multi_priority_jobs,
                                                       args.simulate_steady_state,
                                                       raw_logs_seed_subdir,
                                                       args.timeout,
@@ -346,7 +349,7 @@ def main(args):
             else:
                 # Sort args in order of decreasing lambda to prioritize
                 # short-running jobs.
-                all_args_list.sort(key=lambda x: (x[4], -x[15], x[16]), reverse=True)
+                all_args_list.sort(key=lambda x: x[4], reverse=True)
                 results = [p.apply_async(simulate_with_timeout, args_list)
                            for args_list in all_args_list]
                 results = [result.get() for result in results]
