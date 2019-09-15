@@ -229,7 +229,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         objective_terms = []
         for i in range(len(all_throughputs)):
-            objective_terms.append(cp.sum(cp.multiply(all_throughputs[i], x)))
+            objective_terms.append(cp.sum(cp.multiply(np.multiply(all_throughputs[i], scale_factors_array),
+                                                      x)))
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
         else:
