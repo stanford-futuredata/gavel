@@ -9,29 +9,9 @@ import policies
 import scheduler
 import utils
 
-def parse_trace(trace_file, run_dir):
-    jobs = []
-    arrival_times = []
-    with open(trace_file, 'r') as f:
-        for line in f:
-            (job_type, command, num_steps_arg, needs_data_dir, total_steps,
-             arrival_time, scale_factor) = line.split('\t')
-            if int(needs_data_dir):
-                command = command % (run_dir, run_dir)
-            else:
-                command = command % (run_dir)
-            jobs.append(job.Job(job_id=None,
-                                job_type=job_type,
-                                command=command,
-                                num_steps_arg=num_steps_arg,
-                                total_steps=int(total_steps),
-                                duration=None,
-                                scale_factor=int(scale_factor)))
-            arrival_times.append(float(arrival_time))
-    return jobs, arrival_times
 
 def main(args):
-    jobs, arrival_times = parse_trace(args.trace_file, args.run_dir)
+    jobs, arrival_times = utils.parse_trace(args.trace_file, args.run_dir)
     policy = utils.get_policy(args.policy, args.seed)
 
     sched = scheduler.Scheduler(policy,

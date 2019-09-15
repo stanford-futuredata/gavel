@@ -784,7 +784,8 @@ class Scheduler:
         return job
 
     def simulate(self, cluster_spec, arrival_times=None, jobs=None,
-                 lam=None, jobs_to_complete=None,
+                 measure_steady_state_jobs=False, lam=None,
+                 jobs_to_complete=None,
                  fixed_job_duration=None, num_total_jobs=None,
                  generate_multi_gpu_jobs=False,
                  generate_multi_priority_jobs=False,
@@ -854,7 +855,6 @@ class Scheduler:
         current_round_start_time = 0
         current_round_end_time = None
         num_completed_jobs = 0
-        checkpoint_complete = False
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
