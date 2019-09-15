@@ -144,6 +144,8 @@ class Scheduler:
             self._profiled_jobs = {}
             # Map from job id to reference job type.
             self._reference_job_map = {}
+            # Sets the number of profiling data points to measure
+            # for each newly arrived job.
             self._num_profiling_data_points_per_job = \
                 int(num_reference_models * .6)
         # Currently running jobs.
