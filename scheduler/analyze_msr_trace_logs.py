@@ -1,3 +1,4 @@
+import argparse
 import os
 import numpy as np
 import re
@@ -39,15 +40,14 @@ def average_jct_fn(logfile_path, min_job_id=None, max_job_id=None):
 
 
 if __name__ == '__main__':
-    policies = ["fifo",
-                "fifo_perf",
-                "fifo_packed",
-                "max_min_fairness",
-                "max_min_fairness_perf",
-                "max_min_fairness_packed"]
-    logfile_paths = sorted(get_logfile_paths(
-        "/mnt1/deepak/gpusched/scheduler/logs/philly_sweep/policies"))
+    parser = argparse.ArgumentParser(
+            description='Analyze Philly traces')
 
+    parser.add_argument('-l', '--logdir-path', type=str, default='logs',
+                        help='Log directory')
+    args = parser.parse_args()
+
+    logfile_paths = sorted(get_logfile_paths(args.logdir_path))
     for (vc, v100s, p100s, k80s, policy, seed, logfile_path) in logfile_paths:
         print(",".join([str(x) for x in
                         [vc, v100s, p100s, k80s, policy, seed, average_jct_fn(logfile_path)]]))
