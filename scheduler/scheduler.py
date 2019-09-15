@@ -516,8 +516,6 @@ class Scheduler:
              A list of job IDs and tuple of worker IDs for each scheduled job
              in the coming round.
         """
-        # TODO: See if any code needs to be borrowed from _schedule_job_on_worker
-        # from master.
 
         # Update priorities before trying to figure out applications to run
         # in the upcoming round.
@@ -528,6 +526,8 @@ class Scheduler:
 
         to_remove = []
         worker_types = ["v100", "p100", "k80"]
+
+        # TODO: Replace this with a single global queue containing all worker types.
         if "Perf" not in self._policy.name and "Packing" not in self._policy.name:
             self._worker_type_shuffler.shuffle(worker_types)
 
@@ -1238,7 +1238,6 @@ class Scheduler:
                 self._throughputs, scale_factors, priority_weights,
                 self._cluster_spec)
         elif self._policy.name.startswith("MinTotalDuration"):
-            # TODO: Need to fix this for packed policies.
             num_steps_remaining = {
                 job_id: self._get_remaining_steps(job_id)
                 for job_id in self._jobs}
@@ -1696,8 +1695,10 @@ class Scheduler:
                 max_execution_time = np.max(all_execution_times)
                 # Job may be multi-GPU, and have already been marked complete
                 # by another worker.
-                # Divide by scale_factor so that _job_time_so_far is incremented
-                # in total by max_execution_time.
+                # Divide by scale_factor so that _job_time_so_far and
+                # _worker_time_so_far are incremented in total by
+                # max_execution_time (_worker_time_so_far is just
+                # _job_time_so_far summed over all possible job_ids).
                 if job_id in self._job_time_so_far:
                     scale_factor = None
                     for single_job_id in job_id.singletons():
