@@ -5,7 +5,6 @@ import numpy as np
 import os
 # from preconditions import preconditions
 import queue
-import sys
 import threading
 import time
 import datetime
@@ -13,7 +12,6 @@ import random
 import math
 import matrix_completion
 import warnings
-import sys
 
 # TODO: clean these up.
 from job import Job
@@ -48,7 +46,6 @@ class Scheduler:
                                             profiling_percentage,
                                             num_reference_models))
 
-        self._num_correct_predictions = 0
         # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
         # Initialize seeds.
