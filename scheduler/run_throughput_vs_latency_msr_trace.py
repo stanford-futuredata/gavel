@@ -18,7 +18,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, cluster_spec, interval,
                           seed, vc, log_dir, trace_dir, run_dir, timeout,
                           verbose):
-    with open('traces/msr/jobs.pickle', 'rb') as f:
+    with open('traces/msr/steady_state_jobs.pickle', 'rb') as f:
         steady_state_jobs = pickle.load(f)
 
     with open('traces/msr/jobs_to_complete.pickle', 'rb') as f:

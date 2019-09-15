@@ -3,4 +3,3 @@ func_timeout
 grpcio
 grpcio-tools
 preconditions
-func_timeout
