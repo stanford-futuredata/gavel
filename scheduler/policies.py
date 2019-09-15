@@ -213,6 +213,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                                                      unflattened_priority_weights)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         (m, n) = all_throughputs[0].shape
+        (job_ids, single_job_ids, worker_types) = index
         x = cp.Variable((m, n))
 
         scale_factors_array = np.zeros((m, n))
