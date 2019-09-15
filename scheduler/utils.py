@@ -63,7 +63,8 @@ def parse_trace(trace_file, run_dir):
                                 num_steps_arg=num_steps_arg,
                                 total_steps=int(total_steps),
                                 duration=None,
-                                scale_factor=int(scale_factor)))
+                                scale_factor=int(scale_factor),
+                                priority_weight=1.0))
             arrival_times.append(float(arrival_time))
     return jobs, arrival_times
 
