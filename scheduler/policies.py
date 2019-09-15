@@ -253,7 +253,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 class MinTotalDurationPolicy(Policy):
 
     def __init__(self):
-        self._name = 'MinTotalDuration'
+        self._name = 'MinTotalDuration_Perf'
 
     def get_allocation_helper(self, throughputs, scale_factors_array, T):
         x = cp.Variable(throughputs.shape)
