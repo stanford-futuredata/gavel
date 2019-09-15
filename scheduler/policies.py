@@ -237,7 +237,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             objective = cp.Maximize(cp.minimum(*objective_terms))
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= self._num_workers,
+            cp.sum(cp.multiply(scale_factors_array, x), axis=0) <= self._num_workers,
         ]
         for i in range(len(masks)):
             constraints.append(cp.sum(cp.multiply(x, masks[i])) <= 1)
