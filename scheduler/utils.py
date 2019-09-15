@@ -39,7 +39,6 @@ def parse_trace(trace_file, run_dir):
              arrival_time, scale_factor) = line.split('\t')
             if int(scale_factor) == 0:
                 continue
-                #raise ValueError('Job that requests 0 GPUs')
             if int(needs_data_dir):
                 command = command % (run_dir, run_dir)
             else:
