@@ -137,33 +137,24 @@ class MaxMinFairnessPolicy(Policy):
 
     def __init__(self):
         self._name = 'MaxMinFairness'
+        self._max_min_fairness_perf_policy = MaxMinFairnessPolicyWithPerf()
 
-    def get_allocation(self, unflattened_throughputs,
-                       unflattened_priority_weights, cluster_spec):
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       priority_weights, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None
-        (m, n) = throughputs.shape
         (job_ids, worker_types) = index
 
-        priority_weights = np.array(
-            [unflattened_priority_weights[job_id]
-             for job_id in job_ids]).reshape((m, 1))
-        priority_weights /= sum(priority_weights)
-        num_workers = [cluster_spec[worker_type] for worker_type in worker_types]
-        allocation = np.repeat(priority_weights, n, axis=1)
+        new_unflattened_throughputs = {}
+        for job_id in unflattened_throughputs:
+            new_unflattened_throughputs[job_id] = {}
+            for worker_type in unflattened_throughputs[job_id]:
+                 new_unflattened_throughputs[job_id][worker_type] = 1.0
 
-        # Give each user 1/m of the cluster (num_workers[i] workers
-        # available to each user i).
-        for i in range(n):
-            allocation[:, i] *= num_workers[i]
-
-        # Normalization to make sure each row in the allocation has a sum
-        # <= 1, and each column in the allocation has a sum <= num_workers
-        # of that type.
-        for i in range(m):
-            allocation[i] = allocation[i] / max(1.0, np.sum(allocation[i]))
-        return super().unflatten(allocation, index)
+        return self._max_min_fairness_perf_policy.get_allocation(
+            new_unflattened_throughputs, scale_factors, priority_weights,
+            cluster_spec)
 
 
 class MaxMinFairnessPolicyWithPerf(Policy):
@@ -171,7 +162,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
     def __init__(self):
         self._name = 'MaxMinFairness_Perf'
 
-    def get_allocation(self, unflattened_throughputs,
+    def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
@@ -179,19 +170,34 @@ class MaxMinFairnessPolicyWithPerf(Policy):
         (m, n) = throughputs.shape
         (job_ids, worker_types) = index
 
+        # Row i of scale_factors_array is the scale_factor of job i
+        # repeated len(worker_types) times.
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factors[job_ids[i]]
+
         priority_weights = np.array(
             [1. / unflattened_priority_weights[job_id]
              for job_id in job_ids])
+
         scale = 1.0 / throughputs.sum(axis=1)
         throughputs = throughputs * scale.reshape(m, 1)
         throughputs = throughputs * priority_weights.reshape((m, 1))
 
         x = cp.Variable(throughputs.shape)
-        objective = cp.Maximize(cp.min(cp.sum(cp.multiply(throughputs, x),
-                                              axis=1)))
+        # Multiply throughputs by scale_factors to ensure that scale_factor
+        # is taken into account while allocating times to different jobs.
+        # A job run on 1 GPU should receive `scale_factor` more time than
+        # a job run on `scale_factor` GPUs if throughputs are equal.
+        objective = cp.Maximize(
+            cp.min(cp.sum(cp.multiply(
+                np.multiply(throughputs, scale_factors_array), x), axis=1)))
+        # Make sure that the allocation can fit in the cluster.
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= self._num_workers,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
@@ -208,81 +214,47 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
     def __init__(self):
         self._name = 'MaxMinFairness_Packing'
 
-    def get_allocation(self, unflattened_throughputs,
+    def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
         all_throughputs, masks, index = self.flatten(unflattened_throughputs,
                                                      cluster_spec,
                                                      unflattened_priority_weights)
         if all_throughputs is None or len(all_throughputs) == 0: return None
-        x = cp.Variable(all_throughputs[0].shape)
+        (m, n) = all_throughputs[0].shape
+        (job_ids, single_job_ids, worker_types) = index
+        x = cp.Variable((m, n))
+
+        # Row i of scale_factors_array is the scale_factor of job
+        # combination i repeated len(worker_types) times.
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            scale_factor = None
+            for single_job_id in job_ids[i].singletons():
+                if (scale_factor is not None and
+                    scale_factor != scale_factors[single_job_id]):
+                    scale_factor = 0
+                else:
+                    scale_factor = scale_factors[single_job_id]
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factor
+
         objective_terms = []
+        # Multiply throughputs by scale_factors to ensure that scale_factor
+        # is taken into account while allocating times to different jobs.
+        # A job run on 1 GPU should receive `scale_factor` more time than
+        # a job run on `scale_factor` GPUs.
         for i in range(len(all_throughputs)):
-            objective_terms.append(cp.sum(cp.multiply(all_throughputs[i], x)))
+            objective_terms.append(cp.sum(cp.multiply(
+                np.multiply(all_throughputs[i], scale_factors_array), x)))
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
         else:
             objective = cp.Maximize(cp.minimum(*objective_terms))
+        # Make sure the allocation can fit in the cluster.
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= self._num_workers,
-        ]
-        for i in range(len(masks)):
-            constraints.append(cp.sum(cp.multiply(x, masks[i])) <= 1)
-        cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='SCS')
-
-        if cvxprob.status != "optimal":
-            print('WARNING: Allocation returned by policy not optimal!')
-
-        return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
-
-
-class MaxSumThroughputPolicyWithPerf(Policy):
-
-    def __init__(self):
-        self._name = 'MaxSumThroughput_Perf'
-
-    def get_allocation(self, unflattened_throughputs, cluster_spec):
-        throughputs, index = super().flatten(unflattened_throughputs,
-                                             cluster_spec)
-        if throughputs is None: return None
-        (m, n) = throughputs.shape
-        scale = 1.0 / throughputs.sum(axis=1)
-        throughputs = throughputs * scale.reshape(m, 1)
-
-        x = cp.Variable(throughputs.shape)
-        objective = cp.Maximize(cp.sum(cp.multiply(throughputs, x)))
-        constraints = [
-            x >= 0,
-            cp.sum(x, axis=0) <= self._num_workers,
-            cp.sum(x, axis=1) <= 1,
-        ]
-        cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='SCS')
-
-        if cvxprob.status != "optimal":
-            print('WARNING: Allocation returned by policy not optimal!')
-
-        return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
-
-
-class MaxSumThroughputPolicyWithPacking(PolicyWithPacking):
-
-    def __init__(self):
-        self._name = 'MaxSumThroughput_Packing'
-
-    def get_allocation(self, unflattened_throughputs, cluster_spec):
-        all_throughputs, masks, index = self.flatten(unflattened_throughputs,
-                                                     cluster_spec)
-        if all_throughputs is None or len(all_throughputs) == 0: return None
-        x = cp.Variable(all_throughputs[0].shape)
-        objective_terms = []
-        for i in range(len(all_throughputs)):
-            objective_terms.append(cp.sum(cp.multiply(all_throughputs[i], x)))
-        objective = cp.Maximize(sum(objective_terms))
-        constraints = [
-            x >= 0,
-            cp.sum(x, axis=0) <= self._num_workers,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
         ]
         for i in range(len(masks)):
             constraints.append(cp.sum(cp.multiply(x, masks[i])) <= 1)
@@ -298,14 +270,17 @@ class MaxSumThroughputPolicyWithPacking(PolicyWithPacking):
 class MinTotalDurationPolicy(Policy):
 
     def __init__(self):
-        self._name = 'MinTotalDuration'
+        self._name = 'MinTotalDuration_Perf'
 
-    def get_allocation_helper(self, throughputs, T):
+    def get_allocation_helper(self, throughputs, scale_factors_array, T):
         x = cp.Variable(throughputs.shape)
         objective = cp.Maximize(1)
+        # Make sure the allocation can fit in the cluster, and that the
+        # currently active jobs can finish in time T.
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= self._num_workers,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
             cp.sum(cp.multiply(throughputs, x), axis=1) >= (
                 self._num_steps_remaining / T),
@@ -315,15 +290,24 @@ class MinTotalDurationPolicy(Policy):
 
         return cvxprob.status, x
 
-    def get_allocation(self, unflattened_throughputs, num_steps_remaining,
-                       cluster_spec):
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       num_steps_remaining, cluster_spec):
+        # TODO: Might not want to normalize throughputs here.
         throughputs, index = super().flatten(unflattened_throughputs,
-                                                        cluster_spec)
+                                             cluster_spec)
         if index is None: return None
+        (m, n) = throughputs.shape
         (job_ids, _) = index
         self._num_steps_remaining = np.array([num_steps_remaining[job_id]
                                               for job_id in job_ids])
         if throughputs is None: return None
+
+        # Row i of scale_factors_array is the scale_factor of job i
+        # repeated len(worker_types) times.
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factors[job_ids[i]]
 
         # Units are in seconds.
         max_T = 1000000.
@@ -335,7 +319,8 @@ class MinTotalDurationPolicy(Policy):
             # Binary search for the smallest T that gives an optimal solution.
             while (1.05 * min_T) < max_T:  # TODO: Can tweak the 1.05 in this loop.
                 T = (min_T + max_T) / 2.
-                status, x = self.get_allocation_helper(throughputs, T)
+                status, x = self.get_allocation_helper(throughputs,
+                                                       scale_factors_array, T)
                 if status == "optimal":
                     last_feasible_x = x
                     max_T = T
@@ -356,19 +341,22 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
         self._name = 'MinTotalDuration_Packing'
 
     def get_allocation_helper(self, all_throughputs, masks, job_ids,
-                              single_job_ids, T):
+                              single_job_ids, scale_factors_array, T):
         x = cp.Variable(all_throughputs[0].shape)
         objective = cp.Maximize(1)
+        # Make sure the allocation can fit in the cluster.
         constraints = [
             x >= 0,
-            cp.sum(x, axis=0) <= self._num_workers,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
         ]
         for mask in masks:
             # Every job cannot receive a total time share sum greater than 1.0.
             constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
         for throughputs, num_steps_remaining in zip(all_throughputs,
                                                     self._num_steps_remaining):
-            # Ensure that every job satisfies its throughput constraint.
+            # Ensure that every job satisfies its throughput constraint,
+            # and can finish in time T.
             constraints.append(cp.sum(cp.multiply(throughputs, x)) >=
                 (num_steps_remaining / T))
         cvxprob = cp.Problem(objective, constraints)
@@ -376,15 +364,30 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
 
         return cvxprob.status, x
 
-    def get_allocation(self, unflattened_throughputs, num_steps_remaining,
-                       cluster_spec):
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       num_steps_remaining, cluster_spec):
         all_throughputs, masks, index = super().flatten(unflattened_throughputs,
                                                         cluster_spec, normalize=False)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         if index is None: return None
-        (job_ids, single_job_ids, _) = index
+        (job_ids, single_job_ids, worker_types) = index
         self._num_steps_remaining = [num_steps_remaining[single_job_id]
                                      for single_job_id in single_job_ids]
+
+        # Row i of scale_factors_array is the scale_factor of job
+        # combination i repeated len(worker_types) times.
+        (m, n) = all_throughputs[0].shape
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            scale_factor = None
+            for single_job_id in job_ids[i].singletons():
+                if (scale_factor is not None and
+                    scale_factor != scale_factors[single_job_id]):
+                    scale_factor = 0
+                else:
+                    scale_factor = scale_factors[single_job_id]
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factor
 
         # Units are in seconds.
         max_T = 1000000.
@@ -397,7 +400,8 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
             while (1.05 * min_T) < max_T:  # TODO: Can tweak the 1.05 in this loop.
                 T = (min_T + max_T) / 2.
                 status, x = self.get_allocation_helper(all_throughputs, masks,
-                                                       job_ids, single_job_ids, T)
+                                                       job_ids, single_job_ids,
+                                                       scale_factors_array, T)
                 if status == "optimal":
                     last_feasible_x = x
                     max_T = T

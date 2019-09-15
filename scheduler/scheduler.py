@@ -172,6 +172,10 @@ class Scheduler:
         self._throughput_estimation_generator = np.random.RandomState()
         self._throughput_estimation_generator.seed(seed+4)
 
+        self._worker_type_shuffler = random.Random()
+        self._worker_type_shuffler.seed(seed+5)
+
+
     def start_scheduling_thread(self):
         self.scheduler_thread = threading.Thread(
             target=self.schedule,
@@ -512,8 +516,6 @@ class Scheduler:
              A list of job IDs and tuple of worker IDs for each scheduled job
              in the coming round.
         """
-        # TODO: See if any code needs to be borrowed from _schedule_job_on_worker
-        # from master.
 
         # Update priorities before trying to figure out applications to run
         # in the upcoming round.
@@ -524,6 +526,11 @@ class Scheduler:
 
         to_remove = []
         worker_types = ["v100", "p100", "k80"]
+
+        # TODO: Replace this with a single global queue containing all worker types.
+        if "Perf" not in self._policy.name and "Packing" not in self._policy.name:
+            self._worker_type_shuffler.shuffle(worker_types)
+
         for i, worker_type in enumerate(worker_types):
             if worker_type not in self._worker_type_to_worker_id_mapping:
                 to_remove.append(i)
@@ -1218,29 +1225,28 @@ class Scheduler:
             job 0 and for 95% of the time, worker type 'p100' should run job 0.
         """
 
+        scale_factors = {
+            job_id: self._jobs[job_id].scale_factor
+            for job_id in self._jobs
+        }
         if self._policy.name.startswith("MaxMinFairness"):
             priority_weights = {
                 job_id: self._jobs[job_id].priority_weight
                 for job_id in self._jobs
             }
             unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, priority_weights, self._cluster_spec)
+                self._throughputs, scale_factors, priority_weights,
+                self._cluster_spec)
         elif self._policy.name.startswith("MinTotalDuration"):
             num_steps_remaining = {
                 job_id: self._get_remaining_steps(job_id)
                 for job_id in self._jobs}
             unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, num_steps_remaining, self._cluster_spec)
-        elif self._policy.name.startswith("FIFO"):
-            scale_factors = {
-                job_id: self._jobs[job_id].scale_factor
-                for job_id in self._jobs
-            }
-            unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, scale_factors, self._cluster_spec)
+                self._throughputs, scale_factors, num_steps_remaining,
+                self._cluster_spec)
         else:
             unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, self._cluster_spec)
+                self._throughputs, scale_factors, self._cluster_spec)
         if unflattened_allocation is None:
             return None
 
@@ -1689,15 +1695,22 @@ class Scheduler:
                 max_execution_time = np.max(all_execution_times)
                 # Job may be multi-GPU, and have already been marked complete
                 # by another worker.
+                # Divide by scale_factor so that _job_time_so_far and
+                # _worker_time_so_far are incremented in total by
+                # max_execution_time (_worker_time_so_far is just
+                # _job_time_so_far summed over all possible job_ids).
                 if job_id in self._job_time_so_far:
-                    self._job_time_so_far[job_id][worker_type] += \
-                            max_execution_time
-                # Worker times should be cumulative, even for multi-GPU jobs.
-                # That is, for a job that has a scale_factor s, total time
-                # consumed in this round should be (s * TIME_PER_ITERATION).
-                self._worker_time_so_far[worker_type] += max_execution_time
+                    scale_factor = None
+                    for single_job_id in job_id.singletons():
+                        if single_job_id in self._jobs:
+                            scale_factor = self._jobs[single_job_id].scale_factor
+                    if scale_factor is not None:
+                        self._job_time_so_far[job_id][worker_type] += \
+                            (max_execution_time / scale_factor)
+                        self._worker_time_so_far[worker_type] += \
+                            (max_execution_time / scale_factor)
                 self._cumulative_worker_time_so_far[worker_id] += \
-                        max_execution_time
+                    max_execution_time
 
             self._update_throughput(job_id, worker_type,
                                     all_num_steps,
