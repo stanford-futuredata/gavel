@@ -1081,10 +1081,12 @@ class Scheduler:
                 np.mean([self._job_completion_times[job_id] for job_id in job_ids])
             print('Average job completion time: '
                   '%.3f seconds' % (average_job_completion_time))
-            print('Average job completion time (low priority): '
-                  '%.3f seconds' % (np.mean(low_priority_job_completion_times)))
-            print('Average job completion time (high priority): '
-                  '%.3f seconds' % (np.mean(high_priority_job_completion_times)))
+            if len(low_priority_job_completion_times) > 0:
+                print('Average job completion time (low priority): '
+                      '%.3f seconds' % (np.mean(low_priority_job_completion_times)))
+            if len(high_priority_job_completion_times) > 0:
+                print('Average job completion time (high priority): '
+                      '%.3f seconds' % (np.mean(high_priority_job_completion_times)))
             return average_job_completion_time
 
 
