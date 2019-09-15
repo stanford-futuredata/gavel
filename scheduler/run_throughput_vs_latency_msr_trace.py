@@ -18,10 +18,10 @@ def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, cluster_spec, interval,
                           seed, vc, log_dir, trace_dir, run_dir, timeout,
                           verbose):
-    with open('philly_steady_state_jobs', 'rb') as f:
-        philly_steady_state_jobs = pickle.load(f)
+    with open('traces/msr/jobs.pickle', 'rb') as f:
+        steady_state_jobs = pickle.load(f)
 
-    with open('philly_jobs_to_complete', 'rb') as f:
+    with open('traces/msr/jobs_to_complete.pickle', 'rb') as f:
         jobs_to_complete = pickle.load(f)
     jobs_to_complete = list(jobs_to_complete)
 
@@ -35,7 +35,7 @@ def simulate_with_timeout(experiment_id, policy_name,
     jobs, arrival_times = utils.parse_trace(input_trace, run_dir)
     pruned_jobs, pruned_arrival_times = [], []
     for job_id, (job, arrival_time) in enumerate(zip(jobs, arrival_times)):
-        if job_id in philly_steady_state_jobs:
+        if job_id in steady_state_jobs:
             pruned_jobs.append(job)
             pruned_arrival_times.append(arrival_time)
     jobs = pruned_jobs
