@@ -528,7 +528,7 @@ class Scheduler:
 
         to_remove = []
         worker_types = ["v100", "p100", "k80"]
-        if "Perf" not in self._policy.name and "Packed" not in self._policy.name:
+        if "Perf" not in self._policy.name and "Packing" not in self._policy.name:
             self._worker_type_shuffler.shuffle(worker_types)
 
         for i, worker_type in enumerate(worker_types):
