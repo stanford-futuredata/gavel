@@ -24,6 +24,7 @@ parser.add_argument('--num_epochs', default=None, type=int, help='Number of epoc
 parser.add_argument('--num_steps', default=None, type=int, help='Number of steps to train for')
 parser.add_argument('--batch_size', default=64, type=int, help='Batch size')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+parser.add_argument('--checkpoint_dir', default=None, type=str, help='Checkpoint directory')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--use_progress_bar', '-p', action='store_true', default=False, help='Use progress bar')
 parser.add_argument('--log_interval', type=int, default=100,
@@ -101,14 +102,17 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
+cumulative_steps = 0
 if args.resume:
+    assert(args.checkpoint_dir is not None)
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.t7')
+    assert os.path.isdir(args.checkpoint_dir), 'Error: no checkpoint directory found!'
+    checkpoint = torch.load(os.path.join(args.checkpoint_dir, 'ckpt.t7'))
     net.load_state_dict(checkpoint['net'])
     best_acc = checkpoint['acc']
     start_epoch = checkpoint['epoch']
+    cumulative_steps = checkpoint['cumulative_steps']
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
@@ -121,6 +125,7 @@ def train(epoch, cumulative_steps=None):
     correct = 0
     total = 0
     done = False
+    finished_epoch = True
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.cuda(), targets.cuda()
         optimizer.zero_grad()
@@ -149,12 +154,14 @@ def train(epoch, cumulative_steps=None):
                                                            cumulative_steps))
             if args.num_steps is not None and cumulative_steps >= args.num_steps:
                 done = True
+                finished_epoch = False
                 break
-    return (cumulative_steps, done)
+            finished_epoch = True
+    return (cumulative_steps, done, finished_epoch)
 
 
 
-def test(epoch):
+def test(epoch, cumulative_steps):
     global best_acc
     net.eval()
     test_loss = 0
@@ -174,8 +181,6 @@ def test(epoch):
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-    # Save checkpoint.
-    """
     acc = 100.*correct/total
     if acc > best_acc:
         print('Saving..')
@@ -183,18 +188,18 @@ def test(epoch):
             'net': net.state_dict(),
             'acc': acc,
             'epoch': epoch,
+            'cumulative_steps': cumulative_steps,
         }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.t7')
+        if not os.path.isdir(args.checkpoint_dir):
+            os.mkdir(args.checkpoint_dir)
+        torch.save(state, os.path.join(args.checkpoint_dir, 'ckpt.t7'))
         best_acc = acc
-    """
 
 if args.num_epochs is None:
     args.num_epochs = args.num_steps
-cumulative_steps = 0
 for epoch in range(start_epoch, args.num_epochs):
-    cumulative_steps, done = train(epoch, cumulative_steps)
+    cumulative_steps, done, finished_epoch = train(epoch, cumulative_steps)
+    if finished_epoch:
+        test(epoch, cumulative_steps)
     if done:
         break
-    #test(epoch)
