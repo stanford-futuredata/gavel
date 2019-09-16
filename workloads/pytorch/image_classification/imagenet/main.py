@@ -75,10 +75,10 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 
 best_acc1 = 0
-
+total_minibatches = 0
 
 def main():
-    global args, best_acc1
+    global args, best_acc1, total_minibatches
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -128,6 +128,7 @@ def main():
             checkpoint = torch.load(args.initial_checkpoint_filename)
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
+            total_minibatches = checkpoint['total_minibatches']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
@@ -181,9 +182,15 @@ def main():
         adjust_learning_rate(optimizer, epoch)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch)
+        num_minibatches, finished_epoch = \
+            train(train_loader, model, criterion, optimizer,
+                  epoch, total_minibatches,
+                  max_minibatches=args.num_minibatches)
+        if finished_epoch:
+            total_minibatches += num_minibatches
 
-        if args.num_minibatches is not None:
+        if (args.num_minibatches is not None and
+            total_minibatches >= args.num_minibatches):
             break
 
         # evaluate on validation set
@@ -196,11 +203,13 @@ def main():
         'arch': args.arch,
         'state_dict': model.state_dict(),
         'best_acc1': best_acc1,
+        'total_minibatches': total_minibatches,
         'optimizer' : optimizer.state_dict(),
     }, args.final_checkpoint_filename)
 
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader, model, criterion, optimizer, epoch,
+          total_minibatches, max_minibatches):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -211,10 +220,12 @@ def train(train_loader, model, criterion, optimizer, epoch):
     model.train()
 
     end = time.time()
+    finished_epoch = True
     for i, (input, target) in enumerate(train_loader):
-        if args.num_minibatches is not None and i > args.num_minibatches:
-            return
-
+        if (total_minibatches is not None and
+            i + total_minibatches >= max_minibatches):
+            finished_epoch = False
+            break
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -253,6 +264,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
         if (args.throughput_estimation_interval is not None and
             i % args.throughput_estimation_interval == 0):
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), i))
+    return i, finished_epoch
 
 def validate(val_loader, model, criterion):
     batch_time = AverageMeter()
