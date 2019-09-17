@@ -8,6 +8,7 @@ import shutil
 import sys
 import time
 import os
+import torch
 
 from recoder.model import Recoder
 from recoder.data import RecommendationDataset
@@ -24,13 +25,16 @@ parser.add_argument('-d', '--data_dir', required=True, type=str,
                     help='Data directory')
 parser.add_argument('-b', '--batch_size', default=2048, type=int,
                     help='Batch size')
+parser.add_argument('--checkpoint_dir', type=str,
+                    default='/lfs/1/keshav2/checkpoints/recommendation',
+                    help='Checkpoint dir')
 args = parser.parse_args()
 
-data_dir = args.data_dir #'/home/keshavsanthanam/data/ml-20m/pro_sg/'
-model_dir = '/tmp/models/ml-20m/'
+data_dir = args.data_dir
 
-if not os.path.isdir(model_dir):
-  os.makedirs(model_dir)
+if not os.path.isdir(args.checkpoint_dir):
+  os.makedirs(args.checkpoint_dir)
+checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
 
 common_params = {
   'user_col': 'uid',
@@ -62,14 +66,15 @@ use_cuda = True
 model = DynamicAutoencoder(hidden_layers=[200], activation_type='tanh',
                            noise_prob=0.5, sparse=False)
 
+# NOTE(keshav2): Don't remove in case we want to try a different model
 # model = MatrixFactorization(embedding_size=200, activation_type='tanh',
 #                             dropout_prob=0.5, sparse=False)
 
-#trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
-#                  loss='logistic', user_based=False)
-
-# trainer.init_from_model_file(model_dir + 'bce_ns_d_0.0_n_0.5_200_epoch_50.model')
-model_checkpoint = model_dir + 'bce_ns_d_0.0_n_0.5_200'
+trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
+                  loss='logistic', user_based=False)
+if os.path.exists(checkpoint_path):
+    print('Loading checkpoint from %s...' % (checkpoint_path))
+    trainer.init_from_model_file(checkpoint_path)
 
 metrics = [Recall(k=20, normalize=True), Recall(k=50, normalize=True),
            NDCG(k=100)]
@@ -85,23 +90,36 @@ try:
   for i in range(num_iterations):
       epochs_per_iteration = min(epochs_per_iteration, args.num_epochs - epochs)
       print('Running for %d epochs' % (epochs_per_iteration))
-      trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
-                      loss='logistic', user_based=False)
       trainer.train(train_dataset=train_dataset, val_dataset=val_tr_dataset,
                     batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
                     num_epochs=epochs_per_iteration, negative_sampling=True,
                     lr_milestones=[60, 80], num_data_workers=mp.cpu_count() if use_cuda else 0,
-                    model_checkpoint_prefix=model_checkpoint,
-                    checkpoint_freq=0, eval_num_recommendations=100,
+                    model_checkpoint_prefix=None,
+                    checkpoint_freq=0, eval_num_recommendations=0,
                     metrics=metrics, eval_freq=0)
       epochs += epochs_per_iteration
       if args.throughput_estimation_interval is not None:
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), epochs))
-            #shutil.rmtree(model_dir)
-            for f in os.listdir(model_dir):
-                os.remove(os.path.join(model_dir, f))
-            #os.makedirs(model_d)
+  current_state = {
+      'model_params': trainer.model.model_params(),
+      'last_epoch': trainer.current_epoch,
+      'model': trainer.model.state_dict(),
+      'optimizer_type': trainer.optimizer_type,
+      'optimizer': trainer.optimizer.state_dict(),
+      'items': trainer.items,
+      'users': trainer.users,
+      'num_items': trainer.num_items,
+      'num_users': trainer.num_users
+  }
+
+  if type(trainer.loss) is str:
+    current_state['loss'] = trainer.loss
+    current_state['loss_params'] = trainer.loss_params
+
+  print('Saving checkpoint at %s...' % (checkpoint_path))
+  torch.save(current_state, checkpoint_path)
+
 except (KeyboardInterrupt, SystemExit) as e:
-  print(e) 
+  print(e)
   sys.stdout.flush()
   raise

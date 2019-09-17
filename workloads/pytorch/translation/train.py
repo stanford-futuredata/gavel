@@ -3,6 +3,7 @@ This script handling the training process.
 '''
 
 import argparse
+import glob
 import math
 import os
 import time
@@ -161,11 +162,23 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             log_tf.write('epoch,loss,ppl,accuracy\n')
             log_vf.write('epoch,loss,ppl,accuracy\n')
 
+    start_epoch = 0
+    if not os.path.isdir(opt.checkpoint_dir):
+        os.mkdir(opt.checkpoint_dir)
+    checkpoint_path = os.path.join(opt.checkpoint_dir, 'model.chkpt')
+    if os.path.exists(checkpoint_path):
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['model'])
+        start_epoch = checkpoint['epoch']
+    else:
+        print('No checkpoint file found!')
+
     valid_accus = []
     if opt.epoch is None:
         opt.epoch = opt.step
     cumulative_step = 0
-    for epoch_i in range(opt.epoch):
+    for epoch_i in range(start_epoch, opt.epoch):
         print('[ Epoch', epoch_i, ']')
 
         start = time.time()
@@ -180,9 +193,6 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                   ppl=math.exp(min(train_loss, 100)), accu=100*train_accu,
                   elapse=(time.time()-start)/60))
 
-        if done:
-            return
-        """
         start = time.time()
         valid_loss, valid_accu = eval_epoch(model, validation_data, device)
         print('  - (Validation) ppl: {ppl: 8.5f}, accuracy: {accu:3.3f} %, '\
@@ -196,27 +206,30 @@ def train(model, training_data, validation_data, optimizer, device, opt):
         checkpoint = {
             'model': model_state_dict,
             'settings': opt,
-            'epoch': epoch_i}
+            'epoch': epoch_i,
+        }
 
-        if opt.save_model:
-            if opt.save_mode == 'all':
-                model_name = opt.save_model + '_accu_{accu:3.3f}.chkpt'.format(accu=100*valid_accu)
-                torch.save(checkpoint, model_name)
-            elif opt.save_mode == 'best':
-                model_name = opt.save_model + '.chkpt'
-                if valid_accu >= max(valid_accus):
-                    torch.save(checkpoint, model_name)
-                    print('    - [Info] The checkpoint file has been updated.')
+        if opt.save_mode == 'all':
+            print('Saving checkpoint at %s...' % (checkpoint_path))
+            torch.save(checkpoint, checkpoint_path)
+        elif opt.save_mode == 'best':
+            if valid_accu >= max(valid_accus):
+                print('Saving checkpoint at %s...' % (checkpoint_path))
+                torch.save(checkpoint, checkpoint_path)
+                print('    - [Info] The checkpoint file has been updated.')
 
-        if log_train_file and log_valid_file:
+        if log_train_file:#and log_valid_file:
             with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
                 log_tf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
                     epoch=epoch_i, loss=train_loss,
                     ppl=math.exp(min(train_loss, 100)), accu=100*train_accu))
+                """
                 log_vf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
                     epoch=epoch_i, loss=valid_loss,
                     ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu))
-          """
+                """
+        if done:
+            return
 
 def main():
     ''' Main function '''
@@ -245,8 +258,9 @@ def main():
     parser.add_argument('-proj_share_weight', action='store_true')
 
     parser.add_argument('-log', default=None)
-    parser.add_argument('-save_model', default=None)
-    parser.add_argument('-save_mode', type=str, choices=['all', 'best'], default='best')
+    parser.add_argument('--checkpoint_dir', type=str,
+                        default='/lfs/1/keshav2/checkpoints/transformer')
+    parser.add_argument('-save_mode', type=str, choices=['all', 'best'], default='all')
 
     parser.add_argument('-no_cuda', action='store_true')
     parser.add_argument('-label_smoothing', action='store_true')
@@ -325,6 +339,7 @@ def main():
 
     if distributed:
         transformer = DDP(transformer)
+
 
     optimizer = ScheduledOptim(
         optim.Adam(

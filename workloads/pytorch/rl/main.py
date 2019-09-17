@@ -85,15 +85,10 @@ parser.add_argument(
     metavar='OPT',
     help='shares optimizer choice of Adam or RMSprop')
 parser.add_argument(
-    '--load-model-dir',
-    default='trained_models/',
-    metavar='LMD',
-    help='folder to load trained models from')
-parser.add_argument(
-    '--save-model-dir',
-    default='trained_models/',
-    metavar='SMD',
-    help='folder to save trained models')
+    '--checkpoint_dir',
+    type=str,
+    default='/lfs/1/keshav2/checkpoints/a3c',
+    help='Checkpoint dir')
 parser.add_argument(
     '--log-dir', default='logs/', metavar='LG', help='folder to save logs')
 parser.add_argument(
@@ -135,11 +130,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     torch.manual_seed(args.seed)
     args.gpu_ids = [0]
-    """
-    if args.gpu_ids == -1:
-        args.gpu_ids = [-1]
-    else:
-    """
     torch.cuda.manual_seed(args.seed)
     mp.set_start_method('spawn')
     setup_json = read_config(args.env_config)
@@ -149,10 +139,12 @@ if __name__ == '__main__':
             env_conf = setup_json[i]
     env = atari_env(args.env, env_conf, args)
     shared_model = A3Clstm(env.observation_space.shape[0], env.action_space)
-    if args.load:
-        saved_state = torch.load(
-            '{0}{1}.dat'.format(args.load_model_dir, args.env),
-            map_location=lambda storage, loc: storage)
+    if not os.path.isdir(args.checkpoint_dir):
+        os.mkdir(args.checkpoint_dir)
+    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+    if os.path.exists(checkpoint_path):
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        saved_state = torch.load(checkpoint_path)
         shared_model.load_state_dict(saved_state)
     shared_model.share_memory()
 
@@ -168,9 +160,6 @@ if __name__ == '__main__':
 
     processes = []
 
-    #p = mp.Process(target=test, args=(args, shared_model, env_conf))
-    #p.start()
-    #processes.append(p)
     time.sleep(0.1)
     for rank in range(0, args.workers):
         p = mp.Process(
@@ -181,3 +170,5 @@ if __name__ == '__main__':
     for p in processes:
         time.sleep(0.1)
         p.join()
+    print('Saving checkpoint at %s...' % (checkpoint_path))
+    torch.save(shared_model.state_dict(), checkpoint_path)
