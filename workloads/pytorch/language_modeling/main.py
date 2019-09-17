@@ -44,6 +44,8 @@ parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
+parser.add_argument('--load', type=str, default='model.pt',
+                    help='path to load model from checkpoint')
 parser.add_argument('--save', type=str, default='model.pt',
                     help='path to save the final model')
 parser.add_argument('--onnx-export', type=str, default='',
@@ -129,7 +131,15 @@ test_data = batchify(corpus.test, eval_batch_size)
 ###############################################################################
 
 ntokens = len(corpus.dictionary)
-model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
+
+if args.load is not None and os.path.exists(args.load):
+    with open(args.load, 'rb') as f:
+        state = torch.load(f)
+        model = state['model']
+else:
+    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
+    print('Did not load cumulative steps')
+cumulative_steps = 0
 
 criterion = nn.CrossEntropyLoss()
 
@@ -240,7 +250,6 @@ best_val_loss = None
 
 # At any point you can hit Ctrl + C to break out of training early.
 try:
-    cumulative_steps = 0
     if args.epochs is None:
         args.epochs = args.steps
     for epoch in range(1, args.epochs+1):
@@ -256,6 +265,11 @@ try:
         #                                   val_loss, math.exp(val_loss)))
         print('-' * 89)
         # Save the model if the validation loss is the best we've seen so far.
+    with open(args.save, 'wb') as f:
+        state = {
+            'model': model,
+        }
+        torch.save(state, f)
         """
         if not best_val_loss or val_loss < best_val_loss:
             with open(args.save, 'wb') as f:
