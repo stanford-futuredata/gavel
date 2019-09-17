@@ -1,8 +1,10 @@
 import argparse
 import random
 import time
-import utils
 
+import sys; sys.path.append(".")
+
+import utils
 from job import Job
 from job_id_pair import JobIdPair
 from job_table import JobTable
@@ -57,7 +59,7 @@ def measure_runtime(policy_name, all_num_active_jobs, cluster_specs,
     policy = utils.get_policy(policy_name)
     for cluster_spec in cluster_specs:
         for num_active_jobs in all_num_active_jobs:
-            if num_active_jobs > 1024 and "_Packing" in policy.name:
+            if num_active_jobs > 512 and "_Packing" in policy.name:
                 continue
             throughputs = {}
             jobs = {}
