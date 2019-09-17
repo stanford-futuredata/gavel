@@ -16,9 +16,14 @@ import utils
 def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, cluster_spec, lam, seed, time_per_iteration,
                           jobs_to_complete, fixed_job_duration,
-                          generate_multi_gpu_jobs, simulate_steady_state,
-                          log_dir, timeout, verbose):
+                          generate_multi_gpu_jobs, generate_multi_priority_jobs,
+                          simulate_steady_state, log_dir, timeout,
+                          verbose, checkpoint_threshold,
+                          profiling_percentage):
     lam_str = 'lambda=%f.log' % (lam)
+    checkpoint_file = None
+    if checkpoint_threshold is not None:
+        checkpoint_file = os.path.join(log_dir, 'lambda=%f.pickle' % lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stdout(f):
             policy = utils.get_policy(policy_name, seed)
@@ -26,8 +31,9 @@ def simulate_with_timeout(experiment_id, policy_name,
                             policy,
                             throughputs_file=throughputs_file,
                             seed=seed,
-                            time_per_iteration=time_per_iteration,
-                            simulate=True)
+                            time_per_iteration=interval,
+                            simulate=True,
+                            profiling_percentage=profiling_percentage)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                            cluster_spec['p100'],
@@ -36,9 +42,12 @@ def simulate_with_timeout(experiment_id, policy_name,
                 current_time = datetime.datetime.now()
                 print('[%s] [Experiment ID: %2d] '
                       'Configuration: cluster_spec=%s, policy=%s, '
-                       'seed=%d, lam=%f' % (current_time, experiment_id,
-                                            cluster_spec_str, policy.name,
-                                            seed, lam),
+                       'seed=%d, lam=%f, '
+                       'profiling_percentage=%f' % (current_time, experiment_id,
+                                                    cluster_spec_str,
+                                                    policy.name,
+                                                    seed, lam,
+                                                    profiling_percentage),
                       file=sys.stderr)
 
             if timeout is None:
@@ -46,7 +55,10 @@ def simulate_with_timeout(experiment_id, policy_name,
                                jobs_to_complete=jobs_to_complete,
                                fixed_job_duration=fixed_job_duration,
                                generate_multi_gpu_jobs=generate_multi_gpu_jobs,
-                               simulate_steady_state=simulate_steady_state)
+                               generate_multi_priority_jobs=generate_multi_priority_jobs,
+                               simulate_steady_state=simulate_steady_state,
+                               checkpoint_file=checkpoint_file,
+                               checkpoint_threshold=checkpoint_threshold)
                 average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
@@ -58,7 +70,10 @@ def simulate_with_timeout(experiment_id, policy_name,
                                     'jobs_to_complete': jobs_to_complete,
                                     'fixed_job_duration': fixed_job_duration,
                                     'generate_multi_gpu_jobs': generate_multi_gpu_jobs,
+                                    'generate_multi_priority_jobs': generate_multi_priority_jobs,
                                     'simulate_steady_state': simulate_steady_state,
+                                    'checkpoint_file': checkpoint_file,
+                                    'checkpoint_threshold': checkpoint_threshold
                                  })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -80,8 +95,10 @@ def simulate_with_timeout(experiment_id, policy_name,
 def run_automatic_sweep(experiment_id, policy_name,
                         throughputs_file, cluster_spec, seed, time_per_iteration,
                         jobs_to_complete, fixed_job_duration,
-                        generate_multi_gpu_jobs, simulate_steady_state, log_dir,
-                        timeout, verbose):
+                        generate_multi_gpu_jobs, generate_multi_priority_jobs,
+                        simulate_steady_state, log_dir,
+                        timeout, verbose, checkpoint_threshold,
+                        profiling_percentage):
     all_lams = []
     average_jcts = []
     utilizations = []
@@ -96,8 +113,10 @@ def run_automatic_sweep(experiment_id, policy_name,
                                       lam, seed, time_per_iteration, jobs_to_complete,
                                       fixed_job_duration,
                                       generate_multi_gpu_jobs,
+                                      generate_multi_priority_jobs,
                                       simulate_steady_state, log_dir, timeout,
-                                     verbose)
+                                      verbose, checkpoint_threshold,
+                                      profiling_percentage)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -116,8 +135,10 @@ def run_automatic_sweep(experiment_id, policy_name,
                                      lam, seed, time_per_iteration, jobs_to_complete,
                                      fixed_job_duration,
                                      generate_multi_gpu_jobs,
+                                     generate_multi_priority_jobs,
                                      simulate_steady_state, log_dir,
-                                     timeout, verbose)
+                                     timeout, verbose, checkpoint_threshold,
+                                     profiling_percentage)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -138,8 +159,11 @@ def run_automatic_sweep(experiment_id, policy_name,
                                       lam, seed, time_per_iteration, jobs_to_complete,
                                       fixed_job_duration,
                                       generate_multi_gpu_jobs,
+                                      generate_multi_priority_jobs,
                                       simulate_steady_state, log_dir,
-                                     timeout, verbose)
+                                      timeout, verbose,
+                                      checkpoint_threshold,
+                                      profiling_percentage)
         average_jcts.append(average_jct)
         utilizations.append(utilization)
         if np.max(average_jcts) / np.min(average_jcts) >= 10:
@@ -174,6 +198,7 @@ def main(args):
 
     throughputs_file = args.throughputs_file
     policy_names = args.policies
+    profiling_percentages = args.profiling_percentages
     job_range = (args.window_start, args.window_end)
     experiment_id = 0
 
@@ -199,72 +224,93 @@ def main(args):
             'k80': int(cluster_spec_str_split[2]),
         }
 
-        raw_logs_cluster_spec_subdir = os.path.join(raw_logs_dir,
-                                                    'v100=%d.p100=%d.k80=%d' % (
-                                                        cluster_spec['v100'],
-                                                        cluster_spec['p100'],
-                                                        cluster_spec['k80']))
+        raw_logs_cluster_spec_subdir = \
+            os.path.join(raw_logs_dir,
+                         'v100=%d.p100=%d.k80=%d' % (cluster_spec['v100'],
+                                                     cluster_spec['p100'],
+                                                     cluster_spec['k80']))
         if not os.path.isdir(raw_logs_cluster_spec_subdir):
             os.mkdir(raw_logs_cluster_spec_subdir)
 
         for policy_name in policy_names:
             raw_logs_policy_subdir = os.path.join(raw_logs_cluster_spec_subdir,
-                                                  policy_name)
+                                           policy_name)
             if not os.path.isdir(raw_logs_policy_subdir):
                 os.mkdir(raw_logs_policy_subdir)
 
-            if automatic_sweep:
-                for seed in args.seeds:
-                    seed_str = 'seed=%d' % (seed)
-                    raw_logs_seed_subdir = os.path.join(raw_logs_policy_subdir,
-                                                        seed_str)
-                    if not os.path.isdir(raw_logs_seed_subdir):
-                        os.mkdir(raw_logs_seed_subdir)
-                    all_args_list.append((experiment_id, policy_name,
-                                          throughputs_file, cluster_spec,
-                                          seed, args.time_per_iteration,
-                                          jobs_to_complete,
-                                          args.fixed_job_duration,
-                                          args.generate_multi_gpu_jobs,
-                                          args.simulate_steady_state,
-                                          raw_logs_seed_subdir,
-                                          args.timeout, args.verbose))
-                    experiment_id += 1
-            else:
-                throughputs = list(np.linspace(args.throughput_lower_bound,
-                                               args.throughput_upper_bound,
-                                               num=args.num_data_points))
-                if throughputs[0] == 0.0:
-                    throughputs = throughputs[1:]
-                for throughput in throughputs:
-                    if (cluster_spec_str in cutoff_throughputs and
-                        policy_name in cutoff_throughputs[cluster_spec_str]):
-                        cutoff_throughput = \
-                            cutoff_throughputs[cluster_spec_str][policy_name]
-                        if throughput >= cutoff_throughput:
-                            print('Throughput of %f is too high for policy %s '
-                                  'with cluster spec %s.' % (throughput,
-                                                              policy_name,
-                                                              cluster_spec_str))
-                            continue
-
-                    lam = 3600.0 / throughput
+            for profiling_percentage in profiling_percentages:
+                if len(profiling_percentages) > 1 or profiling_percentage > 0.0:
+                    profiling_percentage_str = \
+                        'profiling_percentage=%f' % (profiling_percentage)
+                    raw_logs_profiling_subdir = \
+                        os.path.join(raw_logs_policy_subdir,
+                                     profiling_percentage_str)
+                    if not os.path.isdir(raw_logs_profiling_subdir):
+                        os.mkdir(raw_logs_profiling_subdir)
+                else:
+                    raw_logs_profiling_subdir = raw_logs_policy_subdir
+                if automatic_sweep:
                     for seed in args.seeds:
                         seed_str = 'seed=%d' % (seed)
                         raw_logs_seed_subdir = \
-                                os.path.join(raw_logs_policy_subdir, seed_str)
+                            os.path.join(raw_logs_profiling_subdir,
+                                         seed_str)
                         if not os.path.isdir(raw_logs_seed_subdir):
                             os.mkdir(raw_logs_seed_subdir)
                         all_args_list.append((experiment_id, policy_name,
                                               throughputs_file, cluster_spec,
-                                              lam, seed, args.time_per_iteration,
+                                              seed, args.interval,
                                               jobs_to_complete,
                                               args.fixed_job_duration,
                                               args.generate_multi_gpu_jobs,
+                                              args.generate_multi_priority_jobs,
                                               args.simulate_steady_state,
                                               raw_logs_seed_subdir,
-                                              args.timeout, args.verbose))
+                                              args.timeout, args.verbose,
+                                              args.checkpoint_threshold,
+                                              profiling_percentage))
                         experiment_id += 1
+                else:
+                    throughputs = list(np.linspace(args.throughput_lower_bound,
+                                                   args.throughput_upper_bound,
+                                                   num=args.num_data_points))
+                    if throughputs[0] == 0.0:
+                        throughputs = throughputs[1:]
+                    for throughput in throughputs:
+                        if (cluster_spec_str in cutoff_throughputs and
+                            policy_name in cutoff_throughputs[cluster_spec_str]):
+                            cutoff_throughput = \
+                                cutoff_throughputs[cluster_spec_str][policy_name]
+                            if throughput >= cutoff_throughput:
+                                print('Throughput of %f is too high '
+                                      'for policy %s with cluster '
+                                      'spec %s.' % (throughput,
+                                                    policy_name,
+                                                    cluster_spec_str))
+                                continue
+
+                        lam = 3600.0 / throughput
+                        for seed in args.seeds:
+                            seed_str = 'seed=%d' % (seed)
+                            raw_logs_seed_subdir = \
+                                    os.path.join(raw_logs_profiling_subdir,
+                                                 seed_str)
+                            if not os.path.isdir(raw_logs_seed_subdir):
+                                os.mkdir(raw_logs_seed_subdir)
+                            all_args_list.append((experiment_id, policy_name,
+                                                  throughputs_file,
+                                                  cluster_spec,
+                                                  lam, seed, args.interval,
+                                                  jobs_to_complete,
+                                                  args.fixed_job_duration,
+                                                  args.generate_multi_gpu_jobs,
+                                                  args.generate_multi_priority_jobs,
+                                                  args.simulate_steady_state,
+                                                  raw_logs_seed_subdir,
+                                                  args.timeout, args.verbose,
+                                                  args.checkpoint_threshold,
+                                                  profiling_percentage))
+                            experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
         print('[%s] Running %d total experiment(s)...' % (current_time,
@@ -277,7 +323,7 @@ def main(args):
             else:
                 # Sort args in order of decreasing lambda to prioritize
                 # short-running jobs.
-                all_args_list.sort(key=lambda x: x[5], reverse=True)
+                all_args_list.sort(key=lambda x: x[4], reverse=True)
                 results = [p.apply_async(simulate_with_timeout, args_list)
                            for args_list in all_args_list]
                 results = [result.get() for result in results]
@@ -302,9 +348,7 @@ if __name__=='__main__':
                         help=('Number of processes to use in pool '
                               '(use as many as available if not specified)'))
     parser.add_argument('-p', '--policies', type=str, nargs='+',
-                        default=['fifo', 'fifo_perf', 'fifo_packed',
-                                 'max_min_fairness', 'max_min_fairness_perf',
-                                 'max_min_fairness_packed'],
+                        default=utils.get_available_policies(),
                         help='List of policies to sweep')
     parser.add_argument('-c', '--cluster-spec', type=str, nargs='+',
                         default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
@@ -328,12 +372,23 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, generates multi-GPU jobs according to '
                               'a pre-defined distribution'))
+    parser.add_argument('--generate-multi-priority-jobs', action='store_true',
+                        default=False,
+                        help=('If set, generates some jobs with higher priority'))
     parser.add_argument('--simulate-steady-state', action='store_true',
                         default=False,
                         help=('If set, adds as many jobs as there are workers '
                               'before beginning the simulation.'))
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
+    parser.add_argument('--checkpoint-threshold', type=int, default=None,
+                        help=('Checkpoint threshold, None if checkpointing is '
+                              'disabled. Checkpoint is created after this '
+                              'job ID is added.'))
+    parser.add_argument('--profiling_percentages', type=float, nargs='+',
+                        default=[0.0],
+                        help=('Percentages of machines dedicated to profiling '
+                              'co-located job pairs'))
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
                              default=None,
                              help=('Lower bound for throughput interval to '

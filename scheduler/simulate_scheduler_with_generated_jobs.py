@@ -12,14 +12,18 @@ import utils
 def simulate(policy_name, throughputs_file, cluster_spec,
              lam, seed, time_per_iteration, jobs_to_complete,
              fixed_job_duration, generate_multi_gpu_jobs,
-             simulate_steady_state, debug):
+             generate_multi_priority_jobs,
+             simulate_steady_state, debug,
+             checkpoint_threshold, checkpoint_file,
+             profiling_percentage):
     policy = utils.get_policy(policy_name, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
                     throughputs_file=throughputs_file,
                     seed=seed,
-                    time_per_iteration=time_per_iteration,
-                    simulate=True)
+                    time_per_iteration=interval,
+                    simulate=True,
+                    profiling_percentage=profiling_percentage)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
@@ -34,8 +38,11 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                    jobs_to_complete=jobs_to_complete,
                    fixed_job_duration=fixed_job_duration,
                    generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                   generate_multi_priority_jobs=generate_multi_priority_jobs,
                    simulate_steady_state=simulate_steady_state,
-                   debug=debug)
+                   debug=debug,
+                   checkpoint_threshold=checkpoint_threshold,
+                   checkpoint_file=checkpoint_file)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
     
@@ -64,8 +71,11 @@ def main(args):
                  args.time_per_iteration, jobs_to_complete,
                  args.fixed_job_duration,
                  args.generate_multi_gpu_jobs,
+                 args.generate_multi_priority_jobs,
                  args.simulate_steady_state,
-                 args.debug)
+                 args.debug, args.checkpoint_threshold,
+                 args.checkpoint_file,
+                 args.profiling_percentage)
     
     else:
         with open('/dev/null', 'w') as f:
@@ -75,8 +85,12 @@ def main(args):
                          args.time_per_iteration, jobs_to_complete,
                          args.fixed_job_duration,
                          args.generate_multi_gpu_jobs,
+                         args.generate_multi_priority_jobs,
                          args.simulate_steady_state,
-                         args.debug)
+                         args.debug,
+                         args.checkpoint_threshold,
+                         args.checkpoint_file,
+                         args.profiling_percentage)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -88,11 +102,9 @@ if __name__=='__main__':
                         help='Measurement window start (job ID)')
     parser.add_argument('-e', '--window-end', type=int, default=5000,
                         help='Measurement window end (job ID)')
-    parser.add_argument('-p', '--policy', type=str, required=True,
-                        choices=['fifo', 'fifo_perf', 'fifo_packed',
-                                 'max_min_fairness', 'max_min_fairness_perf',
-                                 'max_min_fairness_packed'],
-                        help='Policy')
+    parser.add_argument('-p', '--policy', type=str, default='fifo',
+                        choices=utils.get_available_policies(),
+                        help='Scheduler policy')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--time-per-iteration', type=int, default=1920,
                         help='Interval length (in seconds)')
@@ -108,6 +120,9 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, generates multi-GPU jobs according to '
                               'a pre-defined distribution'))
+    parser.add_argument('--generate-multi-priority-jobs', action='store_true',
+                        default=False,
+                        help=('If set, generates some jobs with higher priority'))
     parser.add_argument('--simulate-steady-state', action='store_true',
                         default=False,
                         help=('If set, adds as many jobs as there are workers '
@@ -116,5 +131,12 @@ if __name__=='__main__':
                         help='Verbose')
     parser.add_argument('-d', '--debug', action='store_true', default=False,
                         help='Debug')
+    parser.add_argument('--checkpoint_threshold', type=int, default=None,
+                        help='Create checkpoint when this job ID comes in')
+    parser.add_argument('--checkpoint_file', default=None,
+                        help='Load checkpoint located at passed in checkpoint_file')
+    parser.add_argument('--profiling_percentage', type=float, default=0.0,
+                        help=('Percentage of machines dedicated to profiling '
+                              'co-located job pairs'))
     args = parser.parse_args()
     main(args)

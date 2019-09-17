@@ -4,7 +4,11 @@ This script handling the training process.
 
 import argparse
 import math
+import os
 import time
+
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tqdm import tqdm
 import torch
@@ -53,7 +57,8 @@ def cal_loss(pred, gold, smoothing):
 
 
 def train_epoch(model, training_data, optimizer, device, smoothing,
-                step=None, cumulative_step=None):
+                step=None, cumulative_step=None,
+                throughput_estimation_interval=None):
     ''' Epoch operation in training phase'''
 
     model.train()
@@ -61,7 +66,7 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
     total_loss = 0
     n_word_total = 0
     n_word_correct = 0
-    done = False 
+    done = False
 
     for batch in tqdm(
             training_data, mininterval=2,
@@ -92,6 +97,11 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
 
         if cumulative_step is not None:
           cumulative_step += 1
+
+          if (throughput_estimation_interval is not None and
+              cumulative_step % throughput_estimation_interval == 0):
+              print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
+                                                         cumulative_step))
           if step is not None and cumulative_step >= step:
               done = True
               break
@@ -163,7 +173,8 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             model, training_data, optimizer, device,
             smoothing=opt.label_smoothing,
             step=opt.step,
-            cumulative_step=cumulative_step)
+            cumulative_step=cumulative_step,
+            throughput_estimation_interval=opt.throughput_estimation_interval)
         print('  - (Training)   ppl: {ppl: 8.5f}, accuracy: {accu:3.3f} %, '\
               'elapse: {elapse:3.3f} min'.format(
                   ppl=math.exp(min(train_loss, 100)), accu=100*train_accu,
@@ -225,6 +236,8 @@ def main():
 
     parser.add_argument('-n_head', type=int, default=8)
     parser.add_argument('-n_layers', type=int, default=6)
+    # NOTE(keshav2): This just refers to the learning rate schedule,
+    #                nothing performance related.
     parser.add_argument('-n_warmup_steps', type=int, default=4000)
 
     parser.add_argument('-dropout', type=float, default=0.1)
@@ -238,20 +251,51 @@ def main():
     parser.add_argument('-no_cuda', action='store_true')
     parser.add_argument('-label_smoothing', action='store_true')
 
+    parser.add_argument('--dist-url', default='env://', type=str,
+                                help='url used to set up distributed training')
+    parser.add_argument('--dist-backend', default='nccl', type=str,
+                                help='Distributed backend')
+    parser.add_argument('--local_rank', default=0, type=int,
+                                help='Local rank')
+    parser.add_argument('--rank', default=None, type=int,
+                                help='Rank')
+    parser.add_argument('--world_size', default=None, type=int,
+                                help='World size')
+    parser.add_argument('--master_addr', default=None, type=str,
+                                help='Master address to use for distributed run')
+    parser.add_argument('--master_port', default=None, type=int,
+                                help='Master port to use for distributed run')
+
+    parser.add_argument('--throughput_estimation_interval', type=int,
+                        default=None,
+                        help='Steps between logging steps completed')
+
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda
     opt.d_word_vec = opt.d_model
+
+    torch.cuda.set_device(opt.local_rank)
 
     if opt.epoch is not None and opt.step is not None:
         raise ValueError('Only one of epoch and step may be set')
     elif opt.epoch is None and opt.step is None:
         raise ValueError('One of epoch and step must be set')
 
+    distributed = False
+    if opt.master_addr is not None:
+        distributed = True
+        os.environ['MASTER_ADDR'] = opt.master_addr
+        os.environ['MASTER_PORT'] = str(opt.master_port)
+        dist.init_process_group(backend=opt.dist_backend,
+                                init_method=opt.dist_url,
+                                world_size=opt.world_size,
+                                rank=opt.rank)
+
     #========= Loading Dataset =========#
     data = torch.load(opt.data)
     opt.max_token_seq_len = data['settings'].max_token_seq_len
 
-    training_data, validation_data = prepare_dataloaders(data, opt)
+    training_data, validation_data = prepare_dataloaders(data, opt, opt.master_addr is not None)
 
     opt.src_vocab_size = training_data.dataset.src_vocab_size
     opt.tgt_vocab_size = training_data.dataset.tgt_vocab_size
@@ -279,27 +323,37 @@ def main():
         n_head=opt.n_head,
         dropout=opt.dropout).to(device)
 
+    if distributed:
+        transformer = DDP(transformer)
+
     optimizer = ScheduledOptim(
         optim.Adam(
             filter(lambda x: x.requires_grad, transformer.parameters()),
             betas=(0.9, 0.98), eps=1e-09),
         opt.d_model, opt.n_warmup_steps)
 
-    train(transformer, training_data, validation_data, optimizer, device ,opt)
+    train(transformer, training_data, validation_data, optimizer, device, opt)
 
 
-def prepare_dataloaders(data, opt):
+def prepare_dataloaders(data, opt, distributed):
     # ========= Preparing DataLoader =========#
+    train_dataset = TranslationDataset(
+        src_word2idx=data['dict']['src'],
+        tgt_word2idx=data['dict']['tgt'],
+        src_insts=data['train']['src'],
+        tgt_insts=data['train']['tgt'])
+    if distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    else:
+        train_sampler = None
+
     train_loader = torch.utils.data.DataLoader(
-        TranslationDataset(
-            src_word2idx=data['dict']['src'],
-            tgt_word2idx=data['dict']['tgt'],
-            src_insts=data['train']['src'],
-            tgt_insts=data['train']['tgt']),
+        train_dataset,
         num_workers=2,
         batch_size=opt.batch_size,
         collate_fn=paired_collate_fn,
-        shuffle=True)
+        shuffle=train_sampler is None,
+        sampler=train_sampler)
 
     valid_loader = torch.utils.data.DataLoader(
         TranslationDataset(

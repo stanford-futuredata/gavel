@@ -1,34 +1,23 @@
 {
-    "25:0:0": {
-        "fifo": 0.8,
-        "fifo_perf": 0.8,
-        "fifo_packing": 0.8,
-        "max_min_fairness": 0.8,
-        "max_min_fairness_perf": 0.8,
-        "max_min_fairness_packed": 1.2
+    "64:0:0": {
+        "fifo": 2.3,
+        "fifo_perf": 2.3,
+        "fifo_packed": 2.3,
+        "max_min_fairness": 2.3,
+        "max_min_fairness_perf": 2.3
     },
-    "12:12:0": {
-        "fifo": 0.7,
-        "fifo_perf": 0.7,
-        "fifo_packing": 0.8,
-        "max_min_fairness": 0.7,
-        "max_min_fairness_perf": 0.6,
-        "max_min_fairness_packed": 0.9
+    "36:36:36": {
+        "fifo": 2.3,
+        "fifo_perf": 2.3,
+        "fifo_packed": 2.5,
+        "max_min_fairness": 2.3,
+        "max_min_fairness_perf": 2.5
     },
-    "16:8:0": {
-        "fifo": 0.7,
-        "fifo_perf": 0.7,
-        "fifo_packing": 0.75,
-        "max_min_fairness": 0.75,
-        "max_min_fairness_perf": 0.75,
-        "max_min_fairness_packed": 1.0
-    },
-    "8:8:8": {
-        "fifo": 0.55,
-        "fifo_perf": 0.55,
-        "fifo_packing": 0.55,
-        "max_min_fairness": 0.55,
-        "max_min_fairness_perf": 0.55,
-        "max_min_fairness_packed": 0.8
+    "48:32:16": {
+        "fifo": 2.3,
+        "fifo_perf": 2.3,
+        "fifo_packed": 2.5,
+        "max_min_fairness": 2.3,
+        "max_min_fairness_perf": 2.5
     }
 }

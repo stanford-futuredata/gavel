@@ -4,6 +4,7 @@ import time
 import math
 import os
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.onnx
 
@@ -47,6 +48,24 @@ parser.add_argument('--save', type=str, default='model.pt',
                     help='path to save the final model')
 parser.add_argument('--onnx-export', type=str, default='',
                     help='path to export the final model in onnx format')
+parser.add_argument('--throughput_estimation_interval', type=int, default=None,
+                    help='Steps between logging steps completed')
+
+parser.add_argument('--dist-url', default='env://', type=str,
+                            help='url used to set up distributed training')
+parser.add_argument('--dist-backend', default='nccl', type=str,
+                            help='Distributed backend')
+parser.add_argument('--local_rank', default=0, type=int,
+                            help='Local rank')
+parser.add_argument('--rank', default=None, type=int,
+                            help='Rank')
+parser.add_argument('--world_size', default=None, type=int,
+                            help='World size')
+parser.add_argument('--master_addr', default=None, type=str,
+                            help='Master address to use for distributed run')
+parser.add_argument('--master_port', default=None, type=int,
+                            help='Master port to use for distributed run')
+
 args = parser.parse_args()
 
 if args.epochs is not None and args.steps is not None:
@@ -60,7 +79,18 @@ if torch.cuda.is_available():
     if not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
+torch.cuda.set_device(args.local_rank)
 device = torch.device("cuda" if args.cuda else "cpu")
+
+args.distributed = False
+if args.master_addr is not None:
+    args.distributed = True
+    os.environ['MASTER_ADDR'] = args.master_addr
+    os.environ['MASTER_PORT'] = str(args.master_port)
+    dist.init_process_group(backend=args.dist_backend,
+                            init_method=args.dist_url,
+                            world_size=args.world_size,
+                            rank=args.rank)
 
 ###############################################################################
 # Load data
@@ -184,6 +214,12 @@ def train(cumulative_steps=None):
             start_time = time.time()
         if cumulative_steps is not None:
           cumulative_steps += 1
+
+          if (args.throughput_estimation_interval is not None and
+              cumulative_steps % args.throughput_estimation_interval == 0):
+              print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
+                                                         cumulative_steps))
+
           if args.steps is not None and cumulative_steps >= args.steps:
             done = True
             break
@@ -209,7 +245,7 @@ try:
         args.epochs = args.steps
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
-        cumulative_steps, done = train(cumulative_steps) 
+        cumulative_steps, done = train(cumulative_steps)
         #val_loss = evaluate(val_data)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s'.format(epoch, (time.time() - epoch_start_time)))

@@ -1,4 +1,6 @@
 cvxpy
+func_timeout
 grpcio
 grpcio-tools
 preconditions
+matrix_completion
