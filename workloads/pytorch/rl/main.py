@@ -84,6 +84,7 @@ parser.add_argument(
     default='Adam',
     metavar='OPT',
     help='shares optimizer choice of Adam or RMSprop')
+"""
 parser.add_argument(
     '--load-model-dir',
     default='trained_models/',
@@ -94,6 +95,12 @@ parser.add_argument(
     default='trained_models/',
     metavar='SMD',
     help='folder to save trained models')
+"""
+parser.add_argument(
+    '--checkpoint_dir',
+    type=str,
+    default='/lfs/1/keshav2/checkpoints/a3c',
+    help='Checkpoint dir')
 parser.add_argument(
     '--log-dir', default='logs/', metavar='LG', help='folder to save logs')
 parser.add_argument(
@@ -149,10 +156,12 @@ if __name__ == '__main__':
             env_conf = setup_json[i]
     env = atari_env(args.env, env_conf, args)
     shared_model = A3Clstm(env.observation_space.shape[0], env.action_space)
-    if args.load:
-        saved_state = torch.load(
-            '{0}{1}.dat'.format(args.load_model_dir, args.env),
-            map_location=lambda storage, loc: storage)
+    if not os.path.isdir(args.checkpoint_dir):
+        os.mkdir(args.checkpoint_dir)
+    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+    if os.path.exists(checkpoint_path):
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        saved_state = torch.load(checkpoint_path)
         shared_model.load_state_dict(saved_state)
     shared_model.share_memory()
 
@@ -181,3 +190,5 @@ if __name__ == '__main__':
     for p in processes:
         time.sleep(0.1)
         p.join()
+    print('Saving checkpoint at %s...' % (checkpoint_path))
+    torch.save(shared_model.state_dict(), checkpoint_path)
