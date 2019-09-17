@@ -163,18 +163,16 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             log_vf.write('epoch,loss,ppl,accuracy\n')
 
     start_epoch = 0
-    if opt.load_model:
-        checkpoint_files = glob.glob(os.path.join(opt.save_model, '*.chkpt'))
-        if len(checkpoint_files) > 0:
-            latest_checkpoint_file = max(checkpoint_files,
-                                         key=os.path.getctime)
-            print('latest_check_point_file: %s' % (latest_checkpoint_file))
-            checkpoint = torch.load(latest_checkpoint_file)
-            model.load_state_dict(checkpoint['model'])
-            start_epoch = checkpoint['epoch']
-            cumulative_step = checkpoint['cumulative_step']
-        else:
-            print('No checkpoint file found!')
+    if not os.path.isdir(opt.checkpoint_dir):
+        os.mkdir(opt.checkpoint_dir)
+    checkpoint_path = os.path.join(opt.checkpoint_dir, 'model.chkpt')
+    if os.path.exists(checkpoint_path):
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['model'])
+        start_epoch = checkpoint['epoch']
+    else:
+        print('No checkpoint file found!')
 
     valid_accus = []
     if opt.epoch is None:
@@ -209,20 +207,18 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             'model': model_state_dict,
             'settings': opt,
             'epoch': epoch_i,
-            'cumulative_step': cumulative_step
         }
 
-        if opt.save_model:
-            if not os.path.isdir(opt.save_model):
-                os.mkdir(opt.save_model)
-            if opt.save_mode == 'all':
-                model_name = os.path.join(opt.save_model, 'accu_{accu:3.3f}.chkpt'.format(accu=100*valid_accu))
-                torch.save(checkpoint, model_name)
-            elif opt.save_mode == 'best':
-                model_name = os.path.join(opt.save_model, 'transformer.chkpt')
-                if valid_accu >= max(valid_accus):
-                    torch.save(checkpoint, model_name)
-                    print('    - [Info] The checkpoint file has been updated.')
+        if opt.save_mode == 'all':
+            #model_name = os.path.join(opt.save_model, 'accu_{accu:3.3f}.chkpt'.format(accu=100*valid_accu))
+            print('Saving checkpoint at %s...' % (checkpoint_path))
+            torch.save(checkpoint, checkpoint_path)
+        elif opt.save_mode == 'best':
+            #model_name = os.path.join(opt.save_model, 'transformer.chkpt')
+            if valid_accu >= max(valid_accus):
+                print('Saving checkpoint at %s...' % (checkpoint_path))
+                torch.save(checkpoint, checkpoint_path)
+                print('    - [Info] The checkpoint file has been updated.')
 
         if log_train_file:#and log_valid_file:
             with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
@@ -264,8 +260,10 @@ def main():
     parser.add_argument('-proj_share_weight', action='store_true')
 
     parser.add_argument('-log', default=None)
-    parser.add_argument('-save_model', default=None)
-    parser.add_argument('-load_model', default=False, action='store_true')
+    #parser.add_argument('-save_model', default=None)
+    #parser.add_argument('-load_model', default=False, action='store_true')
+    parser.add_argument('--checkpoint_dir', type=str,
+                        default='/lfs/1/keshav2/checkpoints/transformer')
     parser.add_argument('-save_mode', type=str, choices=['all', 'best'], default='all')
 
     parser.add_argument('-no_cuda', action='store_true')

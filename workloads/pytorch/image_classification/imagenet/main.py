@@ -47,10 +47,14 @@ parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
-parser.add_argument('--initial_checkpoint_filename', default=None, type=str,
-                    help='path to initial checkpoint (default: none)')
-parser.add_argument('--final_checkpoint_filename', default=None, type=str,
-                    help='path to final checkpoint (default: none)')
+#parser.add_argument('--initial_checkpoint_filename', default=None, type=str,
+#                    help='path to initial checkpoint (default: none)')
+#parser.add_argument('--final_checkpoint_filename', default=None, type=str,
+#                    help='path to final checkpoint (default: none)')
+parser.add_argument('--checkpoint_dir',
+                    type=str,
+                    default='/lfs/1/keshav2/checkpoints/resnet-50',
+                    help='Directory for checkpoints')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
@@ -122,19 +126,22 @@ def main():
                                 weight_decay=args.weight_decay)
 
     # optionally load an initial checkpoint
-    if args.initial_checkpoint_filename is not None:
-        if os.path.isfile(args.initial_checkpoint_filename):
-            print("=> loading checkpoint '{}'".format(args.initial_checkpoint_filename))
-            checkpoint = torch.load(args.initial_checkpoint_filename)
+    #if args.initial_checkpoint_filename is not None:
+    #    if os.path.isfile(args.initial_checkpoint_filename):
+    if not os.path.isdir(args.checkpoint_dir):
+        os.mkdir(args.checkpoint_dir)
+    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+    if os.path.exists(checkpoint_path):
+            print("=> loading checkpoint '{}'".format(checkpoint_path))
+            checkpoint = torch.load(checkpoint_path)
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
-            total_minibatches = checkpoint['total_minibatches']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.initial_checkpoint_filename, checkpoint['epoch']))
-        else:
-            print("=> no checkpoint found at '{}'".format(args.initial_checkpoint_filename))
+                  .format(checkpoint_path, checkpoint['epoch']))
+    else:
+        print("=> no checkpoint found at '{}'".format(checkpoint_path))
 
     cudnn.benchmark = True
 
@@ -186,8 +193,7 @@ def main():
             train(train_loader, model, criterion, optimizer,
                   epoch, total_minibatches,
                   max_minibatches=args.num_minibatches)
-        if finished_epoch:
-            total_minibatches += num_minibatches
+        total_minibatches += num_minibatches
 
         if (args.num_minibatches is not None and
             total_minibatches >= args.num_minibatches):
@@ -203,9 +209,8 @@ def main():
         'arch': args.arch,
         'state_dict': model.state_dict(),
         'best_acc1': best_acc1,
-        'total_minibatches': total_minibatches,
         'optimizer' : optimizer.state_dict(),
-    }, args.final_checkpoint_filename)
+    }, checkpoint_path)
 
 
 def train(train_loader, model, criterion, optimizer, epoch,
@@ -313,6 +318,7 @@ def validate(val_loader, model, criterion):
 def save_checkpoint(state, checkpoint_filename):
     if checkpoint_filename is not None:
         torch.save(state, checkpoint_filename)
+        print("=> saved checkpoint '{}'".format(checkpoint_filename))
 
 
 class AverageMeter(object):

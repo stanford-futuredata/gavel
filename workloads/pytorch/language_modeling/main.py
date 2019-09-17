@@ -44,10 +44,15 @@ parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
+"""
 parser.add_argument('--load', type=str, default='model.pt',
                     help='path to load model from checkpoint')
 parser.add_argument('--save', type=str, default='model.pt',
                     help='path to save the final model')
+"""
+parser.add_argument('--checkpoint_dir', type=str,
+                    default='/lfs/1/keshav2/checkpoints/lm',
+                    help='Checkpoint dir')
 parser.add_argument('--onnx-export', type=str, default='',
                     help='path to export the final model in onnx format')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
@@ -132,13 +137,16 @@ test_data = batchify(corpus.test, eval_batch_size)
 
 ntokens = len(corpus.dictionary)
 
-if args.load is not None and os.path.exists(args.load):
-    with open(args.load, 'rb') as f:
+if not os.path.isdir(args.checkpoint_dir):
+    os.mkdir(checkpoint_dir)
+checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+if os.path.exists(checkpoint_path):
+    print('Loading checkpoint from %s...' % (checkpoint_path))
+    with open(checkpoint_path, 'rb') as f:
         state = torch.load(f)
         model = state['model']
 else:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
-    print('Did not load cumulative steps')
 cumulative_steps = 0
 
 criterion = nn.CrossEntropyLoss()
@@ -265,7 +273,8 @@ try:
         #                                   val_loss, math.exp(val_loss)))
         print('-' * 89)
         # Save the model if the validation loss is the best we've seen so far.
-    with open(args.save, 'wb') as f:
+    with open(checkpoint_path, 'wb') as f:
+        print('Saving checkpoint at %s...' % (checkpoint_path))
         state = {
             'model': model,
         }
