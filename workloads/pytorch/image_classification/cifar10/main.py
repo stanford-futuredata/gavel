@@ -26,7 +26,6 @@ parser.add_argument('--batch_size', default=64, type=int, help='Batch size')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--checkpoint_dir', default='/lfs/1/keshav2/checkpoints/resnet-18',
                     type=str, help='Checkpoint directory')
-#parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--use_progress_bar', '-p', action='store_true', default=False, help='Use progress bar')
 parser.add_argument('--log_interval', type=int, default=100,
                     help='Interval to log')
@@ -104,7 +103,6 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 cumulative_steps = 0
-#if args.resume:
 if args.checkpoint_dir is not None:
     checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt') 
     if os.path.exists(checkpoint_path):
@@ -166,7 +164,7 @@ def train(epoch, cumulative_steps=None):
 
 
 
-def test(epoch, cumulative_steps):
+def test(epoch):
     global best_acc
     net.eval()
     test_loss = 0
@@ -191,7 +189,6 @@ def test(epoch, cumulative_steps):
         print('Saving checkpoint at %s...' % (checkpoint_path))
         state = {
             'net': net.state_dict(),
-            'acc': acc,
             'epoch': epoch,
         }
         if not os.path.isdir(args.checkpoint_dir):
@@ -202,7 +199,15 @@ def test(epoch, cumulative_steps):
 if args.num_epochs is None:
     args.num_epochs = args.num_steps
 for epoch in range(start_epoch, args.num_epochs):
-    cumulative_steps, done, finished_epoch = train(epoch, cumulative_steps)
-    test(epoch, cumulative_steps)
+    cumulative_steps, done, finished_epoch = train(epoch, cumulative_steps) 
     if done:
         break
+print('Saving checkpoint at %s...' % (checkpoint_path))
+state = {
+    'net': net.state_dict(),
+    'epoch': epoch,
+}
+if not os.path.isdir(args.checkpoint_dir):
+    os.mkdir(args.checkpoint_dir)
+torch.save(state, checkpoint_path)
+

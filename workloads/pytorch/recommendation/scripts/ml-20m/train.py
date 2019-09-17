@@ -30,8 +30,7 @@ parser.add_argument('--checkpoint_dir', type=str,
                     help='Checkpoint dir')
 args = parser.parse_args()
 
-data_dir = args.data_dir #'/home/keshavsanthanam/data/ml-20m/pro_sg/'
-#model_dir = '/tmp/models/ml-20m/'
+data_dir = args.data_dir
 
 if not os.path.isdir(args.checkpoint_dir):
   os.makedirs(args.checkpoint_dir)
@@ -67,6 +66,7 @@ use_cuda = True
 model = DynamicAutoencoder(hidden_layers=[200], activation_type='tanh',
                            noise_prob=0.5, sparse=False)
 
+# NOTE(keshav2): Don't remove in case we want to try a different model
 # model = MatrixFactorization(embedding_size=200, activation_type='tanh',
 #                             dropout_prob=0.5, sparse=False)
 
@@ -90,8 +90,6 @@ try:
   for i in range(num_iterations):
       epochs_per_iteration = min(epochs_per_iteration, args.num_epochs - epochs)
       print('Running for %d epochs' % (epochs_per_iteration))
-      #trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
-      #                loss='logistic', user_based=False)
       trainer.train(train_dataset=train_dataset, val_dataset=val_tr_dataset,
                     batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
                     num_epochs=epochs_per_iteration, negative_sampling=True,
@@ -102,10 +100,6 @@ try:
       epochs += epochs_per_iteration
       if args.throughput_estimation_interval is not None:
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), epochs))
-            #shutil.rmtree(model_dir)
-            #for f in os.listdir(model_dir):
-            #    os.remove(os.path.join(model_dir, f))
-            #os.makedirs(model_d)
   current_state = {
       'model_params': trainer.model.model_params(),
       'last_epoch': trainer.current_epoch,

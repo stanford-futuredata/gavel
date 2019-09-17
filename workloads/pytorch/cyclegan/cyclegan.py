@@ -23,7 +23,6 @@ import torch.nn.functional as F
 import torch
 
 parser = argparse.ArgumentParser()
-#parser.add_argument("--epoch", type=int, default=0, help="epoch to start training from")
 parser.add_argument("--checkpoint_dir", type=str, default="/lfs/1/keshav2/checkpoints/cyclegan", help="Checkpoint dir")
 parser.add_argument("--n_steps", type=int, default=None, help="number of steps of training")
 parser.add_argument("--n_epochs", type=int, default=None, help="number of epochs of training")
@@ -57,7 +56,6 @@ elif opt.n_steps is None and opt.n_epochs is None:
 os.makedirs("images/%s" % opt.dataset_name, exist_ok=True)
 if not os.path.isdir(opt.checkpoint_dir):
     os.mkdir(opt.checkpoint_dir)
-#os.makedirs("saved_models/%s" % opt.dataset_name, exist_ok=True)
 
 # Losses
 criterion_GAN = torch.nn.MSELoss()
@@ -83,14 +81,6 @@ if cuda:
     criterion_cycle.cuda()
     criterion_identity.cuda()
 
-"""
-if opt.epoch != 0:
-    # Load pretrained models
-    G_AB.load_state_dict(torch.load("saved_models/%s/G_AB_%d.pth" % (opt.dataset_name, opt.epoch)))
-    G_BA.load_state_dict(torch.load("saved_models/%s/G_BA_%d.pth" % (opt.dataset_name, opt.epoch)))
-    D_A.load_state_dict(torch.load("saved_models/%s/D_A_%d.pth" % (opt.dataset_name, opt.epoch)))
-    D_B.load_state_dict(torch.load("saved_models/%s/D_B_%d.pth" % (opt.dataset_name, opt.epoch)))
-"""
 
 checkpoint_path = os.path.join(opt.checkpoint_dir, "model.chkpt")
 if os.path.exists(checkpoint_path):
@@ -330,11 +320,3 @@ state = {
 print('')
 print('Saving checkpoint at %s...' % (checkpoint_path))
 torch.save(state, checkpoint_path)
-"""
-    if opt.checkpoint_interval != -1 and epoch % opt.checkpoint_interval == 0:
-        # Save model checkpoints
-        torch.save(G_AB.state_dict(), "saved_models/%s/G_AB_%d.pth" % (opt.dataset_name, epoch))
-        torch.save(G_BA.state_dict(), "saved_models/%s/G_BA_%d.pth" % (opt.dataset_name, epoch))
-        torch.save(D_A.state_dict(), "saved_models/%s/D_A_%d.pth" % (opt.dataset_name, epoch))
-        torch.save(D_B.state_dict(), "saved_models/%s/D_B_%d.pth" % (opt.dataset_name, epoch))
-"""

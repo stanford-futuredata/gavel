@@ -47,10 +47,6 @@ parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
-#parser.add_argument('--initial_checkpoint_filename', default=None, type=str,
-#                    help='path to initial checkpoint (default: none)')
-#parser.add_argument('--final_checkpoint_filename', default=None, type=str,
-#                    help='path to final checkpoint (default: none)')
 parser.add_argument('--checkpoint_dir',
                     type=str,
                     default='/lfs/1/keshav2/checkpoints/resnet-50',
@@ -125,9 +121,7 @@ def main():
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
-    # optionally load an initial checkpoint
-    #if args.initial_checkpoint_filename is not None:
-    #    if os.path.isfile(args.initial_checkpoint_filename):
+    # Load from checkpoint.
     if not os.path.isdir(args.checkpoint_dir):
         os.mkdir(args.checkpoint_dir)
     checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')

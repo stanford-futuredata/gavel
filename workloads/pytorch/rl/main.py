@@ -84,18 +84,6 @@ parser.add_argument(
     default='Adam',
     metavar='OPT',
     help='shares optimizer choice of Adam or RMSprop')
-"""
-parser.add_argument(
-    '--load-model-dir',
-    default='trained_models/',
-    metavar='LMD',
-    help='folder to load trained models from')
-parser.add_argument(
-    '--save-model-dir',
-    default='trained_models/',
-    metavar='SMD',
-    help='folder to save trained models')
-"""
 parser.add_argument(
     '--checkpoint_dir',
     type=str,
@@ -142,11 +130,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     torch.manual_seed(args.seed)
     args.gpu_ids = [0]
-    """
-    if args.gpu_ids == -1:
-        args.gpu_ids = [-1]
-    else:
-    """
     torch.cuda.manual_seed(args.seed)
     mp.set_start_method('spawn')
     setup_json = read_config(args.env_config)
@@ -177,9 +160,6 @@ if __name__ == '__main__':
 
     processes = []
 
-    #p = mp.Process(target=test, args=(args, shared_model, env_conf))
-    #p.start()
-    #processes.append(p)
     time.sleep(0.1)
     for rank in range(0, args.workers):
         p = mp.Process(

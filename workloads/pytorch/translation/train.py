@@ -210,11 +210,9 @@ def train(model, training_data, validation_data, optimizer, device, opt):
         }
 
         if opt.save_mode == 'all':
-            #model_name = os.path.join(opt.save_model, 'accu_{accu:3.3f}.chkpt'.format(accu=100*valid_accu))
             print('Saving checkpoint at %s...' % (checkpoint_path))
             torch.save(checkpoint, checkpoint_path)
         elif opt.save_mode == 'best':
-            #model_name = os.path.join(opt.save_model, 'transformer.chkpt')
             if valid_accu >= max(valid_accus):
                 print('Saving checkpoint at %s...' % (checkpoint_path))
                 torch.save(checkpoint, checkpoint_path)
@@ -260,8 +258,6 @@ def main():
     parser.add_argument('-proj_share_weight', action='store_true')
 
     parser.add_argument('-log', default=None)
-    #parser.add_argument('-save_model', default=None)
-    #parser.add_argument('-load_model', default=False, action='store_true')
     parser.add_argument('--checkpoint_dir', type=str,
                         default='/lfs/1/keshav2/checkpoints/transformer')
     parser.add_argument('-save_mode', type=str, choices=['all', 'best'], default='all')

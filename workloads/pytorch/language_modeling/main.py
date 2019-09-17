@@ -44,12 +44,6 @@ parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
-"""
-parser.add_argument('--load', type=str, default='model.pt',
-                    help='path to load model from checkpoint')
-parser.add_argument('--save', type=str, default='model.pt',
-                    help='path to save the final model')
-"""
 parser.add_argument('--checkpoint_dir', type=str,
                     default='/lfs/1/keshav2/checkpoints/lm',
                     help='Checkpoint dir')
@@ -268,45 +262,13 @@ try:
         print('| end of epoch {:3d} | time: {:5.2f}s'.format(epoch, (time.time() - epoch_start_time)))
         if done:
           break
-        #print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
-        #        'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
-        #                                   val_loss, math.exp(val_loss)))
         print('-' * 89)
-        # Save the model if the validation loss is the best we've seen so far.
     with open(checkpoint_path, 'wb') as f:
         print('Saving checkpoint at %s...' % (checkpoint_path))
         state = {
             'model': model,
         }
         torch.save(state, f)
-        """
-        if not best_val_loss or val_loss < best_val_loss:
-            with open(args.save, 'wb') as f:
-                torch.save(model, f)
-            best_val_loss = val_loss
-        else:
-            # Anneal the learning rate if no improvement has been seen in the validation dataset.
-            lr /= 4.0
-        """
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
-
-"""
-# Load the best saved model.
-with open(args.save, 'rb') as f:
-    model = torch.load(f)
-    # after load the rnn params are not a continuous chunk of memory
-    # this makes them a continuous chunk, and will speed up forward pass
-    model.rnn.flatten_parameters()
-# Run on test data.
-test_loss = evaluate(test_data)
-print('=' * 89)
-print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
-    test_loss, math.exp(test_loss)))
-print('=' * 89)
-
-if len(args.onnx_export) > 0:
-    # Export the model in ONNX format.
-    export_onnx(args.onnx_export, batch_size=1, seq_len=args.bptt)
-"""
