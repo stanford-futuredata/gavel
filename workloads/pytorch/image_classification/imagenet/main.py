@@ -47,10 +47,10 @@ parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
-parser.add_argument('--initial_checkpoint_filename', default=None, type=str,
-                    help='path to initial checkpoint (default: none)')
-parser.add_argument('--final_checkpoint_filename', default=None, type=str,
-                    help='path to final checkpoint (default: none)')
+parser.add_argument('--checkpoint_dir',
+                    type=str,
+                    default='/lfs/1/keshav2/checkpoints/resnet-50',
+                    help='Directory for checkpoints')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
@@ -75,10 +75,10 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 
 best_acc1 = 0
-
+total_minibatches = 0
 
 def main():
-    global args, best_acc1
+    global args, best_acc1, total_minibatches
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -121,19 +121,21 @@ def main():
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
-    # optionally load an initial checkpoint
-    if args.initial_checkpoint_filename is not None:
-        if os.path.isfile(args.initial_checkpoint_filename):
-            print("=> loading checkpoint '{}'".format(args.initial_checkpoint_filename))
-            checkpoint = torch.load(args.initial_checkpoint_filename)
+    # Load from checkpoint.
+    if not os.path.isdir(args.checkpoint_dir):
+        os.mkdir(args.checkpoint_dir)
+    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+    if os.path.exists(checkpoint_path):
+            print("=> loading checkpoint '{}'".format(checkpoint_path))
+            checkpoint = torch.load(checkpoint_path)
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.initial_checkpoint_filename, checkpoint['epoch']))
-        else:
-            print("=> no checkpoint found at '{}'".format(args.initial_checkpoint_filename))
+                  .format(checkpoint_path, checkpoint['epoch']))
+    else:
+        print("=> no checkpoint found at '{}'".format(checkpoint_path))
 
     cudnn.benchmark = True
 
@@ -181,9 +183,14 @@ def main():
         adjust_learning_rate(optimizer, epoch)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch)
+        num_minibatches, finished_epoch = \
+            train(train_loader, model, criterion, optimizer,
+                  epoch, total_minibatches,
+                  max_minibatches=args.num_minibatches)
+        total_minibatches += num_minibatches
 
-        if args.num_minibatches is not None:
+        if (args.num_minibatches is not None and
+            total_minibatches >= args.num_minibatches):
             break
 
         # evaluate on validation set
@@ -197,10 +204,11 @@ def main():
         'state_dict': model.state_dict(),
         'best_acc1': best_acc1,
         'optimizer' : optimizer.state_dict(),
-    }, args.final_checkpoint_filename)
+    }, checkpoint_path)
 
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader, model, criterion, optimizer, epoch,
+          total_minibatches, max_minibatches):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -211,10 +219,12 @@ def train(train_loader, model, criterion, optimizer, epoch):
     model.train()
 
     end = time.time()
+    finished_epoch = True
     for i, (input, target) in enumerate(train_loader):
-        if args.num_minibatches is not None and i > args.num_minibatches:
-            return
-
+        if (total_minibatches is not None and
+            i + total_minibatches >= max_minibatches):
+            finished_epoch = False
+            break
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -253,6 +263,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
         if (args.throughput_estimation_interval is not None and
             i % args.throughput_estimation_interval == 0):
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), i))
+    return i, finished_epoch
 
 def validate(val_loader, model, criterion):
     batch_time = AverageMeter()
@@ -301,6 +312,7 @@ def validate(val_loader, model, criterion):
 def save_checkpoint(state, checkpoint_filename):
     if checkpoint_filename is not None:
         torch.save(state, checkpoint_filename)
+        print("=> saved checkpoint '{}'".format(checkpoint_filename))
 
 
 class AverageMeter(object):

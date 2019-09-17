@@ -23,7 +23,7 @@ import torch.nn.functional as F
 import torch
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epoch", type=int, default=0, help="epoch to start training from")
+parser.add_argument("--checkpoint_dir", type=str, default="/lfs/1/keshav2/checkpoints/cyclegan", help="Checkpoint dir")
 parser.add_argument("--n_steps", type=int, default=None, help="number of steps of training")
 parser.add_argument("--n_epochs", type=int, default=None, help="number of epochs of training")
 parser.add_argument("--dataset_path", type=str, required=True, help="Path to the dataset")
@@ -54,7 +54,8 @@ elif opt.n_steps is None and opt.n_epochs is None:
 
 # Create sample and checkpoint directories
 os.makedirs("images/%s" % opt.dataset_name, exist_ok=True)
-os.makedirs("saved_models/%s" % opt.dataset_name, exist_ok=True)
+if not os.path.isdir(opt.checkpoint_dir):
+    os.mkdir(opt.checkpoint_dir)
 
 # Losses
 criterion_GAN = torch.nn.MSELoss()
@@ -80,18 +81,23 @@ if cuda:
     criterion_cycle.cuda()
     criterion_identity.cuda()
 
-if opt.epoch != 0:
-    # Load pretrained models
-    G_AB.load_state_dict(torch.load("saved_models/%s/G_AB_%d.pth" % (opt.dataset_name, opt.epoch)))
-    G_BA.load_state_dict(torch.load("saved_models/%s/G_BA_%d.pth" % (opt.dataset_name, opt.epoch)))
-    D_A.load_state_dict(torch.load("saved_models/%s/D_A_%d.pth" % (opt.dataset_name, opt.epoch)))
-    D_B.load_state_dict(torch.load("saved_models/%s/D_B_%d.pth" % (opt.dataset_name, opt.epoch)))
+
+checkpoint_path = os.path.join(opt.checkpoint_dir, "model.chkpt")
+if os.path.exists(checkpoint_path):
+    print('Loading checkpoint from %s...' % (checkpoint_path))
+    checkpoint = torch.load(checkpoint_path)
+    G_AB.load_state_dict(checkpoint['G_AB'])
+    G_BA.load_state_dict(checkpoint['G_BA'])
+    D_A.load_state_dict(checkpoint['D_A'])
+    D_B.load_state_dict(checkpoint['D_B'])
+    start_epoch = checkpoint['epoch']
 else:
     # Initialize weights
     G_AB.apply(weights_init_normal)
     G_BA.apply(weights_init_normal)
     D_A.apply(weights_init_normal)
     D_B.apply(weights_init_normal)
+    start_epoch = 0
 
 # Optimizers
 optimizer_G = torch.optim.Adam(
@@ -136,13 +142,13 @@ if opt.n_epochs is None:
 
 # Learning rate update schedulers
 lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(
-    optimizer_G, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step
+    optimizer_G, lr_lambda=LambdaLR(opt.n_epochs, start_epoch, opt.decay_epoch).step
 )
 lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(
-    optimizer_D_A, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step
+    optimizer_D_A, lr_lambda=LambdaLR(opt.n_epochs, start_epoch, opt.decay_epoch).step
 )
 lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(
-    optimizer_D_B, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step
+    optimizer_D_B, lr_lambda=LambdaLR(opt.n_epochs, start_epoch, opt.decay_epoch).step
 )
 
 def sample_images(batches_done):
@@ -168,11 +174,15 @@ def sample_images(batches_done):
 #  Training
 # ----------
 
+done = False
 steps = 0
 prev_time = time.time()
-for epoch in range(opt.epoch, opt.n_epochs):
+for epoch in range(start_epoch, opt.n_epochs):
     for i, batch in enumerate(dataloader):
 
+        if steps >= opt.n_steps:
+            done = True
+            break
         # Set model input
         real_A = Variable(batch["A"].type(Tensor))
         real_B = Variable(batch["B"].type(Tensor))
@@ -292,18 +302,21 @@ for epoch in range(opt.epoch, opt.n_epochs):
             print('')
             sys.stdout.flush()
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), steps))
-
-        if steps >= opt.n_steps:
-          sys.exit(0)
+    if done:
+        break
 
     # Update learning rates
     lr_scheduler_G.step()
     lr_scheduler_D_A.step()
     lr_scheduler_D_B.step()
 
-    if opt.checkpoint_interval != -1 and epoch % opt.checkpoint_interval == 0:
-        # Save model checkpoints
-        torch.save(G_AB.state_dict(), "saved_models/%s/G_AB_%d.pth" % (opt.dataset_name, epoch))
-        torch.save(G_BA.state_dict(), "saved_models/%s/G_BA_%d.pth" % (opt.dataset_name, epoch))
-        torch.save(D_A.state_dict(), "saved_models/%s/D_A_%d.pth" % (opt.dataset_name, epoch))
-        torch.save(D_B.state_dict(), "saved_models/%s/D_B_%d.pth" % (opt.dataset_name, epoch))
+state = {
+    'G_AB': G_AB.state_dict(),
+    'G_BA': G_BA.state_dict(),
+    'D_A': D_A.state_dict(),
+    'D_B': D_B.state_dict(),
+    'epoch': epoch
+}
+print('')
+print('Saving checkpoint at %s...' % (checkpoint_path))
+torch.save(state, checkpoint_path)
