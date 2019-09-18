@@ -10,4 +10,5 @@ recsys-recoder
 gym
 opencv-python
 setproctitle
+gym
 gym[atari]
