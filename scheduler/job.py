@@ -18,7 +18,8 @@ class Job:
         
         # TODO: Add scale_factor and priority_weight here.
         return Job(job_proto.job_id, job_proto.job_type, job_proto.command,
-                   job_proto.num_steps_arg, job_proto.num_steps, duration, 1)
+                   job_proto.num_steps_arg, job_proto.num_steps, duration,
+                   scale_factor=1, priority_weight=1)
 
     @property
     def job_id(self):

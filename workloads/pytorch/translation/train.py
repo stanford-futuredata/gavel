@@ -194,13 +194,6 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                   elapse=(time.time()-start)/60))
 
         start = time.time()
-        valid_loss, valid_accu = eval_epoch(model, validation_data, device)
-        print('  - (Validation) ppl: {ppl: 8.5f}, accuracy: {accu:3.3f} %, '\
-                'elapse: {elapse:3.3f} min'.format(
-                    ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu,
-                    elapse=(time.time()-start)/60))
-
-        valid_accus += [valid_accu]
 
         model_state_dict = model.state_dict()
         checkpoint = {

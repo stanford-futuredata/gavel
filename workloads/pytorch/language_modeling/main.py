@@ -132,7 +132,7 @@ test_data = batchify(corpus.test, eval_batch_size)
 ntokens = len(corpus.dictionary)
 
 if not os.path.isdir(args.checkpoint_dir):
-    os.mkdir(checkpoint_dir)
+    os.mkdir(args.checkpoint_dir)
 checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
 if os.path.exists(checkpoint_path):
     print('Loading checkpoint from %s...' % (checkpoint_path))

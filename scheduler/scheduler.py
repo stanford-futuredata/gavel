@@ -214,7 +214,10 @@ class Scheduler:
                 if old_throughput != INFINITY:
                     new_throughput *= EMA_ALPHA
                     new_throughput += (1 - EMA_ALPHA) * old_throughput[i]
-                self._throughputs[job_id][worker_type][i] = new_throughput
+                if job_id.is_pair():
+                    self._throughputs[job_id][worker_type][i] = new_throughput
+                else:
+                    self._throughputs[job_id][worker_type] = new_throughput
             print(('[DEBUG] Job %s throughput on worker type %s: '
                    '%s -> %s') % (job_id, worker_type, str(old_throughput),
                                   str(self._throughputs[job_id][worker_type])))
@@ -1324,12 +1327,21 @@ class Scheduler:
 
     def _set_initial_throughput(self, job_id, worker_type):
         assert(not job_id.is_pair())
+
+        # NOTE: We are allowing measured isolated throughputs to be used
+        # in non-simulation mode. Need to fix this.
+        job_type = self._jobs[job_id].job_type
+        self._throughputs[job_id][worker_type] = \
+            self._oracle_throughputs[worker_type][job_type]['null']
+
+        """
         if self._simulate:
             job_type = self._jobs[job_id].job_type
             self._throughputs[job_id][worker_type] = \
                 self._oracle_throughputs[worker_type][job_type]['null']
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
+        """
 
     def _record_profiled_throughputs(self):
         for worker_type in self._profiled_job_combinations:
