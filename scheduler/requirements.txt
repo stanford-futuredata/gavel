@@ -7,3 +7,7 @@ matrix_completion
 glog
 pandas
 recsys-recoder
+gym
+opencv-python
+setproctitle
+gym[atari]
