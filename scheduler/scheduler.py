@@ -858,6 +858,8 @@ class Scheduler:
         completed_jobs = set()
         last_job_arrival_time = None
         next_job_arrival_time = 0
+        if len(arrival_times) > 0:
+            next_job_arrival_time = arrival_times[0]
         no_dispatched_or_running_jobs = False
         current_round_start_time = 0
         current_round_end_time = None
@@ -884,6 +886,7 @@ class Scheduler:
 
             for (arrival_time, job) in zip(arrival_times, jobs):
                 queued_jobs.append((arrival_time, job))
+            self._current_timestamp = arrival_times[0]
         elif simulate_steady_state:
             for worker_type in worker_types:
                 for i in range(cluster_spec[worker_type]):
@@ -898,9 +901,10 @@ class Scheduler:
         while True:
             if debug:
                 input('Press Enter to continue...')
-            if (jobs_to_complete is not None and
-                  jobs_to_complete.issubset(completed_jobs)):
-                break
+            if jobs_to_complete is not None:
+                print("Number of completed jobs: %d" % len(jobs_to_complete.intersection(completed_jobs)))
+                if jobs_to_complete.issubset(completed_jobs):
+                    break
             elif (num_total_jobs is not None and
                     remaining_jobs <= 0):
                 break
