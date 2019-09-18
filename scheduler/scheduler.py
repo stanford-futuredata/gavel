@@ -210,14 +210,18 @@ class Scheduler:
             else:
                 old_throughput = [self._throughputs[job_id][worker_type]]
             for i, single_job_id in enumerate(job_id.singletons()):
-                new_throughput = all_num_steps[i] / all_execution_times[i]
-                if old_throughput != INFINITY:
-                    new_throughput *= EMA_ALPHA
-                    new_throughput += (1 - EMA_ALPHA) * old_throughput[i]
-                if job_id.is_pair():
-                    self._throughputs[job_id][worker_type][i] = new_throughput
+                if all_execution_times[i] < 0:
+                    self._throughputs[job_id][worker_type] = 0
                 else:
-                    self._throughputs[job_id][worker_type] = new_throughput
+                    new_throughput = all_num_steps[i] / all_execution_times[i]
+                    if old_throughput != INFINITY:
+                        new_throughput *= EMA_ALPHA
+                        new_throughput += (1 - EMA_ALPHA) * old_throughput[i]
+                    if job_id.is_pair():
+                        self._throughputs[job_id][worker_type][i] = \
+                            new_throughput
+                    else:
+                        self._throughputs[job_id][worker_type] = new_throughput
             print(('[DEBUG] Job %s throughput on worker type %s: '
                    '%s -> %s') % (job_id, worker_type, str(old_throughput),
                                   str(self._throughputs[job_id][worker_type])))
