@@ -561,14 +561,26 @@ class Scheduler:
                     for single_job_id in job_id.singletons():
                         already_scheduled_jobs.append(single_job_id)
 
-                if job_id in self._prev_worker_mapping[worker_type]:
+                job_ids = sorted(list(self._prev_worker_mapping[worker_type].keys()),
+                                 key=lambda x: len(self._prev_worker_mapping[worker_type][x]), reverse=True)
+                if job_id in job_ids:
+                    unavailable_workers = []
                     for worker_id in self._prev_worker_mapping[worker_type][job_id]:
-                        remaining_worker_ids.remove(worker_id)
+                        if worker_id in remaining_worker_ids:
+                            remaining_worker_ids.remove(worker_id)
+                        else:
+                            unavailable_workers.append(worker_id)
+                    for unavailable_worker in unavailable_workers:
+                        self._prev_worker_mapping[worker_type][job_id].remove(unavailable_worker)
                 else:
-                    self._prev_worker_mapping[worker_type][job_id] = \
-                        [remaining_worker_ids[i] for i in range(scale_factor)]
-                    for i in range(scale_factor):
-                        remaining_worker_ids.pop(0)
+                    self._prev_worker_mapping[worker_type][job_id] = []
+                while (len(self._prev_worker_mapping[worker_type][job_id]) <
+                       scale_factor):
+                    #self._prev_worker_mapping[worker_type][job_id] = \
+                    #    [remaining_worker_ids[i] for i in range(scale_factor)]
+                    #for i in range(scale_factor):
+                    worker_id = remaining_worker_ids.pop(0)
+                    self._prev_worker_mapping[worker_type][job_id].append(worker_id)
                 scheduled_jobs.append((job_id,
                                        tuple(self._prev_worker_mapping[worker_type][job_id])))
 
@@ -1146,7 +1158,7 @@ class Scheduler:
                                  self._worker_start_times[worker_id])
                 worker_time = self._cumulative_worker_time_so_far[worker_id]
                 utilization = worker_time / total_runtime
-                if utilization > 1.0 and not self._job_packing:
+                if utilization > 1.0:
                     print('Error: invalid utilization %.3f' % (utilization))
                     print('Worker ID: %d' % (worker_id))
                     print('Worker time: %.3f' % (worker_time))
