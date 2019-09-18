@@ -112,7 +112,6 @@ if args.checkpoint_dir is not None:
         try:
             checkpoint = torch.load(checkpoint_path)
             net.load_state_dict(checkpoint['net'])
-            best_acc = checkpoint['acc']
             start_epoch = checkpoint['epoch']
         except Exception as e:
             print('Error reading checkpoint: %s' % (e))
