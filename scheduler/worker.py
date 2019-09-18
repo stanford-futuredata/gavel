@@ -11,7 +11,7 @@ from runtime.rpc import worker_server
 
 class Worker:
     def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port,
-                 gpu_id):
+                 gpu_id, time_per_iteration):
         self._gpu_id = gpu_id
         self._worker_type = worker_type
         self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
@@ -22,6 +22,7 @@ class Worker:
         self._devices = [] # TODO: get devices
         self._results = {}
         self._single_job_id_to_job_id_pair_map = {}
+        self._time_per_iteration = time_per_iteration
 
         print('Starting server at port %d' % (worker_port))
 
@@ -43,7 +44,8 @@ class Worker:
 
         self._dispatcher = dispatcher.Dispatcher(self._worker_id,
                                                  self._gpu_id,
-                                                 self._done_callback)
+                                                 self._done_callback,
+                                                 self._time_per_iteration)
 
         self._server_thread.join()
 
@@ -66,14 +68,51 @@ class Worker:
                 job_id
             self._dispatcher.dispatch_job(job)
 
+    def _get_steps(self, outputs):
+        earliest_end_time = None
+        for output in outputs:
+            lines = output.split('\n')
+            for i in range(len(lines) - 1, -1, -1):
+                if '[THROUGHPUT_ESTIMATION]' in lines[i]:
+                    _, time, _ = lines[i].split('\t')
+                    if (earliest_end_time is None or
+                        float(time) < earliest_end_time):
+                        earliest_end_time = float(time)
+                    break
+
+        all_steps = None
+        for output in outputs:
+            lines = output.split('\n')
+            start_time = None
+            for line in lines:
+                if '[THROUGHPUT_ESTIMATION]' in line:
+                    _, time, steps = line.split('\t')
+                    if start_time is None:
+                        start_time = float(time)
+                        start_steps = int(steps)
+                    elif float(time) > earliest_end_time:
+                        break
+            if start_time is None:
+                return (-1, -1)
+            steps = int(steps) - start_steps
+            if all_steps is None:
+                all_steps = (steps,)
+            else:
+                all_steps += (steps,)
+        return all_steps
+
     def _done_callback(self, single_job_id, worker_id, num_steps,
-                       execution_time):
+                       execution_time, output):
         job_id = self._single_job_id_to_job_id_pair_map[single_job_id]
         self._results[job_id].append((single_job_id, worker_id,
-                                      num_steps, execution_time))
+                                      num_steps, execution_time, output))
         if ((len(self._results[job_id]) == 1 and job_id[1] is None) or
             (len(self._results[job_id]) == 2)):
             self._results[job_id].sort(key=lambda x: x[0])
+            steps = self._get_steps([self_results[job_id][0][-1],
+                                     self._results[job_id][1][-1]])
+            self._results[job_id][0][2] = steps[0]
+            self._results[job_id][1][2] = steps[1]
             self._worker_rpc_client.notify_scheduler(self._results[job_id])
             del self._results[job_id]
             del self._single_job_id_to_job_id_pair_map[single_job_id]
@@ -97,9 +136,11 @@ if __name__=='__main__':
                         help='Port number for worker server')
     parser.add_argument('-g', '--gpu_id', type=int, required=True,
                         help='GPU ID')
+    parser.add_argument('--time_per_iteration', type=int, required=True,
+                        help='Time given to each scheduler round')
     args = parser.parse_args()
     opt_dict = vars(args)
 
     worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
                     opt_dict['sched_port'], opt_dict['worker_port'],
-                    opt_dict['gpu_id'])
+                    opt_dict['gpu_id'], opt_dict['time_per_iteration'])

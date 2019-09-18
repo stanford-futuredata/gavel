@@ -28,7 +28,7 @@ INFINITY = float("inf")
 DEFAULT_THROUGHPUT = 10
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
-MAX_FAILED_ATTEMPTS = 5
+MAX_FAILED_ATTEMPTS = 1
 DEFAULT_MATRIX_COMPLETION_K = 10
 DEFAULT_MATRIX_COMPLETION_MU = 1e-2
 
