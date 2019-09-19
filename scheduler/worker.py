@@ -79,7 +79,8 @@ class Worker:
                         float(time) < earliest_end_time):
                         earliest_end_time = float(time)
                     break
-
+        if earliest_end_time is None:
+            return None
         all_steps = None
         for output in outputs:
             lines = output.split('\n')
@@ -113,8 +114,9 @@ class Worker:
             for i in range(len(self._results[job_id])):
               outputs.append(self._results[job_id][i][-1])
             steps = self._get_steps(outputs)
-            for i in range(len(steps)):
-              self._results[job_id][i][2] = steps[i]
+            if steps is not None:
+                for i in range(len(steps)):
+                    self._results[job_id][i][2] = steps[i]
             self._worker_rpc_client.notify_scheduler(self._results[job_id])
             del self._results[job_id]
             del self._single_job_id_to_job_id_pair_map[single_job_id]
