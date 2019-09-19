@@ -73,12 +73,15 @@ parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
+parser.add_argument('--timeout', type=int, default=None,
+                    help='Timeout (in seconds)')
 
 best_acc1 = 0
 total_minibatches = 0
+cumulative_seconds = 0
 
 def main():
-    global args, best_acc1, total_minibatches
+    global args, best_acc1, total_minibatches, cumulative_seconds
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -183,15 +186,19 @@ def main():
         adjust_learning_rate(optimizer, epoch)
 
         # train for one epoch
-        num_minibatches, finished_epoch = \
+        num_minibatches, cumulative_seconds, finished_epoch = \
             train(train_loader, model, criterion, optimizer,
                   epoch, total_minibatches,
-                  max_minibatches=args.num_minibatches)
+                  max_minibatches=args.num_minibatches,
+                  cumulative_seconds=cumulative_seconds,
+                  timeout=args.timeout)
         total_minibatches += num_minibatches
 
         if (args.num_minibatches is not None and
             total_minibatches >= args.num_minibatches):
             break
+        elif args.timeout is not None and cumulative_seconds >= args.timeout:
+          break
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion)
@@ -208,7 +215,8 @@ def main():
 
 
 def train(train_loader, model, criterion, optimizer, epoch,
-          total_minibatches, max_minibatches):
+          total_minibatches, max_minibatches, cumulative_seconds,
+          timeout):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -220,11 +228,16 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
     end = time.time()
     finished_epoch = True
+    start_time = time.time()
     for i, (input, target) in enumerate(train_loader):
         if (total_minibatches is not None and
             i + total_minibatches >= max_minibatches):
             finished_epoch = False
             break
+        elif (timeout is not None and cumulative_seconds >= timeout):
+          break
+        cumulative_seconds += time.time() - start_time
+        start_time = time.time()
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -263,7 +276,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if (args.throughput_estimation_interval is not None and
             i % args.throughput_estimation_interval == 0):
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), i))
-    return i, finished_epoch
+    return i, cumulative_seconds, finished_epoch
 
 def validate(val_loader, model, criterion):
     batch_time = AverageMeter()
