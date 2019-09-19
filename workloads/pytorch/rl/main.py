@@ -119,6 +119,11 @@ parser.add_argument(
     type=int,
     default=None,
     help='Steps between logging steps completed')
+parser.add_argument(
+    '--timeout',
+    type=int,
+    default=None,
+    help='Timeout (in seconds)')
 
 # Based on
 # https://github.com/pytorch/examples/tree/master/mnist_hogwild

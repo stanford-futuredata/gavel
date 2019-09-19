@@ -37,6 +37,8 @@ def train(rank, args, shared_model, optimizer, env_conf):
     player.model.train()
     player.eps_len += 2
     steps = 0
+    start_time = time.time()
+    cumulative_seconds = 0
     while True:
         if steps % 100 == 0:
           print('Finished step %d' % (steps), flush=True)
@@ -114,5 +116,9 @@ def train(rank, args, shared_model, optimizer, env_conf):
             rank == 0):
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), steps))
 
+        cumulative_seconds += time.time() - start_time
+        start_time = time.time()
         if steps >= args.max_steps:
+          return
+        elif args.timeout is not None and cumulative_seconds >= args.timeout:
           return
