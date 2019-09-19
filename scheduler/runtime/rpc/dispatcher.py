@@ -18,7 +18,7 @@ class Dispatcher:
         start_time = time.time()
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(self._gpu_id))
         command = '%s %s %d' % (job.command, job.num_steps_arg, job.total_steps)
-        command += ' --throughput_estimation_interval %d' % (max(1, job.total_steps // 100))
+        command += ' --throughput_estimation_interval %d' % (1) #max(1, job.total_steps // 100))
         command += ' --timeout %d' % (self._timeout)
         print('Running \"%s\"' % (command))
 

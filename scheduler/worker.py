@@ -95,7 +95,7 @@ class Worker:
                         break
             if start_time is None:
                 return (-1, -1)
-            steps = int(steps) - start_steps
+            steps = int(steps)
             if all_steps is None:
                 all_steps = (steps,)
             else:
