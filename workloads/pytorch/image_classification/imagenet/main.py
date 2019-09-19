@@ -276,7 +276,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if (args.throughput_estimation_interval is not None and
             i % args.throughput_estimation_interval == 0):
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
-                                                       total_minibatches+i))
+                                                       total_minibatches+i+1))
     return i, cumulative_seconds, finished_epoch
 
 def validate(val_loader, model, criterion):
