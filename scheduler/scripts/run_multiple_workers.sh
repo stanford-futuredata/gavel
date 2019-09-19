@@ -6,8 +6,8 @@ if [ "$#" -ne 6 ]; then
 fi
 
 let port=60061
-let max_id=$1-1
 let min_id=$6
+let max_id=$1+$min_id-1
 for i in $(seq $min_id $max_id)
 do
   python worker.py -i $2 -t $3 -g $i -w $port --time_per_iteration $5 > $4/worker_$i.log 2>&1 &
