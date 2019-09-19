@@ -66,6 +66,8 @@ parser.add_argument('--master_addr', default=None, type=str,
                             help='Master address to use for distributed run')
 parser.add_argument('--master_port', default=None, type=int,
                             help='Master port to use for distributed run')
+parser.add_argument('--timeout', type=int, default=None,
+                    help='Timeout (in seconds)')
 
 args = parser.parse_args()
 
@@ -142,6 +144,7 @@ if os.path.exists(checkpoint_path):
 else:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
 cumulative_steps = 0
+cumulative_seconds = 0
 
 criterion = nn.CrossEntropyLoss()
 
@@ -190,11 +193,12 @@ def evaluate(data_source):
     return total_loss / (len(data_source) - 1)
 
 
-def train(cumulative_steps=None):
+def train(cumulative_steps=None, cumulative_seconds=None):
     # Turn on training mode which enables dropout.
     model.train()
     total_loss = 0.
     start_time = time.time()
+    cumulative_seconds_start_time = start_time
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(args.batch_size)
     done = False
@@ -224,6 +228,9 @@ def train(cumulative_steps=None):
                 elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
             total_loss = 0
             start_time = time.time()
+        if cumulative_seconds is not None:
+          cumulative_seconds += time.time() - cumulative_seconds_start_time
+          cumulative_seconds_start_time = time.time()
         if cumulative_steps is not None:
           cumulative_steps += 1
 
@@ -235,7 +242,10 @@ def train(cumulative_steps=None):
           if args.steps is not None and cumulative_steps >= args.steps:
             done = True
             break
-    return (cumulative_steps, done)
+          elif args.timeout is not None and cumulative_seconds >= args.timeout:
+            done = True
+            break
+    return (cumulative_steps, cumulative_seconds, done)
 
 def export_onnx(path, batch_size, seq_len):
     print('The model is also exported in ONNX format at {}'.
@@ -256,7 +266,8 @@ try:
         args.epochs = args.steps
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
-        cumulative_steps, done = train(cumulative_steps)
+        cumulative_steps, cumulative_seconds, done = train(cumulative_steps,
+                                                           cumulative_seconds)
         #val_loss = evaluate(val_data)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s'.format(epoch, (time.time() - epoch_start_time)))

@@ -59,6 +59,8 @@ def cal_loss(pred, gold, smoothing):
 
 def train_epoch(model, training_data, optimizer, device, smoothing,
                 step=None, cumulative_step=None,
+                timeout=None,
+                cumulative_seconds=None,
                 throughput_estimation_interval=None):
     ''' Epoch operation in training phase'''
 
@@ -68,6 +70,7 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
     n_word_total = 0
     n_word_correct = 0
     done = False
+    start_time = time.time()
 
     for batch in tqdm(
             training_data, mininterval=2,
@@ -96,20 +99,26 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
         n_word_total += n_word
         n_word_correct += n_correct
 
+        if cumulative_seconds is not None:
+          cumulative_seconds += time.time() - start_time
+          start_time = time.time()
+
         if cumulative_step is not None:
-          cumulative_step += 1
+            cumulative_step += 1
 
-          if (throughput_estimation_interval is not None and
-              cumulative_step % throughput_estimation_interval == 0):
-              print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
-                                                         cumulative_step))
-          if step is not None and cumulative_step >= step:
-              done = True
-              break
-
+            if (throughput_estimation_interval is not None and
+                cumulative_step % throughput_estimation_interval == 0):
+                print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
+                                                           cumulative_step))
+            if step is not None and cumulative_step >= step:
+                done = True
+                break
+            elif timeout is not None and cumulative_seconds >= timeout:
+                done = True
+                break
     loss_per_word = total_loss/n_word_total
     accuracy = n_word_correct/n_word_total
-    return loss_per_word, accuracy, cumulative_step, done
+    return loss_per_word, accuracy, cumulative_step, cumulative_seconds, done
 
 def eval_epoch(model, validation_data, device):
     ''' Epoch operation in evaluation phase '''
@@ -178,15 +187,18 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     if opt.epoch is None:
         opt.epoch = opt.step
     cumulative_step = 0
+    cumulative_seconds = 0
     for epoch_i in range(start_epoch, opt.epoch):
         print('[ Epoch', epoch_i, ']')
 
         start = time.time()
-        train_loss, train_accu, cumulative_step, done = train_epoch(
+        train_loss, train_accu, cumulative_step, cumulative_seconds, done = train_epoch(
             model, training_data, optimizer, device,
             smoothing=opt.label_smoothing,
             step=opt.step,
+            timeout=opt.timeout,
             cumulative_step=cumulative_step,
+            cumulative_seconds=cumulative_seconds,
             throughput_estimation_interval=opt.throughput_estimation_interval)
         print('  - (Training)   ppl: {ppl: 8.5f}, accuracy: {accu:3.3f} %, '\
               'elapse: {elapse:3.3f} min'.format(
@@ -202,14 +214,6 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             'epoch': epoch_i,
         }
 
-        if opt.save_mode == 'all':
-            print('Saving checkpoint at %s...' % (checkpoint_path))
-            torch.save(checkpoint, checkpoint_path)
-        elif opt.save_mode == 'best':
-            if valid_accu >= max(valid_accus):
-                print('Saving checkpoint at %s...' % (checkpoint_path))
-                torch.save(checkpoint, checkpoint_path)
-                print('    - [Info] The checkpoint file has been updated.')
 
         if log_train_file:#and log_valid_file:
             with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
@@ -222,7 +226,15 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                     ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu))
                 """
         if done:
-            return
+            break
+    if opt.save_mode == 'all':
+        print('Saving checkpoint at %s...' % (checkpoint_path))
+        torch.save(checkpoint, checkpoint_path)
+    elif opt.save_mode == 'best':
+        if valid_accu >= max(valid_accus):
+            print('Saving checkpoint at %s...' % (checkpoint_path))
+            torch.save(checkpoint, checkpoint_path)
+            print('    - [Info] The checkpoint file has been updated.')
 
 def main():
     ''' Main function '''
@@ -276,6 +288,8 @@ def main():
     parser.add_argument('--throughput_estimation_interval', type=int,
                         default=None,
                         help='Steps between logging steps completed')
+    parser.add_argument('--timeout', type=int, default=None,
+                        help='Timeout (in seconds)')
 
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda

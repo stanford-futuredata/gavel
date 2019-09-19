@@ -44,6 +44,8 @@ parser.add_argument("--lambda_cyc", type=float, default=10.0, help="cycle loss w
 parser.add_argument("--lambda_id", type=float, default=5.0, help="identity loss weight")
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
+parser.add_argument('--timeout', type=int, default=None,
+                    help='Timeout (in seconds)')
 opt = parser.parse_args()
 print(opt)
 
@@ -176,10 +178,17 @@ def sample_images(batches_done):
 
 done = False
 steps = 0
+cumulative_seconds = 0
 prev_time = time.time()
+start_time = time.time()
 for epoch in range(start_epoch, opt.n_epochs):
     for i, batch in enumerate(dataloader):
 
+        cumulative_seconds += time.time() - start_time
+        start_time = time.time()
+        if opt.timeout is not None and cumulative_seconds >= opt.timeout:
+            done = True
+            break
         if steps >= opt.n_steps:
             done = True
             break

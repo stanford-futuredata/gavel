@@ -28,6 +28,8 @@ parser.add_argument('-b', '--batch_size', default=2048, type=int,
 parser.add_argument('--checkpoint_dir', type=str,
                     default='/lfs/1/keshav2/checkpoints/recommendation',
                     help='Checkpoint dir')
+parser.add_argument('--timeout', type=int, default=None,
+                    help='Timeout (in seconds)')
 args = parser.parse_args()
 
 data_dir = args.data_dir
@@ -87,6 +89,8 @@ try:
       num_iterations = 1
       epochs_per_iteration = args.num_epochs
   epochs = 0
+  start_time = time.time()
+  cumulative_seconds = 0
   for i in range(num_iterations):
       epochs_per_iteration = min(epochs_per_iteration, args.num_epochs - epochs)
       print('Running for %d epochs' % (epochs_per_iteration))
@@ -97,6 +101,10 @@ try:
                     model_checkpoint_prefix=None,
                     checkpoint_freq=0, eval_num_recommendations=0,
                     metrics=metrics, eval_freq=0)
+      cumulative_seconds += time.time() - start_time
+      start_time = time.time()
+      if args.timeout is not None and cumulative_seconds >= args.timeout:
+          break
       epochs += epochs_per_iteration
       if args.throughput_estimation_interval is not None:
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), epochs))

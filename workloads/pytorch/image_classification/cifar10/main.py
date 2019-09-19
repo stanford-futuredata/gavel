@@ -104,7 +104,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 cumulative_steps = 0
-cumulative_time = 0
+cumulative_seconds = 0
 if args.checkpoint_dir is not None:
     checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
     if os.path.exists(checkpoint_path):
@@ -153,6 +153,7 @@ def train(epoch, cumulative_steps=None, cumulative_seconds=None):
                                            100.*correct/total, correct, total))
         if cumulative_seconds is not None:
             cumulative_seconds += time.time() - start_time
+            start_time = time.time()
         if cumulative_steps is not None:
             cumulative_steps += 1
             if (args.throughput_estimation_interval is not None and
@@ -160,12 +161,12 @@ def train(epoch, cumulative_steps=None, cumulative_seconds=None):
                 print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
                                                            cumulative_steps))
             if ((args.num_steps is not None and cumulative_steps >= args.num_steps) or
-                (args.timeout is not None and cumulative_time >= args.timeout)):
+                (args.timeout is not None and cumulative_seconds >= args.timeout)):
                 done = True
                 finished_epoch = False
                 break
             finished_epoch = True
-    return (cumulative_steps, cumulative_time, done, finished_epoch)
+    return (cumulative_steps, cumulative_seconds, done, finished_epoch)
 
 
 
@@ -204,8 +205,8 @@ def test(epoch):
 if args.num_epochs is None:
     args.num_epochs = args.num_steps
 for epoch in range(start_epoch, args.num_epochs):
-    cumulative_steps, cumulative_time, done, finished_epoch = \
-        train(epoch, cumulative_steps, cumulative_time)
+    cumulative_steps, cumulative_seconds, done, finished_epoch = \
+        train(epoch, cumulative_steps, cumulative_seconds)
     if done:
         break
 print('Saving checkpoint at %s...' % (checkpoint_path))
