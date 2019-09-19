@@ -164,7 +164,7 @@ def train(epoch, cumulative_steps=None, cumulative_seconds=None):
                 (args.timeout is not None and cumulative_seconds >= args.timeout)):
                 done = True
                 finished_epoch = False
-                break
+                return (cumulative_steps, cumulative_seconds, done, finished_epoch)
             finished_epoch = True
     return (cumulative_steps, cumulative_seconds, done, finished_epoch)
 
