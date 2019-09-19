@@ -104,15 +104,17 @@ class Worker:
     def _done_callback(self, single_job_id, worker_id, num_steps,
                        execution_time, output):
         job_id = self._single_job_id_to_job_id_pair_map[single_job_id]
-        self._results[job_id].append((single_job_id, worker_id,
-                                      num_steps, execution_time, output))
+        self._results[job_id].append([single_job_id, worker_id,
+                                      num_steps, execution_time, output])
         if ((len(self._results[job_id]) == 1 and job_id[1] is None) or
             (len(self._results[job_id]) == 2)):
             self._results[job_id].sort(key=lambda x: x[0])
-            steps = self._get_steps([self_results[job_id][0][-1],
-                                     self._results[job_id][1][-1]])
-            self._results[job_id][0][2] = steps[0]
-            self._results[job_id][1][2] = steps[1]
+            outputs = []
+            for i in range(len(self._results[job_id])):
+              outputs.append(self._results[job_id][i][-1])
+            steps = self._get_steps(outputs)
+            for i in range(len(steps)):
+              self._results[job_id][i][2] = steps[i]
             self._worker_rpc_client.notify_scheduler(self._results[job_id])
             del self._results[job_id]
             del self._single_job_id_to_job_id_pair_map[single_job_id]

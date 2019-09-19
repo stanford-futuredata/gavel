@@ -58,7 +58,7 @@ class WorkerRpcClient:
         # Send a Done message.
         request = w2s_pb2.DoneRequest()
         for result in results:
-            job_id, worker_id, num_steps, execution_time = result
+            job_id, worker_id, num_steps, execution_time, _ = result
             job_description = request.job_descriptions.add()
             job_description.job_id = job_id
             job_description.worker_id = worker_id

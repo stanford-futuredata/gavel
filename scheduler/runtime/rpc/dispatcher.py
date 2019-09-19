@@ -19,6 +19,8 @@ class Dispatcher:
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(self._gpu_id))
         command = '%s %s %d' % (job.command, job.num_steps_arg, job.total_steps)
         command += ' --throughput_estimation_interval %d' % (max(1, job.total_steps // 100))
+        print('Running \"%s\"' % (command))
+
         try:
             proc = subprocess.run(command,
                                   env=env,
@@ -34,7 +36,7 @@ class Dispatcher:
                   "Output:" % (str(job.job_id),
                                command,
                                job.total_steps,
-                               execution_time), output))
+                               execution_time), output)
 
         except subprocess.CalledProcessError as e:
             print('Job %s failed with error code %d' % (str(job.job_id),
@@ -55,10 +57,9 @@ class Dispatcher:
               print(stderr_output)
               output += stderr_output
             execution_time = -1
-
         except subprocess.TimeoutExpired as e:
             execution_time = time.time() - start_time
-            output = proc.stdout.decode('utf-8')
+            output = e.stdout.decode('utf-8')
             print("Job ID: %s, Command: '%s', "
                   "Num_steps: %d, Execution time: %.3f seconds, "
                   "Output:" % (str(job.job_id),
