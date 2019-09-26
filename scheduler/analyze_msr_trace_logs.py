@@ -48,6 +48,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     logfile_paths = sorted(get_logfile_paths(args.logdir_path))
+    results = {}
     for (vc, v100s, p100s, k80s, policy, seed, logfile_path) in logfile_paths:
+        key = (vc, v100s, p100s, k80s, policy)
+        if key not in results: results[key] = []
+        results[key].append(average_jct_fn(logfile_path))
         print(",".join([str(x) for x in
                         [vc, v100s, p100s, k80s, policy, seed, average_jct_fn(logfile_path)]]))
+    for key in results:
+        try:
+            print(key, np.mean(results[key]))
+        except:
+            continue
