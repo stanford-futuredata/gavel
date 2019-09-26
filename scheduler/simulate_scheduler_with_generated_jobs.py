@@ -138,5 +138,8 @@ if __name__=='__main__':
     parser.add_argument('--profiling_percentage', type=float, default=0.0,
                         help=('Percentage of machines dedicated to profiling '
                               'co-located job pairs'))
+    parser.add_argument('--num_reference_models', type=int, default=16,
+                        help=('Number of reference models to use when '
+                              'estimating throughputs'))
     args = parser.parse_args()
     main(args)
