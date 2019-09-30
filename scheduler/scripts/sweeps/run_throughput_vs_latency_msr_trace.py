@@ -1,3 +1,6 @@
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
+
 import argparse
 import datetime
 import json
@@ -6,8 +9,6 @@ from func_timeout import func_timeout, FunctionTimedOut
 import multiprocessing
 import numpy as np
 import pickle
-import os
-import sys
 
 from job_id_pair import JobIdPair
 import scheduler
@@ -274,7 +275,8 @@ if __name__=='__main__':
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
     parser.add_argument('--throughputs-file', type=str,
-                        default='oracle_throughputs.json',
+                        default=('/lfs/1/keshav2/gpusched/gavel/'
+                                 'oracle_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('--run_dir', type=str, default='/tmp',
                         help='Run directory')

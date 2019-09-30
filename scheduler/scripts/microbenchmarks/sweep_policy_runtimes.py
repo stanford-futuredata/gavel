@@ -1,8 +1,9 @@
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
+
 import argparse
 import random
 import time
-
-import sys; sys.path.append(".")
 
 import utils
 from job import Job
@@ -111,7 +112,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='')
     parser.add_argument('--throughputs-file', type=str,
-                        default='oracle_throughputs.json',
+                        default=('/lfs/1/keshav2/gpusched/gavel/'
+                                 'oracle_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('--generate-multi-gpu-jobs', action='store_true',
                         default=False,

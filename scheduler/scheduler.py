@@ -864,7 +864,7 @@ class Scheduler:
         completed_jobs = set()
         last_job_arrival_time = None
         next_job_arrival_time = 0
-        if len(arrival_times) > 0:
+        if arrival_times is not None and len(arrival_times) > 0:
             next_job_arrival_time = arrival_times[0]
         no_dispatched_or_running_jobs = False
         current_round_start_time = 0

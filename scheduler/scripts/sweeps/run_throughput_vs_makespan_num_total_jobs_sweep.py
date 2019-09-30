@@ -1,3 +1,6 @@
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
+
 import argparse
 import datetime
 import json
@@ -190,7 +193,8 @@ if __name__=='__main__':
                         help=('If set, fixes the duration of all jobs to the '
                               'specified value (in seconds)'))
     parser.add_argument('--throughputs-file', type=str,
-                        default='oracle_throughputs.json',
+                        default=('/lfs/1/keshav2/gpusched/gavel/'
+                                 'oracle_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true',
                         default=False,
