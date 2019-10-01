@@ -1,3 +1,6 @@
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
+
 import argparse
 import datetime
 import json
@@ -392,7 +395,8 @@ if __name__=='__main__':
                         help=('If set, uses the attached cutoff_throughputs '
                               'JSON file in sweep to limit args run'))
     parser.add_argument('--throughputs-file', type=str,
-                        default='oracle_throughputs.json',
+                        default=('/lfs/1/keshav2/gpusched/gavel/'
+                                 'oracle_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true',
                         default=False,
