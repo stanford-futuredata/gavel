@@ -47,6 +47,9 @@ class Policy:
 
 class PolicyWithPacking(Policy):
 
+    def __init__(self, pruning_threshold=0.0):
+        self._pruning_threshold=pruning_threshold
+
     def flatten(self, d, cluster_spec, normalize=True,
                 priority_weights=None):
         """
@@ -93,6 +96,8 @@ class PolicyWithPacking(Policy):
         shape = (len(single_job_ids), len(job_ids), len(worker_types))
         all_m = np.zeros(shape, dtype=np.float32)
         masks = np.zeros(shape, dtype=np.float32)
+        skipped_combinations = 0
+        total_combinations = 0
         # Compute the throughput matrix and mask for each individual job.
         for i, single_job_id in enumerate(sorted_single_job_ids):
             # Each throughput matrix and mask has dimension
@@ -107,18 +112,36 @@ class PolicyWithPacking(Policy):
                             all_m[i][j][k] = d[job_id][worker_type]
                             masks[i][j][k] = 1.0
                     else:
+                        total_combinations += 1
                         if single_job_id.overlaps_with(job_id):
                             # Find the index of the job of interest in the job
                             # combination tuple.
                             index = job_id.as_tuple().index(single_job_id[0])
-                            throughputs = d[job_id][worker_type]
-                            all_m[i][j][k] = d[job_id][worker_type][index]
-                            masks[i][j][k] = 1.0
+                            throughput = d[job_id][worker_type][index]
+                            normalized_throughputs = []
+                            for i, x in enumerate(job_id.singletons()):
+                                normalized_throughputs.append(
+                                    (d[job_id][worker_type][i] /
+                                        d[x][worker_type]))
+                            if (np.min(normalized_throughputs) >= \
+                                    self._pruning_threshold):
+                                all_m[i][j][k] = throughput
+                                masks[i][j][k] = 1.0
+                            else:
+                                skipped_combinations += 1
             # Normalize.
             if normalize:
                 all_m[i] /= normalizing_factors[single_job_id]
                 if priority_weights is not None:
                     all_m[i] /= priority_weights[single_job_id]
+        """
+        print('\npruning_threshold=%f, skipped %d/%d (%.3f%%) '
+              'combinations' % (self._pruning_threshold,
+                                skipped_combinations,
+                                total_combinations,
+                                100.0 * skipped_combinations / total_combinations))
+        """
+
         return all_m, masks, (job_ids, single_job_ids, worker_types)
 
     def unflatten(self, m, index):
@@ -201,7 +224,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='SCS')
+        result = cvxprob.solve(solver='ECOS')
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -211,8 +234,11 @@ class MaxMinFairnessPolicyWithPerf(Policy):
 
 class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
-    def __init__(self):
+    def __init__(self, pruning_threshold=0.0, warm_start=False):
+        super(MaxMinFairnessPolicyWithPacking, self).__init__(pruning_threshold)
         self._name = 'MaxMinFairness_Packing'
+        self._warm_start = warm_start
+        self._prev_allocation = None
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
@@ -223,6 +249,18 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         (m, n) = all_throughputs[0].shape
         (job_ids, single_job_ids, worker_types) = index
         x = cp.Variable((m, n))
+
+        if self._warm_start and self._prev_allocation is not None:
+            (prev_x, prev_job_ids, prev_worker_types) = self._prev_allocation
+            warm_start_x = np.zeros((m, n), dtype=np.float32)
+            for i, job_id in enumerate(job_ids):
+                if job_id in prev_job_ids:
+                    prev_i = prev_job_ids.index(job_id)
+                    for j, worker_type in enumerate(worker_types):
+                        if worker_type in prev_worker_types:
+                            prev_j = prev_worker_types.index(worker_type)
+                            warm_start_x[i][j] = prev_x[prev_i][prev_j]
+            x.value = warm_start_x
 
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.
@@ -259,11 +297,16 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         for i in range(len(masks)):
             constraints.append(cp.sum(cp.multiply(x, masks[i])) <= 1)
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='SCS')
+        warm_start = self._warm_start and self._prev_allocation is not None
+        result = cvxprob.solve(solver='ECOS', warm_start=warm_start)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
+        if self._warm_start:
+            self._prev_allocation = (copy.deepcopy(x.value),
+                                     copy.deepcopy(job_ids),
+                                     copy.deepcopy(worker_types))
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
 
@@ -286,7 +329,7 @@ class MinTotalDurationPolicy(Policy):
                 self._num_steps_remaining / T),
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='SCS')
+        result = cvxprob.solve(solver='ECOS')
 
         return cvxprob.status, x
 
@@ -360,7 +403,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
             constraints.append(cp.sum(cp.multiply(throughputs, x)) >=
                 (num_steps_remaining / T))
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='SCS')
+        result = cvxprob.solve(solver='ECOS')
 
         return cvxprob.status, x
 
