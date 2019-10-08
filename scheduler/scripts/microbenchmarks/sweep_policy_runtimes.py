@@ -60,7 +60,7 @@ def measure_runtime(policy_name, all_num_active_jobs, cluster_specs,
     policy = utils.get_policy(policy_name)
     for cluster_spec in cluster_specs:
         for num_active_jobs in all_num_active_jobs:
-            if num_active_jobs > 512 and "_Packing" in policy.name:
+            if num_active_jobs > 2048 and "_Packing" in policy.name:
                 continue
             throughputs = {}
             jobs = {}
@@ -125,12 +125,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     all_num_active_jobs = [2**i for i in range(4, 15)]
-    cluster_specs = [{"v100": 64, "p100": 0, "k80": 0},
+    cluster_specs = [{"v100": 64, "p100": 0, "k80": 0}]
+    """
                      {"v100": 36, "p100": 36, "k80": 36},
                      {"v100": 1500, "p100": 0, "k80": 0},
                      {"v100": 850, "p100": 850, "k80": 850}]
+    """
     oracle_throughputs = utils.read_all_throughputs_json(args.throughputs_file)
-    for policy_name in ['max_min_fairness', 'max_min_fairness_perf', 'max_min_fairness_packed']:
+    for policy_name in ['max_min_fairness_packed']:
         measure_runtime(policy_name, all_num_active_jobs, cluster_specs,
                         oracle_throughputs, args.generate_multi_gpu_jobs,
                         args.generate_multi_priority_jobs)
