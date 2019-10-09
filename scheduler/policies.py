@@ -136,7 +136,7 @@ class PolicyWithPacking(Policy):
     def unflatten(self, m, index):
         """Converts a NumPy array to a 2-level dict."""
 
-        (job_id_combinations, single_job_ids, worker_types, _index) = index
+        (job_id_combinations, single_job_ids, worker_types, _) = index
         d = {}
         for i in range(len(job_id_combinations)):
             d[job_id_combinations[i]] = {}
