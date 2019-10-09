@@ -385,7 +385,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
                                                         cluster_spec, normalize=False)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         if index is None: return None
-        (job_ids, single_job_ids, worker_types) = index
+        (job_ids, single_job_ids, worker_types, _) = index
         self._num_steps_remaining = [num_steps_remaining[single_job_id]
                                      for single_job_id in single_job_ids]
 
