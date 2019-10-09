@@ -395,7 +395,7 @@ if __name__=='__main__':
                         help=('If set, uses the attached cutoff_throughputs '
                               'JSON file in sweep to limit args run'))
     parser.add_argument('--throughputs-file', type=str,
-                        default=('/lfs/1/keshav2/gpusched/gavel/'
+                        default=('/lfs/1/keshav2/gpusched/scheduler/'
                                  'oracle_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true',

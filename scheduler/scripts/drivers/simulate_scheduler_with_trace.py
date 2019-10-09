@@ -44,7 +44,7 @@ if __name__=='__main__':
                         choices=utils.get_available_policies(),
                         help='Scheduler policy')
     parser.add_argument('--throughputs_file', type=str,
-                        default=('/lfs/1/keshav2/gpusched/gavel/'
+                        default=('/lfs/1/keshav2/gpusched/scheduler/'
                                  'oracle_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('-c', '--cluster_spec', type=str, default='25:0:0',
