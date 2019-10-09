@@ -356,7 +356,8 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
         self._name = 'MinTotalDuration_Packing'
 
     def get_allocation_helper(self, all_throughputs, masks, job_ids,
-                              single_job_ids, scale_factors_array, T):
+                              single_job_ids, scale_factors_array, T,
+                              relevant_combinations):
         x = cp.Variable(all_throughputs[0].shape)
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster.
@@ -365,15 +366,19 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
             cp.sum(cp.multiply(
                 scale_factors_array, x), axis=0) <= self._num_workers,
         ]
-        for mask in masks:
-            # Every job cannot receive a total time share sum greater than 1.0.
-            constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
-        for throughputs, num_steps_remaining in zip(all_throughputs,
-                                                    self._num_steps_remaining):
+
+        # Every job cannot receive a total time share sum greater than 1.0.
+        for single_job_id in single_job_ids:
+            indexes = relevant_combinations[single_job_id]
+            constraints.append(cp.sum(x[indexes]) <= 1)
+        for i, (throughputs, num_steps_remaining) in \
+            enumerate(zip(all_throughputs, self._num_steps_remaining)):
+            indexes = relevant_combinations[single_job_ids[i]]
             # Ensure that every job satisfies its throughput constraint,
             # and can finish in time T.
-            constraints.append(cp.sum(cp.multiply(throughputs, x)) >=
-                (num_steps_remaining / T))
+            constraints.append(
+                cp.sum(cp.multiply(throughputs[indexes], x[indexes])) >=
+                    (num_steps_remaining / T))
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='SCS')
 
@@ -385,7 +390,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
                                                         cluster_spec, normalize=False)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         if index is None: return None
-        (job_ids, single_job_ids, worker_types, _) = index
+        (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         self._num_steps_remaining = [num_steps_remaining[single_job_id]
                                      for single_job_id in single_job_ids]
 
@@ -416,7 +421,8 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
                 T = (min_T + max_T) / 2.
                 status, x = self.get_allocation_helper(all_throughputs, masks,
                                                        job_ids, single_job_ids,
-                                                       scale_factors_array, T)
+                                                       scale_factors_array, T,
+                                                       relevant_combinations)
                 if status == "optimal":
                     last_feasible_x = x
                     max_T = T
