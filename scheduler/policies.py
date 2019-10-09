@@ -57,8 +57,7 @@ class PolicyWithPacking(Policy):
         If an integer, represents a single job / application run on the
         GPU.
 
-        Returns a list of each user's normalized throughput matrix, a list
-        of masks (used for normalization in the linear program), and an
+        Returns a list of each user's normalized throughput matrix and an
         index to reconstruct the allocation as a dict.
         """
 
@@ -102,21 +101,19 @@ class PolicyWithPacking(Policy):
 
         shape = (len(single_job_ids), len(job_ids), len(worker_types))
         all_m = np.zeros(shape, dtype=np.float32)
-        masks = np.zeros(shape, dtype=np.float32)
-        # Compute the throughput matrix and mask for each individual job.
+        # Compute the throughput matrix for each individual job.
         for i, single_job_id in enumerate(sorted_single_job_ids):
-            # Each throughput matrix and mask has dimension
+            # Each throughput matrix has dimension
             # (num_app_combinations x num_worker_types).
             for j in relevant_combinations[single_job_id]:
                 job_id = job_ids[j]
                 for k, worker_type in enumerate(worker_types):
                     # If job ID of interest is not in this job_id_combination,
-                    # mask and throughput should be 0.
+                    # throughput should be 0.
                     # Otherwise, use the right throughput from the input dict.
                     if job_id in single_job_ids:
                         if job_id == single_job_id:
                             all_m[i][j][k] = d[job_id][worker_type]
-                            masks[i][j][k] = 1.0
                     else:
                         if single_job_id.overlaps_with(job_id):
                             # Find the index of the job of interest in the job
@@ -124,13 +121,12 @@ class PolicyWithPacking(Policy):
                             index = job_id.as_tuple().index(single_job_id[0])
                             throughputs = d[job_id][worker_type]
                             all_m[i][j][k] = d[job_id][worker_type][index]
-                            masks[i][j][k] = 1.0
             # Normalize.
             if normalize:
                 all_m[i] /= normalizing_factors[single_job_id]
                 if priority_weights is not None:
                     all_m[i] /= priority_weights[single_job_id]
-        return all_m, masks, (job_ids, sorted_single_job_ids, worker_types,
+        return all_m, (job_ids, sorted_single_job_ids, worker_types,
                               relevant_combinations)
 
     def unflatten(self, m, index):
@@ -228,7 +224,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
-        all_throughputs, masks, index = \
+        all_throughputs, index = \
             self.flatten(unflattened_throughputs, cluster_spec,
                          unflattened_priority_weights)
         if all_throughputs is None or len(all_throughputs) == 0: return None
@@ -355,7 +351,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
     def __init__(self):
         self._name = 'MinTotalDuration_Packing'
 
-    def get_allocation_helper(self, all_throughputs, masks, job_ids,
+    def get_allocation_helper(self, all_throughputs, job_ids,
                               single_job_ids, scale_factors_array, T,
                               relevant_combinations):
         x = cp.Variable(all_throughputs[0].shape)
@@ -386,8 +382,8 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        num_steps_remaining, cluster_spec):
-        all_throughputs, masks, index = super().flatten(unflattened_throughputs,
-                                                        cluster_spec, normalize=False)
+        all_throughputs, index = super().flatten(unflattened_throughputs,
+                                                 cluster_spec, normalize=False)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         if index is None: return None
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
@@ -419,7 +415,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
             # Binary search for the smallest T that gives an optimal solution.
             while (1.05 * min_T) < max_T:  # TODO: Can tweak the 1.05 in this loop.
                 T = (min_T + max_T) / 2.
-                status, x = self.get_allocation_helper(all_throughputs, masks,
+                status, x = self.get_allocation_helper(all_throughputs,
                                                        job_ids, single_job_ids,
                                                        scale_factors_array, T,
                                                        relevant_combinations)
