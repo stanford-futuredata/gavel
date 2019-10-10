@@ -127,7 +127,7 @@ class PolicyWithPacking(Policy):
                 if priority_weights is not None:
                     all_m[i] /= priority_weights[single_job_id]
         return all_m, (job_ids, sorted_single_job_ids, worker_types,
-                              relevant_combinations)
+                       relevant_combinations)
 
     def unflatten(self, m, index):
         """Converts a NumPy array to a 2-level dict."""
