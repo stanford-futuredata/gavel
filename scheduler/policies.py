@@ -57,8 +57,7 @@ class PolicyWithPacking(Policy):
         If an integer, represents a single job / application run on the
         GPU.
 
-        Returns a list of each user's normalized throughput matrix, a list
-        of masks (used for normalization in the linear program), and an
+        Returns a list of each user's normalized throughput matrix and an
         index to reconstruct the allocation as a dict.
         """
 
@@ -69,12 +68,22 @@ class PolicyWithPacking(Policy):
         self._num_workers = \
             [cluster_spec[worker_type] for worker_type in worker_types]
 
+        # Stores which indexes in job_ids are relevant for each single job ID.
+        relevant_combinations = {}
         single_job_ids = set()
         sorted_single_job_ids = []
-        for job_id in job_ids:
+        for i, job_id in enumerate(job_ids):
             if not job_id.is_pair():
                 single_job_ids.add(job_id)
                 sorted_single_job_ids.append(job_id)
+                if job_id not in relevant_combinations:
+                    relevant_combinations[job_id] = []
+                relevant_combinations[job_id].append(i)
+            else:
+                for single_job_id in job_id.singletons():
+                    if single_job_id not in relevant_combinations:
+                        relevant_combinations[single_job_id] = []
+                    relevant_combinations[single_job_id].append(i)
 
         # Compute normalizing factor for each individual job, this normalizing
         # factor will be used to normalize throughputs for the same job in job
@@ -92,20 +101,19 @@ class PolicyWithPacking(Policy):
 
         shape = (len(single_job_ids), len(job_ids), len(worker_types))
         all_m = np.zeros(shape, dtype=np.float32)
-        masks = np.zeros(shape, dtype=np.float32)
-        # Compute the throughput matrix and mask for each individual job.
+        # Compute the throughput matrix for each individual job.
         for i, single_job_id in enumerate(sorted_single_job_ids):
-            # Each throughput matrix and mask has dimension
+            # Each throughput matrix has dimension
             # (num_app_combinations x num_worker_types).
-            for j, job_id in enumerate(job_ids):
+            for j in relevant_combinations[single_job_id]:
+                job_id = job_ids[j]
                 for k, worker_type in enumerate(worker_types):
                     # If job ID of interest is not in this job_id_combination,
-                    # mask and throughput should be 0.
+                    # throughput should be 0.
                     # Otherwise, use the right throughput from the input dict.
                     if job_id in single_job_ids:
                         if job_id == single_job_id:
                             all_m[i][j][k] = d[job_id][worker_type]
-                            masks[i][j][k] = 1.0
                     else:
                         if single_job_id.overlaps_with(job_id):
                             # Find the index of the job of interest in the job
@@ -113,18 +121,18 @@ class PolicyWithPacking(Policy):
                             index = job_id.as_tuple().index(single_job_id[0])
                             throughputs = d[job_id][worker_type]
                             all_m[i][j][k] = d[job_id][worker_type][index]
-                            masks[i][j][k] = 1.0
             # Normalize.
             if normalize:
                 all_m[i] /= normalizing_factors[single_job_id]
                 if priority_weights is not None:
                     all_m[i] /= priority_weights[single_job_id]
-        return all_m, masks, (job_ids, single_job_ids, worker_types)
+        return all_m, (job_ids, sorted_single_job_ids, worker_types,
+                              relevant_combinations)
 
     def unflatten(self, m, index):
         """Converts a NumPy array to a 2-level dict."""
 
-        (job_id_combinations, single_job_ids, worker_types) = index
+        (job_id_combinations, single_job_ids, worker_types, _) = index
         d = {}
         for i in range(len(job_id_combinations)):
             d[job_id_combinations[i]] = {}
@@ -216,12 +224,12 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
-        all_throughputs, masks, index = self.flatten(unflattened_throughputs,
-                                                     cluster_spec,
-                                                     unflattened_priority_weights)
+        all_throughputs, index = \
+            self.flatten(unflattened_throughputs, cluster_spec,
+                         unflattened_priority_weights)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         (m, n) = all_throughputs[0].shape
-        (job_ids, single_job_ids, worker_types) = index
+        (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         x = cp.Variable((m, n))
 
         # Row i of scale_factors_array is the scale_factor of job
@@ -244,8 +252,10 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         # A job run on 1 GPU should receive `scale_factor` more time than
         # a job run on `scale_factor` GPUs.
         for i in range(len(all_throughputs)):
+            indexes = relevant_combinations[single_job_ids[i]]
             objective_terms.append(cp.sum(cp.multiply(
-                np.multiply(all_throughputs[i], scale_factors_array), x)))
+                np.multiply(all_throughputs[i][indexes],
+                            scale_factors_array[indexes]), x[indexes])))
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
         else:
@@ -256,8 +266,9 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             cp.sum(cp.multiply(
                 scale_factors_array, x), axis=0) <= self._num_workers,
         ]
-        for i in range(len(masks)):
-            constraints.append(cp.sum(cp.multiply(x, masks[i])) <= 1)
+        for single_job_id in single_job_ids:
+            indexes = relevant_combinations[single_job_id]
+            constraints.append(cp.sum(x[indexes]) <= 1)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='SCS')
 
@@ -340,8 +351,9 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
     def __init__(self):
         self._name = 'MinTotalDuration_Packing'
 
-    def get_allocation_helper(self, all_throughputs, masks, job_ids,
-                              single_job_ids, scale_factors_array, T):
+    def get_allocation_helper(self, all_throughputs, job_ids,
+                              single_job_ids, scale_factors_array, T,
+                              relevant_combinations):
         x = cp.Variable(all_throughputs[0].shape)
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster.
@@ -350,15 +362,19 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
             cp.sum(cp.multiply(
                 scale_factors_array, x), axis=0) <= self._num_workers,
         ]
-        for mask in masks:
-            # Every job cannot receive a total time share sum greater than 1.0.
-            constraints.append(cp.sum(cp.multiply(x, mask)) <= 1)
-        for throughputs, num_steps_remaining in zip(all_throughputs,
-                                                    self._num_steps_remaining):
+
+        # Every job cannot receive a total time share sum greater than 1.0.
+        for single_job_id in single_job_ids:
+            indexes = relevant_combinations[single_job_id]
+            constraints.append(cp.sum(x[indexes]) <= 1)
+        for i, (throughputs, num_steps_remaining) in \
+            enumerate(zip(all_throughputs, self._num_steps_remaining)):
+            indexes = relevant_combinations[single_job_ids[i]]
             # Ensure that every job satisfies its throughput constraint,
             # and can finish in time T.
-            constraints.append(cp.sum(cp.multiply(throughputs, x)) >=
-                (num_steps_remaining / T))
+            constraints.append(
+                cp.sum(cp.multiply(throughputs[indexes], x[indexes])) >=
+                    (num_steps_remaining / T))
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='SCS')
 
@@ -366,11 +382,11 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        num_steps_remaining, cluster_spec):
-        all_throughputs, masks, index = super().flatten(unflattened_throughputs,
-                                                        cluster_spec, normalize=False)
+        all_throughputs, index = super().flatten(unflattened_throughputs,
+                                                 cluster_spec, normalize=False)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         if index is None: return None
-        (job_ids, single_job_ids, worker_types) = index
+        (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         self._num_steps_remaining = [num_steps_remaining[single_job_id]
                                      for single_job_id in single_job_ids]
 
@@ -399,9 +415,10 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
             # Binary search for the smallest T that gives an optimal solution.
             while (1.05 * min_T) < max_T:  # TODO: Can tweak the 1.05 in this loop.
                 T = (min_T + max_T) / 2.
-                status, x = self.get_allocation_helper(all_throughputs, masks,
+                status, x = self.get_allocation_helper(all_throughputs,
                                                        job_ids, single_job_ids,
-                                                       scale_factors_array, T)
+                                                       scale_factors_array, T,
+                                                       relevant_combinations)
                 if status == "optimal":
                     last_feasible_x = x
                     max_T = T
