@@ -19,13 +19,13 @@ def read_all_throughputs_json(throughputs_file):
         throughputs = json.load(f)
     return throughputs
 
-def get_policy(policy_name, seed=None):
+def get_policy(policy_name, seed=None, solver='ECOS'):
     if policy_name == 'max_min_fairness':
         policy = policies.MaxMinFairnessPolicy()
     elif policy_name == 'max_min_fairness_perf':
         policy = policies.MaxMinFairnessPolicyWithPerf()
     elif policy_name == 'max_min_fairness_packed':
-        policy = policies.MaxMinFairnessPolicyWithPacking()
+        policy = policies.MaxMinFairnessPolicyWithPacking(solver=solver)
     elif policy_name == 'max_sum_throughput_perf':
         policy = policies.MaxSumThroughputPolicyWithPerf()
     elif policy_name == 'max_sum_throughput_packed':

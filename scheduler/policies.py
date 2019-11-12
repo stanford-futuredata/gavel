@@ -209,7 +209,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver='GUROBI')
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -219,8 +219,9 @@ class MaxMinFairnessPolicyWithPerf(Policy):
 
 class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
-    def __init__(self):
+    def __init__(self, solver):
         self._name = 'MaxMinFairness_Packing'
+        self._solver = solver
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
@@ -234,17 +235,27 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.
-        scale_factors_array = np.zeros((m, n))
-        for i in range(m):
-            scale_factor = None
-            for single_job_id in job_ids[i].singletons():
-                if (scale_factor is not None and
-                    scale_factor != scale_factors[single_job_id]):
-                    scale_factor = 0
-                else:
-                    scale_factor = scale_factors[single_job_id]
-            for j in range(n):
-                scale_factors_array[i, j] = scale_factor
+        scale_factors_array = None
+        for job_id in scale_factors:
+            if job_id.is_pair():
+                scale_factors_array = np.zeros((m, n))
+                for i in range(m):
+                    scale_factor = scale_factors[job_ids[i]]
+                    for j in range(n):
+                        scale_factors_array[i, j] = scale_factor
+                break
+        if scale_factors_array is None:
+            scale_factors_array = np.zeros((m, n))
+            for i in range(m):
+                scale_factor = None
+                for single_job_id in job_ids[i].singletons():
+                    if (scale_factor is not None and
+                        scale_factor != scale_factors[single_job_id]):
+                        scale_factor = 0
+                    else:
+                        scale_factor = scale_factors[single_job_id]
+                for j in range(n):
+                    scale_factors_array[i, j] = scale_factor
 
         objective_terms = []
         # Multiply throughputs by scale_factors to ensure that scale_factor
@@ -270,7 +281,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             indexes = relevant_combinations[single_job_id]
             constraints.append(cp.sum(x[indexes]) <= 1)
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -297,7 +308,7 @@ class MinTotalDurationPolicy(Policy):
                 self._num_steps_remaining / T),
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver='GUROBI')
 
         return cvxprob.status, x
 
@@ -376,7 +387,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
                 cp.sum(cp.multiply(throughputs[indexes], x[indexes])) >=
                     (num_steps_remaining / T))
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver='GUROBI')
 
         return cvxprob.status, x
 

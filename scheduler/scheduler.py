@@ -1244,6 +1244,8 @@ class Scheduler:
                 job_id: self._jobs[job_id].priority_weight
                 for job_id in self._jobs
             }
+            if self._policy.name == 'MaxMinFairness_Packing':
+                pass
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, priority_weights,
                 self._cluster_spec)
