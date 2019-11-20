@@ -119,6 +119,13 @@ class Scheduler:
         # Measured and predicted throughputs for all current incomplete
         # applications.
         self._throughputs = {}
+        # Throughputs measured with respect to applications rather than
+        # individual jobs.
+        self._app_throughputs = {}
+        # Map from job ID to application.
+        self._job_id_to_application = {}
+        # Map from application to set of job IDs.
+        self._application_to_job_ids = {}
         # Throughputs for all job types (pre-measured).
         if throughputs_file is not None:
             self._oracle_throughputs = utils.read_all_throughputs_json(
@@ -264,6 +271,29 @@ class Scheduler:
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
             self._throughputs[job_id] = {}
+            app = self._jobs[job_id].job_type
+            self._job_id_to_application[job_id] = app
+            if app not in self._app_throughputs:
+                self._application_to_job_ids[app] = set()
+                if self._estimate_throughputs:
+                    # TODO: Support throughput estimation.
+                    pass
+                else:
+                    self._app_throughputs[app] = {}
+                    other_apps = list(self._app_throughputs.keys())
+                    for worker_type in self._worker_types:
+                        self._app_throughputs[app][worker_type] = {}
+                        self._app_throughputs[app][worker_type][None] = \
+                            self._oracle_throughputs[worker_type][app]['null']
+                        if self._job_packing:
+                            for other_app in other_apps:
+                                colocated_throughputs = \
+                                    self._oracle_throughputs[worker_type][app][other_app]
+                                self._app_throughputs[app][worker_type][other_app] = \
+                                    colocated_throughputs[0]
+                                self._app_throughputs[other_app][worker_type][app] = \
+                                    colocated_throughputs[1]
+            self._application_to_job_ids[app].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
             for worker_type in self._worker_types:
@@ -319,12 +349,14 @@ class Scheduler:
                       self._per_job_latest_timestamps[job_id],
                       duration, "seconds", len(self._jobs))
                   )
-
+            app = self._job_id_to_application[job_id]
+            self._application_to_job_ids[app].remove(job_id)
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._total_steps_run[job_id]
             del self._job_time_so_far[job_id]
             del self._throughputs[job_id]
+            del self._job_id_to_application[job_id]
             del self._num_failures_per_job[job_id]
             if self._job_packing:
                 to_delete = []
@@ -337,6 +369,11 @@ class Scheduler:
                     del self._job_time_so_far[other_job_id]
                     if self._estimate_throughputs:
                         del self._throughputs_mask[other_job_id]
+                if len(self._application_to_job_ids[app]) == 0:
+                    del self._app_throughputs[app]
+                    for other_app in self._app_throughputs:
+                        for worker_type in self._worker_types:
+                            del self._app_throughputs[other_app][worker_type][app]
             if self._estimate_throughputs:
                 for worker_type in self._profiled_jobs:
                     if job_id in self._jobs_to_profile[worker_type]:
@@ -1239,6 +1276,10 @@ class Scheduler:
             job_id: self._jobs[job_id].scale_factor
             for job_id in self._jobs
         }
+        if self._policy.name == 'MaxMinFairness_Packing':
+            unflattened_allocation = self._policy.get_allocation_v2(
+                    self._app_throughputs, self._job_id_to_application,
+                    scale_factors, None, self._cluster_spec)
         if self._policy.name.startswith("MaxMinFairness"):
             priority_weights = {
                 job_id: self._jobs[job_id].priority_weight

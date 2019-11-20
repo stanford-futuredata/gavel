@@ -222,6 +222,84 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
     def __init__(self):
         self._name = 'MaxMinFairness_Packing'
 
+    def get_allocation_v2(self, unflattened_app_throughputs,
+                          job_id_to_application, scale_factors,
+                          priority_weights, cluster_spec):
+        # TODO: Handle scale factors
+        # TODO: Handle priorities
+        job_ids = sorted(job_id_to_application.keys())
+        apps = sorted(unflattened_app_throughputs.keys())
+        worker_types = sorted(cluster_spec.keys())
+        self._num_workers = \
+            [cluster_spec[worker_type] for worker_type in worker_types]
+
+        # Num jobs.
+        n = len(job_ids)
+        # Num applications.
+        a = len(unflattened_app_throughputs.keys())
+        # Num worker_types.
+        m = len(worker_types)
+        # Num varibles per job.
+        num_variables_per_job = 1 + a
+
+        # Compute normalizing factor for each application, this normalizing
+        # factor will be used to normalize throughputs for the same application
+        # in application combinations as well.
+        normalizing_factors = {}
+        for app in apps:
+            normalizing_factor = 0.0
+            for worker_type in worker_types:
+                normalizing_factor += \
+                    unflattened_app_throughputs[app][worker_type][None]
+            normalizing_factors[app] = normalizing_factor
+
+        flattened_app_throughputs = np.zeros(shape=(a, 1 + a, m),
+                                             dtype=np.float32)
+        for i, app in enumerate(apps):
+            for j, other_app in enumerate([None] + apps):
+                for k, worker_type in enumerate(worker_types):
+                    flattened_app_throughputs[i,j,k] = \
+                        unflattened_app_throughputs[app][worker_type][other_app]
+        for i, app in enumerate(apps):
+            flattened_app_throughputs[i] /= normalizing_factors[app]
+
+        # Allocation matrix.
+        x = cp.Variable((n * num_variables_per_job, m))
+
+        objective_terms = []
+        constraints = [
+            x >= 0,
+        ]
+
+        for i in range(0, n * num_variables_per_job, num_variables_per_job):
+            job_id = job_ids[i // num_variables_per_job]
+            app = job_id_to_application[job_id]
+            app_idx = apps.index(app)
+            # Compute the effective throughput for each job.
+            objective_terms.append(
+                cp.sum(cp.multiply(x[i:i+num_variables_per_job],
+                                   flattened_app_throughputs[app_idx])))
+            constraints.append(cp.sum(x[i:i+num_variables_per_job]) <= 1)
+        constraints.append(cp.sum(x, axis=0) <= self._num_workers)
+
+        if len(objective_terms) == 1:
+            objective = cp.Maximize(objective_terms[0])
+        else:
+            objective = cp.Maximize(cp.minimum(*objective_terms))
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve(solver='ECOS')
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
+
+        allocation = x.value.clip(min=0.0).clip(max=1.0)
+        for i in range(0, n * num_variables_per_job, num_variables_per_job):
+            job_id = job_ids[i // num_variables_per_job]
+            print('Allocation for job ID %s:' % (job_id))
+            print(allocation[i:i+num_variables_per_job])
+            print('')
+
+
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
         all_throughputs, index = \
