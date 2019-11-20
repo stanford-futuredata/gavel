@@ -46,14 +46,14 @@ class JobIdPair():
                              'index %d' % index)
 
     def __lt__(self, other):
-        if self._job0 != other._job0:
-            return self._job0 < other._job0
-        elif self._job1 is None and self._job0 is None:
+        if other._job1 is not None:
+            if self._job1 is None:
+                return True
+            elif self._job0 == other._job0:
+                return self._job1 < other._job1
+        elif self._job1 is not None:
             return False
-        elif self._job1 is not None and other._job1 is not None:
-            return self._job0 < other._job1
-        else:
-            return self._job1 is None
+        return self._job0 < other._job0
 
     def __eq__(self, other):
         return self._job0 == other._job0 and self._job1 == other._job1
