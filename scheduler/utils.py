@@ -68,3 +68,23 @@ def parse_trace(trace_file, run_dir):
             arrival_times.append(float(arrival_time))
     return jobs, arrival_times
 
+def print_allocation(allocation, current_time=None):
+    """Prints the allocation.
+
+       Debug method used for printing the allocation of each job on each
+       worker type.
+    """
+    # print('')
+    print('=' * 80)
+    if current_time is not None:
+        print('Allocation\t(Current_time: %f)' % (current_time))
+        print('-' * 80)
+    for job_id in sorted(list(allocation.keys())):
+        allocation_str = 'Job ID %s:' % (job_id)
+        for worker_type in sorted(list(allocation[job_id].keys())):
+            value = allocation[job_id][worker_type]
+            allocation_str += ' [%s: %f]' % (worker_type, value)
+        print(allocation_str)
+    print('=' * 80)
+    #print('')
+

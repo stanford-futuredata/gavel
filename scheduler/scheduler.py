@@ -1215,26 +1215,6 @@ class Scheduler:
     """
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
-    def _print_allocation(self):
-        """Prints the allocation.
-
-           Debug method used for printing the allocation of each job on each
-           worker type.
-        """
-        print('')
-        print('=' * 80)
-        print('Allocation\t(Current_time: %f)' % (self.get_current_timestamp()))
-        print('-' * 80)
-        for job_id in sorted(list(self._allocation.keys())):
-            allocation_str = 'Job ID %s:' % (job_id)
-            for worker_type in sorted(list(self._allocation[job_id].keys())):
-                allocation = self._allocation[job_id][worker_type]
-                allocation_str += ' [%s: %f]' % (worker_type, allocation)
-            print(allocation_str)
-        print('=' * 80)
-        print('')
-
-    # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _print_deficits(self):
         """Prints the deficit.
 
