@@ -281,8 +281,16 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             print('')
             """
 
+        print('v2 throughputs:')
+        print(flattened_app_throughputs)
+
         # Allocation matrix.
         x = cp.Variable((n * num_variables_per_job, m))
+        masks = np.ones((n * num_variables_per_job, m))
+        for i in range(0, n * num_variables_per_job, num_variables_per_job):
+            for j in range(1, num_variables_per_job):
+                for k in range(m):
+                    masks[i+j, k] = 0.5
 
         objective_terms = []
         constraints = [
@@ -309,11 +317,13 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                     redundant_variables[app_pair][worker_type].append(x[i+j,k])
 
             # Compute the effective throughput for each job.
+            print(flattened_app_throughputs[app_idx])
+            print(num_variables_per_job)
             objective_terms.append(
                 cp.sum(cp.multiply(x[i:i+num_variables_per_job],
                                    flattened_app_throughputs[app_idx])))
             constraints.append(cp.sum(x[i:i+num_variables_per_job]) <= 1)
-        constraints.append(cp.sum(x, axis=0) <= self._num_workers)
+        constraints.append(cp.sum(cp.multiply(x, masks), axis=0) <= self._num_workers)
 
         """
         for app_pair in redundant_variables:
@@ -341,7 +351,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
-        allocation = x.value.clip(min=0.0).clip(max=1.0)
+        allocation = np.multiply(x.value, masks).clip(min=0.0).clip(max=1.0)
         """
         for i in range(0, n * num_variables_per_job, num_variables_per_job):
             job_id = job_ids[i // num_variables_per_job]

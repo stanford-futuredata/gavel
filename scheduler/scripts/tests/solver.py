@@ -168,8 +168,7 @@ if __name__=='__main__':
             description='')
     parser.add_argument('--num_jobs', type=int, default=10, help='Num jobs')
     parser.add_argument('--throughputs-file', type=str,
-                        default=('/lfs/1/keshav2/gpusched/scheduler/'
-                                 'oracle_throughputs.json'),
+                        default=('oracle_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('--generate-multi-gpu-jobs', action='store_true',
                         default=False,

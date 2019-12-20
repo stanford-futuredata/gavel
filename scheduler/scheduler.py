@@ -1260,6 +1260,7 @@ class Scheduler:
             unflattened_allocation = self._policy.get_allocation_v2(
                     self._app_throughputs, self._job_id_to_application,
                     scale_factors, None, self._cluster_spec)
+            self._print_allocation()
         if self._policy.name.startswith("MaxMinFairness"):
             priority_weights = {
                 job_id: self._jobs[job_id].priority_weight
