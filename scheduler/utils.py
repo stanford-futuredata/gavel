@@ -86,5 +86,3 @@ def print_allocation(allocation, current_time=None):
             allocation_str += ' [%s: %f]' % (worker_type, value)
         print(allocation_str)
     print('=' * 80)
-    #print('')
-

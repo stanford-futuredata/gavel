@@ -351,7 +351,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
-        allocation = np.multiply(x.value, masks).clip(min=0.0).clip(max=1.0)
+        allocation = x.value.clip(min=0.0).clip(max=1.0)
+
         """
         for i in range(0, n * num_variables_per_job, num_variables_per_job):
             job_id = job_ids[i // num_variables_per_job]

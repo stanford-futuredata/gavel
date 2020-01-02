@@ -102,7 +102,7 @@ def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
     flattened_allocation = policy.get_allocation_v2(app_throughputs,
                                                     job_id_to_application,
                                                     None, None, cluster_spec)
-    print('Flattenedv v2 allocation:')
+    print('Flattened v2 allocation:')
     print(flattened_allocation)
     unflattened_allocation = {}
     for i, job in enumerate(jobs):
