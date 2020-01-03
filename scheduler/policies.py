@@ -232,6 +232,14 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         self._num_workers = \
             [cluster_spec[worker_type] for worker_type in worker_types]
 
+        # Create a map from application to list of job indexes.
+        application_to_job_idx = {}
+        for i, job_id in enumerate(job_ids):
+            app = job_id_to_application[job_id]
+            if app not in application_to_job_idx:
+                application_to_job_idx[app] = []
+            application_to_job_idx[app].append(i)
+
         # Num jobs.
         n = len(job_ids)
         # Num applications.
@@ -240,7 +248,6 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         m = len(worker_types)
         # Num varibles per job.
         num_variables_per_job = 1 + a
-        redundant_variables = {}
 
         # Compute normalizing factor for each application, this normalizing
         # factor will be used to normalize throughputs for the same application
@@ -257,22 +264,9 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                                              dtype=np.float32)
         for i, app in enumerate(apps):
             for j, other_app in enumerate([None] + apps):
-                if ((app, other_app) not in redundant_variables and
-                    (other_app, app) not in redundant_variables):
-                    redundant_variables[(app, other_app)] = {}
                 for k, worker_type in enumerate(worker_types):
-                    if ((app, other_app) in redundant_variables and
-                        worker_type not in redundant_variables[(app, other_app)]):
-                        redundant_variables[(app, other_app)][worker_type] = []
-                    if i + 1 == j:
-                        # NOTE: Hack to prevent apps from co-locating with
-                        # themselves
-                        # TODO: add a better fix
-                        throughput = 0
-                    else:
-                        throughput = \
-                            unflattened_app_throughputs[app][worker_type][other_app]
-                    flattened_app_throughputs[i,j,k] = throughput
+                    flattened_app_throughputs[i,j,k] = \
+                        unflattened_app_throughputs[app][worker_type][other_app]
         for i, app in enumerate(apps):
             flattened_app_throughputs[i] /= normalizing_factors[app]
             """
@@ -297,6 +291,37 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             x >= 0,
         ]
 
+        """
+        for all job type pairs j, k:
+            sum of allocation of all jobs of type j paired with type k ==
+            sum of allocation of all jobs of type k paired with type j
+        """
+
+        for i, app_0 in enumerate(apps):
+            for j, app_1 in enumerate(apps):
+                # Set constraint for job type pair app_0, app_1
+
+                # Store the allocation values for jobs of each type
+                app_0_job_allocations = []
+                app_1_job_allocations = []
+
+                # Retrieve the list of jobs of each type.
+                app_0_jobs = application_to_job_idx[app_0]
+                app_1_jobs = application_to_job_idx[app_1]
+
+                # Allocation of jobs of type app_0 when paired with type app_1
+                for job_idx in app_0_jobs:
+                    job_idx *= num_variables_per_job
+                    app_0_job_allocations.append(x[job_idx+1+j])
+
+                # Allocation of job of type app_1 when paired with type app_0
+                for job_idx in app_1_jobs:
+                    job_idx *= num_variables_per_job
+                    app_1_job_allocations.append(x[job_idx+1+i])
+
+                constraints.append(cp.sum(app_0_job_allocations) ==
+                                   cp.sum(app_1_job_allocations))
+
         for i in range(0, n * num_variables_per_job, num_variables_per_job):
             job_id = job_ids[i // num_variables_per_job]
             app = job_id_to_application[job_id]
@@ -304,17 +329,9 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             # NOTE: Hack to prevent apps from co-locating with
             # themselves
             # TODO: add a better fix
-            for k, worker_type in enumerate(worker_types):
-                constraints.append(x[i+app_idx+1,k] == 0.0)
-            for j, other_app in enumerate([None] + apps):
-                app_pair = None
-                if (app, other_app) in redundant_variables:
-                    app_pair = (app, other_app)
-                elif (other_app, app) in redundant_variables:
-                    app_pair = (other_app, app)
-                assert app_pair is not None
+            if len(application_to_job_idx[app]) == 1:
                 for k, worker_type in enumerate(worker_types):
-                    redundant_variables[app_pair][worker_type].append(x[i+j,k])
+                    constraints.append(x[i+1+app_idx,k] == 0.0)
 
             # Compute the effective throughput for each job.
             print(flattened_app_throughputs[app_idx])
@@ -324,22 +341,6 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                                    flattened_app_throughputs[app_idx])))
             constraints.append(cp.sum(x[i:i+num_variables_per_job]) <= 1)
         constraints.append(cp.sum(cp.multiply(x, masks), axis=0) <= self._num_workers)
-
-        """
-        for app_pair in redundant_variables:
-            for worker_type in redundant_variables[app_pair]:
-                if len(redundant_variables[app_pair][worker_type]) <= 1:
-                    break
-                print('%s [%s] %s' % (str(app_pair), worker_type,
-                                      str(redundant_variables[app_pair][worker_type])))
-        """
-
-        for app_pair in redundant_variables:
-            for worker_type in redundant_variables[app_pair]:
-                for i, v1 in enumerate(redundant_variables[app_pair][worker_type]):
-                    for v2 in redundant_variables[app_pair][worker_type][i+1:]:
-                        print('Adding constraint %s == %s' % (str(v1), str(v2)))
-                        constraints.append(v1 == v2)
 
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
