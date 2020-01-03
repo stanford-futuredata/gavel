@@ -90,7 +90,32 @@ def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
     scale_factors = {}
     for job in jobs:
         scale_factors[job.job_id] = 1
-    return policy.get_allocation(throughputs, scale_factors, None, cluster_spec)
+    unflattened_allocation = \
+        policy.get_allocation(throughputs, scale_factors, None, cluster_spec)
+    n = len(jobs)
+    apps = sorted(set([job.job_type for job in jobs]))
+    num_variables_per_job = 1 + len(apps)
+    flattened_allocation = np.zeros((n * num_variables_per_job,
+                                     len(worker_types)), dtype=np.float32)
+    job_ids = sorted([job.job_id for job in jobs])
+    for i, job_id in enumerate(job_ids):
+        job_offset = i * num_variables_per_job
+        for k, worker_type in enumerate(worker_types):
+            flattened_allocation[job_offset,k] = \
+                unflattened_allocation[job_id][worker_type]
+        for j, other_job_id in enumerate(job_ids):
+            if i == j:
+                continue
+            merged_job_id = JobIdPair(job_id[0], other_job_id[0])
+            app_idx = apps.index(jobs[j].job_type)
+            for k, worker_type in enumerate(worker_types):
+                flattened_allocation[job_offset+1+app_idx, k] += \
+                    unflattened_allocation[merged_job_id][worker_type]
+    print('Flattened v1 allocation:')
+    print(flattened_allocation.round(5))
+    print('')
+
+    return unflattened_allocation
 
 def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
                       worker_types):
@@ -103,7 +128,7 @@ def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
                                                     job_id_to_application,
                                                     None, None, cluster_spec)
     print('Flattened v2 allocation:')
-    print(flattened_allocation)
+    print(flattened_allocation.round(5))
     unflattened_allocation = {}
     for i, job in enumerate(jobs):
         unflattened_allocation[job.job_id] = {}

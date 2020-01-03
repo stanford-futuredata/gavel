@@ -269,14 +269,11 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                         unflattened_app_throughputs[app][worker_type][other_app]
         for i, app in enumerate(apps):
             flattened_app_throughputs[i] /= normalizing_factors[app]
-            """
-            print('Flattened throughputs for app %s:' % (app))
-            print(flattened_app_throughputs[i])
-            print('')
-            """
 
+        """
         print('v2 throughputs:')
         print(flattened_app_throughputs)
+        """
 
         # Allocation matrix.
         x = cp.Variable((n * num_variables_per_job, m))
@@ -326,16 +323,13 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             job_id = job_ids[i // num_variables_per_job]
             app = job_id_to_application[job_id]
             app_idx = apps.index(app)
-            # NOTE: Hack to prevent apps from co-locating with
-            # themselves
-            # TODO: add a better fix
+            # If there is only one job of this application type, zero out the
+            # allocation corresponding to this job colocating with itself.
             if len(application_to_job_idx[app]) == 1:
                 for k, worker_type in enumerate(worker_types):
                     constraints.append(x[i+1+app_idx,k] == 0.0)
 
             # Compute the effective throughput for each job.
-            print(flattened_app_throughputs[app_idx])
-            print(num_variables_per_job)
             objective_terms.append(
                 cp.sum(cp.multiply(x[i:i+num_variables_per_job],
                                    flattened_app_throughputs[app_idx])))
@@ -375,8 +369,10 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         x = cp.Variable((m, n))
 
+        """
         print('v1 throughputs:')
         print(all_throughputs)
+        """
 
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.
