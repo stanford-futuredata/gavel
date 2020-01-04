@@ -12,6 +12,26 @@ from job import Job
 from job_id_pair import JobIdPair
 from job_table import JobTable
 
+def print_allocation(allocation, jobs):
+    n = len(jobs)
+    apps = sorted(set([job.job_type for job in jobs]))
+    num_variables_per_job = 1 + len(apps)
+    job_ids = sorted([job.job_id for job in jobs])
+    job_id_to_application = {job.job_id : job.job_type for job in jobs}
+    for i in range(0, n * num_variables_per_job, num_variables_per_job):
+        job_id = job_ids[i // num_variables_per_job]
+        print('Job %s (%s):' % (str(job_id),
+                                job_id_to_application[job_id]))
+        print('\tIsolated allocation: %.5f %.5f %.5f' % (allocation[i,0],
+                                                         allocation[i,1],
+                                                         allocation[i,2]))
+        for j in range(1, num_variables_per_job):
+            print('\tAllocation with %s: %.5f %.5f %.5f' % (apps[j-1],
+                                                            allocation[i+j,0],
+                                                            allocation[i+j,1],
+                                                            allocation[i+j,2]))
+
+
 def generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
                   generate_multi_priority_jobs=False,
                   run_dir='/tmp', job_template=None, job_id=None):
@@ -31,17 +51,26 @@ def generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
 
     scale_factor = 1
     if generate_multi_gpu_jobs:  # Copies Philly distribution.
-        r = random.uniform(0, 1)
+        r = rng.uniform(0, 1)
+        if 0.2 <= r <= 0.6:
+            scale_factor = 2
+        elif 0.6 <= r <= 0.9:
+            scale_factor = 4
+        elif 0.9 <= r:
+            scale_factor = 8
+
+        """
         if 0.8 <= r <= 0.85:
             scale_factor = 2
         elif 0.85 <= r <= 0.95:
             scale_factor = 4
         elif 0.95 <= r:
             scale_factor = 8
+        """
 
     priority_weight = 1.0
     if generate_multi_priority_jobs:
-        r = random.uniform(0, 1)
+        r = rng.uniform(0, 1)
         if 0.0 <= r <= 0.2:
             priority_weight = 5.0
 
@@ -86,11 +115,8 @@ def get_app_throughputs(jobs, oracle_throughputs, worker_types):
     return app_throughputs
 
 def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
-                      worker_types):
+                      worker_types, scale_factors):
     throughputs = get_job_throughputs(jobs, oracle_throughputs, worker_types)
-    scale_factors = {}
-    for job in jobs:
-        scale_factors[job.job_id] = 1
     unflattened_allocation = \
         policy.get_allocation(throughputs, scale_factors, None, cluster_spec)
     n = len(jobs)
@@ -112,26 +138,18 @@ def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
             for k, worker_type in enumerate(worker_types):
                 flattened_allocation[job_offset+1+app_idx, k] += \
                     unflattened_allocation[merged_job_id][worker_type]
-    print('Flattened v1 allocation:')
-    print(flattened_allocation.round(5))
-    print('')
-    return unflattened_allocation
+    return flattened_allocation
 
 def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
-                      worker_types):
+                      worker_types, scale_factors):
     job_id_to_application = {job.job_id : job.job_type for job in jobs}
     app_throughputs = get_app_throughputs(jobs, oracle_throughputs,
                                           worker_types)
-    apps = sorted(app_throughputs.keys())
-    num_variables_per_job = len(app_throughputs.keys()) + 1
     flattened_allocation = policy.get_allocation_v2(app_throughputs,
                                                     job_id_to_application,
-                                                    None, None, cluster_spec)
-    print('Flattened v2 allocation:')
-    print(flattened_allocation.round(5))
-    # TODO: Unflatten allocation.
-    unflattened_allocation = {}
-    return unflattened_allocation
+                                                    scale_factors, None,
+                                                    cluster_spec)
+    return flattened_allocation
 
 def main(args):
     rng = random.Random()
@@ -154,14 +172,30 @@ def main(args):
                                  job_template=job_template,
                                  job_id=job_id))
     policy = utils.get_policy('max_min_fairness_packed')
+    scale_factors = {
+        job.job_id: job.scale_factor for job in jobs
+    }
+    print('scale_factors:')
+    for job_id in scale_factors:
+        print('%s: %d' % (job_id, scale_factors[job_id]))
     start = datetime.datetime.now()
-    allocation_v1 = get_allocation_v1(policy, jobs, oracle_throughputs,
-                                      cluster_spec, worker_types)
+    v1_allocation = get_allocation_v1(policy, jobs, oracle_throughputs,
+                                      cluster_spec, worker_types,
+                                      scale_factors)
     v1_runtime = datetime.datetime.now() - start
     start = datetime.datetime.now()
-    allocation_v2 = get_allocation_v2(policy, jobs, oracle_throughputs,
-                                      cluster_spec, worker_types)
+    v2_allocation = get_allocation_v2(policy, jobs, oracle_throughputs,
+                                      cluster_spec, worker_types,
+                                      scale_factors)
     v2_runtime = datetime.datetime.now() - start
+    print('v1 allocation:')
+    #print(v1_allocation)
+    print_allocation(v1_allocation, jobs)
+    print('')
+    print('v2 allocation:')
+    #print(v2_allocation)
+    print_allocation(v2_allocation, jobs)
+    print('')
     print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
     print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
 

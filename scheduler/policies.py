@@ -282,6 +282,12 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                 for k in range(m):
                     masks[i+j, k] = 0.5
 
+        # Set up scale factors.
+        scale_factors_array = np.ones((n * num_variables_per_job, m))
+        for i in range(0, n * num_variables_per_job, num_variables_per_job):
+            scale_factors_array[i:i+num_variables_per_job] = \
+                scale_factors[job_ids[i // num_variables_per_job]]
+
         objective_terms = []
         constraints = [
             x >= 0,
@@ -289,8 +295,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         # Set the following constraints:
         # for all job type pairs j, k:
-        #    sum of allocation of all jobs of type j paired with type k ==
-        #    sum of allocation of all jobs of type k paired with type j
+        #   sum of allocation of all jobs of type j paired with type k ==
+        #   sum of allocation of all jobs of type k paired with type j
         for i, app_0 in enumerate(apps):
             for j, app_1 in enumerate(apps):
                 # Set constraint for job type pair app_0, app_1
@@ -329,10 +335,13 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             # Compute the effective throughput for each job.
             objective_terms.append(
                 cp.sum(cp.multiply(x[i:i+num_variables_per_job],
-                                   flattened_app_throughputs[app_idx])))
+                                   np.multiply(
+                                       scale_factors_array[i:i+num_variables_per_job],
+                                       flattened_app_throughputs[app_idx]))))
             constraints.append(cp.sum(x[i:i+num_variables_per_job]) <= 1)
         constraints.append(
-            cp.sum(cp.multiply(x, masks), axis=0) <= self._num_workers)
+            cp.sum(cp.multiply(x, cp.multiply(scale_factors_array, masks)),
+                    axis=0) <= self._num_workers)
 
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
@@ -343,6 +352,22 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
+
+        """
+        # For debugging scale factors:
+        objective_terms = []
+        for i in range(0, n * num_variables_per_job, num_variables_per_job):
+            job_id = job_ids[i // num_variables_per_job]
+            app = job_id_to_application[job_id]
+            app_idx = apps.index(app)
+            objective_terms.append(
+                cp.sum(cp.multiply(x.value[i:i+num_variables_per_job],
+                                   np.multiply(
+                                       scale_factors_array[i:i+num_variables_per_job],
+                                       flattened_app_throughputs[app_idx]))))
+        objective = cp.Maximize(cp.minimum(*objective_terms))
+        print(objective)
+        """
 
         allocation = x.value.clip(min=0.0).clip(max=1.0)
 
