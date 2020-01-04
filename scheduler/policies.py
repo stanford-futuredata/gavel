@@ -270,13 +270,12 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         for i, app in enumerate(apps):
             flattened_app_throughputs[i] /= normalizing_factors[app]
 
-        """
-        print('v2 throughputs:')
-        print(flattened_app_throughputs)
-        """
-
         # Allocation matrix.
         x = cp.Variable((n * num_variables_per_job, m))
+
+        # Set up masks to avoid double-counting allocation values when
+        # computing constraint that the sum of allocation values of each
+        # worker type must be <= the number of workers of that worker type.
         masks = np.ones((n * num_variables_per_job, m))
         for i in range(0, n * num_variables_per_job, num_variables_per_job):
             for j in range(1, num_variables_per_job):
@@ -288,12 +287,10 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             x >= 0,
         ]
 
-        """
-        for all job type pairs j, k:
-            sum of allocation of all jobs of type j paired with type k ==
-            sum of allocation of all jobs of type k paired with type j
-        """
-
+        # Set the following constraints:
+        # for all job type pairs j, k:
+        #    sum of allocation of all jobs of type j paired with type k ==
+        #    sum of allocation of all jobs of type k paired with type j
         for i, app_0 in enumerate(apps):
             for j, app_1 in enumerate(apps):
                 # Set constraint for job type pair app_0, app_1
@@ -334,7 +331,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                 cp.sum(cp.multiply(x[i:i+num_variables_per_job],
                                    flattened_app_throughputs[app_idx])))
             constraints.append(cp.sum(x[i:i+num_variables_per_job]) <= 1)
-        constraints.append(cp.sum(cp.multiply(x, masks), axis=0) <= self._num_workers)
+        constraints.append(
+            cp.sum(cp.multiply(x, masks), axis=0) <= self._num_workers)
 
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
@@ -348,13 +346,6 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         allocation = x.value.clip(min=0.0).clip(max=1.0)
 
-        """
-        for i in range(0, n * num_variables_per_job, num_variables_per_job):
-            job_id = job_ids[i // num_variables_per_job]
-            print('Allocation for job ID %s:' % (job_id))
-            print(allocation[i:i+num_variables_per_job])
-            print('')
-        """
         return allocation
 
 
@@ -368,11 +359,6 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         (m, n) = all_throughputs[0].shape
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         x = cp.Variable((m, n))
-
-        """
-        print('v1 throughputs:')
-        print(all_throughputs)
-        """
 
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.

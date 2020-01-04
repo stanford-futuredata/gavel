@@ -2,6 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 
 import argparse
+import datetime
 import numpy as np
 import random
 import time
@@ -114,7 +115,6 @@ def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
     print('Flattened v1 allocation:')
     print(flattened_allocation.round(5))
     print('')
-
     return unflattened_allocation
 
 def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
@@ -129,25 +129,8 @@ def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
                                                     None, None, cluster_spec)
     print('Flattened v2 allocation:')
     print(flattened_allocation.round(5))
+    # TODO: Unflatten allocation.
     unflattened_allocation = {}
-    for i, job in enumerate(jobs):
-        unflattened_allocation[job.job_id] = {}
-        for j, worker_type in enumerate(worker_types):
-            unflattened_allocation[job.job_id][worker_type] = \
-                flattened_allocation[i*num_variables_per_job,j]
-        for k, other_job in enumerate(jobs):
-            if i == k:
-                continue
-            merged_job_id = JobIdPair(job.job_id[0], other_job.job_id[0])
-            if merged_job_id not in unflattened_allocation:
-                unflattened_allocation[merged_job_id] = {}
-            for j, worker_type in enumerate(worker_types):
-                app_idx = apps.index(other_job.job_type)
-                if worker_type not in unflattened_allocation[merged_job_id]:
-                    unflattened_allocation[merged_job_id][worker_type] = 0
-                unflattened_allocation[merged_job_id][worker_type] += \
-                    flattened_allocation[i*num_variables_per_job+1+app_idx,j]
-
     return unflattened_allocation
 
 def main(args):
@@ -171,22 +154,16 @@ def main(args):
                                  job_template=job_template,
                                  job_id=job_id))
     policy = utils.get_policy('max_min_fairness_packed')
+    start = datetime.datetime.now()
     allocation_v1 = get_allocation_v1(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types)
+    v1_runtime = datetime.datetime.now() - start
+    start = datetime.datetime.now()
     allocation_v2 = get_allocation_v2(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types)
-
-    print('Allocation v1:')
-    utils.print_allocation(allocation_v1)
-    print('Allocation v2:')
-    utils.print_allocation(allocation_v2)
-
-    """
-    job_ids = sorted(allocation_v2.keys())
-    for job_id in job_ids:
-        print('Job', str(job_id) + ':', allocation_v2[job_id])
-        print('')
-    """
+    v2_runtime = datetime.datetime.now() - start
+    print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
+    print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(

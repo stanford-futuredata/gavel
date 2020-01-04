@@ -1256,11 +1256,8 @@ class Scheduler:
             job_id: self._jobs[job_id].scale_factor
             for job_id in self._jobs
         }
-        if self._policy.name == 'MaxMinFairness_Packing':
-            unflattened_allocation = self._policy.get_allocation_v2(
-                    self._app_throughputs, self._job_id_to_application,
-                    scale_factors, None, self._cluster_spec)
-            self._print_allocation()
+        # TODO: Add case for MaxMinFairnessPacking policy with
+        # new allocation format.
         if self._policy.name.startswith("MaxMinFairness"):
             priority_weights = {
                 job_id: self._jobs[job_id].priority_weight
