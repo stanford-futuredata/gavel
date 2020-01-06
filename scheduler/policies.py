@@ -343,6 +343,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             cp.sum(cp.multiply(x, cp.multiply(scale_factors_array, masks)),
                     axis=0) <= self._num_workers)
 
+
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
         else:
@@ -422,6 +423,16 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         for single_job_id in single_job_ids:
             indexes = relevant_combinations[single_job_id]
             constraints.append(cp.sum(x[indexes]) <= 1)
+
+        # Explicitly constrain all allocation values with an effective scale
+        # factor of 0 to be 0.
+        # NOTE: This is not strictly necessary because these allocation values
+        # do not affect the optimal allocation for nonzero scale factor
+        # combinations.
+        for i in range(m):
+            for j in range(n):
+                if scale_factors_array[i,j] == 0:
+                    constraints.append(x[i,j] == 0)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='ECOS')
 
