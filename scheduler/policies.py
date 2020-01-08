@@ -221,52 +221,58 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
     def __init__(self):
         self._name = 'MaxMinFairness_Packing'
 
-    def get_allocation_v2(self, unflattened_app_throughputs,
-                          job_id_to_application, scale_factors,
+    def get_allocation_v2(self, unflattened_job_type_throughputs,
+                          job_id_to_job_type, scale_factors,
                           priority_weights, cluster_spec):
-        job_ids = sorted(job_id_to_application.keys())
-        apps = sorted(unflattened_app_throughputs.keys())
+        # TODO: Rename unflattened_job_type_throughputs ->
+        #       unflattened_throughputs
+        job_ids = sorted(job_id_to_job_type.keys())
+        job_types = sorted(unflattened_job_type_throughputs.keys())
         worker_types = sorted(cluster_spec.keys())
         self._num_workers = \
             [cluster_spec[worker_type] for worker_type in worker_types]
 
-        # Create a map from application to list of job indexes.
-        application_to_job_idx = {}
+        # Create a map from job type to list of job indexes.
+        job_type_to_job_idx = {}
         for i, job_id in enumerate(job_ids):
-            app = job_id_to_application[job_id]
-            if app not in application_to_job_idx:
-                application_to_job_idx[app] = []
-            application_to_job_idx[app].append(i)
+            job_type = job_id_to_job_type[job_id]
+            if job_type not in job_type_to_job_idx:
+                job_type_to_job_idx[job_type] = []
+            job_type_to_job_idx[job_type].append(i)
 
         # Num jobs.
         n = len(job_ids)
-        # Num applications.
-        a = len(unflattened_app_throughputs.keys())
+        # Num job_types.
+        a = len(unflattened_job_type_throughputs.keys())
         # Num worker_types.
         m = len(worker_types)
         # Num varibles per job.
         num_variables_per_job = 1 + a
 
-        # Compute normalizing factor for each application, this normalizing
-        # factor will be used to normalize throughputs for the same application
-        # in application combinations as well.
+        # Compute normalizing factor for each job type.
+        # This normalizing factor will be used to normalize throughputs for the
+        # same job type in job-job type combinations, as well.
         normalizing_factors = {}
-        for app in apps:
+        for job_type in job_types:
+            unflattened_throughputs = \
+                unflattened_job_type_throughputs[job_type]
             normalizing_factor = 0.0
             for worker_type in worker_types:
                 normalizing_factor += \
-                    unflattened_app_throughputs[app][worker_type][None]
-            normalizing_factors[app] = normalizing_factor
+                    unflattened_throughputs[worker_type][None]
+            normalizing_factors[job_type] = normalizing_factor
 
-        flattened_app_throughputs = np.zeros(shape=(a, 1 + a, m),
-                                             dtype=np.float32)
-        for i, app in enumerate(apps):
-            for j, other_app in enumerate([None] + apps):
+        flattened_job_type_throughputs = np.zeros(shape=(a, 1 + a, m),
+                                                  dtype=np.float32)
+        for i, job_type in enumerate(job_types):
+            unflattened_throughputs = \
+                unflattened_job_type_throughputs[job_type]
+            for j, other_job_type in enumerate([None] + job_types):
                 for k, worker_type in enumerate(worker_types):
-                    flattened_app_throughputs[i,j,k] = \
-                        unflattened_app_throughputs[app][worker_type][other_app]
-        for i, app in enumerate(apps):
-            flattened_app_throughputs[i] /= normalizing_factors[app]
+                    flattened_job_type_throughputs[i,j,k] = \
+                        unflattened_throughputs[worker_type][other_job_type]
+        for i, job_type in enumerate(job_types):
+            flattened_job_type_throughputs[i] /= normalizing_factors[job_type]
 
         # Allocation matrix.
         x = cp.Variable((n * num_variables_per_job, m))
@@ -274,6 +280,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         # Set up masks to avoid double-counting allocation values when
         # computing constraint that the sum of allocation values of each
         # worker type must be <= the number of workers of that worker type.
+        # TODO: Change this if we ever consider combinations larger than pairs.
         masks = np.ones((n * num_variables_per_job, m))
         for i in range(0, n * num_variables_per_job, num_variables_per_job):
             for j in range(1, num_variables_per_job):
@@ -295,47 +302,47 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         # for all job type pairs a, b:
         #   sum of allocation of all jobs of type a paired with type b ==
         #   sum of allocation of all jobs of type b paired with type a
-        for i, app_0 in enumerate(apps):
-            for j, app_1 in enumerate(apps):
-                # Set constraint for job type pair app_0, app_1
+        for i, job_type_0 in enumerate(job_types):
+            for j, job_type_1 in enumerate(job_types):
+                # Set constraint for job type pair job_type_0, job_type_1
 
                 # Store the allocation values for jobs of each type
-                app_0_job_allocations = []
-                app_1_job_allocations = []
+                job_type_0_job_allocations = []
+                job_type_1_job_allocations = []
 
                 # Retrieve the list of jobs of each type.
-                app_0_jobs = application_to_job_idx[app_0]
-                app_1_jobs = application_to_job_idx[app_1]
+                job_type_0_jobs = job_type_to_job_idx[job_type_0]
+                job_type_1_jobs = job_type_to_job_idx[job_type_1]
 
-                # Allocation of jobs of type app_0 when paired with type app_1
-                for job_idx in app_0_jobs:
+                # Allocation of jobs of job_type_0 when paired with job_type_1
+                for job_idx in job_type_0_jobs:
                     job_id = job_ids[job_idx]
                     job_idx *= num_variables_per_job
-                    app_0_job_allocations.append(x[job_idx+1+j])
+                    job_type_0_job_allocations.append(x[job_idx+1+j])
 
-                # Allocation of job of type app_1 when paired with type app_0
-                for job_idx in app_1_jobs:
+                # Allocation of jobs of job_type_1 when paired with job_type_0
+                for job_idx in job_type_1_jobs:
                     job_id = job_ids[job_idx]
                     job_idx *= num_variables_per_job
-                    app_1_job_allocations.append(x[job_idx+1+i])
+                    job_type_1_job_allocations.append(x[job_idx+1+i])
 
-                constraints.append(cp.sum(app_0_job_allocations) ==
-                                   cp.sum(app_1_job_allocations))
+                constraints.append(cp.sum(job_type_0_job_allocations) ==
+                                   cp.sum(job_type_1_job_allocations))
 
         for i in range(0, n * num_variables_per_job, num_variables_per_job):
             job_id = job_ids[i // num_variables_per_job]
-            app = job_id_to_application[job_id]
-            app_idx = apps.index(app)
-            # If there is only one job of this application type, zero out the
+            job_type = job_id_to_job_type[job_id]
+            job_type_idx = job_types.index(job_type)
+            # If there is only one job of this job type, zero out the
             # allocation corresponding to this job colocating with itself.
-            if len(application_to_job_idx[app]) == 1:
+            if len(job_type_to_job_idx[job_type]) == 1:
                 for k, worker_type in enumerate(worker_types):
-                    constraints.append(x[i+1+app_idx,k] == 0.0)
+                    constraints.append(x[i+1+job_type_idx,k] == 0.0)
 
             # Compute the effective throughput for each job.
             coefficients = \
                 np.multiply(scale_factors_array[i:i+num_variables_per_job],
-                            flattened_app_throughputs[app_idx] /\
+                            flattened_job_type_throughputs[job_type_idx] /\
                                 priority_weights[job_id])
             objective_terms.append(
                 cp.sum(cp.multiply(x[i:i+num_variables_per_job],

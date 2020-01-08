@@ -14,19 +14,19 @@ from job_table import JobTable
 
 def print_allocation(allocation, jobs):
     n = len(jobs)
-    apps = sorted(set([job.job_type for job in jobs]))
-    num_variables_per_job = 1 + len(apps)
+    job_types = sorted(set([job.job_type for job in jobs]))
+    num_variables_per_job = 1 + len(job_types)
     job_ids = sorted([job.job_id for job in jobs])
-    job_id_to_application = {job.job_id : job.job_type for job in jobs}
+    job_id_to_job_type = {job.job_id : job.job_type for job in jobs}
     for i in range(0, n * num_variables_per_job, num_variables_per_job):
         job_id = job_ids[i // num_variables_per_job]
         print('Job %s (%s):' % (str(job_id),
-                                job_id_to_application[job_id]))
+                                job_id_to_job_type[job_id]))
         print('\tIsolated allocation: %.5f %.5f %.5f' % (allocation[i,0],
                                                          allocation[i,1],
                                                          allocation[i,2]))
         for j in range(1, num_variables_per_job):
-            print('\tAllocation with %s: %.5f %.5f %.5f' % (apps[j-1],
+            print('\tAllocation with %s: %.5f %.5f %.5f' % (job_types[j-1],
                                                             allocation[i+j,0],
                                                             allocation[i+j,1],
                                                             allocation[i+j,2]))
@@ -93,19 +93,19 @@ def get_job_throughputs(jobs, oracle_throughputs, worker_types):
                     oracle_throughputs[worker_type][job.job_type][other_job.job_type]
     return throughputs
 
-def get_app_throughputs(jobs, oracle_throughputs, worker_types):
-    apps = set([job.job_type for job in jobs])
-    app_throughputs = {}
-    for app in apps:
-        app_throughputs[app] = {}
+def get_job_type_throughputs(jobs, oracle_throughputs, worker_types):
+    job_types = set([job.job_type for job in jobs])
+    job_type_throughputs = {}
+    for job_type in job_types:
+        job_type_throughputs[job_type] = {}
         for worker_type in worker_types:
-            app_throughputs[app][worker_type] = {}
-            app_throughputs[app][worker_type][None] = \
-                oracle_throughputs[worker_type][app]['null']
-            for other_app in apps:
-                app_throughputs[app][worker_type][other_app] = \
-                    oracle_throughputs[worker_type][app][other_app][0]
-    return app_throughputs
+            job_type_throughputs[job_type][worker_type] = {}
+            job_type_throughputs[job_type][worker_type][None] = \
+                oracle_throughputs[worker_type][job_type]['null']
+            for other_job_type in job_types:
+                job_type_throughputs[job_type][worker_type][other_job_type] = \
+                    oracle_throughputs[worker_type][job_type][other_job_type][0]
+    return job_type_throughputs
 
 def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
                       worker_types, scale_factors, priority_weights,
@@ -118,8 +118,8 @@ def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
         return unflattened_allocation
 
     n = len(jobs)
-    apps = sorted(set([job.job_type for job in jobs]))
-    num_variables_per_job = 1 + len(apps)
+    job_types = sorted(set([job.job_type for job in jobs]))
+    num_variables_per_job = 1 + len(job_types)
     flattened_allocation = np.zeros((n * num_variables_per_job,
                                      len(worker_types)), dtype=np.float32)
     job_ids = sorted([job.job_id for job in jobs])
@@ -132,20 +132,20 @@ def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
             if i == j:
                 continue
             merged_job_id = JobIdPair(job_id[0], other_job_id[0])
-            app_idx = apps.index(jobs[j].job_type)
+            job_type_idx = job_types.index(jobs[j].job_type)
             for k, worker_type in enumerate(worker_types):
-                flattened_allocation[job_offset+1+app_idx, k] = \
+                flattened_allocation[job_offset+1+job_type_idx, k] = \
                     unflattened_allocation[merged_job_id][worker_type]
     return flattened_allocation
 
 def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
                       worker_types, scale_factors, priority_weights,
                       flatten=True):
-    job_id_to_application = {job.job_id : job.job_type for job in jobs}
-    app_throughputs = get_app_throughputs(jobs, oracle_throughputs,
+    job_id_to_job_type = {job.job_id : job.job_type for job in jobs}
+    job_type_throughputs = get_job_type_throughputs(jobs, oracle_throughputs,
                                           worker_types)
-    flattened_allocation = policy.get_allocation_v2(app_throughputs,
-                                                    job_id_to_application,
+    flattened_allocation = policy.get_allocation_v2(job_type_throughputs,
+                                                    job_id_to_job_type,
                                                     scale_factors,
                                                     priority_weights,
                                                     cluster_spec)

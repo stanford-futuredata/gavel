@@ -119,13 +119,14 @@ class Scheduler:
         # Measured and predicted throughputs for all current incomplete
         # applications.
         self._throughputs = {}
-        # Throughputs measured with respect to applications rather than
+        # Throughputs measured with respect to job types rather than
         # individual jobs.
-        self._app_throughputs = {}
+        # TODO: Use this to replace self._throughputs.
+        self._job_type_throughputs = {}
         # Map from job ID to application.
-        self._job_id_to_application = {}
+        self._job_id_to_job_type = {}
         # Map from application to set of job IDs.
-        self._application_to_job_ids = {}
+        self._job_type_to_job_ids = {}
         # Throughputs for all job types (pre-measured).
         if throughputs_file is not None:
             self._oracle_throughputs = utils.read_all_throughputs_json(
@@ -271,29 +272,29 @@ class Scheduler:
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
             self._throughputs[job_id] = {}
-            app = self._jobs[job_id].job_type
-            self._job_id_to_application[job_id] = app
-            if app not in self._app_throughputs:
-                self._application_to_job_ids[app] = set()
+            job_type = self._jobs[job_id].job_type
+            self._job_id_to_job_type[job_id] = job_type
+            if job_type not in self._job_type_throughputs:
+                self._job_type_to_job_ids[job_type] = set()
                 if self._estimate_throughputs:
                     # TODO: Support throughput estimation.
                     pass
                 else:
-                    self._app_throughputs[app] = {}
-                    other_apps = list(self._app_throughputs.keys())
+                    self._job_type_throughputs[job_type] = {}
+                    other_job_types = list(self._job_type_throughputs.keys())
                     for worker_type in self._worker_types:
-                        self._app_throughputs[app][worker_type] = {}
-                        self._app_throughputs[app][worker_type][None] = \
-                            self._oracle_throughputs[worker_type][app]['null']
+                        self._job_type_throughputs[job_type][worker_type] = {}
+                        self._job_type_throughputs[job_type][worker_type][None] = \
+                            self._oracle_throughputs[worker_type][job_type]['null']
                         if self._job_packing:
-                            for other_app in other_apps:
+                            for other_job_type in other_job_types:
                                 colocated_throughputs = \
-                                    self._oracle_throughputs[worker_type][app][other_app]
-                                self._app_throughputs[app][worker_type][other_app] = \
+                                    self._oracle_throughputs[worker_type][job_type][other_job_type]
+                                self._job_type_throughputs[job_type][worker_type][other_job_type] = \
                                     colocated_throughputs[0]
-                                self._app_throughputs[other_app][worker_type][app] = \
+                                self._job_type_throughputs[other_job_type][worker_type][job_type] = \
                                     colocated_throughputs[1]
-            self._application_to_job_ids[app].add(job_id)
+            self._job_type_to_job_ids[job_type].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
             for worker_type in self._worker_types:
@@ -349,14 +350,14 @@ class Scheduler:
                       self._per_job_latest_timestamps[job_id],
                       duration, "seconds", len(self._jobs))
                   )
-            app = self._job_id_to_application[job_id]
-            self._application_to_job_ids[app].remove(job_id)
+            job_type = self._job_id_to_job_type[job_id]
+            self._job_type_to_job_ids[job_type].remove(job_id)
             del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._total_steps_run[job_id]
             del self._job_time_so_far[job_id]
             del self._throughputs[job_id]
-            del self._job_id_to_application[job_id]
+            del self._job_id_to_job_type[job_id]
             del self._num_failures_per_job[job_id]
             if self._job_packing:
                 to_delete = []
@@ -369,11 +370,11 @@ class Scheduler:
                     del self._job_time_so_far[other_job_id]
                     if self._estimate_throughputs:
                         del self._throughputs_mask[other_job_id]
-                if len(self._application_to_job_ids[app]) == 0:
-                    del self._app_throughputs[app]
-                    for other_app in self._app_throughputs:
+                if len(self._job_type_to_job_ids[job_type]) == 0:
+                    del self._job_type_throughputs[job_type]
+                    for other_job_type in self._job_type_throughputs:
                         for worker_type in self._worker_types:
-                            del self._app_throughputs[other_app][worker_type][app]
+                            del self._job_type_throughputs[other_job_type][worker_type][job_type]
             if self._estimate_throughputs:
                 for worker_type in self._profiled_jobs:
                     if job_id in self._jobs_to_profile[worker_type]:
