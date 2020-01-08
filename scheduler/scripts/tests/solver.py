@@ -50,7 +50,8 @@ def generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
         command = job_template.command % (run_dir)
 
     scale_factor = 1
-    if generate_multi_gpu_jobs:  # Copies Philly distribution.
+    if generate_multi_gpu_jobs:
+        # NOTE: Distribution modified for test purposes.
         r = rng.uniform(0, 1)
         if 0.2 <= r <= 0.6:
             scale_factor = 2
@@ -59,20 +60,11 @@ def generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
         elif 0.9 <= r:
             scale_factor = 8
 
-        # TODO: Revert this back.
-        """
-        if 0.8 <= r <= 0.85:
-            scale_factor = 2
-        elif 0.85 <= r <= 0.95:
-            scale_factor = 4
-        elif 0.95 <= r:
-            scale_factor = 8
-        """
-
     priority_weight = 1.0
     if generate_multi_priority_jobs:
+        # NOTE: Distribution modified for test purposes.
         r = rng.uniform(0, 1)
-        if 0.0 <= r <= 0.2:
+        if 0.0 <= r <= 0.4:
             priority_weight = 5.0
 
     job = Job(job_id=job_id,
@@ -116,10 +108,12 @@ def get_app_throughputs(jobs, oracle_throughputs, worker_types):
     return app_throughputs
 
 def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
-                      worker_types, scale_factors, flatten=True):
+                      worker_types, scale_factors, priority_weights,
+                      flatten=True):
     throughputs = get_job_throughputs(jobs, oracle_throughputs, worker_types)
     unflattened_allocation = \
-        policy.get_allocation(throughputs, scale_factors, None, cluster_spec)
+        policy.get_allocation(throughputs, scale_factors, priority_weights,
+                              cluster_spec)
     if not flatten:
         return unflattened_allocation
 
@@ -145,13 +139,15 @@ def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
     return flattened_allocation
 
 def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
-                      worker_types, scale_factors, flatten=True):
+                      worker_types, scale_factors, priority_weights,
+                      flatten=True):
     job_id_to_application = {job.job_id : job.job_type for job in jobs}
     app_throughputs = get_app_throughputs(jobs, oracle_throughputs,
                                           worker_types)
     flattened_allocation = policy.get_allocation_v2(app_throughputs,
                                                     job_id_to_application,
-                                                    scale_factors, None,
+                                                    scale_factors,
+                                                    priority_weights,
                                                     cluster_spec)
     if flatten:
         return flattened_allocation
@@ -184,15 +180,18 @@ def main(args):
     scale_factors = {
         job.job_id: job.scale_factor for job in jobs
     }
+    priority_weights = {
+        job.job_id: job.priority_weight for job in jobs
+    }
     start = datetime.datetime.now()
     v1_allocation = get_allocation_v1(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
-                                      scale_factors)
+                                      scale_factors, priority_weights)
     v1_runtime = datetime.datetime.now() - start
     start = datetime.datetime.now()
     v2_allocation = get_allocation_v2(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
-                                      scale_factors)
+                                      scale_factors, priority_weights)
     v2_runtime = datetime.datetime.now() - start
     print('v1 allocation:')
     print_allocation(v1_allocation, jobs)
