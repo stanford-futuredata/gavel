@@ -304,7 +304,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         #   sum of allocation of all jobs of type b paired with type a
         for i, job_type_0 in enumerate(job_types):
             for j, job_type_1 in enumerate(job_types):
-                # Set constraint for job type pair job_type_0, job_type_1
+                if j <= i:
+                    continue
 
                 # Store the allocation values for jobs of each type
                 job_type_0_job_allocations = []
