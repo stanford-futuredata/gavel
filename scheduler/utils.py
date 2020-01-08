@@ -74,7 +74,6 @@ def print_allocation(allocation, current_time=None):
        Debug method used for printing the allocation of each job on each
        worker type.
     """
-    # print('')
     print('=' * 80)
     if current_time is not None:
         print('Allocation\t(Current_time: %f)' % (current_time))
