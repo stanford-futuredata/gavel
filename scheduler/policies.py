@@ -208,7 +208,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver='GUROBI')
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -358,7 +358,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         else:
             objective = cp.Maximize(cp.minimum(*objective_terms))
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver='GUROBI')
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -427,7 +427,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                 if scale_factors_array[i,j] == 0:
                     constraints.append(x[i,j] == 0)
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver='GUROBI')
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -454,7 +454,7 @@ class MinTotalDurationPolicy(Policy):
                 self._num_steps_remaining / T),
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver='GUROBI')
 
         return cvxprob.status, x
 
@@ -533,7 +533,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
                 cp.sum(cp.multiply(throughputs[indexes], x[indexes])) >=
                     (num_steps_remaining / T))
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver='GUROBI')
 
         return cvxprob.status, x
 
