@@ -7,8 +7,9 @@ import job_id_pair
 
 class Policy:
 
-    def __init__(self):
+    def __init__(self, solver='ECOS'):
         self._name = None
+        self._solver = solver
 
     @property
     def name(self):
@@ -46,6 +47,9 @@ class Policy:
 
 
 class PolicyWithPacking(Policy):
+
+    def __init__(self, solver='ECOS'):
+        Policy.__init__(self, solver)
 
     def flatten(self, d, cluster_spec, normalize=True,
                 priority_weights=None):
@@ -142,9 +146,10 @@ class PolicyWithPacking(Policy):
 
 class MaxMinFairnessPolicy(Policy):
 
-    def __init__(self):
+    def __init__(self, solver):
         self._name = 'MaxMinFairness'
-        self._max_min_fairness_perf_policy = MaxMinFairnessPolicyWithPerf()
+        self._max_min_fairness_perf_policy = \
+            MaxMinFairnessPolicyWithPerf(solver)
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        priority_weights, cluster_spec):
@@ -166,7 +171,8 @@ class MaxMinFairnessPolicy(Policy):
 
 class MaxMinFairnessPolicyWithPerf(Policy):
 
-    def __init__(self):
+    def __init__(self, solver):
+        Policy.__init__(self, solver)
         self._name = 'MaxMinFairness_Perf'
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
@@ -208,7 +214,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
             cp.sum(x, axis=1) <= 1,
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='GUROBI')
+        result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -218,7 +224,8 @@ class MaxMinFairnessPolicyWithPerf(Policy):
 
 class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
-    def __init__(self):
+    def __init__(self, solver):
+        PolicyWithPacking.__init__(self, solver)
         self._name = 'MaxMinFairness_Packing'
 
     def get_allocation_v2(self, unflattened_job_type_throughputs,
@@ -358,7 +365,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         else:
             objective = cp.Maximize(cp.minimum(*objective_terms))
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='GUROBI')
+        result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -427,7 +434,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                 if scale_factors_array[i,j] == 0:
                     constraints.append(x[i,j] == 0)
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='GUROBI')
+        result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -437,7 +444,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
 class MinTotalDurationPolicy(Policy):
 
-    def __init__(self):
+    def __init__(self, solver):
+        Policy.__init__(self, solver)
         self._name = 'MinTotalDuration_Perf'
 
     def get_allocation_helper(self, throughputs, scale_factors_array, T):
@@ -454,7 +462,7 @@ class MinTotalDurationPolicy(Policy):
                 self._num_steps_remaining / T),
         ]
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='GUROBI')
+        result = cvxprob.solve(solver=self._solver)
 
         return cvxprob.status, x
 
@@ -505,7 +513,8 @@ class MinTotalDurationPolicy(Policy):
 
 class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
 
-    def __init__(self):
+    def __init__(self, solver):
+        PolicyWithPacking.__init__(self, solver)
         self._name = 'MinTotalDuration_Packing'
 
     def get_allocation_helper(self, all_throughputs, job_ids,
@@ -533,7 +542,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
                 cp.sum(cp.multiply(throughputs[indexes], x[indexes])) >=
                     (num_steps_remaining / T))
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='GUROBI')
+        result = cvxprob.solve(solver=self._solver)
 
         return cvxprob.status, x
 

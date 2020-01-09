@@ -33,7 +33,7 @@ def main(args):
     job_queue = queue.Queue()
     for job in jobs:
         job_queue.put(job)
-    policy = utils.get_policy(args.policy, args.seed)
+    policy = utils.get_policy(args.policy, solver=args.solver, seed=args.seed)
     sched = scheduler.Scheduler(policy,
                                 seed=args.seed)
     start_time = datetime.datetime.now()
@@ -63,4 +63,6 @@ if __name__=='__main__':
                         help='Scheduler policy')
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+                        default='ECOS', help='CVXPY solver')
     main(parser.parse_args())

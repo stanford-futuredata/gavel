@@ -176,7 +176,7 @@ def main(args):
                                  args.generate_multi_priority_jobs,
                                  job_template=job_template,
                                  job_id=job_id))
-    policy = utils.get_policy('max_min_fairness_packed')
+    policy = utils.get_policy('max_min_fairness_packed', solver=args.solver)
     scale_factors = {
         job.job_id: job.scale_factor for job in jobs
     }
@@ -219,6 +219,8 @@ if __name__=='__main__':
     parser.add_argument('-c', '--cluster-spec', type=str, default='3:3:3',
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+                        default='ECOS', help='CVXPY solver')
     args = parser.parse_args()
     main(args)
 
