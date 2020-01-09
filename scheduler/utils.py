@@ -19,21 +19,21 @@ def read_all_throughputs_json(throughputs_file):
         throughputs = json.load(f)
     return throughputs
 
-def get_policy(policy_name, seed=None):
+def get_policy(policy_name, solver, seed=None):
     if policy_name == 'max_min_fairness':
-        policy = policies.MaxMinFairnessPolicy()
+        policy = policies.MaxMinFairnessPolicy(solver=solver)
     elif policy_name == 'max_min_fairness_perf':
-        policy = policies.MaxMinFairnessPolicyWithPerf()
+        policy = policies.MaxMinFairnessPolicyWithPerf(solver=solver)
     elif policy_name == 'max_min_fairness_packed':
-        policy = policies.MaxMinFairnessPolicyWithPacking()
+        policy = policies.MaxMinFairnessPolicyWithPacking(solver=solver)
     elif policy_name == 'max_sum_throughput_perf':
-        policy = policies.MaxSumThroughputPolicyWithPerf()
+        policy = policies.MaxSumThroughputPolicyWithPerf(solver=solver)
     elif policy_name == 'max_sum_throughput_packed':
-        policy = policies.MaxSumThroughputPolicyWithPacking()
+        policy = policies.MaxSumThroughputPolicyWithPacking(solver=solver)
     elif policy_name == 'min_total_duration':
-        policy = policies.MinTotalDurationPolicy()
+        policy = policies.MinTotalDurationPolicy(solver=solver)
     elif policy_name == 'min_total_duration_packed':
-        policy = policies.MinTotalDurationPolicyWithPacking()
+        policy = policies.MinTotalDurationPolicyWithPacking(solver=solver)
     elif policy_name == 'fifo':
         policy = policies.FIFOPolicy(seed=seed)
     elif policy_name == 'fifo_perf':

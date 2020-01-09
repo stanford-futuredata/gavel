@@ -16,10 +16,10 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              lam, seed, interval, jobs_to_complete,
              fixed_job_duration, generate_multi_gpu_jobs,
              generate_multi_priority_jobs,
-             simulate_steady_state, debug,
+             simulate_steady_state, solver, debug,
              checkpoint_threshold, checkpoint_file,
              profiling_percentage):
-    policy = utils.get_policy(policy_name, seed=seed)
+    policy = utils.get_policy(policy_name, solver=solver, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
                     throughputs_file=throughputs_file,
@@ -76,6 +76,7 @@ def main(args):
                  args.generate_multi_gpu_jobs,
                  args.generate_multi_priority_jobs,
                  args.simulate_steady_state,
+                 args.solver,
                  args.debug, args.checkpoint_threshold,
                  args.checkpoint_file,
                  args.profiling_percentage)
@@ -90,7 +91,7 @@ def main(args):
                          args.generate_multi_gpu_jobs,
                          args.generate_multi_priority_jobs,
                          args.simulate_steady_state,
-                         args.debug,
+                         args.solver, args.debug,
                          args.checkpoint_threshold,
                          args.checkpoint_file,
                          args.profiling_percentage)
@@ -130,6 +131,8 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, adds as many jobs as there are workers '
                               'before beginning the simulation.'))
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+                        default='ECOS', help='CVXPY solver')
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Verbose')
     parser.add_argument('-d', '--debug', action='store_true', default=False,
