@@ -156,6 +156,25 @@ def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
     unflattened_allocation = {}
     return unflattned_allocation
 
+def get_allocation_v3(policy, jobs, oracle_throughputs, cluster_spec,
+                      worker_types, scale_factors, priority_weights,
+                      flatten=True):
+    job_id_to_job_type = {job.job_id : job.job_type for job in jobs}
+    job_type_throughputs = get_job_type_throughputs(jobs, oracle_throughputs,
+                                          worker_types)
+    flattened_allocation = policy.get_allocation_v3(job_type_throughputs,
+                                                    job_id_to_job_type,
+                                                    scale_factors,
+                                                    priority_weights,
+                                                    cluster_spec)
+    if flatten:
+        return flattened_allocation
+
+    # TODO: Unflatten allocation
+    unflattened_allocation = {}
+    return unflattned_allocation
+
+
 def main(args):
     rng = random.Random()
     rng.seed(0)
@@ -183,6 +202,7 @@ def main(args):
     priority_weights = {
         job.job_id: job.priority_weight for job in jobs
     }
+    """
     start = datetime.datetime.now()
     v1_allocation = get_allocation_v1(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
@@ -193,14 +213,27 @@ def main(args):
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights)
     v2_runtime = datetime.datetime.now() - start
+    """
+    start = datetime.datetime.now()
+    v3_allocation = get_allocation_v3(policy, jobs, oracle_throughputs,
+                                      cluster_spec, worker_types,
+                                      scale_factors, priority_weights)
+    v3_runtime = datetime.datetime.now() - start
+    """
     print('v1 allocation:')
     print_allocation(v1_allocation, jobs)
     print('')
     print('v2 allocation:')
     print_allocation(v2_allocation, jobs)
     print('')
-    print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
-    print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
+    """
+    print('v3 allocation:')
+    print(v3_allocation)
+    #print_allocation(v3_allocation, jobs)
+    print('')
+    #print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
+    #print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
+    print('v3 runtime:', v3_runtime.seconds + v3_runtime.microseconds / 1.0e6)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(

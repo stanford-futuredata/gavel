@@ -220,6 +220,154 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
     def __init__(self):
         self._name = 'MaxMinFairness_Packing'
+    
+    def get_allocation_v3(self, unflattened_job_type_throughputs,
+                          job_id_to_job_type, scale_factors,
+                          priority_weights, cluster_spec):
+        # TODO: Rename unflattened_job_type_throughputs ->
+        #       unflattened_throughputs
+        job_ids = sorted(job_id_to_job_type.keys())
+        job_types = sorted(unflattened_job_type_throughputs.keys())
+        worker_types = sorted(cluster_spec.keys())
+        num_workers = \
+            [cluster_spec[worker_type] for worker_type in worker_types]
+
+        # Create a map from job type to list of job indexes.
+        job_type_to_job_idx = {}
+        for i, job_id in enumerate(job_ids):
+            job_type = job_id_to_job_type[job_id]
+            if job_type not in job_type_to_job_idx:
+                job_type_to_job_idx[job_type] = []
+            job_type_to_job_idx[job_type].append(i)
+
+        # Num jobs.
+        n = len(job_ids)
+        # Num job_types.
+        a = len(unflattened_job_type_throughputs.keys())
+        # Num worker_types.
+        m = len(worker_types)
+        # Num varibles per job.
+        num_variables_per_job = 1 + a
+
+        # Compute normalizing factor for each job type.
+        # This normalizing factor will be used to normalize throughputs for the
+        # same job type in job-job type combinations, as well.
+        normalizing_factors = {}
+        for job_type in job_types:
+            unflattened_throughputs = \
+                unflattened_job_type_throughputs[job_type]
+            normalizing_factor = 0.0
+            for worker_type in worker_types:
+                normalizing_factor += \
+                    unflattened_throughputs[worker_type][None]
+            normalizing_factors[job_type] = normalizing_factor
+
+        # Set up flattened job type throughputs.
+        flattened_job_type_throughputs = np.zeros(shape=(a, (1 + a) * m),
+                                                  dtype=np.float32)
+        for i, job_type in enumerate(job_types):
+            unflattened_throughputs = \
+                unflattened_job_type_throughputs[job_type]
+            for k, worker_type in enumerate(worker_types):
+                for j, other_job_type in enumerate([None] + job_types):
+                    flattened_job_type_throughputs[i,k*(1+a)+j] = \
+                        unflattened_throughputs[worker_type][other_job_type]
+    
+        # Set up scale factors.
+        flattened_scale_factors = \
+            np.reshape([scale_factors[job_id] for job_id in job_ids], (n, 1))
+        scale_factors_array = np.tile(flattened_scale_factors,
+                                        (1, num_variables_per_job * m))
+
+        # Set up masks to avoid double-counting allocation values when
+        # computing constraint that the sum of allocation values of each
+        # worker type must be <= the number of workers of that worker type.
+        # TODO: Change this if we ever consider combinations larger than pairs.
+        masks = np.full(shape=(n, num_variables_per_job), fill_value=0.5)
+        masks[:0] = 1.0
+
+        # Allocation matrix.
+        x = cp.Variable((n, num_variables_per_job * m))
+        
+        constraints = [
+            # All allocation values must be >= 0.
+            x >= 0,
+            # The sum of allocation values for each job must be <= 1.
+            cp.sum(x, axis=1) <= 1
+        ]
+        
+        # The sum of allocation values for each worker type must be <=
+        # the number of workers of that type.
+        for i in range(m):
+            relevant_vars = \
+                x[:,i*num_variables_per_job:(i+1)*num_variables_per_job]
+            constraints.append(
+                cp.sum(cp.multiply(relevant_vars, masks)) <= num_workers[i])
+        
+        # Set the following constraints:
+        # for all job type pairs a, b:
+        #   sum of allocation of all jobs of type a paired with type b ==
+        #   sum of allocation of all jobs of type b paired with type a
+        lhs = []
+        rhs = []
+        for i, job_type_0 in enumerate(job_types):
+            for j, job_type_1 in enumerate(job_types):
+                if j <= i:
+                    continue
+
+                # Store the allocation values for jobs of each type
+                job_type_0_job_allocations = []
+                job_type_1_job_allocations = []
+
+                # Retrieve the list of jobs of each type.
+                job_type_0_jobs = job_type_to_job_idx[job_type_0]
+                job_type_1_jobs = job_type_to_job_idx[job_type_1]
+
+                for k in range(m):
+                    # Allocation of job_type_0 jobs when paired with job_type_1
+                    for job_idx in job_type_0_jobs:
+                        offset = k  * num_variables_per_job + 1 + j
+                        job_type_0_job_allocations.append(x[job_idx,offset])
+
+                    # Allocation of job_type_1 jobs when paired with job_type_0
+                    for job_idx in job_type_1_jobs:
+                        offset = k  * num_variables_per_job + 1 + i
+                        job_type_1_job_allocations.append(x[job_idx,offset])
+
+                lhs.append(cp.sum(job_type_0_job_allocations))
+                rhs.append(cp.sum(job_type_1_job_allocations))
+                #constraints.append(cp.sum(job_type_0_job_allocations) ==
+                #                   cp.sum(job_type_1_job_allocations))
+        constraints.append(cp.atoms.affine.hstack.hstack(lhs) ==
+                           cp.atoms.affine.hstack.hstack(rhs))
+
+        # Allocation coefficients.
+        all_coefficients = np.zeros((n, num_variables_per_job * m))
+        for i, job_id in enumerate(job_ids):
+            job_type = job_id_to_job_type[job_id]
+            job_type_idx = job_types.index(job_type)
+            if len(job_type_to_job_idx[job_type]) == 1:
+                for k, worker_type in enumerate(worker_types):
+                    offset = k * num_variables_per_job + 1 + job_type_idx
+                    constraints.append(x[i,offset] == 0.0)
+            all_coefficients[i] = \
+                np.multiply(flattened_job_type_throughputs[job_type_idx],
+                            scale_factors_array[i]) / priority_weights[job_id]
+
+        objective = \
+            cp.Maximize(cp.min(cp.sum(cp.multiply(all_coefficients, x),
+                                      axis=1)))
+ 
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve(solver='ECOS')
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
+
+        allocation = x.value.clip(min=0.0).clip(max=1.0)
+
+        return allocation
+
 
     def get_allocation_v2(self, unflattened_job_type_throughputs,
                           job_id_to_job_type, scale_factors,
