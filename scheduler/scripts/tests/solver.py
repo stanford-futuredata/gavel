@@ -12,24 +12,44 @@ from job import Job
 from job_id_pair import JobIdPair
 from job_table import JobTable
 
-def print_allocation(allocation, jobs):
+def print_allocation(allocation, jobs, v3=False):
     n = len(jobs)
     job_types = sorted(set([job.job_type for job in jobs]))
-    num_variables_per_job = 1 + len(job_types)
+    k = 1 + len(job_types)
     job_ids = sorted([job.job_id for job in jobs])
     job_id_to_job_type = {job.job_id : job.job_type for job in jobs}
-    for i in range(0, n * num_variables_per_job, num_variables_per_job):
-        job_id = job_ids[i // num_variables_per_job]
-        print('Job %s (%s):' % (str(job_id),
-                                job_id_to_job_type[job_id]))
-        print('\tIsolated allocation: %.5f %.5f %.5f' % (allocation[i,0],
-                                                         allocation[i,1],
-                                                         allocation[i,2]))
-        for j in range(1, num_variables_per_job):
-            print('\tAllocation with %s: %.5f %.5f %.5f' % (job_types[j-1],
-                                                            allocation[i+j,0],
-                                                            allocation[i+j,1],
-                                                            allocation[i+j,2]))
+    if v3:
+        for i, job_id in enumerate(job_ids):
+            print('Job %s (%s):' % (str(job_id),
+                                    job_id_to_job_type[job_id]))
+            for j, job_type in enumerate([None] + job_types):
+                if j == 0:
+                    print('\tIsolated allocation: '
+                          '%.5f %.5f %.5f' % (allocation[i,0],
+                                              allocation[i,k],
+                                              allocation[i,2*k]))
+                else:
+                    print('\tAllocation with %s: '
+                          '%.5f %.5f %.5f' % (job_type,
+                                              allocation[i,j],
+                                              allocation[i,k+j],
+                                              allocation[i,2*k+j]))
+
+    else:
+        for i in range(0, n * k, k):
+            job_id = job_ids[i // k]
+            print('Job %s (%s):' % (str(job_id),
+                                    job_id_to_job_type[job_id]))
+            print('\tIsolated allocation: '
+                  '%.5f %.5f %.5f' % (allocation[i,0],
+                                      allocation[i,1],
+                                      allocation[i,2]))
+            for j in range(1, k):
+                print('\tAllocation with %s: '
+                      '%.5f %.5f %.5f' % (job_types[j-1],
+                                          allocation[i+j,0],
+                                          allocation[i+j,1],
+                                          allocation[i+j,2]))
 
 
 def generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
@@ -202,7 +222,6 @@ def main(args):
     priority_weights = {
         job.job_id: job.priority_weight for job in jobs
     }
-    """
     start = datetime.datetime.now()
     v1_allocation = get_allocation_v1(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
@@ -213,26 +232,22 @@ def main(args):
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights)
     v2_runtime = datetime.datetime.now() - start
-    """
     start = datetime.datetime.now()
     v3_allocation = get_allocation_v3(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights)
     v3_runtime = datetime.datetime.now() - start
-    """
     print('v1 allocation:')
     print_allocation(v1_allocation, jobs)
     print('')
     print('v2 allocation:')
     print_allocation(v2_allocation, jobs)
     print('')
-    """
     print('v3 allocation:')
-    print(v3_allocation)
-    #print_allocation(v3_allocation, jobs)
+    print_allocation(v3_allocation, jobs, v3=True)
     print('')
-    #print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
-    #print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
+    print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
+    print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
     print('v3 runtime:', v3_runtime.seconds + v3_runtime.microseconds / 1.0e6)
 
 if __name__=='__main__':
