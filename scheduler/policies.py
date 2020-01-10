@@ -325,14 +325,14 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                 if j <= i:
                     continue
 
-                job_type_0_mask = np.zeros(x.shape)
-                job_type_1_mask = np.zeros(x.shape)
-
                 # Retrieve the list of jobs of each type.
                 job_type_0_jobs = job_type_to_job_idx[job_type_0]
                 job_type_1_jobs = job_type_to_job_idx[job_type_1]
 
                 for k in range(m):
+                    job_type_0_mask = np.zeros(x.shape)
+                    job_type_1_mask = np.zeros(x.shape)
+
                     # Allocation of job_type_0 jobs when paired with job_type_1
                     for job_idx in job_type_0_jobs:
                         offset = k * num_vars_per_job + 1 + j
@@ -343,8 +343,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                         offset = k  * num_vars_per_job + 1 + i
                         job_type_1_mask[job_idx,offset] = 1
 
-                lhs.append(cp.sum(x[job_type_0_mask == 1]))
-                rhs.append(cp.sum(x[job_type_1_mask == 1]))
+                    lhs.append(cp.sum(x[job_type_0_mask == 1]))
+                    rhs.append(cp.sum(x[job_type_1_mask == 1]))
 
         constraints.append(cp.atoms.affine.hstack.hstack(lhs) ==
                            cp.atoms.affine.hstack.hstack(rhs))
@@ -508,7 +508,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         #print('v2 constraint:')
         constraints.append(
             cp.sum(cp.multiply(x, cp.multiply(scale_factors_array, masks)),
-                    axis=0) <= self._num_workers)
+                   axis=0) <= self._num_workers)
         #print(constraints[-1])
         #print('')
         if len(objective_terms) == 1:
