@@ -505,12 +505,10 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                                    coefficients)))
             constraints.append(cp.sum(x[i:i+num_vars_per_job]) <= 1)
 
-        #print('v2 constraint:')
         constraints.append(
             cp.sum(cp.multiply(x, cp.multiply(scale_factors_array, masks)),
                    axis=0) <= self._num_workers)
-        #print(constraints[-1])
-        #print('')
+
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
         else:
