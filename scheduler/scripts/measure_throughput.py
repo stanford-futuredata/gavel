@@ -199,11 +199,14 @@ def enable_mps():
         print(e.stdout.decode('utf-8'))
 
 
-def run_job(job, run_dir):
+def run_job(job, run_dir, data_dir):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES="0")
     interval = max(1, job.num_steps // 100)
     if job.needs_data_dir:
-        parameterized_command = job.command % (run_dir, run_dir)
+        if data_dir is None:
+            parameterized_command = job.command % (run_dir, run_dir)
+        else:
+            parameterized_command = job.command % (run_dir, data_dir)
     else:
         parameterized_command = job.command % (run_dir)
     command = ('%s %d '
@@ -276,7 +279,7 @@ def main(args):
                                   job_table[i].model,
                                   job_table[i].num_steps))
               start_time = time.time()
-              output = run_job(job_table[i], args.run_dir)
+              output = run_job(job_table[i], args.run_dir, args.data_dir)
               if not output:
                   break
               runtime = time.time() - start_time
@@ -370,5 +373,8 @@ if __name__=='__main__':
     parser.add_argument('-r', '--run_dir', type=str,
                         default='/lfs/1/keshav2/workspace',
                         help='Directory to run from')
+    parser.add_argument('-d', '--data_dir', type=str,
+                        default=None,
+                        help='Directory where data is stored')
     args = parser.parse_args()
     main(args)
