@@ -228,6 +228,19 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         PolicyWithPacking.__init__(self, solver)
         self._name = 'MaxMinFairness_Packing'
 
+    def unflatten_v3(self, flattened_allocation, job_ids, job_types,
+                     worker_types):
+        unflattened_allocation = {}
+        num_vars_per_job = len(job_types) + 1
+        for i, job_id in enumerate(job_ids):
+            unflattened_allocation[job_id] = {}
+            for k, worker_type in enumerate(worker_types):
+                unflattened_allocation[job_id][worker_type] = {}
+                for j, job_type in enumerate([None] + job_types):
+                    unflattened_allocation[job_id][worker_type][job_type] = \
+                        flattened_allocation[i,num_vars_per_job*k+j]
+        return unflattened_allocation
+
     def get_allocation_v3(self, unflattened_job_type_throughputs,
                           job_id_to_job_type, scale_factors,
                           priority_weights, cluster_spec):
@@ -253,7 +266,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         a = len(unflattened_job_type_throughputs.keys())
         # Num worker_types.
         m = len(worker_types)
-        # Num varibles per job.
+        # Num variables per job.
         num_vars_per_job = 1 + a
 
         # Compute normalizing factor for each job type.
@@ -328,10 +341,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         lhs = []
         rhs = []
         for i, job_type_0 in enumerate(job_types):
-            for j, job_type_1 in enumerate(job_types):
-                if j <= i:
-                    continue
-
+            for j, job_type_1 in enumerate(job_types[i+1:]):
                 # Retrieve the list of jobs of each type.
                 job_type_0_jobs = job_type_to_job_idx[job_type_0]
                 job_type_1_jobs = job_type_to_job_idx[job_type_1]
@@ -373,14 +383,14 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                                       axis=1)))
 
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
         allocation = x.value.clip(min=0.0).clip(max=1.0)
 
-        return allocation
+        return self.unflatten_v3(allocation, job_ids, job_types, worker_types)
 
 
     def get_allocation_v2(self, unflattened_job_type_throughputs,

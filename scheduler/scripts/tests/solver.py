@@ -24,16 +24,14 @@ def print_allocation(allocation, jobs, v3=False):
                                     job_id_to_job_type[job_id]))
             for j, job_type in enumerate([None] + job_types):
                 if j == 0:
-                    print('\tIsolated allocation: '
-                          '%.5f %.5f %.5f' % (allocation[i,0],
-                                              allocation[i,k],
-                                              allocation[i,2*k]))
+                    s = 'Isolated allocation'
                 else:
-                    print('\tAllocation with %s: '
-                          '%.5f %.5f %.5f' % (job_type,
-                                              allocation[i,j],
-                                              allocation[i,k+j],
-                                              allocation[i,2*k+j]))
+                    s = 'Allocation with %s' % (job_type)
+                print('\t%s: '
+                      '%.5f %.5f %.5f' % (s,
+                                          allocation[job_id]['k80'][job_type],
+                                          allocation[job_id]['p100'][job_type],
+                                          allocation[job_id]['v100'][job_type]))
 
     else:
         for i in range(0, n * k, k):
@@ -178,21 +176,26 @@ def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
 
 def get_allocation_v3(policy, jobs, oracle_throughputs, cluster_spec,
                       worker_types, scale_factors, priority_weights,
-                      flatten=True):
+                      flatten=False):
     job_id_to_job_type = {job.job_id : job.job_type for job in jobs}
     job_type_throughputs = get_job_type_throughputs(jobs, oracle_throughputs,
                                           worker_types)
-    flattened_allocation = policy.get_allocation_v3(job_type_throughputs,
-                                                    job_id_to_job_type,
-                                                    scale_factors,
-                                                    priority_weights,
-                                                    cluster_spec)
+    unflattened_allocation = policy.get_allocation_v3(job_type_throughputs,
+                                                      job_id_to_job_type,
+                                                      scale_factors,
+                                                      priority_weights,
+                                                      cluster_spec)
     if flatten:
+        # TODO: Flatten allocation
+        n = len(jobs)
+        a = len(job_type_throughputs)
+        job_types = sorted(set([job.job_type for job in jobs]))
+        num_variables_per_job = 1 + len(job_types)
+        flattened_allocation = np.zeros((n, num_variables_per_job *
+                                         len(worker_types)), dtype=np.float32)
         return flattened_allocation
 
-    # TODO: Unflatten allocation
-    unflattened_allocation = {}
-    return unflattned_allocation
+    return unflattened_allocation
 
 
 def main(args):
