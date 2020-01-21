@@ -363,8 +363,9 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                     lhs.append(cp.sum(x[job_type_0_mask == 1]))
                     rhs.append(cp.sum(x[job_type_1_mask == 1]))
 
-        constraints.append(cp.atoms.affine.hstack.hstack(lhs) ==
-                           cp.atoms.affine.hstack.hstack(rhs))
+        if len(lhs) > 0:
+            constraints.append(cp.atoms.affine.hstack.hstack(lhs) ==
+                               cp.atoms.affine.hstack.hstack(rhs))
 
         # Allocation coefficients.
         all_coefficients = np.zeros((n, num_vars_per_job * m))

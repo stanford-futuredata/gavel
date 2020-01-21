@@ -85,3 +85,55 @@ def print_allocation(allocation, current_time=None):
             allocation_str += ' [%s: %f]' % (worker_type, value)
         print(allocation_str)
     print('=' * 80)
+
+def print_allocation_v3(allocation, job_id_to_job_type, job_types):
+    for i, job_id in enumerate(job_id_to_job_type.keys()):
+        print('Job %s (%s):' % (str(job_id),
+                                job_id_to_job_type[job_id]))
+        for j, job_type in enumerate([None] + job_types):
+            if j == 0:
+                s = 'Isolated allocation'
+            else:
+                s = 'Allocation with %s' % (job_type)
+            print('\t%s: '
+                  '%.5f %.5f %.5f' % (s,
+                                      allocation[job_id]['k80'][job_type],
+                                      allocation[job_id]['p100'][job_type],
+                                      allocation[job_id]['v100'][job_type]))
+
+def convert_v1_alloc_to_v3_alloc(v1_allocation, job_id_to_job_type,
+                                 job_types, worker_types):
+    v3_allocation = {}
+
+    # Initialize allocation.
+    for job_id in v1_allocation:
+        v3_allocation[job_id] = {}
+        for worker_type in worker_types:
+            v3_allocation[job_id][worker_type] = {}
+            for job_type in [None] + job_types:
+                v3_allocation[job_id][worker_type][job_type] = 0.0
+
+    for job_id in v1_allocation:
+        if not job_id.is_pair():
+            for worker_type in worker_types:
+                v3_allocation[job_id][worker_type][None] += \
+                    v1_allocation[job_id][worker_type]
+        else:
+            job_types = []
+            single_job_ids = job_id.singletons()
+            for single_job_id in single_job_ids:
+                job_types.append(job_id_to_job_type[single_job_id])
+
+            single_job_id = single_job_ids[0]
+            job_type = job_types[1]
+            for worker_type in worker_types:
+                v3_allocation[single_job_id][worker_type][job_type] += \
+                    v1_allocation[job_id][worker_type]
+
+            single_job_id = single_job_ids[1]
+            job_type = job_types[0]
+            for worker_type in worker_types:
+                v3_allocation[single_job_id][worker_type][job_type] += \
+                    v1_allocation[job_id][worker_type]
+
+    return v3_allocation

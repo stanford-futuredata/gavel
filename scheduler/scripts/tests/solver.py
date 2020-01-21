@@ -152,7 +152,7 @@ def get_allocation_v1(policy, jobs, oracle_throughputs, cluster_spec,
             merged_job_id = JobIdPair(job_id[0], other_job_id[0])
             job_type_idx = job_types.index(jobs[j].job_type)
             for k, worker_type in enumerate(worker_types):
-                flattened_allocation[job_offset+1+job_type_idx, k] = \
+                flattened_allocation[job_offset+1+job_type_idx, k] += \
                     unflattened_allocation[merged_job_id][worker_type]
     return flattened_allocation
 
@@ -228,7 +228,8 @@ def main(args):
     start = datetime.datetime.now()
     v1_allocation = get_allocation_v1(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
-                                      scale_factors, priority_weights)
+                                      scale_factors, priority_weights,
+                                      flatten=False)
     v1_runtime = datetime.datetime.now() - start
     start = datetime.datetime.now()
     v2_allocation = get_allocation_v2(policy, jobs, oracle_throughputs,
@@ -240,6 +241,7 @@ def main(args):
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights)
     v3_runtime = datetime.datetime.now() - start
+
     print('v1 allocation:')
     print_allocation(v1_allocation, jobs)
     print('')
