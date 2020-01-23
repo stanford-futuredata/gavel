@@ -1378,6 +1378,9 @@ class Scheduler:
         NOTE: Used when scheduling is performed in rounds.
         """
 
+        if len(self._jobs) == 0:
+            return
+
         if self._need_to_update_allocation:
             self._reset_time_run_so_far()
             self._allocation = self._get_allocation()

@@ -22,14 +22,14 @@ def simulate_with_timeout(experiment_id, policy_name,
                           generate_multi_gpu_jobs,
                           generate_multi_priority_jobs, simulate_steady_state,
                           log_dir, timeout, verbose, checkpoint_threshold,
-                          profiling_percentage, num_reference_models):
+                          profiling_percentage, num_reference_models, solver):
     lam_str = 'lambda=%f.log' % (lam)
     checkpoint_file = None
     if checkpoint_threshold is not None:
         checkpoint_file = os.path.join(log_dir, 'lambda=%f.pickle' % lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stdout(f):
-            policy = utils.get_policy(policy_name, seed)
+            policy = utils.get_policy(policy_name, solver, seed=seed)
             sched = scheduler.Scheduler(
                             policy,
                             throughputs_file=throughputs_file,
@@ -294,7 +294,8 @@ def main(args):
                                                   args.timeout, args.verbose,
                                                   args.checkpoint_threshold,
                                                   profiling_percentage,
-                                                  num_reference_models))
+                                                  num_reference_models,
+                                                  args.solver))
                             experiment_id += 1
                     else:
                         throughputs = \
@@ -338,7 +339,8 @@ def main(args):
                                                       args.verbose,
                                                       args.checkpoint_threshold,
                                                       profiling_percentage,
-                                                      num_reference_models))
+                                                      num_reference_models,
+                                                      args.solver))
                                 experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
@@ -423,6 +425,8 @@ if __name__=='__main__':
                         default=[16, 26],
                         help=('Number of reference models to use when '
                               'estimating throughputs'))
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+                        default='ECOS', help='CVXPY solver')
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
                              default=None,
                              help=('Lower bound for throughput interval to '
