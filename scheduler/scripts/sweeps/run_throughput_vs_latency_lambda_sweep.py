@@ -18,7 +18,7 @@ import utils
 
 def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, cluster_spec, lam, seed, interval,
-                          jobs_to_complete, fixed_job_duration,
+                          jobs_to_complete, fixed_job_duration, solver,
                           generate_multi_gpu_jobs,
                           generate_multi_priority_jobs, simulate_steady_state,
                           log_dir, timeout, verbose, checkpoint_threshold,
@@ -29,7 +29,7 @@ def simulate_with_timeout(experiment_id, policy_name,
         checkpoint_file = os.path.join(log_dir, 'lambda=%f.pickle' % lam)
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stdout(f):
-            policy = utils.get_policy(policy_name, seed)
+            policy = utils.get_policy(policy_name, solver=solver, seed=seed)
             sched = scheduler.Scheduler(
                             policy,
                             throughputs_file=throughputs_file,
@@ -101,7 +101,7 @@ def simulate_with_timeout(experiment_id, policy_name,
 
 def run_automatic_sweep(experiment_id, policy_name,
                         throughputs_file, cluster_spec, seed, interval,
-                        jobs_to_complete, fixed_job_duration,
+                        jobs_to_complete, fixed_job_duration, solver,
                         generate_multi_gpu_jobs, generate_multi_priority_jobs,
                         simulate_steady_state, log_dir,
                         timeout, verbose, checkpoint_threshold,
@@ -118,7 +118,7 @@ def run_automatic_sweep(experiment_id, policy_name,
                 simulate_with_timeout(experiment_id, policy_name,
                                       throughputs_file, cluster_spec,
                                       lam, seed, interval, jobs_to_complete,
-                                      fixed_job_duration,
+                                      fixed_job_duration, solver,
                                       generate_multi_gpu_jobs,
                                       generate_multi_priority_jobs,
                                       simulate_steady_state, log_dir, timeout,
@@ -141,7 +141,7 @@ def run_automatic_sweep(experiment_id, policy_name,
                 simulate_with_timeout(experiment_id, policy_name,
                                      throughputs_file, cluster_spec,
                                      lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration,
+                                     fixed_job_duration, solver,
                                      generate_multi_gpu_jobs,
                                      generate_multi_priority_jobs,
                                      simulate_steady_state, log_dir,
@@ -165,7 +165,7 @@ def run_automatic_sweep(experiment_id, policy_name,
                 simulate_with_timeout(experiment_id, policy_name,
                                       throughputs_file, cluster_spec,
                                       lam, seed, interval, jobs_to_complete,
-                                      fixed_job_duration,
+                                      fixed_job_duration, solver,
                                       generate_multi_gpu_jobs,
                                       generate_multi_priority_jobs,
                                       simulate_steady_state, log_dir,
@@ -287,6 +287,7 @@ def main(args):
                                                   seed, args.interval,
                                                   jobs_to_complete,
                                                   args.fixed_job_duration,
+                                                  args.solver,
                                                   args.generate_multi_gpu_jobs,
                                                   args.generate_multi_priority_jobs,
                                                   args.simulate_steady_state,
@@ -330,6 +331,7 @@ def main(args):
                                                       lam, seed, args.interval,
                                                       jobs_to_complete,
                                                       args.fixed_job_duration,
+                                                      args.solver,
                                                       args.generate_multi_gpu_jobs,
                                                       args.generate_multi_priority_jobs,
                                                       args.simulate_steady_state,
@@ -409,6 +411,8 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, adds as many jobs as there are workers '
                               'before beginning the simulation.'))
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+                        default='ECOS', help='CVXPY solver')
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
     parser.add_argument('--checkpoint-threshold', type=int, default=None,
