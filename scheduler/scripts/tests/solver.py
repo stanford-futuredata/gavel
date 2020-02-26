@@ -5,12 +5,69 @@ import argparse
 import datetime
 import numpy as np
 import random
+from scipy.optimize import nnls, lsq_linear
 import time
 
 import utils
 from job import Job
 from job_id_pair import JobIdPair
 from job_table import JobTable
+
+def convert_job_type_allocation(allocation, job_id_to_job_type):
+    job_ids = sorted(allocation.keys())
+    job_types = sorted(set([job_id_to_job_type[job_id] for job_id in job_ids]))
+    worker_types = sorted(allocation[job_ids[0]].keys())
+    converted_allocation = {}
+
+    for worker_type in worker_types:
+        v1_vars = []
+        v2_vars = []
+        v2_var_to_v1_vars = {}
+
+        for i, job_id in enumerate(job_ids):
+            for job_type in [None] + job_types:
+                v2_vars.append((job_id, job_type))
+                v2_var_to_v1_vars[v2_vars[-1]] = []
+
+        idx = -1
+        for i, job_id in enumerate(job_ids):
+            job_type = job_id_to_job_type[job_id]
+            v1_vars.append(job_id)
+            idx += 1
+            v2_var_to_v1_vars[(job_id, None)].append(idx)
+            for other_job_id in job_ids[i+1:]:
+                colocated_job_type = job_id_to_job_type[other_job_id]
+                v1_vars.append(JobIdPair(job_id[0], other_job_id[0]))
+                idx += 1
+                if (job_id, colocated_job_type) in v2_var_to_v1_vars:
+                    v2_var_to_v1_vars[(job_id, colocated_job_type)].append(idx)
+                if (other_job_id, job_type) in v2_var_to_v1_vars:
+                    v2_var_to_v1_vars[(other_job_id, job_type)].append(idx)
+
+        a = np.zeros((len(v2_vars), len(v1_vars)))
+        b = np.zeros(len(v2_vars))
+        for i, v2_var in enumerate(v2_vars):
+            (job_id, colocated_job_type) = v2_var
+            for j in v2_var_to_v1_vars[v2_var]:
+                a[i,j] = 1
+            b[i] = allocation[job_id][worker_type][colocated_job_type]
+        
+        result = lsq_linear(a, b, bounds=(0, 1), method='trf',
+                            lsq_solver='lsmr', lsmr_tol='auto',
+                            verbose=2)
+        print('Result found in %d iterations' % (result.nit))
+        
+        for i, v1_var in enumerate(v1_vars):
+            if v1_var not in converted_allocation:
+                converted_allocation[v1_var] = {}
+            converted_allocation[v1_var][worker_type] = result.x[i]
+    return converted_allocation
+
+def print_unflattened_v1_allocation(allocation):
+    for job_id in sorted(allocation.keys()):
+        print('%s: %.5f %.5f %.5f' % (job_id, allocation[job_id]['k80'],
+                                      allocation[job_id]['p100'],
+                                      allocation[job_id]['v100']))
 
 def print_allocation(allocation, jobs, v3=False):
     n = len(jobs)
@@ -178,21 +235,32 @@ def get_allocation_v2(policy, jobs, oracle_throughputs, cluster_spec,
 
 def get_allocation_v3(policy, jobs, oracle_throughputs, cluster_spec,
                       worker_types, scale_factors, priority_weights,
-                      flatten=True):
+                      flatten=False):
     job_id_to_job_type = {job.job_id : job.job_type for job in jobs}
     job_type_throughputs = get_job_type_throughputs(jobs, oracle_throughputs,
                                           worker_types)
-    flattened_allocation = policy.get_allocation_v3(job_type_throughputs,
-                                                    job_id_to_job_type,
-                                                    scale_factors,
-                                                    priority_weights,
-                                                    cluster_spec)
+    unflattened_allocation = policy.get_allocation_v3(job_type_throughputs,
+                                                      job_id_to_job_type,
+                                                      scale_factors,
+                                                      priority_weights,
+                                                      cluster_spec)
     if flatten:
+        # TODO: Flatten allocation.
+        
+        # Num jobs.
+        n = len(jobs)
+        # Num job_types.
+        a = len(job_type_throughputs.keys())
+        # Num worker_types.
+        m = len(worker_types)
+        # Num varibles per job.
+        num_vars_per_job = 1 + a
+        
+        flattened_allocation = np.zeros((n, num_vars_per_job * m))
+        
         return flattened_allocation
 
-    # TODO: Unflatten allocation
-    unflattened_allocation = {}
-    return unflattned_allocation
+    return unflattened_allocation
 
 
 def main(args):
@@ -225,18 +293,26 @@ def main(args):
     start = datetime.datetime.now()
     v1_allocation = get_allocation_v1(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
-                                      scale_factors, priority_weights)
+                                      scale_factors, priority_weights,
+                                      flatten=False)
     v1_runtime = datetime.datetime.now() - start
+    """
     start = datetime.datetime.now()
     v2_allocation = get_allocation_v2(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights)
     v2_runtime = datetime.datetime.now() - start
+    """
     start = datetime.datetime.now()
     v3_allocation = get_allocation_v3(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
-                                      scale_factors, priority_weights)
+                                      scale_factors, priority_weights,
+                                      flatten=False)
+    v3_allocation = \
+        convert_job_type_allocation(v3_allocation,
+                                    {job.job_id: job.job_type for job in jobs})
     v3_runtime = datetime.datetime.now() - start
+    """
     print('v1 allocation:')
     print_allocation(v1_allocation, jobs)
     print('')
@@ -246,9 +322,15 @@ def main(args):
     print('v3 allocation:')
     print_allocation(v3_allocation, jobs, v3=True)
     print('')
+    """
     print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
-    print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
+    #print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
     print('v3 runtime:', v3_runtime.seconds + v3_runtime.microseconds / 1.0e6)
+    print('v1:')
+    print_unflattened_v1_allocation(v1_allocation)
+    print('')
+    print('v3:')
+    print_unflattened_v1_allocation(v3_allocation)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(

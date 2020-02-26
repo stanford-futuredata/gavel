@@ -12,6 +12,8 @@ import random
 import math
 import matrix_completion
 import warnings
+# from scipy.optimize import nnls
+from fastnnls import fnnls
 
 # TODO: clean these up.
 from job import Job
@@ -421,6 +423,7 @@ class Scheduler:
                     if self._estimate_throughputs:
                         del self._throughputs_mask[other_job_id]
                 if len(self._job_type_to_job_ids[job_type]) == 0:
+                    del self._job_type_to_job_ids[job_type]
                     del self._job_type_throughputs[job_type]
                     for other_job_type in self._job_type_throughputs:
                         for worker_type in self._worker_types:
@@ -1336,6 +1339,55 @@ class Scheduler:
         print('=' * 80)
         print('')
 
+    def _convert_job_type_allocation(self, allocation):
+        job_ids = sorted(allocation.keys())
+        job_types = sorted(self._job_type_to_job_ids.keys())
+        worker_types = sorted(allocation[job_ids[0]].keys())
+        converted_allocation = {}
+
+        for worker_type in worker_types:
+            v1_vars = []
+            v2_vars = []
+            v2_var_to_v1_vars = {}
+
+            for i, job_id in enumerate(job_ids):
+                for job_type in [None] + job_types:
+                    v2_vars.append((job_id, job_type))
+                    v2_var_to_v1_vars[v2_vars[-1]] = []
+
+            idx = -1
+            for i, job_id in enumerate(job_ids):
+                job_type = self._job_id_to_job_type[job_id]
+                v1_vars.append(job_id)
+                idx += 1
+                v2_var_to_v1_vars[(job_id, None)].append(idx)
+                for other_job_id in job_ids[i+1:]:
+                    colocated_job_type = self._job_id_to_job_type[other_job_id]
+                    v1_vars.append(
+                        job_id_pair.JobIdPair(job_id[0], other_job_id[0]))
+                    idx += 1
+                    if (job_id, colocated_job_type) in v2_var_to_v1_vars:
+                        v2_var_to_v1_vars[(job_id, colocated_job_type)].append(idx)
+                    if (other_job_id, job_type) in v2_var_to_v1_vars:
+                        v2_var_to_v1_vars[(other_job_id, job_type)].append(idx)
+
+            a = np.zeros((len(v2_vars), len(v1_vars)))
+            b = np.zeros(len(v2_vars))
+            for i, v2_var in enumerate(v2_vars):
+                (job_id, colocated_job_type) = v2_var
+                for j in v2_var_to_v1_vars[v2_var]:
+                    a[i,j] = 1
+                b[i] = allocation[job_id][worker_type][colocated_job_type]
+
+            x = fnnls(a, b)
+
+            for i, v1_var in enumerate(v1_vars):
+                if v1_var not in converted_allocation:
+                    converted_allocation[v1_var] = {}
+                converted_allocation[v1_var][worker_type] = x[i]
+        return converted_allocation
+
+
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _get_allocation(self):
         """Computes the allocation.
@@ -1365,9 +1417,21 @@ class Scheduler:
                 job_id: self._jobs[job_id].priority_weight
                 for job_id in self._jobs
             }
-            unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, scale_factors, priority_weights,
-                self._cluster_spec)
+            if "Packing" in self._policy.name:
+                unflattened_allocation = \
+                    self._policy.get_allocation_v3(self._job_type_throughputs,
+                                                   self._job_id_to_job_type,
+                                                   scale_factors,
+                                                   priority_weights,
+                                                   self._cluster_spec)
+                if unflattened_allocation is not None:
+                    unflattened_allocation = \
+                        self._convert_job_type_allocation(
+                            unflattened_allocation)
+            else:
+                unflattened_allocation = self._policy.get_allocation(
+                    self._throughputs, scale_factors, priority_weights,
+                    self._cluster_spec)
         elif self._policy.name.startswith("MinTotalDuration"):
             num_steps_remaining = {
                 job_id: self._get_remaining_steps(job_id)

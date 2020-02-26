@@ -234,6 +234,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         # TODO: Rename unflattened_job_type_throughputs ->
         #       unflattened_throughputs
         job_ids = sorted(job_id_to_job_type.keys())
+        if len(job_ids) == 0:
+            return None
         job_types = sorted(unflattened_job_type_throughputs.keys())
         worker_types = sorted(cluster_spec.keys())
         num_workers = \
@@ -353,8 +355,10 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                     lhs.append(cp.sum(x[job_type_0_mask == 1]))
                     rhs.append(cp.sum(x[job_type_1_mask == 1]))
 
-        constraints.append(cp.atoms.affine.hstack.hstack(lhs) ==
-                           cp.atoms.affine.hstack.hstack(rhs))
+        assert (len(lhs) == len(rhs))
+        if len(lhs) > 0:
+            constraints.append(cp.atoms.affine.hstack.hstack(lhs) ==
+                               cp.atoms.affine.hstack.hstack(rhs))
 
         # Allocation coefficients.
         all_coefficients = np.zeros((n, num_vars_per_job * m))
@@ -380,7 +384,17 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         allocation = x.value.clip(min=0.0).clip(max=1.0)
 
-        return allocation
+        # Unflatten allocation.
+        unflattened_allocation = {}
+        for i, job_id in enumerate(job_ids):
+            unflattened_allocation[job_id] = {}
+            for j, worker_type in enumerate(worker_types):
+                unflattened_allocation[job_id][worker_type] = {}
+                for k, job_type in enumerate([None] + job_types):
+                    unflattened_allocation[job_id][worker_type][job_type] = \
+                        allocation[i, j * num_vars_per_job + k]
+
+        return unflattened_allocation
 
 
     def get_allocation_v2(self, unflattened_job_type_throughputs,
