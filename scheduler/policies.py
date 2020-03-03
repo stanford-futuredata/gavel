@@ -376,8 +376,12 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             cp.Maximize(cp.min(cp.sum(cp.multiply(all_coefficients, x),
                                       axis=1)))
 
+        import datetime
+        start = datetime.datetime.now()
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        result = cvxprob.solve(solver=self._solver)
+        solver_time = datetime.datetime.now() - start
+        print('Solver time: %f' % (solver_time.seconds + solver_time.microseconds / 1.0e6))
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')

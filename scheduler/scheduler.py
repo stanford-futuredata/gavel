@@ -12,8 +12,9 @@ import random
 import math
 import matrix_completion
 import warnings
+from scipy.optimize import lsq_linear
 # from scipy.optimize import nnls
-from fastnnls import fnnls
+#from fastnnls import fnnls
 
 # TODO: clean these up.
 from job import Job
@@ -1379,12 +1380,13 @@ class Scheduler:
                     a[i,j] = 1
                 b[i] = allocation[job_id][worker_type][colocated_job_type]
 
-            x = fnnls(a, b)
-
+            result = lsq_linear(a, b, bounds=(0, 1), method='trf',
+                                lsq_solver='lsmr', lsmr_tol='auto',
+                                verbose=2)
             for i, v1_var in enumerate(v1_vars):
                 if v1_var not in converted_allocation:
                     converted_allocation[v1_var] = {}
-                converted_allocation[v1_var][worker_type] = x[i]
+                converted_allocation[v1_var][worker_type] = result.x[i]
         return converted_allocation
 
 

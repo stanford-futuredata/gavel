@@ -13,6 +13,49 @@ from job import Job
 from job_id_pair import JobIdPair
 from job_table import JobTable
 
+def convert_job_type_allocation_v2(allocation, job_id_to_job_type):
+    job_ids = sorted(allocation.keys())
+    worker_types = sorted(allocation[job_ids[0]].keys())
+    job_types = sorted(set([job_id_to_job_type[job_id] for job_id in job_ids]))
+
+    job_type_allocation = {}
+    for worker_type in worker_types:
+        job_type_allocation[worker_type] = {}
+        for job_type in job_types:
+            job_type_allocation[worker_type][job_type] = {}
+            for other_job_type in job_types + [None]:
+                job_type_allocation[worker_type][job_type][other_job_type] = 0.0
+
+    for worker_type in worker_types:
+        for job_id in allocation:
+            job_type = job_id_to_job_type[job_id]
+            for other_job_type in allocation[job_id][worker_type]:
+                job_type_allocation[worker_type][job_type][other_job_type] += \
+                    allocation[job_id][worker_type][other_job_type]
+                if other_job_type is None:
+                    continue
+                job_type_allocation[worker_type][other_job_type][job_type] += \
+                    allocation[job_id][worker_type][other_job_type]
+
+    converted_allocation = {}
+    for i, job_id in enumerate(job_ids):
+        converted_allocation[job_id] = {}
+        job_type = job_id_to_job_type[job_id]
+        for worker_type in worker_types:
+            converted_allocation[job_id][worker_type] = \
+                allocation[job_id][worker_type][None]
+        for other_job_id in job_ids[i+1:]:
+            other_job_type = job_id_to_job_type[other_job_id]
+            merged_job_id = JobIdPair(job_id[0], other_job_id[0])
+            converted_allocation[merged_job_id] = {}
+            for worker_type in worker_types:
+                converted_allocation[merged_job_id][worker_type] = \
+                    (allocation[job_id][worker_type][other_job_type] *\
+                     allocation[other_job_id][worker_type][job_type] /\
+                     job_type_allocation[worker_type][job_type][other_job_type])
+
+    return converted_allocation
+
 def convert_job_type_allocation(allocation, job_id_to_job_type):
     job_ids = sorted(allocation.keys())
     job_types = sorted(set([job_id_to_job_type[job_id] for job_id in job_ids]))
@@ -25,38 +68,73 @@ def convert_job_type_allocation(allocation, job_id_to_job_type):
         v2_var_to_v1_vars = {}
 
         for i, job_id in enumerate(job_ids):
-            for job_type in [None] + job_types:
+            for job_type in [''] + job_types:
                 v2_vars.append((job_id, job_type))
                 v2_var_to_v1_vars[v2_vars[-1]] = []
 
-        idx = -1
         for i, job_id in enumerate(job_ids):
             job_type = job_id_to_job_type[job_id]
             v1_vars.append(job_id)
-            idx += 1
-            v2_var_to_v1_vars[(job_id, None)].append(idx)
+            v2_var_to_v1_vars[(job_id, '')].append(v1_vars[-1])
             for other_job_id in job_ids[i+1:]:
                 colocated_job_type = job_id_to_job_type[other_job_id]
                 v1_vars.append(JobIdPair(job_id[0], other_job_id[0]))
-                idx += 1
                 if (job_id, colocated_job_type) in v2_var_to_v1_vars:
-                    v2_var_to_v1_vars[(job_id, colocated_job_type)].append(idx)
+                    v2_var = (job_id, colocated_job_type)
+                    v2_var_to_v1_vars[v2_var].append(v1_vars[-1])
                 if (other_job_id, job_type) in v2_var_to_v1_vars:
-                    v2_var_to_v1_vars[(other_job_id, job_type)].append(idx)
+                    v2_var = (other_job_id, job_type)
+                    v2_var_to_v1_vars[v2_var].append(v1_vars[-1])
+
+        # Filter out all variables that have 0 allocation.
+        zero_v2_vars = set()
+        zero_v1_vars = set()
+        for i, v2_var in enumerate(v2_vars):
+            (job_id, colocated_job_type) = v2_var
+            # NOTE: We have to store the "none" colocated job type as an empty
+            # string to enable taking set differences. So we convert the empty
+            # string back to None here.
+            if colocated_job_type == '':
+                colocated_job_type = None
+            if allocation[job_id][worker_type][colocated_job_type] <= 1e-10:
+                zero_v2_vars.add(v2_var)
+                for v1_var in v2_var_to_v1_vars[v2_var]:
+                    if v1_var not in converted_allocation:
+                        converted_allocation[v1_var] = {}
+                    converted_allocation[v1_var][worker_type] = 0
+                    zero_v1_vars.add(v1_var)
+
+        print('%d/%d (%.2f) of job-job type allocation '
+              'values are 0' % (len(zero_v2_vars), len(v2_vars),
+                                float(len(zero_v2_vars)) / len(v2_vars) * 100))
+
+        v1_vars = sorted(set(v1_vars) - zero_v1_vars)
+        v2_vars = sorted(set(v2_vars) - zero_v2_vars)
+
+        # Build map from v1_var to index.
+        index = {}
+        for i, v1_var in enumerate(v1_vars):
+            index[v1_var] = i
 
         a = np.zeros((len(v2_vars), len(v1_vars)))
         b = np.zeros(len(v2_vars))
         for i, v2_var in enumerate(v2_vars):
             (job_id, colocated_job_type) = v2_var
-            for j in v2_var_to_v1_vars[v2_var]:
-                a[i,j] = 1
+            # NOTE: We have to store the "none" colocated job type as an empty
+            # string to enable taking set differences. So we convert the empty
+            # string back to None here.
+            if colocated_job_type == '':
+                colocated_job_type = None
+            for v1_var in v2_var_to_v1_vars[v2_var]:
+                if v1_var in v1_vars:
+                    j = index[v1_var]
+                    a[i,j] = 1
             b[i] = allocation[job_id][worker_type][colocated_job_type]
-        
+
         result = lsq_linear(a, b, bounds=(0, 1), method='trf',
                             lsq_solver='lsmr', lsmr_tol='auto',
                             verbose=2)
-        print('Result found in %d iterations' % (result.nit))
-        
+
         for i, v1_var in enumerate(v1_vars):
             if v1_var not in converted_allocation:
                 converted_allocation[v1_var] = {}
@@ -246,7 +324,7 @@ def get_allocation_v3(policy, jobs, oracle_throughputs, cluster_spec,
                                                       cluster_spec)
     if flatten:
         # TODO: Flatten allocation.
-        
+
         # Num jobs.
         n = len(jobs)
         # Num job_types.
@@ -255,9 +333,9 @@ def get_allocation_v3(policy, jobs, oracle_throughputs, cluster_spec,
         m = len(worker_types)
         # Num varibles per job.
         num_vars_per_job = 1 + a
-        
+
         flattened_allocation = np.zeros((n, num_vars_per_job * m))
-        
+
         return flattened_allocation
 
     return unflattened_allocation
@@ -296,8 +374,8 @@ def main(args):
                                       scale_factors, priority_weights,
                                       flatten=False)
     v1_runtime = datetime.datetime.now() - start
-    """
     start = datetime.datetime.now()
+    """
     v2_allocation = get_allocation_v2(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights)
@@ -308,9 +386,11 @@ def main(args):
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights,
                                       flatten=False)
+    solver_time = datetime.datetime.now() - start
+    print('Solver time: %f' % (solver_time.seconds + solver_time.microseconds / 1.0e6))
     v3_allocation = \
-        convert_job_type_allocation(v3_allocation,
-                                    {job.job_id: job.job_type for job in jobs})
+        convert_job_type_allocation_v2(v3_allocation,
+                                       {job.job_id: job.job_type for job in jobs})
     v3_runtime = datetime.datetime.now() - start
     """
     print('v1 allocation:')
@@ -326,11 +406,13 @@ def main(args):
     print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
     #print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
     print('v3 runtime:', v3_runtime.seconds + v3_runtime.microseconds / 1.0e6)
+    """
     print('v1:')
     print_unflattened_v1_allocation(v1_allocation)
     print('')
     print('v3:')
     print_unflattened_v1_allocation(v3_allocation)
+    """
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
