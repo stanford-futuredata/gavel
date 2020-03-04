@@ -1342,51 +1342,58 @@ class Scheduler:
 
     def _convert_job_type_allocation(self, allocation):
         job_ids = sorted(allocation.keys())
+        worker_types = self._worker_types
         job_types = sorted(self._job_type_to_job_ids.keys())
-        worker_types = sorted(allocation[job_ids[0]].keys())
-        converted_allocation = {}
+
+        job_type_allocation = {}
+        for worker_type in worker_types:
+            job_type_allocation[worker_type] = {}
+            for job_type in job_types:
+                job_type_allocation[worker_type][job_type] = {}
+                job_type_allocation_ = \
+                    job_type_allocation[worker_type][job_type]
+                for other_job_type in [None] + job_types:
+                    job_type_allocation_[other_job_type] = 0.0
 
         for worker_type in worker_types:
-            v1_vars = []
-            v2_vars = []
-            v2_var_to_v1_vars = {}
-
-            for i, job_id in enumerate(job_ids):
-                for job_type in [None] + job_types:
-                    v2_vars.append((job_id, job_type))
-                    v2_var_to_v1_vars[v2_vars[-1]] = []
-
-            idx = -1
-            for i, job_id in enumerate(job_ids):
+            job_type_allocation_ = job_type_allocation[worker_type]
+            for job_id in allocation:
                 job_type = self._job_id_to_job_type[job_id]
-                v1_vars.append(job_id)
-                idx += 1
-                v2_var_to_v1_vars[(job_id, None)].append(idx)
-                for other_job_id in job_ids[i+1:]:
-                    colocated_job_type = self._job_id_to_job_type[other_job_id]
-                    v1_vars.append(
-                        job_id_pair.JobIdPair(job_id[0], other_job_id[0]))
-                    idx += 1
-                    if (job_id, colocated_job_type) in v2_var_to_v1_vars:
-                        v2_var_to_v1_vars[(job_id, colocated_job_type)].append(idx)
-                    if (other_job_id, job_type) in v2_var_to_v1_vars:
-                        v2_var_to_v1_vars[(other_job_id, job_type)].append(idx)
+                for other_job_type in allocation[job_id][worker_type]:
+                    job_type_allocation_[job_type][other_job_type] += \
+                        allocation[job_id][worker_type][other_job_type]
+                    if other_job_type is None:
+                        continue
+                    job_type_allocation_[other_job_type][job_type] += \
+                        allocation[job_id][worker_type][other_job_type]
 
-            a = np.zeros((len(v2_vars), len(v1_vars)))
-            b = np.zeros(len(v2_vars))
-            for i, v2_var in enumerate(v2_vars):
-                (job_id, colocated_job_type) = v2_var
-                for j in v2_var_to_v1_vars[v2_var]:
-                    a[i,j] = 1
-                b[i] = allocation[job_id][worker_type][colocated_job_type]
+        converted_allocation = {}
+        for i, job_id in enumerate(job_ids):
+            converted_allocation[job_id] = {}
+            job_type = self._job_id_to_job_type[job_id]
+            for worker_type in worker_types:
+                converted_allocation[job_id][worker_type] = \
+                    allocation[job_id][worker_type][None]
+            for other_job_id in job_ids[i+1:]:
+                other_job_type = self._job_id_to_job_type[other_job_id]
+                merged_job_id = \
+                    job_id_pair.JobIdPair(job_id[0], other_job_id[0])
+                converted_allocation[merged_job_id] = {}
+                for worker_type in worker_types:
+                    job_type_allocation_ = job_type_allocation[worker_type]
+                    current_job_type_allocation = \
+                        job_type_allocation_[job_type][other_job_type]
+                    if job_type == other_job_type:
+                        current_job_type_allocation -= \
+                            allocation[job_id][worker_type][job_type]
+                    if current_job_type_allocation > 0.0:
+                        converted_allocation[merged_job_id][worker_type] = \
+                            (allocation[job_id][worker_type][other_job_type] *\
+                             allocation[other_job_id][worker_type][job_type] /\
+                             current_job_type_allocation)
+                    else:
+                        converted_allocation[merged_job_id][worker_type] = 0.0
 
-            result = lsq_linear(a, b, bounds=(0, 1), method='trf',
-                                lsq_solver='lsmr', lsmr_tol='auto',
-                                verbose=2)
-            for i, v1_var in enumerate(v1_vars):
-                if v1_var not in converted_allocation:
-                    converted_allocation[v1_var] = {}
-                converted_allocation[v1_var][worker_type] = result.x[i]
         return converted_allocation
 
 

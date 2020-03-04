@@ -14,29 +14,32 @@ from job_id_pair import JobIdPair
 from job_table import JobTable
 
 def convert_job_type_allocation_v2(allocation, job_id_to_job_type):
+    """Converts a job-job_type allocation to a job-job allocation."""
     job_ids = sorted(allocation.keys())
     worker_types = sorted(allocation[job_ids[0]].keys())
     job_types = sorted(set([job_id_to_job_type[job_id] for job_id in job_ids]))
 
+    # Initialize job_type-job_type allocation.
     job_type_allocation = {}
     for worker_type in worker_types:
         job_type_allocation[worker_type] = {}
         for job_type in job_types:
             job_type_allocation[worker_type][job_type] = {}
-            for other_job_type in job_types + [None]:
-                job_type_allocation[worker_type][job_type][other_job_type] = 0.0
+            job_type_allocation_ = job_type_allocation[worker_type][job_type]
+            for other_job_type in [None] + job_types:
+                job_type_allocation_[other_job_type] = 0.0
 
+    # Populate job_type-job_type allocation.
     for worker_type in worker_types:
         for job_id in allocation:
             job_type = job_id_to_job_type[job_id]
             for other_job_type in allocation[job_id][worker_type]:
                 job_type_allocation[worker_type][job_type][other_job_type] += \
                     allocation[job_id][worker_type][other_job_type]
-                if other_job_type is None:
-                    continue
-                job_type_allocation[worker_type][other_job_type][job_type] += \
-                    allocation[job_id][worker_type][other_job_type]
 
+    # Compute job-job allocations using the following formula:
+    # x_{i,j} = x_{i, job_type(j)} * x_{j, job_type(i)} /
+    #   sum x_{k, job_type(j)} for all k of job_type(i)
     converted_allocation = {}
     for i, job_id in enumerate(job_ids):
         converted_allocation[job_id] = {}
@@ -49,10 +52,18 @@ def convert_job_type_allocation_v2(allocation, job_id_to_job_type):
             merged_job_id = JobIdPair(job_id[0], other_job_id[0])
             converted_allocation[merged_job_id] = {}
             for worker_type in worker_types:
-                converted_allocation[merged_job_id][worker_type] = \
-                    (allocation[job_id][worker_type][other_job_type] *\
-                     allocation[other_job_id][worker_type][job_type] /\
-                     job_type_allocation[worker_type][job_type][other_job_type])
+                current_job_type_allocation = \
+                    job_type_allocation[worker_type][job_type][other_job_type]
+                if current_job_type_allocation > 0.0:
+                    if job_type == other_job_type:
+                        current_job_type_allocation -= \
+                            allocation[job_id][worker_type][job_type]
+                    converted_allocation[merged_job_id][worker_type] = \
+                        (allocation[job_id][worker_type][other_job_type] *\
+                         allocation[other_job_id][worker_type][job_type] /\
+                         current_job_type_allocation)
+                else:
+                    converted_allocation[merged_job_id][worker_type] = 0.0
 
     return converted_allocation
 
@@ -341,6 +352,84 @@ def get_allocation_v3(policy, jobs, oracle_throughputs, cluster_spec,
     return unflattened_allocation
 
 
+def print_effective_throughputs_v2(allocation, throughputs,
+                                   job_id_to_job_type):
+    """Prints effective throughputs given a job-job_type allocation."""
+    job_ids = sorted(allocation.keys())
+    worker_types = sorted(allocation[job_ids[0]].keys())
+    job_types = sorted(set([job_id_to_job_type[job_id] for job_id in job_ids]))
+
+    normalizing_factors = {}
+    for job_id in job_ids:
+        normalizing_factors[job_id] = 0.0
+        job_type = job_id_to_job_type[job_id]
+        for worker_type in worker_types:
+            normalizing_factors[job_id] += \
+                throughputs[worker_type][job_type]['null']
+
+    effective_throughputs = {}
+    for job_id in job_ids:
+        job_type = job_id_to_job_type[job_id]
+        effective_throughput = 0.0
+        for worker_type in worker_types:
+            throughput = \
+                throughputs[worker_type][job_type]['null']
+            throughput /= normalizing_factors[job_id]
+            effective_throughput += \
+                allocation[job_id][worker_type][None] * throughput
+            for colocated_job_type in job_types:
+                throughput = \
+                    throughputs[worker_type][job_type][colocated_job_type][0]
+                throughput /= normalizing_factors[job_id]
+                effective_throughput += \
+                    (allocation[job_id][worker_type][colocated_job_type] *\
+                        throughput)
+        print('%s: %f' % (job_id, effective_throughput))
+
+
+def print_effective_throughputs(allocation, throughputs, job_id_to_job_type):
+    """Prints effective throughputs given a job-job allocation."""
+    job_ids = sorted(allocation.keys())
+    worker_types = sorted(allocation[job_ids[0]].keys())
+
+    relevant_job_ids = {}
+    for job_id in job_ids:
+        for single_job_id in job_id.singletons():
+            if single_job_id not in relevant_job_ids:
+                relevant_job_ids[single_job_id] = []
+            relevant_job_ids[single_job_id].append(job_id)
+
+    single_job_ids = sorted(relevant_job_ids.keys())
+
+    normalizing_factors = {}
+    for single_job_id in single_job_ids:
+        normalizing_factors[single_job_id] = 0.0
+        job_type = job_id_to_job_type[single_job_id]
+        for worker_type in worker_types:
+            normalizing_factors[single_job_id] += \
+                throughputs[worker_type][job_type]['null']
+
+    effective_throughputs = {}
+    for single_job_id in single_job_ids:
+        job_type = job_id_to_job_type[single_job_id]
+        effective_throughput = 0.0
+        for job_id in relevant_job_ids[single_job_id]:
+            for worker_type in worker_types:
+                if not job_id.is_pair():
+                    throughput = throughputs[worker_type][job_type]['null']
+                else:
+                    index = job_id.singletons().index(single_job_id)
+                    other_job_id = \
+                        job_id.singletons()[1 - index]
+                    other_job_type = \
+                        job_id_to_job_type[other_job_id]
+                    throughput = \
+                        throughputs[worker_type][job_type][other_job_type][0]
+                throughput /= normalizing_factors[single_job_id]
+                effective_throughput += \
+                    allocation[job_id][worker_type] * throughput
+        print('%s: %f' % (single_job_id, effective_throughput))
+
 def main(args):
     rng = random.Random()
     rng.seed(0)
@@ -368,53 +457,46 @@ def main(args):
     priority_weights = {
         job.job_id: job.priority_weight for job in jobs
     }
+
     start = datetime.datetime.now()
     v1_allocation = get_allocation_v1(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights,
                                       flatten=False)
     v1_runtime = datetime.datetime.now() - start
-    start = datetime.datetime.now()
-    """
-    v2_allocation = get_allocation_v2(policy, jobs, oracle_throughputs,
-                                      cluster_spec, worker_types,
-                                      scale_factors, priority_weights)
-    v2_runtime = datetime.datetime.now() - start
-    """
+
     start = datetime.datetime.now()
     v3_allocation = get_allocation_v3(policy, jobs, oracle_throughputs,
                                       cluster_spec, worker_types,
                                       scale_factors, priority_weights,
                                       flatten=False)
-    solver_time = datetime.datetime.now() - start
-    print('Solver time: %f' % (solver_time.seconds + solver_time.microseconds / 1.0e6))
+    job_id_to_job_type = {job.job_id: job.job_type for job in jobs}
     v3_allocation = \
-        convert_job_type_allocation_v2(v3_allocation,
-                                       {job.job_id: job.job_type for job in jobs})
+        convert_job_type_allocation_v2(v3_allocation, job_id_to_job_type)
     v3_runtime = datetime.datetime.now() - start
-    """
+
     print('v1 allocation:')
-    print_allocation(v1_allocation, jobs)
+    utils.print_allocation(v1_allocation)
     print('')
-    print('v2 allocation:')
-    print_allocation(v2_allocation, jobs)
-    print('')
+
     print('v3 allocation:')
-    print_allocation(v3_allocation, jobs, v3=True)
+    utils.print_allocation(v3_allocation, jobs)
     print('')
-    """
+
+    print('v1 effective_throughputs:')
+    print_effective_throughputs(v1_allocation, oracle_throughputs,
+				job_id_to_job_type)
+    print('')
+
+    print('v3 effective_throughputs:')
+    print_effective_throughputs(v3_allocation, oracle_throughputs,
+				job_id_to_job_type)
+
     print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
-    #print('v2 runtime:', v2_runtime.seconds + v2_runtime.microseconds / 1.0e6)
     print('v3 runtime:', v3_runtime.seconds + v3_runtime.microseconds / 1.0e6)
-    """
-    print('v1:')
-    print_unflattened_v1_allocation(v1_allocation)
-    print('')
-    print('v3:')
-    print_unflattened_v1_allocation(v3_allocation)
-    """
 
 if __name__=='__main__':
+    #test_v2()
     parser = argparse.ArgumentParser(
             description='')
     parser.add_argument('--num_jobs', type=int, default=10, help='Num jobs')
@@ -435,4 +517,3 @@ if __name__=='__main__':
                         default='ECOS', help='CVXPY solver')
     args = parser.parse_args()
     main(args)
-
