@@ -349,7 +349,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
                     # Allocation of job_type_1 jobs when paired with job_type_0
                     for job_idx in job_type_1_jobs:
-                        offset = k  * num_vars_per_job + 1 + i
+                        offset = k * num_vars_per_job + 1 + i
                         job_type_1_mask[job_idx,offset] = 1
 
                     lhs.append(cp.sum(x[job_type_0_mask == 1]))
@@ -359,6 +359,29 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         if len(lhs) > 0:
             constraints.append(cp.atoms.affine.hstack.hstack(lhs) ==
                                cp.atoms.affine.hstack.hstack(rhs))
+
+        # TODO: Enable this when we have an efficient solution.
+        """
+        for i, job_type in enumerate(job_types):
+            same_job_type_vars = []
+            sums = []
+            deltas = []
+            job_type_jobs = job_type_to_job_idx[job_type]
+
+            # Find all variables for job-job_type pairs where the job
+            # types match.
+            for k in range(m):
+                offset = k * num_vars_per_job + 1 + i
+                for job_idx in job_type_jobs:
+                    same_job_type_vars.append(x[job_idx, offset])
+
+            # Add constraints that all partial sums of the same job_type
+            # variables excluding exactly one variable are equal.
+            total_sum = cp.sum(same_job_type_vars)
+            for j in range(len(same_job_type_vars) - 1):
+                constraints.append(total_sum - same_job_type_vars[j] ==
+                                   total_sum - same_job_type_vars[j+1])
+        """
 
         # Allocation coefficients.
         all_coefficients = np.zeros((n, num_vars_per_job * m))

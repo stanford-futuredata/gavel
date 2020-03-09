@@ -13,8 +13,6 @@ import math
 import matrix_completion
 import warnings
 from scipy.optimize import lsq_linear
-# from scipy.optimize import nnls
-#from fastnnls import fnnls
 
 # TODO: clean these up.
 from job import Job
@@ -1419,13 +1417,13 @@ class Scheduler:
             job_id: self._jobs[job_id].scale_factor
             for job_id in self._jobs
         }
-        # TODO: Add case for MaxMinFairnessPacking policy with
-        # new allocation format.
         if self._policy.name.startswith("MaxMinFairness"):
             priority_weights = {
                 job_id: self._jobs[job_id].priority_weight
                 for job_id in self._jobs
             }
+            # TODO: Enable this when we have a correct, efficient solution.
+            """
             if "Packing" in self._policy.name:
                 unflattened_allocation = \
                     self._policy.get_allocation_v3(self._job_type_throughputs,
@@ -1437,10 +1435,10 @@ class Scheduler:
                     unflattened_allocation = \
                         self._convert_job_type_allocation(
                             unflattened_allocation)
-            else:
-                unflattened_allocation = self._policy.get_allocation(
-                    self._throughputs, scale_factors, priority_weights,
-                    self._cluster_spec)
+            """
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, scale_factors, priority_weights,
+                self._cluster_spec)
         elif self._policy.name.startswith("MinTotalDuration"):
             num_steps_remaining = {
                 job_id: self._get_remaining_steps(job_id)
