@@ -55,7 +55,6 @@ def convert_job_type_allocation_v2(allocation, job_id_to_job_type):
                 current_job_type_allocation = \
                     job_type_allocation[worker_type][job_type][other_job_type]
                 if current_job_type_allocation > 0.0:
-                    # TODO: Remove this when we have a correct solution.
                     if job_type == other_job_type:
                         current_job_type_allocation -= \
                             allocation[job_id][worker_type][job_type]
@@ -485,14 +484,14 @@ def main(args):
         utils.print_allocation(v3_allocation)
         print('')
 
-        print('v1 effective_throughputs:')
-        print_effective_throughputs(v1_allocation, oracle_throughputs,
-                                    job_id_to_job_type)
-        print('')
+    print('v1 effective_throughputs:')
+    print_effective_throughputs(v1_allocation, oracle_throughputs,
+                                job_id_to_job_type)
+    print('')
 
-        print('v3 effective_throughputs:')
-        print_effective_throughputs(v3_allocation, oracle_throughputs,
-                                    job_id_to_job_type)
+    print('v3 effective_throughputs:')
+    print_effective_throughputs(v3_allocation, oracle_throughputs,
+                                job_id_to_job_type)
 
     print('v1 runtime:', v1_runtime.seconds + v1_runtime.microseconds / 1.0e6)
     print('v3 runtime:', v3_runtime.seconds + v3_runtime.microseconds / 1.0e6)

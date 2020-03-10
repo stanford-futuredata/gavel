@@ -320,8 +320,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                                    cp.multiply(relevant_scale_factors,
                                                masks))))
         constraints.append(
-            cp.atoms.affine.hstack.hstack(per_worker_type_allocations) <= \
-                num_workers)
+                cp.hstack(per_worker_type_allocations) <= num_workers)
 
         # Set the following constraints:
         # for all job type pairs a, b:
@@ -357,31 +356,24 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         assert (len(lhs) == len(rhs))
         if len(lhs) > 0:
-            constraints.append(cp.atoms.affine.hstack.hstack(lhs) ==
-                               cp.atoms.affine.hstack.hstack(rhs))
+            constraints.append(cp.hstack(lhs) == cp.hstack(rhs))
 
-        # TODO: Enable this when we have an efficient solution.
-        """
+        # Add constraints to make all variables of the form i-A where job i
+        # is of job type A equal.
         for i, job_type in enumerate(job_types):
-            same_job_type_vars = []
-            sums = []
-            deltas = []
-            job_type_jobs = job_type_to_job_idx[job_type]
-
-            # Find all variables for job-job_type pairs where the job
-            # types match.
             for k in range(m):
+                same_job_type_vars = []
+                job_type_jobs = job_type_to_job_idx[job_type]
+
+                # Find all variables for job-job_type pairs where the job
+                # types match.
                 offset = k * num_vars_per_job + 1 + i
                 for job_idx in job_type_jobs:
                     same_job_type_vars.append(x[job_idx, offset])
 
-            # Add constraints that all partial sums of the same job_type
-            # variables excluding exactly one variable are equal.
-            total_sum = cp.sum(same_job_type_vars)
-            for j in range(len(same_job_type_vars) - 1):
-                constraints.append(total_sum - same_job_type_vars[j] ==
-                                   total_sum - same_job_type_vars[j+1])
-        """
+                # Constrain the variables to all be equal.
+                c = cp.Variable()
+                constraints.append(cp.hstack(same_job_type_vars) == c)
 
         # Allocation coefficients.
         all_coefficients = np.zeros((n, num_vars_per_job * m))
