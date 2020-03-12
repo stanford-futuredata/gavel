@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 
@@ -13,6 +14,48 @@ def get_available_policies():
             'min_total_duration_packed',
             'max_sum_throughput_perf',
             'max_sum_throughput_packed']
+
+def read_per_instance_type_prices_json(directory):
+    per_instance_type_spot_prices = {}
+    for filename in os.listdir(directory):
+        full_filepath = os.path.join(directory, filename)
+        with open(full_filepath, 'r') as f:
+            json_obj = json.load(f)
+            for x in json_obj['SpotPriceHistory']:
+                instance_type = x['InstanceType']
+                if instance_type not in per_instance_type_spot_prices:
+                    per_instance_type_spot_prices[instance_type] = []
+                per_instance_type_spot_prices[instance_type].append(x)
+    return per_instance_type_spot_prices
+
+def get_latest_price_for_worker_type(worker_type,
+                                     per_instance_type_spot_prices):
+    if worker_type == 'v100':
+        instance_type = 'p3.2xlarge'
+    elif worker_type == 'p100':
+        # NOTE: AWS does not have single P100 instances, use 1.5x K80 price
+        # as a proxy.
+        instance_type = 'p2.xlarge'
+    elif worker_type == 'k80':
+        instance_type = 'p2.xlarge'
+    availability_zones = \
+        [x['AvailabilityZone']
+         for x in per_instance_type_spot_prices[instance_type]]
+    latest_prices = []
+    for availability_zone in set(availability_zones):
+        per_instance_type_spot_prices[instance_type].sort(
+            key=lambda x: datetime.strptime(x['Timestamp'],
+                                            '%Y-%m-%dT%H:%M:%S.000Z'))
+        spot_prices = [float(x['SpotPrice'])
+                       for x in per_instance_type_spot_prices[instance_type]
+                       if x['AvailabilityZone'] == availability_zone]
+        latest_prices.append(spot_prices[-1])
+    # NOTE: AWS does not have single P100 instances, use 1.5x K80 price
+    # as a proxy.
+    if worker_type == 'p100':
+        return min(latest_prices) * 1.5
+    else:
+        return min(latest_prices)
 
 def read_all_throughputs_json(throughputs_file):
     with open(throughputs_file, 'r') as f:

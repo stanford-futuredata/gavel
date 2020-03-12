@@ -34,7 +34,7 @@ class Scheduler:
 
     def __init__(self, policy, simulate=False, throughputs_file=None,
                  seed=0, time_per_iteration=1920, profiling_percentage=0.0,
-                 num_reference_models=16):
+                 num_reference_models=16, per_instance_type_prices_dir=None):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -98,6 +98,8 @@ class Scheduler:
         # Time run so far on each worker_id, for all current incomplete
         # applications.
         self._job_time_so_far = {}
+        # Total cost of each job so far.
+        self._job_cost_so_far = {}
         # Time spent running any application on each worker, for all current
         # incomplete applications.
         self._worker_time_so_far = {}
@@ -136,6 +138,14 @@ class Scheduler:
         # Flag to indicate whether throughputs should be estimated online.
         self._estimate_throughputs = \
             self._job_packing and profiling_percentage > 0
+        if per_instance_type_prices_dir is not None:
+            self._per_instance_type_prices = \
+                utils.read_per_instance_type_prices_json(
+                    per_instance_type_prices_dir)
+            self._per_worker_type_prices = {}
+        else:
+            self._per_instance_type_prices = None
+            self._per_worker_type_prices = None
         if self._estimate_throughputs:
             # Percentage of machines to use for profiling co-located jobs.
             self._profiling_percentage = profiling_percentage
@@ -271,6 +281,7 @@ class Scheduler:
             self._jobs[job_id] = job
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
+            self._job_cost_so_far[job_id] = 0.0
             self._throughputs[job_id] = {}
             job_type = self._jobs[job_id].job_type
             self._job_id_to_job_type[job_id] = job_type
@@ -1680,6 +1691,10 @@ class Scheduler:
                                     self._reference_job_types,
                                     len(self._reference_job_types),
                                     replace=False).tolist()
+                if self._per_worker_type_prices is not None:
+                    self._per_worker_type_prices[worker_type] = \
+                        utils.get_latest_price_for_worker_type(
+                            worker_type, self._per_instance_type_prices)
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
@@ -1756,6 +1771,13 @@ class Scheduler:
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
+                    # TODO: Update total job cost so far using
+                    # per-instance-type prices.
+                    self._job_cost_so_far[single_job_id] += \
+                        (self._per_worker_type_prices[worker_type] *
+                         execution_time / 3600.0)
+                    print('Job %s cost so far: $%.2f' % (single_job_id,
+                                                         self._job_cost_so_far[single_job_id]))
                     # Job may be multi-GPU, and have already been removed from
                     # running_jobs by another worker.
                     if single_job_id in self._running_jobs:
