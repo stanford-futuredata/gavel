@@ -598,6 +598,56 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
+class ThroughputSumWithPerf(Policy):
+
+    def __init__(self, solver):
+        Policy.__init__(self, solver)
+        self._name = 'ThroughputSum_Perf'
+
+    def get_allocation(self, unflattened_throughputs, cluster_spec, instance_costs):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if throughputs is None: return None
+        (m, n) = throughputs.shape
+        (job_ids, worker_types) = index
+
+        scale = 1.0 / throughputs.sum(axis=1)
+        instance_costs_array = np.zeros((1, n))
+        for i in range(n):
+            instance_costs_array[1, i] = instance_costs[i]
+            scale_factor = None
+            for single_job_id in job_ids[i].singletons():
+                if (scale_factor is not None and
+                    scale_factor != scale_factors[single_job_id]):
+                    scale_factor = 0
+                else:
+                    scale_factor = scale_factors[single_job_id]
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factor
+        throughputs = throughputs * scale.reshape(m, 1)
+
+        x = cp.Variable(throughputs.shape)
+        # Multiply throughputs by scale_factors to ensure that scale_factor
+        # is taken into account while allocating times to different jobs.
+        # A job run on 1 GPU should receive `scale_factor` more time than
+        # a job run on `scale_factor` GPUs if throughputs are equal.
+        objective = cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs, x),
+                                axis=1)))
+        # Make sure that the allocation can fit in the cluster.
+        # Make self._num_workers infinity for most cloud settings.
+        constraints = [
+            x >= 0,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
+            cp.sum(x, axis=1) <= 1,
+        ]
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve(solver=self._solver)
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
+
+        return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
 class MinTotalDurationPolicy(Policy):
 
