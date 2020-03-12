@@ -49,11 +49,12 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                    checkpoint_file=checkpoint_file)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
-    
+    total_cost = sched.get_total_cost()
+
     current_time = datetime.datetime.now()
-    print('[%s] Results: average JCT=%f, utilization=%f' % (current_time,
-                                                            average_jct,
-                                                            utilization),
+    print('[%s] Results: average JCT=%f, utilization=%f, '
+          'total_cost=$%.2f ' % (current_time, average_jct, utilization,
+                                 total_cost),
           file=sys.stderr)
 
 def main(args):
@@ -82,7 +83,7 @@ def main(args):
                  args.checkpoint_file,
                  args.profiling_percentage,
                  args.per_instance_type_prices_dir)
-    
+
     else:
         with open('/dev/null', 'w') as f:
             with contextlib.redirect_stdout(f):
