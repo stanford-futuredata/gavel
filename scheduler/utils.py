@@ -28,7 +28,7 @@ def read_per_instance_type_prices_json(directory):
                 per_instance_type_spot_prices[instance_type].append(x)
     return per_instance_type_spot_prices
 
-def get_latest_price_for_worker_type(worker_type,
+def get_latest_price_for_worker_type(worker_type, current_time,
                                      per_instance_type_spot_prices):
     if worker_type == 'v100':
         instance_type = 'p3.2xlarge'
@@ -38,6 +38,11 @@ def get_latest_price_for_worker_type(worker_type,
         instance_type = 'p2.xlarge'
     elif worker_type == 'k80':
         instance_type = 'p2.xlarge'
+
+    timestamps = [datetime.strptime(x['Timestamp'], '%Y-%m-%dT%H:%M:%S.000Z')
+                  for x in per_instance_type_spot_prices[instance_type]]
+    timestamps.sort()
+
     availability_zones = \
         [x['AvailabilityZone']
          for x in per_instance_type_spot_prices[instance_type]]
@@ -46,10 +51,19 @@ def get_latest_price_for_worker_type(worker_type,
         per_instance_type_spot_prices[instance_type].sort(
             key=lambda x: datetime.strptime(x['Timestamp'],
                                             '%Y-%m-%dT%H:%M:%S.000Z'))
-        spot_prices = [float(x['SpotPrice'])
-                       for x in per_instance_type_spot_prices[instance_type]
-                       if x['AvailabilityZone'] == availability_zone]
-        latest_prices.append(spot_prices[-1])
+        latest_price = None
+        for x in per_instance_type_spot_prices[instance_type]:
+            if x['AvailabilityZone'] != availability_zone:
+                continue
+            timestamp = (datetime.strptime(x['Timestamp'],
+                                          '%Y-%m-%dT%H:%M:%S.000Z') -
+                         timestamps[0]).total_seconds()
+            if timestamp > current_time and latest_price is not None:
+                break
+            latest_price = float(x['SpotPrice'])
+        assert(latest_price is not None)
+        latest_prices.append(latest_price)
+
     # NOTE: AWS does not have single P100 instances, use 1.5x K80 price
     # as a proxy.
     if worker_type == 'p100':
@@ -70,7 +84,7 @@ def get_policy(policy_name, solver, seed=None):
     elif policy_name == 'max_min_fairness_packed':
         policy = policies.MaxMinFairnessPolicyWithPacking(solver=solver)
     elif policy_name == 'max_sum_throughput_perf':
-        policy = policies.MaxSumThroughputPolicyWithPerf(solver=solver)
+        policy = policies.ThroughputNormalizedByCostSumWithPerf(solver=solver)
     elif policy_name == 'max_sum_throughput_packed':
         policy = policies.MaxSumThroughputPolicyWithPacking(solver=solver)
     elif policy_name == 'min_total_duration':

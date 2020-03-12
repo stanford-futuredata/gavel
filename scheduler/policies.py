@@ -627,8 +627,10 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
             instance_costs_array = np.zeros((1, n))
             for i in range(n):
                 instance_costs_array[0, i] = instance_costs[worker_types[i]]
-            objective = cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs / instance_costs_array, x),
-                                    axis=1)))
+            objective = \
+                cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs /
+                                                      instance_costs_array, x),
+                                          axis=1)))
 
         # Make sure that a given job is not over-allocated resources.
         # TODO: Account for self.num_workers and scale_factor_array?

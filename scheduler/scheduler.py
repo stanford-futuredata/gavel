@@ -53,6 +53,10 @@ class Scheduler:
         # Initialize time in seconds each iteration should run for.
         self._time_per_iteration = time_per_iteration
 
+        if self._simulate:
+            self._start_timestamp = 0
+        else:
+            self._start_timestamp = time.time()
         # Latest simulated timestamp.
         self._current_timestamp = 0
         # Start and last processed timestamp for each job_id.
@@ -216,6 +220,14 @@ class Scheduler:
         self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
 
+
+    def _update_per_worker_type_prices(self):
+        current_time = self.get_current_timestamp(in_seconds=True)
+        for worker_type in self._per_worker_type_prices:
+
+            self._per_worker_type_prices[worker_type] = \
+                utils.get_latest_price_for_worker_type(
+                    worker_type, current_time, self._per_instance_type_prices)
 
     def _update_throughput(self, job_id, worker_type, all_num_steps,
                            all_execution_times):
@@ -986,6 +998,10 @@ class Scheduler:
             else:
                 self._current_timestamp = next_job_arrival_time
 
+            # Update per-instance type prices.
+            if self._per_worker_type_prices is not None:
+                self._update_per_worker_type_prices()
+
             # Check if any jobs have completed.
             while len(running_jobs) > 0:
                 (finish_time, job_id, worker_ids, all_num_steps) = \
@@ -1285,6 +1301,11 @@ class Scheduler:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
+        elif self._policy.name.startswith('ThroughputNormalizedByCost'):
+            # TODO: Add SLAs
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, self._cluster_spec,
+                self._per_worker_type_prices, {}, {})
         else:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, self._cluster_spec)
@@ -1633,11 +1654,14 @@ class Scheduler:
         return self._jobs[job_id].total_steps - steps_run_so_far
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
-    def get_current_timestamp(self):
+    def get_current_timestamp(self, in_seconds=False):
         if self._simulate:
             return self._current_timestamp
         else:
-            return time.time()
+            if in_seconds:
+                return time.time() - self._start_timestamp
+            else:
+                return time.time()
 
     """
     ======================================================================
@@ -1694,7 +1718,9 @@ class Scheduler:
                 if self._per_worker_type_prices is not None:
                     self._per_worker_type_prices[worker_type] = \
                         utils.get_latest_price_for_worker_type(
-                            worker_type, self._per_instance_type_prices)
+                            worker_type,
+                            self.get_current_timestamp(in_seconds=True),
+                            self._per_instance_type_prices)
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
