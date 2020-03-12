@@ -605,7 +605,7 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
         self._name = 'ThroughputNormalizedByCostSum_Perf'
 
     def get_allocation(self, unflattened_throughputs, cluster_spec,
-                       instance_costs=None):
+                       instance_costs=None, SLAs={}, num_steps_remaining={}):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None
@@ -636,6 +636,13 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
             x >= 0,
             cp.sum(x, axis=1) <= 1,
         ]
+        for job_id in SLAs:
+            i = job_ids.index(job_id)
+            assert(job_id in num_steps_remaining)
+            constraints.append(
+                cp.sum(cp.multiply(throughputs / instance_costs_array, x),
+                       axis=1) >= (num_steps_remaining[job_id] / SLAs[job_id])
+            )
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
 
