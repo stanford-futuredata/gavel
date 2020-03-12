@@ -1,0 +1,25 @@
+import sys; sys.path.append("..")
+import policies
+import unittest
+
+class TestPolicies(unittest.TestCase):
+
+    def test_throughput_sum(self):
+        policy = policies.ThroughputSumWithPerf(solver='ECOS')
+        unflattened_throughputs = {
+            0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
+        }
+        cluster_spec = {
+            'v100': 1,
+            'p100': 1,
+            'k80': 1
+        }
+        policy.get_allocation(unflattened_throughputs, cluster_spec,
+                              instance_costs=None)
+        policy.get_allocation(unflattened_throughputs, cluster_spec,
+                              instance_costs={'v100': 3.1, 'p100': 2.0, 'k80': 0.8})
+
+
+if __name__=='__main__':
+    unittest.main()
