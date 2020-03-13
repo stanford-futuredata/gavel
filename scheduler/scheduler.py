@@ -222,12 +222,15 @@ class Scheduler:
 
 
     def _update_per_worker_type_prices(self):
+        assert(self._per_worker_type_prices is not None)
         current_time = self.get_current_timestamp(in_seconds=True)
         for worker_type in self._per_worker_type_prices:
-
-            self._per_worker_type_prices[worker_type] = \
+            latest_price = \
                 utils.get_latest_price_for_worker_type(
                     worker_type, current_time, self._per_instance_type_prices)
+            if self._per_worker_type_prices[worker_type] != latest_price:
+                self._per_worker_type_prices[worker_type] = latest_price
+                self._need_to_update_allocation = True
 
     def _update_throughput(self, job_id, worker_type, all_num_steps,
                            all_execution_times):
