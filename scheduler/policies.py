@@ -598,6 +598,18 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
+class ThroughputSumWithPerf(Policy):
+
+    def __init__(self, solver):
+        self._name = 'ThroughputSumWithPerf'
+        self._policy = ThroughputNormalizedByCostSumWithPerf(solver)
+
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       cluster_spec):
+        # TODO: Handle scale factors.
+        return self._policy.get_allocation(unflattened_throughputs,
+                                           cluster_spec)
+
 class ThroughputNormalizedByCostSumWithPerf(Policy):
 
     def __init__(self, solver):

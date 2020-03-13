@@ -1131,7 +1131,7 @@ class Scheduler:
         self._schedule_with_rounds()
 
 
-    def get_average_jct(self, job_ids=None):
+    def get_average_jct(self, job_ids=None, verbose=True):
         """Computes the average job completion time.
 
            Args:
@@ -1161,14 +1161,19 @@ class Scheduler:
                         self._job_completion_times[job_id])
             average_job_completion_time = \
                 np.mean([self._job_completion_times[job_id] for job_id in job_ids])
-            print('Average job completion time: '
-                  '%.3f seconds' % (average_job_completion_time))
-            if len(low_priority_job_completion_times) > 0:
-                print('Average job completion time (low priority): '
-                      '%.3f seconds' % (np.mean(low_priority_job_completion_times)))
-            if len(high_priority_job_completion_times) > 0:
-                print('Average job completion time (high priority): '
-                      '%.3f seconds' % (np.mean(high_priority_job_completion_times)))
+            if verbose:
+                print('Average job completion time: '
+                      '%.3f seconds' % (average_job_completion_time))
+                if len(low_priority_job_completion_times) > 0:
+                    average_low_pri_jct = \
+                        np.mean(low_priority_job_completion_times)
+                    print('Average job completion time (low priority): '
+                          '%.3f seconds' % (average_low_pri_jct))
+                if len(high_priority_job_completion_times) > 0:
+                    average_high_pri_jct = \
+                        np.mean(high_priority_job_completion_times)
+                    print('Average job completion time (high priority): '
+                          '%.3f seconds' % (average_high_pri_jct))
             return average_job_completion_time
 
 
@@ -1192,6 +1197,14 @@ class Scheduler:
             cluster_utilization = np.mean(utilizations)
             print('Cluster utilization: %.3f' % (cluster_utilization))
             return cluster_utilization
+
+    def get_total_cost(self, verbose=True):
+        total_cost = 0.0
+        for job_id in self._job_cost_so_far:
+            total_cost += self._job_cost_so_far[job_id]
+        if verbose:
+            print('Total cost: $%.2f' % (total_cost))
+        return total_cost
 
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
@@ -1301,7 +1314,7 @@ class Scheduler:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
-        elif self._policy.name.startswith('ThroughputNormalizedByCost'):
+        elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
             # TODO: Add SLAs
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, self._cluster_spec,
