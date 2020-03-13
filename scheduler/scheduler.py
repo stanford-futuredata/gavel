@@ -1317,7 +1317,7 @@ class Scheduler:
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
             # TODO: Add SLAs
             unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, self._cluster_spec,
+                self._throughputs, scale_factors, self._cluster_spec,
                 self._per_worker_type_prices, {}, {})
         else:
             unflattened_allocation = self._policy.get_allocation(
