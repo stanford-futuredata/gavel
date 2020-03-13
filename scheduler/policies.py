@@ -604,7 +604,7 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
         Policy.__init__(self, solver)
         self._name = 'ThroughputNormalizedByCostSum_Perf'
 
-    def get_allocation(self, unflattened_throughputs, cluster_spec,
+    def get_allocation(self, unflattened_throughputs, scale_factors, cluster_spec,
                        instance_costs=None, SLAs={}, num_steps_remaining={}):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
@@ -614,6 +614,13 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
 
         scale = 1.0 / throughputs.sum(axis=1)
         throughputs = throughputs * scale.reshape(m, 1)
+
+        # Row i of scale_factors_array is the scale_factor of job
+        # combination i repeated len(worker_types) times.
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factors[job_ids[i]]
 
         x = cp.Variable(throughputs.shape)
         # Multiply throughputs by scale_factors to ensure that scale_factor
@@ -633,9 +640,10 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
                                           axis=1)))
 
         # Make sure that a given job is not over-allocated resources.
-        # TODO: Account for self.num_workers and scale_factor_array?
         constraints = [
             x >= 0,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
         for job_id in SLAs:
