@@ -608,6 +608,7 @@ class ThroughputSumWithPerf(Policy):
                        cluster_spec):
         # TODO: Handle scale factors.
         return self._policy.get_allocation(unflattened_throughputs,
+                                           scale_factors,
                                            cluster_spec)
 
 class ThroughputNormalizedByCostSumWithPerf(Policy):
@@ -655,7 +656,7 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
         constraints = [
             x >= 0,
             cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
+                    scale_factors_array, x), axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
         for job_id in SLAs:
