@@ -476,8 +476,7 @@ class Scheduler:
 
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
-    def _schedule_jobs_on_workers_helper(self, worker_type,
-                                         already_scheduled_jobs):
+    def _schedule_jobs_on_workers_helper(self):
         """Greedily selects the jobs to run in the next round by iterating
            through the job list in sorted priority order.
 
@@ -487,32 +486,39 @@ class Scheduler:
              A list of job IDs to schedule on the passed-in worker_type in
              the upcoming round.
         """
-        num_workers = len(
-            self._worker_type_to_worker_id_mapping[worker_type])
-        already_scheduled_jobs_set = set(already_scheduled_jobs)
-        scheduled_jobs_on_worker_type = []
 
-        if self._estimate_throughputs:
-            num_workers_left = self._profile_with_reference_jobs(worker_type,
-                                                                 num_workers)
-        else:
-            num_workers_left = num_workers
+        already_scheduled_jobs = set()
+        scheduled_jobs = {}
+
+        num_workers_left = {}
+        for worker_type in self._worker_types:
+            scheduled_jobs[worker_type] = []
+            num_workers = len(
+                self._worker_type_to_worker_id_mapping[worker_type])
+            if self._estimate_throughputs:
+                num_workers_left[worker_type] = \
+                    self._profile_with_reference_jobs(worker_type,
+                                                      num_workers)
+            else:
+                num_workers_left[worker_type] = num_workers
 
         entries = []
-        for job_id in self._priorities[worker_type]:
-            entries.append((job_id, self._priorities[worker_type][job_id],
-                            self._deficits[worker_type][job_id],
-                            self._allocation[job_id][worker_type]))
+        for worker_type in self._worker_types:
+            for job_id in self._priorities[worker_type]:
+                entries.append((job_id, worker_type,
+                                self._priorities[worker_type][job_id],
+                                self._deficits[worker_type][job_id],
+                                self._allocation[job_id][worker_type]))
 
         sorted_job_queue = sorted(entries,
-                                  key=lambda x: (x[1], x[2], x[3]),
+                                  key=lambda x: (x[2], x[3], x[4]),
                                   reverse=True)
 
-        for job_id, *_ in sorted_job_queue:
-            if num_workers_left == 0:
-                break
+        for job_id, worker_type, *_ in sorted_job_queue:
+            if num_workers_left[worker_type] == 0:
+                continue
             # Don't schedule jobs that have already been scheduled.
-            if ((not job_id.is_pair() and job_id in already_scheduled_jobs_set) or
+            if ((not job_id.is_pair() and job_id in already_scheduled_jobs) or
                 (job_id.is_pair() and
                  (job_id.singletons()[0] in already_scheduled_jobs_set or
                   job_id.singletons()[1] in already_scheduled_jobs_set))):
@@ -543,16 +549,15 @@ class Scheduler:
                     continue
             else:
                 scale_factor = self._jobs[job_id].scale_factor
-            if scale_factor > num_workers_left:
+            if scale_factor > num_workers_left[worker_type]:
                 continue
-            num_workers_left -= scale_factor
+            num_workers_left[worker_type] -= scale_factor
 
             for single_job_id in job_id.singletons():
-                already_scheduled_jobs_set.add(single_job_id)
-            scheduled_jobs_on_worker_type.append((job_id,
-                                                  scale_factor))
+                already_scheduled_jobs.add(single_job_id)
+            scheduled_jobs[worker_type].append((job_id, scale_factor))
 
-        return scheduled_jobs_on_worker_type
+        return scheduled_jobs
 
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
@@ -568,15 +573,9 @@ class Scheduler:
         # in the upcoming round.
         self._update_priorities()
 
-        already_scheduled_jobs = []
-        scheduled_jobs = []
-
+        # TODO: Remove this?
         to_remove = []
         worker_types = ["v100", "p100", "k80"]
-
-        # TODO: Replace this with a single global queue containing all worker types.
-        if "Perf" not in self._policy.name and "Packing" not in self._policy.name:
-            self._worker_type_shuffler.shuffle(worker_types)
 
         for i, worker_type in enumerate(worker_types):
             if worker_type not in self._worker_type_to_worker_id_mapping:
@@ -584,27 +583,22 @@ class Scheduler:
         for i in reversed(to_remove):
             worker_types.pop(i)
 
-        for worker_type in worker_types:
+        worker_assignments = []
+        scheduled_jobs = self._schedule_jobs_on_workers_helper()
+
+        for worker_type in scheduled_jobs:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
-            scheduled_jobs_on_worker_type = \
-                    self._schedule_jobs_on_workers_helper(
-                            worker_type, already_scheduled_jobs)
 
-            for (job_id, scale_factor) in scheduled_jobs_on_worker_type:
-                # Make sure a job is only scheduled on a single worker_type in
-                # a given round.
-                already_scheduled_jobs.append(job_id)
-                if job_id.is_pair():
-                    for single_job_id in job_id.singletons():
-                        already_scheduled_jobs.append(single_job_id)
-
+            for (job_id, scale_factor) in scheduled_jobs[worker_type]:
                 # For now, ignore locality. Place job_id on the first
                 # `scale_factor` workers of the desired type.
                 # assert(scale_factor == self._jobs[job_id].scale_factor)
-                worker_id_ptrs = [worker_id_ptr + i for i in range(scale_factor)]
-                scheduled_jobs.append((job_id,
-                                       tuple([worker_ids[i] for i in worker_id_ptrs])))
+                worker_id_ptrs = \
+                    [worker_id_ptr + i for i in range(scale_factor)]
+                worker_assignments.append(
+                        (job_id,
+                         tuple([worker_ids[i] for i in worker_id_ptrs])))
                 worker_id_ptr += scale_factor
 
                 for single_job_id in job_id.singletons():
@@ -627,7 +621,8 @@ class Scheduler:
                 worker_types = sorted(worker_types)
                 allocation_str = ''
                 for x in worker_types:
-                    allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
+                    allocation_str += \
+                        ' [%4s %f]' % (x, self._allocation[job_id][x])
                 print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                        'Worker type: %s\tWorker ID(s): %s\t'
                        'Priority: %f\tDeficit: %f\t'
@@ -644,7 +639,7 @@ class Scheduler:
                                                        worker_type,
                                                        len(self._jobs)))
 
-        return scheduled_jobs
+        return worker_assignments
 
     def _get_num_steps(self, job_id, worker_type, single_job_id=None):
         if self._simulate:
@@ -1815,9 +1810,10 @@ class Scheduler:
                             all_execution_times):
                     # TODO: Update total job cost so far using
                     # per-instance-type prices.
-                    self._job_cost_so_far[single_job_id] += \
-                        (self._per_worker_type_prices[worker_type] *
-                         execution_time / 3600.0)
+                    if self._per_worker_type_prices is not None:
+                        self._job_cost_so_far[single_job_id] += \
+                            (self._per_worker_type_prices[worker_type] *
+                             execution_time / 3600.0)
                     print('Job %s cost so far: $%.2f' % (single_job_id,
                                                          self._job_cost_so_far[single_job_id]))
                     # Job may be multi-GPU, and have already been removed from
