@@ -34,7 +34,7 @@ class Scheduler:
 
     def __init__(self, policy, simulate=False, throughputs_file=None,
                  seed=0, time_per_iteration=1920, profiling_percentage=0.0,
-                 num_reference_models=16):
+                 num_reference_models=16, per_instance_type_prices_dir=None):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -53,6 +53,10 @@ class Scheduler:
         # Initialize time in seconds each iteration should run for.
         self._time_per_iteration = time_per_iteration
 
+        if self._simulate:
+            self._start_timestamp = 0
+        else:
+            self._start_timestamp = time.time()
         # Latest simulated timestamp.
         self._current_timestamp = 0
         # Start and last processed timestamp for each job_id.
@@ -98,6 +102,8 @@ class Scheduler:
         # Time run so far on each worker_id, for all current incomplete
         # applications.
         self._job_time_so_far = {}
+        # Total cost of each job so far.
+        self._job_cost_so_far = {}
         # Time spent running any application on each worker, for all current
         # incomplete applications.
         self._worker_time_so_far = {}
@@ -136,6 +142,14 @@ class Scheduler:
         # Flag to indicate whether throughputs should be estimated online.
         self._estimate_throughputs = \
             self._job_packing and profiling_percentage > 0
+        if per_instance_type_prices_dir is not None:
+            self._per_instance_type_prices = \
+                utils.read_per_instance_type_prices_json(
+                    per_instance_type_prices_dir)
+            self._per_worker_type_prices = {}
+        else:
+            self._per_instance_type_prices = None
+            self._per_worker_type_prices = None
         if self._estimate_throughputs:
             # Percentage of machines to use for profiling co-located jobs.
             self._profiling_percentage = profiling_percentage
@@ -207,6 +221,17 @@ class Scheduler:
         self.scheduler_thread.start()
 
 
+    def _update_per_worker_type_prices(self):
+        assert(self._per_worker_type_prices is not None)
+        current_time = self.get_current_timestamp(in_seconds=True)
+        for worker_type in self._per_worker_type_prices:
+            latest_price = \
+                utils.get_latest_price_for_worker_type(
+                    worker_type, current_time, self._per_instance_type_prices)
+            if self._per_worker_type_prices[worker_type] != latest_price:
+                self._per_worker_type_prices[worker_type] = latest_price
+                self._need_to_update_allocation = True
+
     def _update_throughput(self, job_id, worker_type, all_num_steps,
                            all_execution_times):
         if self._simulate and self._estimate_throughputs:
@@ -271,6 +296,7 @@ class Scheduler:
             self._jobs[job_id] = job
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
+            self._job_cost_so_far[job_id] = 0.0
             self._throughputs[job_id] = {}
             job_type = self._jobs[job_id].job_type
             self._job_id_to_job_type[job_id] = job_type
@@ -975,6 +1001,10 @@ class Scheduler:
             else:
                 self._current_timestamp = next_job_arrival_time
 
+            # Update per-instance type prices.
+            if self._per_worker_type_prices is not None:
+                self._update_per_worker_type_prices()
+
             # Check if any jobs have completed.
             while len(running_jobs) > 0:
                 (finish_time, job_id, worker_ids, all_num_steps) = \
@@ -1104,7 +1134,7 @@ class Scheduler:
         self._schedule_with_rounds()
 
 
-    def get_average_jct(self, job_ids=None):
+    def get_average_jct(self, job_ids=None, verbose=True):
         """Computes the average job completion time.
 
            Args:
@@ -1134,14 +1164,19 @@ class Scheduler:
                         self._job_completion_times[job_id])
             average_job_completion_time = \
                 np.mean([self._job_completion_times[job_id] for job_id in job_ids])
-            print('Average job completion time: '
-                  '%.3f seconds' % (average_job_completion_time))
-            if len(low_priority_job_completion_times) > 0:
-                print('Average job completion time (low priority): '
-                      '%.3f seconds' % (np.mean(low_priority_job_completion_times)))
-            if len(high_priority_job_completion_times) > 0:
-                print('Average job completion time (high priority): '
-                      '%.3f seconds' % (np.mean(high_priority_job_completion_times)))
+            if verbose:
+                print('Average job completion time: '
+                      '%.3f seconds' % (average_job_completion_time))
+                if len(low_priority_job_completion_times) > 0:
+                    average_low_pri_jct = \
+                        np.mean(low_priority_job_completion_times)
+                    print('Average job completion time (low priority): '
+                          '%.3f seconds' % (average_low_pri_jct))
+                if len(high_priority_job_completion_times) > 0:
+                    average_high_pri_jct = \
+                        np.mean(high_priority_job_completion_times)
+                    print('Average job completion time (high priority): '
+                          '%.3f seconds' % (average_high_pri_jct))
             return average_job_completion_time
 
 
@@ -1165,6 +1200,14 @@ class Scheduler:
             cluster_utilization = np.mean(utilizations)
             print('Cluster utilization: %.3f' % (cluster_utilization))
             return cluster_utilization
+
+    def get_total_cost(self, verbose=True):
+        total_cost = 0.0
+        for job_id in self._job_cost_so_far:
+            total_cost += self._job_cost_so_far[job_id]
+        if verbose:
+            print('Total cost: $%.2f' % (total_cost))
+        return total_cost
 
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
@@ -1274,6 +1317,11 @@ class Scheduler:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
+        elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
+            # TODO: Add SLAs
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, scale_factors, self._cluster_spec,
+                self._per_worker_type_prices, {}, {})
         else:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, self._cluster_spec)
@@ -1622,11 +1670,14 @@ class Scheduler:
         return self._jobs[job_id].total_steps - steps_run_so_far
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
-    def get_current_timestamp(self):
+    def get_current_timestamp(self, in_seconds=False):
         if self._simulate:
             return self._current_timestamp
         else:
-            return time.time()
+            if in_seconds:
+                return time.time() - self._start_timestamp
+            else:
+                return time.time()
 
     """
     ======================================================================
@@ -1680,6 +1731,12 @@ class Scheduler:
                                     self._reference_job_types,
                                     len(self._reference_job_types),
                                     replace=False).tolist()
+                if self._per_worker_type_prices is not None:
+                    self._per_worker_type_prices[worker_type] = \
+                        utils.get_latest_price_for_worker_type(
+                            worker_type,
+                            self.get_current_timestamp(in_seconds=True),
+                            self._per_instance_type_prices)
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
@@ -1756,6 +1813,13 @@ class Scheduler:
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
+                    # TODO: Update total job cost so far using
+                    # per-instance-type prices.
+                    self._job_cost_so_far[single_job_id] += \
+                        (self._per_worker_type_prices[worker_type] *
+                         execution_time / 3600.0)
+                    print('Job %s cost so far: $%.2f' % (single_job_id,
+                                                         self._job_cost_so_far[single_job_id]))
                     # Job may be multi-GPU, and have already been removed from
                     # running_jobs by another worker.
                     if single_job_id in self._running_jobs:

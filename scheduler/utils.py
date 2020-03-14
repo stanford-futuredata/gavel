@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 
@@ -12,7 +13,64 @@ def get_available_policies():
             'min_total_duration',
             'min_total_duration_packed',
             'max_sum_throughput_perf',
-            'max_sum_throughput_packed']
+            'max_sum_throughput_normalized_by_cost_perf'
+            ]
+
+def read_per_instance_type_prices_json(directory):
+    per_instance_type_spot_prices = {}
+    for filename in os.listdir(directory):
+        full_filepath = os.path.join(directory, filename)
+        with open(full_filepath, 'r') as f:
+            json_obj = json.load(f)
+            for x in json_obj['SpotPriceHistory']:
+                instance_type = x['InstanceType']
+                if instance_type not in per_instance_type_spot_prices:
+                    per_instance_type_spot_prices[instance_type] = []
+                per_instance_type_spot_prices[instance_type].append(x)
+    return per_instance_type_spot_prices
+
+def get_latest_price_for_worker_type(worker_type, current_time,
+                                     per_instance_type_spot_prices):
+    if worker_type == 'v100':
+        instance_type = 'p3.2xlarge'
+    elif worker_type == 'p100':
+        # NOTE: AWS does not have single P100 instances, use 1.5x K80 price
+        # as a proxy.
+        instance_type = 'p2.xlarge'
+    elif worker_type == 'k80':
+        instance_type = 'p2.xlarge'
+
+    timestamps = [datetime.strptime(x['Timestamp'], '%Y-%m-%dT%H:%M:%S.000Z')
+                  for x in per_instance_type_spot_prices[instance_type]]
+    timestamps.sort()
+
+    availability_zones = \
+        [x['AvailabilityZone']
+         for x in per_instance_type_spot_prices[instance_type]]
+    latest_prices = []
+    for availability_zone in set(availability_zones):
+        per_instance_type_spot_prices[instance_type].sort(
+            key=lambda x: datetime.strptime(x['Timestamp'],
+                                            '%Y-%m-%dT%H:%M:%S.000Z'))
+        latest_price = None
+        for x in per_instance_type_spot_prices[instance_type]:
+            if x['AvailabilityZone'] != availability_zone:
+                continue
+            timestamp = (datetime.strptime(x['Timestamp'],
+                                          '%Y-%m-%dT%H:%M:%S.000Z') -
+                         timestamps[0]).total_seconds()
+            if timestamp > current_time and latest_price is not None:
+                break
+            latest_price = float(x['SpotPrice'])
+        assert(latest_price is not None)
+        latest_prices.append(latest_price)
+
+    # NOTE: AWS does not have single P100 instances, use 1.5x K80 price
+    # as a proxy.
+    if worker_type == 'p100':
+        return min(latest_prices) * 1.5
+    else:
+        return min(latest_prices)
 
 def read_all_throughputs_json(throughputs_file):
     with open(throughputs_file, 'r') as f:
@@ -27,9 +85,9 @@ def get_policy(policy_name, solver, seed=None):
     elif policy_name == 'max_min_fairness_packed':
         policy = policies.MaxMinFairnessPolicyWithPacking(solver=solver)
     elif policy_name == 'max_sum_throughput_perf':
-        policy = policies.MaxSumThroughputPolicyWithPerf(solver=solver)
-    elif policy_name == 'max_sum_throughput_packed':
-        policy = policies.MaxSumThroughputPolicyWithPacking(solver=solver)
+        policy = policies.ThroughputSumWithPerf(solver=solver)
+    elif policy_name == 'max_sum_throughput_normalized_by_cost_perf':
+        policy = policies.ThroughputNormalizedByCostSumWithPerf(solver=solver)
     elif policy_name == 'min_total_duration':
         policy = policies.MinTotalDurationPolicy(solver=solver)
     elif policy_name == 'min_total_duration_packed':

@@ -598,6 +598,81 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
+class ThroughputSumWithPerf(Policy):
+
+    def __init__(self, solver):
+        self._name = 'ThroughputSumWithPerf'
+        self._policy = ThroughputNormalizedByCostSumWithPerf(solver)
+
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       cluster_spec):
+        # TODO: Handle scale factors.
+        return self._policy.get_allocation(unflattened_throughputs,
+                                           scale_factors,
+                                           cluster_spec)
+
+class ThroughputNormalizedByCostSumWithPerf(Policy):
+
+    def __init__(self, solver):
+        Policy.__init__(self, solver)
+        self._name = 'ThroughputNormalizedByCostSum_Perf'
+
+    def get_allocation(self, unflattened_throughputs, scale_factors, cluster_spec,
+                       instance_costs=None, SLAs={}, num_steps_remaining={}):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if throughputs is None: return None
+        (m, n) = throughputs.shape
+        (job_ids, worker_types) = index
+
+        scale = 1.0 / throughputs.sum(axis=1)
+        throughputs = throughputs * scale.reshape(m, 1)
+
+        # Row i of scale_factors_array is the scale_factor of job
+        # combination i repeated len(worker_types) times.
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factors[job_ids[i]]
+
+        x = cp.Variable(throughputs.shape)
+        # Multiply throughputs by scale_factors to ensure that scale_factor
+        # is taken into account while allocating times to different jobs.
+        # A job run on 1 GPU should receive `scale_factor` more time than
+        # a job run on `scale_factor` GPUs if throughputs are equal.
+        if instance_costs is None:
+            objective = cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs, x),
+                                    axis=1)))
+        else:
+            instance_costs_array = np.zeros((1, n))
+            for i in range(n):
+                instance_costs_array[0, i] = instance_costs[worker_types[i]]
+            objective = \
+                cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs /
+                                                      instance_costs_array, x),
+                                          axis=1)))
+
+        # Make sure that a given job is not over-allocated resources.
+        constraints = [
+            x >= 0,
+            cp.sum(cp.multiply(
+                    scale_factors_array, x), axis=0) <= self._num_workers,
+            cp.sum(x, axis=1) <= 1,
+        ]
+        for job_id in SLAs:
+            i = job_ids.index(job_id)
+            assert(job_id in num_steps_remaining)
+            constraints.append(
+                cp.sum(cp.multiply(throughputs / instance_costs_array, x),
+                       axis=1) >= (num_steps_remaining[job_id] / SLAs[job_id])
+            )
+        cvxprob = cp.Problem(objective, constraints)
+        result = cvxprob.solve(solver=self._solver)
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
+
+        return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
 class MinTotalDurationPolicy(Policy):
 

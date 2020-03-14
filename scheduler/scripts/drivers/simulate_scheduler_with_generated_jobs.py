@@ -18,7 +18,7 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              generate_multi_priority_jobs,
              simulate_steady_state, solver, debug,
              checkpoint_threshold, checkpoint_file,
-             profiling_percentage):
+             profiling_percentage, per_instance_type_prices_dir):
     policy = utils.get_policy(policy_name, solver=solver, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -26,7 +26,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                     seed=seed,
                     time_per_iteration=interval,
                     simulate=True,
-                    profiling_percentage=profiling_percentage)
+                    profiling_percentage=profiling_percentage,
+                    per_instance_type_prices_dir=per_instance_type_prices_dir)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
@@ -48,11 +49,12 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                    checkpoint_file=checkpoint_file)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
-    
+    total_cost = sched.get_total_cost()
+
     current_time = datetime.datetime.now()
-    print('[%s] Results: average JCT=%f, utilization=%f' % (current_time,
-                                                            average_jct,
-                                                            utilization),
+    print('[%s] Results: average JCT=%f, utilization=%f, '
+          'total_cost=$%.2f ' % (current_time, average_jct, utilization,
+                                 total_cost),
           file=sys.stderr)
 
 def main(args):
@@ -79,8 +81,9 @@ def main(args):
                  args.solver,
                  args.debug, args.checkpoint_threshold,
                  args.checkpoint_file,
-                 args.profiling_percentage)
-    
+                 args.profiling_percentage,
+                 args.per_instance_type_prices_dir)
+
     else:
         with open('/dev/null', 'w') as f:
             with contextlib.redirect_stdout(f):
@@ -94,7 +97,8 @@ def main(args):
                          args.solver, args.debug,
                          args.checkpoint_threshold,
                          args.checkpoint_file,
-                         args.profiling_percentage)
+                         args.profiling_percentage,
+                         args.per_instance_type_prices_dir)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -147,5 +151,8 @@ if __name__=='__main__':
     parser.add_argument('--num_reference_models', type=int, default=16,
                         help=('Number of reference models to use when '
                               'estimating throughputs'))
+    parser.add_argument('--per_instance_type_prices_dir', type=str,
+                        default=None,
+                        help='Per-instance-type prices directory')
     args = parser.parse_args()
     main(args)

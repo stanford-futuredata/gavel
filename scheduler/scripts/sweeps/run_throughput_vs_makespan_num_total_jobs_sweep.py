@@ -17,19 +17,20 @@ import utils
 
 
 def simulate_with_timeout(experiment_id, policy_name,
-                          throughputs_file, cluster_spec, lam, seed, interval,
+                          throughputs_file, per_instance_type_prices_dir,
+                          cluster_spec, lam, seed, interval,
                           fixed_job_duration, generate_multi_gpu_jobs,
-                          num_total_jobs, log_dir, timeout, verbose):
+                          num_total_jobs, solver, log_dir, timeout, verbose):
     num_total_jobs_str = 'num_total_jobs=%d.log' % (num_total_jobs)
     with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
         with contextlib.redirect_stdout(f):
-            policy = utils.get_policy(policy_name, seed)
-            sched = scheduler.Scheduler(
-                            policy,
-                            throughputs_file=throughputs_file,
-                            seed=seed,
-                            time_per_iteration=interval,
-                            simulate=True)
+            policy = utils.get_policy(policy_name, seed=seed, solver=solver)
+            sched = \
+                scheduler.Scheduler(
+                    policy, throughputs_file=throughputs_file,
+                    seed=seed, time_per_iteration=interval,
+                    per_instance_type_prices_dir=per_instance_type_prices_dir,
+                    simulate=True)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                            cluster_spec['p100'],
@@ -53,6 +54,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
                 makespan = sched.get_current_timestamp()
+                total_cost = sched.get_total_cost()
             else:
                 try:
                     func_timeout(timeout, sched.simulate,
@@ -66,19 +68,24 @@ def simulate_with_timeout(experiment_id, policy_name,
                     average_jct = sched.get_average_jct()
                     utilization = sched.get_cluster_utilization()
                     makespan = sched.get_current_timestamp()
+                    total_cost = sched.get_total_cost()
                 except FunctionTimedOut:
                     average_jct = float('inf')
                     utilization = 1.0
+                    makespan = float('inf')
+                    total_cost = float('inf')
 
     if verbose:
         current_time = datetime.datetime.now()
         print('[%s] [Experiment ID: %2d] '
-              'Results: average JCT=%f, utilization=%f, makespan=%f' % (
+              'Results: average JCT=%f, utilization=%f, '
+              'makespan=%f, total_cost=$%.2f' % (
                   current_time,
                   experiment_id,
                   average_jct,
                   utilization,
-                  makespan),
+                  makespan,
+                  total_cost),
               file=sys.stderr)
 
     return average_jct, utilization
@@ -128,10 +135,8 @@ def main(args):
 
             lower_bound = args.num_total_jobs_lower_bound
             upper_bound = args.num_total_jobs_upper_bound
-            step = (upper_bound - lower_bound) // args.num_data_points
-            all_num_total_jobs = list(np.arange(lower_bound,
-                                                upper_bound,
-                                                step=step))
+            all_num_total_jobs = np.linspace(lower_bound, upper_bound,
+                                             args.num_data_points)
             if all_num_total_jobs[0] == 0:
                 all_num_total_jobs = all_num_total_jobs[1:]
             for num_total_jobs in all_num_total_jobs:
@@ -143,11 +148,14 @@ def main(args):
                     if not os.path.isdir(raw_logs_seed_subdir):
                         os.mkdir(raw_logs_seed_subdir)
                     all_args_list.append((experiment_id, policy_name,
-                                          throughputs_file, cluster_spec,
+                                          throughputs_file,
+                                          args.per_instance_type_prices_dir,
+                                          cluster_spec,
                                           lam, seed, args.interval,
                                           args.fixed_job_duration,
                                           args.generate_multi_gpu_jobs,
                                           num_total_jobs,
+                                          args.solver,
                                           raw_logs_seed_subdir,
                                           args.timeout, args.verbose))
                     experiment_id += 1
@@ -158,7 +166,7 @@ def main(args):
         with multiprocessing.Pool(args.processes) as p:
             # Sort args in order of increasing num_total_jobs to prioritize
             # short-running jobs.
-            all_args_list.sort(key=lambda x: x[9])
+            all_args_list.sort(key=lambda x: x[10])
             results = [p.apply_async(simulate_with_timeout, args_list)
                        for args_list in all_args_list]
             results = [result.get() for result in results]
@@ -200,8 +208,13 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, generates multi-GPU jobs according to '
                               'a pre-defined distribution'))
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+                        default='ECOS', help='CVXPY solver')
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')
+    parser.add_argument('--per_instance_type_prices_dir', type=str,
+                        default=None,
+                        help='Per-instance-type prices directory')
     fixed_range.add_argument('-a', '--num-total-jobs-lower-bound', type=int,
                              default=None,
                              help='Lower bound for num_total_jobs to sweep')
