@@ -72,6 +72,7 @@ def read_per_instance_type_spot_prices_json(directory):
 
 def get_latest_price_for_worker_type_aws(worker_type, current_time,
                                          per_instance_type_spot_prices):
+    # TODO: Make this function more efficient.
     if worker_type == 'v100':
         instance_type = 'p3.2xlarge'
     elif worker_type == 'p100':
@@ -148,21 +149,30 @@ def get_latest_price_for_worker_type_azure(worker_type, current_time,
     return latest_price
 
 def get_latest_price_for_worker_type(worker_type, current_time,
-                                     per_instance_type_spot_prices):
-    aws_price = \
-        get_latest_price_for_worker_type_aws(
-                worker_type, current_time,
-                per_instance_type_spot_prices['aws'])
-    gcp_price = \
-        get_latest_price_for_worker_type_gcp(
-                worker_type, current_time,
-                per_instance_type_spot_prices['gcp'])
-    azure_price = \
-        get_latest_price_for_worker_type_azure(
-                worker_type, current_time,
-                per_instance_type_spot_prices['azure'])
+                                     per_instance_type_spot_prices,
+                                     available_clouds):
+    assert(len(available_clouds) > 0)
+    prices = []
+    if 'aws' in available_clouds:
+        aws_price = \
+            get_latest_price_for_worker_type_aws(
+                    worker_type, current_time,
+                    per_instance_type_spot_prices['aws'])
+        prices.append(aws_price)
+    if 'gcp' in available_clouds:
+        gcp_price = \
+            get_latest_price_for_worker_type_gcp(
+                    worker_type, current_time,
+                    per_instance_type_spot_prices['gcp'])
+        prices.append(gcp_price)
+    if 'azure' in available_clouds:
+        azure_price = \
+            get_latest_price_for_worker_type_azure(
+                    worker_type, current_time,
+                    per_instance_type_spot_prices['azure'])
+        prices.append(azure_price)
 
-    return min([aws_price, gcp_price, azure_price])
+    return min(prices)
 
 def read_all_throughputs_json(throughputs_file):
     with open(throughputs_file, 'r') as f:

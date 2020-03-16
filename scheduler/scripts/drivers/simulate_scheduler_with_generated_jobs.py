@@ -18,7 +18,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              generate_multi_priority_jobs,
              simulate_steady_state, solver, debug,
              checkpoint_threshold, checkpoint_file,
-             profiling_percentage, per_instance_type_prices_dir):
+             profiling_percentage, per_instance_type_prices_dir,
+             available_clouds):
     policy = utils.get_policy(policy_name, solver=solver, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -27,7 +28,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                     time_per_iteration=interval,
                     simulate=True,
                     profiling_percentage=profiling_percentage,
-                    per_instance_type_prices_dir=per_instance_type_prices_dir)
+                    per_instance_type_prices_dir=per_instance_type_prices_dir,
+                    available_clouds=available_clouds)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
@@ -88,7 +90,8 @@ def main(args):
                  args.debug, args.checkpoint_threshold,
                  args.checkpoint_file,
                  args.profiling_percentage,
-                 args.per_instance_type_prices_dir)
+                 args.per_instance_type_prices_dir,
+                 args.available_clouds)
 
     else:
         with open('/dev/null', 'w') as f:
@@ -104,7 +107,8 @@ def main(args):
                          args.checkpoint_threshold,
                          args.checkpoint_file,
                          args.profiling_percentage,
-                         args.per_instance_type_prices_dir)
+                         args.per_instance_type_prices_dir,
+                         args.available_clouds)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -160,5 +164,9 @@ if __name__=='__main__':
     parser.add_argument('--per_instance_type_prices_dir', type=str,
                         default=None,
                         help='Per-instance-type prices directory')
+    parser.add_argument('--available_clouds', type=str, nargs='+',
+                        choices=['aws', 'gcp', 'azure'],
+                        default=['aws', 'gcp', 'azure'],
+                        help='Clouds available to rent machines from')
     args = parser.parse_args()
     main(args)

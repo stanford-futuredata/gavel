@@ -34,7 +34,9 @@ class Scheduler:
 
     def __init__(self, policy, simulate=False, throughputs_file=None,
                  seed=0, time_per_iteration=1920, profiling_percentage=0.0,
-                 num_reference_models=16, per_instance_type_prices_dir=None):
+                 num_reference_models=16,
+                 per_instance_type_prices_dir=None,
+                 available_clouds=[]):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -143,12 +145,13 @@ class Scheduler:
         self._estimate_throughputs = \
             self._job_packing and profiling_percentage > 0
         if per_instance_type_prices_dir is not None:
-            self._per_instance_type_prices = \
-                utils.read_per_instance_type_prices_json(
+            self._per_instance_type_spot_prices = \
+                utils.read_per_instance_type_spot_prices_json(
                     per_instance_type_prices_dir)
             self._per_worker_type_prices = {}
+            self._available_clouds = set(available_clouds)
         else:
-            self._per_instance_type_prices = None
+            self._per_instance_type_spot_prices = None
             self._per_worker_type_prices = None
         if self._estimate_throughputs:
             # Percentage of machines to use for profiling co-located jobs.
@@ -227,7 +230,9 @@ class Scheduler:
         for worker_type in self._per_worker_type_prices:
             latest_price = \
                 utils.get_latest_price_for_worker_type(
-                    worker_type, current_time, self._per_instance_type_prices)
+                    worker_type, current_time,
+                    self._per_instance_type_spot_prices,
+                    self._available_clouds)
             if self._per_worker_type_prices[worker_type] != latest_price:
                 self._per_worker_type_prices[worker_type] = latest_price
                 self._need_to_update_allocation = True
@@ -1731,7 +1736,8 @@ class Scheduler:
                         utils.get_latest_price_for_worker_type(
                             worker_type,
                             self.get_current_timestamp(in_seconds=True),
-                            self._per_instance_type_prices)
+                            self._per_instance_type_spot_prices,
+                            self._available_clouds)
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \

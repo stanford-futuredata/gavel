@@ -20,7 +20,7 @@ import utils
 
 def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, per_instance_type_prices_dir,
-                          cluster_spec, lam, seed, interval,
+                          available_clouds, cluster_spec, lam, seed, interval,
                           fixed_job_duration, generate_multi_gpu_jobs,
                           num_total_jobs, solver, log_dir, timeout, verbose):
     # Add some random delay to prevent outputs from overlapping.
@@ -35,6 +35,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                     policy, throughputs_file=throughputs_file,
                     seed=seed, time_per_iteration=interval,
                     per_instance_type_prices_dir=per_instance_type_prices_dir,
+                    available_clouds = available_clouds,
                     simulate=True)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
@@ -155,6 +156,7 @@ def main(args):
                     all_args_list.append((experiment_id, policy_name,
                                           throughputs_file,
                                           args.per_instance_type_prices_dir,
+                                          args.available_clouds,
                                           cluster_spec,
                                           lam, seed, args.interval,
                                           args.fixed_job_duration,
@@ -171,7 +173,7 @@ def main(args):
         with multiprocessing.Pool(args.processes) as p:
             # Sort args in order of increasing num_total_jobs to prioritize
             # short-running jobs.
-            all_args_list.sort(key=lambda x: x[10])
+            all_args_list.sort(key=lambda x: x[11])
             results = [p.apply_async(simulate_with_timeout, args_list)
                        for args_list in all_args_list]
             results = [result.get() for result in results]
@@ -220,6 +222,10 @@ if __name__=='__main__':
     parser.add_argument('--per_instance_type_prices_dir', type=str,
                         default=None,
                         help='Per-instance-type prices directory')
+    parser.add_argument('--available_clouds', type=str, nargs='+',
+                        choices=['aws', 'gcp', 'azure'],
+                        default=['aws', 'gcp', 'azure'],
+                        help='Clouds available to rent machines from')
     fixed_range.add_argument('-a', '--num-total-jobs-lower-bound', type=int,
                              default=None,
                              help='Lower bound for num_total_jobs to sweep')
