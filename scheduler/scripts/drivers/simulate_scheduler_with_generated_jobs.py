@@ -38,12 +38,18 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                                 seed, lam),
           file=sys.stderr)
 
+    if lam == 0:
+        num_total_jobs = len(jobs_to_complete)
+    else:
+        num_total_jobs = None
+
     sched.simulate(cluster_spec, lam=lam,
                    jobs_to_complete=jobs_to_complete,
                    fixed_job_duration=fixed_job_duration,
                    generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                    generate_multi_priority_jobs=generate_multi_priority_jobs,
                    simulate_steady_state=simulate_steady_state,
+                   num_total_jobs=num_total_jobs,
                    debug=debug,
                    checkpoint_threshold=checkpoint_threshold,
                    checkpoint_file=checkpoint_file)

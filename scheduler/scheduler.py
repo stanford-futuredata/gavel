@@ -1046,7 +1046,7 @@ class Scheduler:
             else:
                 while next_job_arrival_time <= self._current_timestamp:
                     if num_total_jobs is not None:
-                        if num_jobs_generated > num_total_jobs:
+                        if num_jobs_generated >= num_total_jobs:
                             break
                     job = self._generate_job(
                         fixed_job_duration=fixed_job_duration,

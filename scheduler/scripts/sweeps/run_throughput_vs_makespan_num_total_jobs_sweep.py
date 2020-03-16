@@ -9,7 +9,9 @@ from func_timeout import func_timeout, FunctionTimedOut
 import multiprocessing
 import numpy as np
 import os
+import random
 import sys
+import time
 
 from job_id_pair import JobIdPair
 import scheduler
@@ -21,6 +23,9 @@ def simulate_with_timeout(experiment_id, policy_name,
                           cluster_spec, lam, seed, interval,
                           fixed_job_duration, generate_multi_gpu_jobs,
                           num_total_jobs, solver, log_dir, timeout, verbose):
+    # Add some random delay to prevent outputs from overlapping.
+    # TODO: Replace this with postprocessing in the log parsing script.
+    time.sleep(random.uniform(0, 5))
     num_total_jobs_str = 'num_total_jobs=%d.log' % (num_total_jobs)
     with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
         with contextlib.redirect_stdout(f):
