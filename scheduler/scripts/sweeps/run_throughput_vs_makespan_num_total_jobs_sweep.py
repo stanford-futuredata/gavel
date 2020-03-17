@@ -20,9 +20,10 @@ import utils
 
 def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, per_instance_type_prices_dir,
-                          available_clouds, cluster_spec, lam, seed, interval,
-                          fixed_job_duration, generate_multi_gpu_jobs,
-                          num_total_jobs, solver, log_dir, timeout, verbose):
+                          available_clouds, assign_SLAs, cluster_spec, lam,
+                          seed, interval, fixed_job_duration,
+                          generate_multi_gpu_jobs, num_total_jobs, solver,
+                          log_dir, timeout, verbose):
     # Add some random delay to prevent outputs from overlapping.
     # TODO: Replace this with postprocessing in the log parsing script.
     time.sleep(random.uniform(0, 5))
@@ -36,6 +37,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                     seed=seed, time_per_iteration=interval,
                     per_instance_type_prices_dir=per_instance_type_prices_dir,
                     available_clouds = available_clouds,
+                    assign_SLAs=assign_SLAs,
                     simulate=True)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
@@ -157,6 +159,7 @@ def main(args):
                                           throughputs_file,
                                           args.per_instance_type_prices_dir,
                                           args.available_clouds,
+                                          args.assign_SLAs,
                                           cluster_spec,
                                           lam, seed, args.interval,
                                           args.fixed_job_duration,
@@ -173,7 +176,7 @@ def main(args):
         with multiprocessing.Pool(args.processes) as p:
             # Sort args in order of increasing num_total_jobs to prioritize
             # short-running jobs.
-            all_args_list.sort(key=lambda x: x[11])
+            all_args_list.sort(key=lambda x: x[12])
             results = [p.apply_async(simulate_with_timeout, args_list)
                        for args_list in all_args_list]
             results = [result.get() for result in results]
@@ -226,6 +229,8 @@ if __name__=='__main__':
                         choices=['aws', 'gcp', 'azure'],
                         default=['aws', 'gcp', 'azure'],
                         help='Clouds available to rent machines from')
+    parser.add_argument('--assign_SLAs', action='store_true', default=False,
+                        help='If set, assigns SLAs to each job')
     fixed_range.add_argument('-a', '--num-total-jobs-lower-bound', type=int,
                              default=None,
                              help='Lower bound for num_total_jobs to sweep')

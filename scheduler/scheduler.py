@@ -38,7 +38,7 @@ class Scheduler:
                  num_reference_models=16,
                  per_instance_type_prices_dir=None,
                  available_clouds=[],
-                 assign_SLAs=True):
+                 assign_SLAs=False):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -405,8 +405,6 @@ class Scheduler:
             del self._throughputs[job_id]
             del self._job_id_to_job_type[job_id]
             del self._num_failures_per_job[job_id]
-            if self._SLAs is not None:
-                del self._SLAs[job_id]
             if self._job_packing:
                 to_delete = []
                 for other_job_id in self._throughputs:
@@ -840,7 +838,9 @@ class Scheduler:
             print('Running for fixed duration %d minutes' % (fixed_job_duration / 60.0))
             run_time = fixed_job_duration
         else:
-            run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
+            run_time = \
+                self._job_generator.choice(np.multiply([0.5, 1, 2, 4, 8], (3600 * 24)))
+            # run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
         num_steps = \
             run_time * self._oracle_throughputs['v100'][job_type]['null']
         assert(run_time > 0)
@@ -1237,6 +1237,17 @@ class Scheduler:
             print('Total cost: $%.2f' % (total_cost))
         return total_cost
 
+    def get_num_SLA_violations(self, verbose=True):
+        num_SLA_violations = 0
+        if self._SLAs is not None:
+            for job_id in self._SLAs:
+                if (self._per_job_latest_timestamps[job_id] >
+                    self._SLAs[job_id]):
+                    num_SLA_violations += 1
+        if verbose:
+            print('Number of SLA violations: %d' % (num_SLA_violations))
+        return num_SLA_violations
+
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
 
@@ -1347,22 +1358,26 @@ class Scheduler:
                 self._cluster_spec)
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
             # TODO: Add SLAs
-            SLAs = {}
-            num_steps_remaining = {}
-            if self._SLAs is not None:
-                for job_id in self._jobs:
-                    SLAs[job_id] = (self._SLAs[job_id] -
-                                    self.get_current_timestamp(in_seconds=True))
-                    num_steps_remaining[job_id] = \
-                        (self._jobs[job_id].total_steps -
-                         self._total_steps_run[job_id])
-            else:
+            if 'SLA' in self._policy.name:
                 SLAs = {}
-            unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, scale_factors, self._cluster_spec,
-                instance_costs=self._per_worker_type_prices,
-                SLAs=SLAs,
-                num_steps_remaining=num_steps_remaining)
+                num_steps_remaining = {}
+                if self._SLAs is not None:
+                    for job_id in self._jobs:
+                        SLAs[job_id] = \
+                            (self._SLAs[job_id] -
+                             self.get_current_timestamp(in_seconds=True))
+                        num_steps_remaining[job_id] = \
+                            (self._jobs[job_id].total_steps -
+                             self._total_steps_run[job_id])
+                unflattened_allocation = self._policy.get_allocation(
+                    self._throughputs, scale_factors, self._cluster_spec,
+                    instance_costs=self._per_worker_type_prices,
+                    SLAs=SLAs,
+                    num_steps_remaining=num_steps_remaining)
+            else:
+                unflattened_allocation = self._policy.get_allocation(
+                    self._throughputs, scale_factors, self._cluster_spec,
+                    instance_costs=self._per_worker_type_prices)
         else:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, self._cluster_spec)

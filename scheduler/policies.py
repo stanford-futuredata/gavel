@@ -602,23 +602,35 @@ class ThroughputSumWithPerf(Policy):
 
     def __init__(self, solver):
         self._name = 'ThroughputSumWithPerf'
-        self._policy = ThroughputNormalizedByCostSumWithPerf(solver)
+        self._policy = ThroughputNormalizedByCostSumWithPerfSLAs(solver)
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        cluster_spec):
-        # TODO: Handle scale factors.
         return self._policy.get_allocation(unflattened_throughputs,
                                            scale_factors,
                                            cluster_spec)
 
 class ThroughputNormalizedByCostSumWithPerf(Policy):
+    def __init__(self, solver):
+        self._name = 'ThroughputNormalizedByCostSum_Perf'
+        self._policy = ThroughputNormalizedByCostSumWithPerfSLAs(solver)
+
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       cluster_spec, instance_costs):
+        return self._policy.get_allocation(unflattened_throughputs,
+                                           scale_factors,
+                                           cluster_spec,
+                                           instance_costs=instance_costs)
+
+class ThroughputNormalizedByCostSumWithPerfSLAs(Policy):
 
     def __init__(self, solver):
         Policy.__init__(self, solver)
-        self._name = 'ThroughputNormalizedByCostSum_Perf'
+        self._name = 'ThroughputNormalizedByCostSum_PerfSLAs'
 
-    def get_allocation(self, unflattened_throughputs, scale_factors, cluster_spec,
-                       instance_costs=None, SLAs={}, num_steps_remaining={}):
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       cluster_spec, instance_costs=None, SLAs={},
+                       num_steps_remaining={}):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None

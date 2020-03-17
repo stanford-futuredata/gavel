@@ -19,7 +19,7 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              simulate_steady_state, solver, debug,
              checkpoint_threshold, checkpoint_file,
              profiling_percentage, per_instance_type_prices_dir,
-             available_clouds):
+             available_clouds, assign_SLAs):
     policy = utils.get_policy(policy_name, solver=solver, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -29,7 +29,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                     simulate=True,
                     profiling_percentage=profiling_percentage,
                     per_instance_type_prices_dir=per_instance_type_prices_dir,
-                    available_clouds=available_clouds)
+                    available_clouds=available_clouds,
+                    assign_SLAs=assign_SLAs)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
@@ -58,11 +59,15 @@ def simulate(policy_name, throughputs_file, cluster_spec,
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
     total_cost = sched.get_total_cost()
+    num_SLA_violations = sched.get_num_SLA_violations()
 
     current_time = datetime.datetime.now()
     print('[%s] Results: average JCT=%f, utilization=%f, '
-          'total_cost=$%.2f ' % (current_time, average_jct, utilization,
-                                 total_cost),
+          'total_cost=$%.2f, num_SLA_violations=%d' % (current_time,
+                                                       average_jct,
+                                                       utilization,
+                                                       total_cost,
+                                                       num_SLA_violations),
           file=sys.stderr)
 
 def main(args):
@@ -91,7 +96,8 @@ def main(args):
                  args.checkpoint_file,
                  args.profiling_percentage,
                  args.per_instance_type_prices_dir,
-                 args.available_clouds)
+                 args.available_clouds,
+                 args.assign_SLAs)
 
     else:
         with open('/dev/null', 'w') as f:
@@ -108,7 +114,8 @@ def main(args):
                          args.checkpoint_file,
                          args.profiling_percentage,
                          args.per_instance_type_prices_dir,
-                         args.available_clouds)
+                         args.available_clouds,
+                         args.assign_SLAs)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -168,5 +175,7 @@ if __name__=='__main__':
                         choices=['aws', 'gcp', 'azure'],
                         default=['aws', 'gcp', 'azure'],
                         help='Clouds available to rent machines from')
+    parser.add_argument('--assign_SLAs', action='store_true', default=False,
+                        help='If set, assigns SLAs to each job')
     args = parser.parse_args()
     main(args)
