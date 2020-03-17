@@ -38,7 +38,7 @@ class Scheduler:
                  num_reference_models=16,
                  per_instance_type_prices_dir=None,
                  available_clouds=[],
-                 per_job_SLA=10.0):
+                 per_job_SLA=1.2):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -337,7 +337,9 @@ class Scheduler:
             self._total_steps_run[job_id] = 0
             if self._SLAs is not None:
                 assert(job.duration is not None)
-                self._SLAs[job_id] = self._per_job_SLA * job.duration
+                self._SLAs[job_id] = \
+                    (self._per_job_SLA * job.duration +
+                     self.get_current_timestamp(in_seconds=True))
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
                 self._set_initial_throughput(job_id, worker_type)
@@ -1331,16 +1333,17 @@ class Scheduler:
                 self._cluster_spec)
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
             # TODO: Add SLAs
+            SLAs = {}
             num_steps_remaining = {}
             if self._SLAs is not None:
-                SLAs = self._SLAs
                 for job_id in self._jobs:
+                    SLAs[job_id] = (self._SLAs[job_id] -
+                                    self.get_current_timestamp(in_seconds=True))
                     num_steps_remaining[job_id] = \
                         (self._jobs[job_id].total_steps -
                          self._total_steps_run[job_id])
             else:
                 SLAs = {}
-
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, self._cluster_spec,
                 instance_costs=self._per_worker_type_prices,
