@@ -1,6 +1,6 @@
 class Job:
     def __init__(self, job_id, job_type, command, num_steps_arg, total_steps,
-                 duration, scale_factor, priority_weight):
+                 duration, scale_factor, priority_weight, SLA=None):
         self._job_id = job_id
         self._job_type = job_type
         self._command = command
@@ -9,13 +9,14 @@ class Job:
         self._duration = duration
         self._scale_factor = scale_factor
         self._priority_weight = priority_weight
+        self._SLA = SLA
 
     @staticmethod
     def from_proto(job_proto):
         duration = None
         if job_proto.has_duration:
             duration = job_proto.duration
-        # TODO: Add scale_factor and priority_weight here.
+        # TODO: Add scale_factor, priority_weight, and SLA here.
         return Job(job_proto.job_id, job_proto.job_type, job_proto.command,
                    job_proto.num_steps_arg, job_proto.num_steps, duration)
 
@@ -50,3 +51,7 @@ class Job:
     @property
     def priority_weight(self):
         return self._priority_weight
+
+    @property
+    def SLA(self):
+        return self._SLA

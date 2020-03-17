@@ -658,15 +658,21 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
                     scale_factors_array, x), axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
+        SLA_constraints = []
         for job_id in SLAs:
             i = job_ids.index(job_id)
             assert(job_id in num_steps_remaining)
-            constraints.append(
+            SLA_constraints.append(
                 cp.sum(cp.multiply(throughputs[i], x[i])) >=\
                     (num_steps_remaining[job_id] / SLAs[job_id])
             )
-        cvxprob = cp.Problem(objective, constraints)
+        cvxprob = cp.Problem(objective, constraints + SLA_constraints)
         result = cvxprob.solve(solver=self._solver)
+
+        if x.value is None:
+            print('WARNING: No allocation possible with provided SLAs!')
+            cvxprob = cp.Problem(objective, constraints)
+            result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')

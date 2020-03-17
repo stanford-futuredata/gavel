@@ -32,13 +32,13 @@ DEFAULT_MATRIX_COMPLETION_MU = 1e-2
 
 class Scheduler:
 
-    # TODO: Make per_job_SLA a configurable argument from scripts.
+    # TODO: Make assign_SLAs a configurable parameter from scripts.
     def __init__(self, policy, simulate=False, throughputs_file=None,
                  seed=0, time_per_iteration=1920, profiling_percentage=0.0,
                  num_reference_models=16,
                  per_instance_type_prices_dir=None,
                  available_clouds=[],
-                 per_job_SLA=1.2):
+                 assign_SLAs=True):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -152,12 +152,12 @@ class Scheduler:
                     per_instance_type_prices_dir)
             self._per_worker_type_prices = {}
             self._available_clouds = set(available_clouds)
-            self._per_job_SLA = per_job_SLA
-            if per_job_SLA is not None:
+            if assign_SLAs:
                 self._SLAs = {}
             else:
-                self._SLAS = None
+                self._SLAs = None
         else:
+            self._SLAs = None
             self._per_instance_type_spot_prices = None
             self._per_worker_type_prices = None
         if self._estimate_throughputs:
@@ -222,6 +222,8 @@ class Scheduler:
         self._worker_type_shuffler = random.Random()
         self._worker_type_shuffler.seed(seed+5)
 
+        self._SLA_generator = random.Random()
+        self._SLA_generator.seed(seed+6)
 
     def start_scheduling_thread(self):
         self.scheduler_thread = threading.Thread(
@@ -337,8 +339,9 @@ class Scheduler:
             self._total_steps_run[job_id] = 0
             if self._SLAs is not None:
                 assert(job.duration is not None)
+                assert(job.SLA is not None)
                 self._SLAs[job_id] = \
-                    (self._per_job_SLA * job.duration +
+                    (job.SLA * job.duration +
                      self.get_current_timestamp(in_seconds=True))
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
@@ -863,6 +866,16 @@ class Scheduler:
             if 0.0 <= r <= 0.2:
                 priority_weight = 5.0
 
+        SLA = None
+        if self._SLAs is not None:
+            r = self._SLA_generator.uniform(0, 1)
+            if 0.0 <= r < 0.33:
+                SLA = 1.2
+            elif 0.33 <= r < 0.67:
+                SLA = 2.0
+            else:
+                SLA = 10.0
+
         job = Job(job_id=None,
                   job_type=job_type,
                   command=command,
@@ -870,7 +883,8 @@ class Scheduler:
                   total_steps=num_steps,
                   duration=run_time,
                   scale_factor=scale_factor,
-                  priority_weight=priority_weight)
+                  priority_weight=priority_weight,
+                  SLA=SLA)
 
         return job
 
