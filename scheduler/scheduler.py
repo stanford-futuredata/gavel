@@ -32,11 +32,13 @@ DEFAULT_MATRIX_COMPLETION_MU = 1e-2
 
 class Scheduler:
 
+    # TODO: Make per_job_SLA a configurable argument from scripts.
     def __init__(self, policy, simulate=False, throughputs_file=None,
                  seed=0, time_per_iteration=1920, profiling_percentage=0.0,
                  num_reference_models=16,
                  per_instance_type_prices_dir=None,
-                 available_clouds=[]):
+                 available_clouds=[],
+                 per_job_SLA=10.0):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -150,6 +152,11 @@ class Scheduler:
                     per_instance_type_prices_dir)
             self._per_worker_type_prices = {}
             self._available_clouds = set(available_clouds)
+            self._per_job_SLA = per_job_SLA
+            if per_job_SLA is not None:
+                self._SLAs = {}
+            else:
+                self._SLAS = None
         else:
             self._per_instance_type_spot_prices = None
             self._per_worker_type_prices = None
@@ -328,6 +335,9 @@ class Scheduler:
             self._job_type_to_job_ids[job_type].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
+            if self._SLAs is not None:
+                assert(job.duration is not None)
+                self._SLAs[job_id] = self._per_job_SLA * job.duration
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
                 self._set_initial_throughput(job_id, worker_type)
@@ -390,6 +400,8 @@ class Scheduler:
             del self._throughputs[job_id]
             del self._job_id_to_job_type[job_id]
             del self._num_failures_per_job[job_id]
+            if self._SLAs is not None:
+                del self._SLAs[job_id]
             if self._job_packing:
                 to_delete = []
                 for other_job_id in self._throughputs:
@@ -854,7 +866,7 @@ class Scheduler:
                   command=command,
                   num_steps_arg=job_template.num_steps_arg,
                   total_steps=num_steps,
-                  duration=None,
+                  duration=run_time,
                   scale_factor=scale_factor,
                   priority_weight=priority_weight)
 
@@ -1319,9 +1331,21 @@ class Scheduler:
                 self._cluster_spec)
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
             # TODO: Add SLAs
+            num_steps_remaining = {}
+            if self._SLAs is not None:
+                SLAs = self._SLAs
+                for job_id in self._jobs:
+                    num_steps_remaining[job_id] = \
+                        (self._jobs[job_id].total_steps -
+                         self._total_steps_run[job_id])
+            else:
+                SLAs = {}
+
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, self._cluster_spec,
-                self._per_worker_type_prices, {}, {})
+                instance_costs=self._per_worker_type_prices,
+                SLAs=SLAs,
+                num_steps_remaining=num_steps_remaining)
         else:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, self._cluster_spec)
