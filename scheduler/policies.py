@@ -626,7 +626,6 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
         (job_ids, worker_types) = index
 
         scale = 1.0 / throughputs.sum(axis=1)
-        throughputs = throughputs * scale.reshape(m, 1)
 
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.
@@ -663,8 +662,8 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
             i = job_ids.index(job_id)
             assert(job_id in num_steps_remaining)
             constraints.append(
-                cp.sum(cp.multiply(throughputs / instance_costs_array, x),
-                       axis=1) >= (num_steps_remaining[job_id] / SLAs[job_id])
+                cp.sum(cp.multiply(throughputs[i], x[i])) >=\
+                    (num_steps_remaining[job_id] / SLAs[job_id])
             )
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
