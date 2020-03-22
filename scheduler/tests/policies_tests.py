@@ -28,7 +28,7 @@ class TestPolicies(unittest.TestCase):
         policy.get_allocation(unflattened_throughputs, scale_factors,
                               cluster_spec,
                               instance_costs={'v100': 3.1, 'p100': 2.0, 'k80': 0.8},
-                              SLAs={0: 100000000}, num_steps_remaining={0: 100})
+                              SLAs={0: 1000}, num_steps_remaining={0: 100})
 
 
 if __name__=='__main__':
