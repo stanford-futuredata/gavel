@@ -15,7 +15,8 @@ def get_available_policies():
             'min_total_duration_packed',
             'max_sum_throughput_perf',
             'max_sum_throughput_normalized_by_cost_perf',
-            'max_sum_throughput_normalized_by_cost_perf_SLAs'
+            'max_sum_throughput_normalized_by_cost_perf_SLOs',
+            'max_sum_throughput_normalized_by_cost_packed_SLOs'
             ]
 
 def read_per_instance_type_spot_prices_aws(directory):
@@ -191,9 +192,13 @@ def get_policy(policy_name, solver, seed=None):
         policy = policies.ThroughputSumWithPerf(solver=solver)
     elif policy_name == 'max_sum_throughput_normalized_by_cost_perf':
         policy = policies.ThroughputNormalizedByCostSumWithPerf(solver=solver)
-    elif policy_name == 'max_sum_throughput_normalized_by_cost_perf_SLAs':
+    elif policy_name == 'max_sum_throughput_normalized_by_cost_perf_SLOs':
         policy = \
-            policies.ThroughputNormalizedByCostSumWithPerfSLAs(solver=solver)
+            policies.ThroughputNormalizedByCostSumWithPerfSLOs(solver=solver)
+    elif policy_name == 'max_sum_throughput_normalized_by_cost_packed_SLOs':
+        policy = \
+            policies.ThroughputNormalizedByCostSumWithPackingSLOs(
+                                                        solver=solver)
     elif policy_name == 'min_total_duration':
         policy = policies.MinTotalDurationPolicy(solver=solver)
     elif policy_name == 'min_total_duration_packed':

@@ -667,7 +667,7 @@ class ThroughputNormalizedByCostSumWithPerfSLOs(Policy):
             i = job_ids.index(job_id)
             assert(job_id in num_steps_remaining)
             constraints.append(
-                cp.sum(cp.multiply(throughputs[i], x[i])) >= 
+                cp.sum(cp.multiply(throughputs[i], x[i])) >=
                     (num_steps_remaining[job_id] / SLOs[job_id])
             )
         cvxprob = cp.Problem(objective, constraints)
@@ -682,7 +682,7 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
 
     def __init__(self, solver):
         Policy.__init__(self, solver)
-        self._name = 'ThroughputNormalizedByCostSum_Packing'
+        self._name = 'ThroughputNormalizedByCostSum_PackingSLOs'
 
     def get_allocation(self, unflattened_throughputs, scale_factors, cluster_spec,
                        instance_costs=None, SLOs={}, num_steps_remaining={}):
@@ -714,7 +714,7 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
                 instance_costs_array[0, i] = instance_costs[worker_types[i]]
 
         objective_terms = []
-        for i in range(len(all_throughputs)):
+        for i in range(len(single_job_ids)):
             indexes = relevant_combinations[single_job_ids[i]]
             objective_terms.append(cp.sum(cp.multiply(
                 all_throughputs[i][indexes] / instance_costs_array, x[indexes])))
@@ -722,8 +722,7 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
         else:
-            objective = cp.Maximize(
-                cp.atoms.affine.add_expr.AddExpression(objective_terms))
+            objective = cp.Maximize(cp.sum(cp.hstack(objective_terms)))
 
         # Make sure that a given job is not over-allocated resources.
         constraints = [
@@ -731,20 +730,25 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
             cp.sum(cp.multiply(
                 scale_factors_array, x), axis=0) <= self._num_workers,
         ]
+        per_job_allocations = []
         for single_job_id in single_job_ids:
             indexes = relevant_combinations[single_job_id]
-            constraints.append(cp.sum(x[indexes]) <= 1)
+            per_job_allocations.append(cp.sum(x[indexes]))
+        constraints.append(cp.vstack(per_job_allocations) <= 1)
 
+        per_job_throughputs = []
+        per_job_SLOs = []
         for job_id in SLOs:
             i = job_ids.index(job_id)
             assert(job_id in num_steps_remaining)
             indexes = relevant_combinations[single_job_ids[i]]
             throughput = cp.sum(cp.multiply(
                 all_throughputs[i][indexes], x[indexes]))
-            constraints.append(
-                throughput >=
-                    (num_steps_remaining[job_id] / SLOs[job_id])
-            )
+            per_job_throughputs.append(throughput)
+            per_job_SLOs.append(num_steps_remaining[job_id] / SLOs[job_id])
+        if len(per_job_throughputs) > 0:
+            constraints.append(cp.vstack(per_job_throughputs) >=
+                               cp.vstack(per_job_SLOs))
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
 

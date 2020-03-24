@@ -32,13 +32,13 @@ DEFAULT_MATRIX_COMPLETION_MU = 1e-2
 
 class Scheduler:
 
-    # TODO: Make assign_SLAs a configurable parameter from scripts.
+    # TODO: Make assign_SLOs a configurable parameter from scripts.
     def __init__(self, policy, simulate=False, throughputs_file=None,
                  seed=0, time_per_iteration=1920, profiling_percentage=0.0,
                  num_reference_models=16,
                  per_instance_type_prices_dir=None,
                  available_clouds=[],
-                 assign_SLAs=False):
+                 assign_SLOs=False):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -152,12 +152,12 @@ class Scheduler:
                     per_instance_type_prices_dir)
             self._per_worker_type_prices = {}
             self._available_clouds = set(available_clouds)
-            if assign_SLAs:
-                self._SLAs = {}
+            if assign_SLOs:
+                self._SLOs = {}
             else:
-                self._SLAs = None
+                self._SLOs = None
         else:
-            self._SLAs = None
+            self._SLOs = None
             self._per_instance_type_spot_prices = None
             self._per_worker_type_prices = None
         if self._estimate_throughputs:
@@ -222,8 +222,8 @@ class Scheduler:
         self._worker_type_shuffler = random.Random()
         self._worker_type_shuffler.seed(seed+5)
 
-        self._SLA_generator = random.Random()
-        self._SLA_generator.seed(seed+6)
+        self._SLO_generator = random.Random()
+        self._SLO_generator.seed(seed+6)
 
     def start_scheduling_thread(self):
         self.scheduler_thread = threading.Thread(
@@ -337,11 +337,11 @@ class Scheduler:
             self._job_type_to_job_ids[job_type].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
-            if self._SLAs is not None:
+            if self._SLOs is not None:
                 assert(job.duration is not None)
-                assert(job.SLA is not None)
-                self._SLAs[job_id] = \
-                    (job.SLA * job.duration +
+                assert(job.SLO is not None)
+                self._SLOs[job_id] = \
+                    (job.SLO * job.duration +
                      self.get_current_timestamp(in_seconds=True))
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
@@ -429,7 +429,7 @@ class Scheduler:
                         del self._profiled_jobs[worker_type][job_id]
             self._remove_from_priorities(job_id)
             # TODO: Add a flag to choose whether to update allocation here.
-            self._need_to_update_allocation = True
+            # self._need_to_update_allocation = True
 
     def num_workers(self):
         """Returns the number of workers the scheduler is connected to."""
@@ -541,8 +541,8 @@ class Scheduler:
             # Don't schedule jobs that have already been scheduled.
             if ((not job_id.is_pair() and job_id in already_scheduled_jobs) or
                 (job_id.is_pair() and
-                 (job_id.singletons()[0] in already_scheduled_jobs_set or
-                  job_id.singletons()[1] in already_scheduled_jobs_set))):
+                 (job_id.singletons()[0] in already_scheduled_jobs or
+                  job_id.singletons()[1] in already_scheduled_jobs))):
                 continue
 
             # Don't schedule jobs with 0 throughput.
@@ -867,15 +867,15 @@ class Scheduler:
             if 0.0 <= r <= 0.2:
                 priority_weight = 5.0
 
-        SLA = None
-        if self._SLAs is not None:
-            r = self._SLA_generator.uniform(0, 1)
+        SLO = None
+        if self._SLOs is not None:
+            r = self._SLO_generator.uniform(0, 1)
             if 0.0 <= r < 0.33:
-                SLA = 1.2
+                SLO = 1.2
             elif 0.33 <= r < 0.67:
-                SLA = 2.0
+                SLO = 2.0
             else:
-                SLA = 10.0
+                SLO = 10.0
 
         job = Job(job_id=None,
                   job_type=job_type,
@@ -885,7 +885,7 @@ class Scheduler:
                   duration=run_time,
                   scale_factor=scale_factor,
                   priority_weight=priority_weight,
-                  SLA=SLA)
+                  SLO=SLO)
 
         return job
 
@@ -1238,23 +1238,23 @@ class Scheduler:
             print('Total cost: $%.2f' % (total_cost))
         return total_cost
 
-    def get_num_SLA_violations(self, verbose=True):
-        num_SLA_violations = 0
-        if self._SLAs is not None:
-            for job_id in self._SLAs:
-                SLA = self._SLAs[job_id]
+    def get_num_SLO_violations(self, verbose=True):
+        num_SLO_violations = 0
+        if self._SLOs is not None:
+            for job_id in self._SLOs:
+                SLO = self._SLOs[job_id]
                 completion_time = self._job_completion_times[job_id]
                 if verbose:
-                    print('%s: completion_time=%f, SLA=%f, '
-                          'completion_time / SLA = %f' % (job_id,
+                    print('%s: completion_time=%f, SLO=%f, '
+                          'completion_time / SLO = %f' % (job_id,
                                                           completion_time,
-                                                          SLA,
-                                                          completion_time / SLA))
-                if completion_time > SLA:
-                    num_SLA_violations += 1
+                                                          SLO,
+                                                          completion_time / SLO))
+                if completion_time > SLO:
+                    num_SLO_violations += 1
         if verbose:
-            print('Number of SLA violations: %d' % (num_SLA_violations))
-        return num_SLA_violations
+            print('Number of SLO violations: %d' % (num_SLO_violations))
+        return num_SLO_violations
 
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
@@ -1365,14 +1365,14 @@ class Scheduler:
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
-            # TODO: Add SLAs
-            if 'SLA' in self._policy.name:
-                SLAs = {}
+            # TODO: Add SLOs
+            if 'SLO' in self._policy.name:
+                SLOs = {}
                 num_steps_remaining = {}
-                if self._SLAs is not None:
+                if self._SLOs is not None:
                     for job_id in self._jobs:
-                        SLAs[job_id] = \
-                            (self._SLAs[job_id] -
+                        SLOs[job_id] = \
+                            (self._SLOs[job_id] -
                              self.get_current_timestamp(in_seconds=True))
                         num_steps_remaining[job_id] = \
                             (self._jobs[job_id].total_steps -
@@ -1380,7 +1380,7 @@ class Scheduler:
                 unflattened_allocation = self._policy.get_allocation(
                     self._throughputs, scale_factors, self._cluster_spec,
                     instance_costs=self._per_worker_type_prices,
-                    SLAs=SLAs,
+                    SLOs=SLOs,
                     num_steps_remaining=num_steps_remaining)
             else:
                 unflattened_allocation = self._policy.get_allocation(

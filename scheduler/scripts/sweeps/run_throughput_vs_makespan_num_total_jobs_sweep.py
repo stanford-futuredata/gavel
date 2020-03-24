@@ -20,7 +20,7 @@ import utils
 
 def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, per_instance_type_prices_dir,
-                          available_clouds, assign_SLAs, cluster_spec, lam,
+                          available_clouds, assign_SLOs, cluster_spec, lam,
                           seed, interval, fixed_job_duration,
                           generate_multi_gpu_jobs, num_total_jobs, solver,
                           log_dir, timeout, verbose):
@@ -37,7 +37,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                     seed=seed, time_per_iteration=interval,
                     per_instance_type_prices_dir=per_instance_type_prices_dir,
                     available_clouds = available_clouds,
-                    assign_SLAs=assign_SLAs,
+                    assign_SLOs=assign_SLOs,
                     simulate=True)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
@@ -159,7 +159,7 @@ def main(args):
                                           throughputs_file,
                                           args.per_instance_type_prices_dir,
                                           args.available_clouds,
-                                          args.assign_SLAs,
+                                          args.assign_SLOs,
                                           cluster_spec,
                                           lam, seed, args.interval,
                                           args.fixed_job_duration,
@@ -229,8 +229,8 @@ if __name__=='__main__':
                         choices=['aws', 'gcp', 'azure'],
                         default=['aws', 'gcp', 'azure'],
                         help='Clouds available to rent machines from')
-    parser.add_argument('--assign_SLAs', action='store_true', default=False,
-                        help='If set, assigns SLAs to each job')
+    parser.add_argument('--assign_SLOs', action='store_true', default=False,
+                        help='If set, assigns SLOs to each job')
     fixed_range.add_argument('-a', '--num-total-jobs-lower-bound', type=int,
                              default=None,
                              help='Lower bound for num_total_jobs to sweep')

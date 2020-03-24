@@ -15,7 +15,7 @@ class Experiment:
         self._utilization = None
         self._makespan = None
         self._total_cost = None
-        self._num_SLA_violations = None
+        self._num_SLO_violations = None
 
         if 'lam' in params:
             self._lam = float(params['lam'])
@@ -34,8 +34,8 @@ class Experiment:
         if 'total_cost' in results:
             # Remove $
             self._total_cost = float(results['total_cost'][1:])
-        if 'num_SLA_violations' in results:
-            self._num_SLA_violations = int(results['num_SLA_violations'])
+        if 'num_SLO_violations' in results:
+            self._num_SLO_violations = int(results['num_SLO_violations'])
 
 def print_experiments(experiments):
     print('Experiment ID,Cluster Spec,Policy,Seed,Lambda,Total Jobs,'
@@ -70,7 +70,7 @@ def print_experiments(experiments):
                                       experiment._utilization,
                                       experiment._makespan,
                                       experiment._total_cost,
-                                      experiment._num_SLA_violations))
+                                      experiment._num_SLO_violations))
 
 def main(args):
     experiments = {}
