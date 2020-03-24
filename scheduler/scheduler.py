@@ -428,6 +428,7 @@ class Scheduler:
                     if job_id in self._profiled_jobs[worker_type]:
                         del self._profiled_jobs[worker_type][job_id]
             self._remove_from_priorities(job_id)
+            # TODO: Add a flag to choose whether to update allocation here.
             self._need_to_update_allocation = True
 
     def num_workers(self):
@@ -838,8 +839,8 @@ class Scheduler:
             print('Running for fixed duration %d minutes' % (fixed_job_duration / 60.0))
             run_time = fixed_job_duration
         else:
-            run_time = \
-                self._job_generator.choice(np.multiply([0.5, 1, 2, 4, 8], (3600 * 24)))
+            run_time = self._job_generator.choice(
+                           np.multiply([0.5, 1, 2, 4, 8], (3600 * 24)))
             # run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
         num_steps = \
             run_time * self._oracle_throughputs['v100'][job_type]['null']
@@ -1241,8 +1242,15 @@ class Scheduler:
         num_SLA_violations = 0
         if self._SLAs is not None:
             for job_id in self._SLAs:
-                if (self._per_job_latest_timestamps[job_id] >
-                    self._SLAs[job_id]):
+                SLA = self._SLAs[job_id]
+                completion_time = self._job_completion_times[job_id]
+                if verbose:
+                    print('%s: completion_time=%f, SLA=%f, '
+                          'completion_time / SLA = %f' % (job_id,
+                                                          completion_time,
+                                                          SLA,
+                                                          completion_time / SLA))
+                if completion_time > SLA:
                     num_SLA_violations += 1
         if verbose:
             print('Number of SLA violations: %d' % (num_SLA_violations))
