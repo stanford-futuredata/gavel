@@ -421,6 +421,7 @@ class Scheduler:
                     if self._estimate_throughputs:
                         del self._throughputs_mask[other_job_id]
                 if len(self._job_type_to_job_ids[job_type]) == 0:
+                    del self._job_type_to_job_ids[job_type]
                     del self._job_type_throughputs[job_type]
                     for other_job_type in self._job_type_throughputs:
                         for worker_type in self._worker_types:
@@ -1358,8 +1359,6 @@ class Scheduler:
             job_id: self._jobs[job_id].scale_factor
             for job_id in self._jobs
         }
-        # TODO: Add case for MaxMinFairnessPacking policy with
-        # new allocation format.
         if self._policy.name.startswith("MaxMinFairness"):
             priority_weights = {
                 job_id: self._jobs[job_id].priority_weight
@@ -1376,7 +1375,6 @@ class Scheduler:
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
-            # TODO: Add SLOs
             if 'SLO' in self._policy.name:
                 SLOs = {}
                 num_steps_remaining = {}
@@ -1889,14 +1887,14 @@ class Scheduler:
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
-                    # TODO: Update total job cost so far using
-                    # per-instance-type prices.
                     if self._per_worker_type_prices is not None:
                         self._job_cost_so_far[single_job_id] += \
                             (self._per_worker_type_prices[worker_type] *
                              execution_time / 3600.0)
+                    job_cost_so_far = \
+                        self._job_cost_so_far[single_job_id]
                     print('Job %s cost so far: $%.2f' % (single_job_id,
-                                                         self._job_cost_so_far[single_job_id]))
+                                                         job_cost_so_far))
                     # Job may be multi-GPU, and have already been removed from
                     # running_jobs by another worker.
                     if single_job_id in self._running_jobs:
