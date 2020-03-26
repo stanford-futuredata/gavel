@@ -663,18 +663,25 @@ class ThroughputNormalizedByCostSumWithPerfSLOs(Policy):
                     scale_factors_array, x), axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
+
+        SLO_constraints = []
         for job_id in SLOs:
             i = job_ids.index(job_id)
             assert(job_id in num_steps_remaining)
-            constraints.append(
+            SLO_constraints.append(
                 cp.sum(cp.multiply(throughputs[i], x[i])) >=
                     (num_steps_remaining[job_id] / SLOs[job_id])
             )
-        cvxprob = cp.Problem(objective, constraints)
+        cvxprob = cp.Problem(objective, constraints + SLO_constraints)
         result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
+
+        if x.value is None:
+            print('WARNING: No allocation possible with provided SLOs!')
+            cvxprob = cp.Problem(objective, constraints)
+            result = cvxprob.solve(solver=self._solver)
 
         return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
@@ -739,6 +746,7 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
             per_job_allocations.append(cp.sum(x[indexes]))
         constraints.append(cp.vstack(per_job_allocations) <= 1)
 
+        SLO_constraints = []
         per_job_throughputs = []
         per_job_SLOs = []
         for job_id in SLOs:
@@ -750,9 +758,9 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
             per_job_throughputs.append(throughput)
             per_job_SLOs.append(num_steps_remaining[job_id] / SLOs[job_id])
         if len(per_job_throughputs) > 0:
-            constraints.append(cp.vstack(per_job_throughputs) >=
-                               cp.vstack(per_job_SLOs))
-        cvxprob = cp.Problem(objective, constraints)
+            SLO_constraints.append(cp.vstack(per_job_throughputs) >=
+                                   cp.vstack(per_job_SLOs))
+        cvxprob = cp.Problem(objective, constraints + SLO_constraints)
         result = cvxprob.solve(solver=self._solver)
 
         if x.value is None:
