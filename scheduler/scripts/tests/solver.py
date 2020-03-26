@@ -5,7 +5,6 @@ import argparse
 import datetime
 import numpy as np
 import random
-from scipy.optimize import nnls, lsq_linear
 import time
 
 import utils
