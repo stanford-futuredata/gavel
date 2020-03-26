@@ -32,9 +32,14 @@ DEFAULT_MATRIX_COMPLETION_MU = 1e-2
 
 class Scheduler:
 
+    # TODO: Make assign_SLOs a configurable parameter from scripts.
     def __init__(self, policy, simulate=False, throughputs_file=None,
                  seed=0, time_per_iteration=1920, profiling_percentage=0.0,
-                 num_reference_models=16, per_instance_type_prices_dir=None):
+                 num_reference_models=16,
+                 per_instance_type_prices_dir=None,
+                 available_clouds=[],
+                 assign_SLOs=False,
+                 enable_global_queue=False):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -52,6 +57,9 @@ class Scheduler:
         self._initialize_seeds(seed)
         # Initialize time in seconds each iteration should run for.
         self._time_per_iteration = time_per_iteration
+
+        # Sets whether to use a global queue across all worker types.
+        self._enable_global_queue = enable_global_queue
 
         if self._simulate:
             self._start_timestamp = 0
@@ -143,12 +151,18 @@ class Scheduler:
         self._estimate_throughputs = \
             self._job_packing and profiling_percentage > 0
         if per_instance_type_prices_dir is not None:
-            self._per_instance_type_prices = \
-                utils.read_per_instance_type_prices_json(
+            self._per_instance_type_spot_prices = \
+                utils.read_per_instance_type_spot_prices_json(
                     per_instance_type_prices_dir)
             self._per_worker_type_prices = {}
+            self._available_clouds = set(available_clouds)
+            if assign_SLOs:
+                self._SLOs = {}
+            else:
+                self._SLOs = None
         else:
-            self._per_instance_type_prices = None
+            self._SLOs = None
+            self._per_instance_type_spot_prices = None
             self._per_worker_type_prices = None
         if self._estimate_throughputs:
             # Percentage of machines to use for profiling co-located jobs.
@@ -212,6 +226,8 @@ class Scheduler:
         self._worker_type_shuffler = random.Random()
         self._worker_type_shuffler.seed(seed+5)
 
+        self._SLO_generator = random.Random()
+        self._SLO_generator.seed(seed+6)
 
     def start_scheduling_thread(self):
         self.scheduler_thread = threading.Thread(
@@ -227,7 +243,9 @@ class Scheduler:
         for worker_type in self._per_worker_type_prices:
             latest_price = \
                 utils.get_latest_price_for_worker_type(
-                    worker_type, current_time, self._per_instance_type_prices)
+                    worker_type, current_time,
+                    self._per_instance_type_spot_prices,
+                    self._available_clouds)
             if self._per_worker_type_prices[worker_type] != latest_price:
                 self._per_worker_type_prices[worker_type] = latest_price
                 self._need_to_update_allocation = True
@@ -323,6 +341,12 @@ class Scheduler:
             self._job_type_to_job_ids[job_type].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
+            if self._SLOs is not None:
+                assert(job.duration is not None)
+                assert(job.SLO is not None)
+                self._SLOs[job_id] = \
+                    (job.SLO * job.duration +
+                     self.get_current_timestamp(in_seconds=True))
             for worker_type in self._worker_types:
                 self._steps_run_so_far[job_id][worker_type] = 0
                 self._set_initial_throughput(job_id, worker_type)
@@ -408,6 +432,7 @@ class Scheduler:
                     if job_id in self._profiled_jobs[worker_type]:
                         del self._profiled_jobs[worker_type][job_id]
             self._remove_from_priorities(job_id)
+            # TODO: Add a flag to choose whether to update allocation here.
             self._need_to_update_allocation = True
 
     def num_workers(self):
@@ -476,8 +501,7 @@ class Scheduler:
 
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
-    def _schedule_jobs_on_workers_helper(self, worker_type,
-                                         already_scheduled_jobs):
+    def _schedule_jobs_on_workers_helper(self):
         """Greedily selects the jobs to run in the next round by iterating
            through the job list in sorted priority order.
 
@@ -487,35 +511,49 @@ class Scheduler:
              A list of job IDs to schedule on the passed-in worker_type in
              the upcoming round.
         """
-        num_workers = len(
-            self._worker_type_to_worker_id_mapping[worker_type])
-        already_scheduled_jobs_set = set(already_scheduled_jobs)
-        scheduled_jobs_on_worker_type = []
 
-        if self._estimate_throughputs:
-            num_workers_left = self._profile_with_reference_jobs(worker_type,
-                                                                 num_workers)
-        else:
-            num_workers_left = num_workers
+        already_scheduled_jobs = set()
+        scheduled_jobs = {}
+
+        num_workers_left = {}
+        for worker_type in self._worker_types:
+            scheduled_jobs[worker_type] = []
+            num_workers = len(
+                self._worker_type_to_worker_id_mapping[worker_type])
+            if self._estimate_throughputs:
+                num_workers_left[worker_type] = \
+                    self._profile_with_reference_jobs(worker_type,
+                                                      num_workers)
+            else:
+                num_workers_left[worker_type] = num_workers
 
         entries = []
-        for job_id in self._priorities[worker_type]:
-            entries.append((job_id, self._priorities[worker_type][job_id],
-                            self._deficits[worker_type][job_id],
-                            self._allocation[job_id][worker_type]))
+        for worker_type in self._worker_types:
+            for job_id in self._priorities[worker_type]:
+                entries.append((job_id, worker_type,
+                                self._priorities[worker_type][job_id],
+                                self._deficits[worker_type][job_id],
+                                self._allocation[job_id][worker_type]))
 
-        sorted_job_queue = sorted(entries,
-                                  key=lambda x: (x[1], x[2], x[3]),
-                                  reverse=True)
+        if self._enable_global_queue:
+            # Schedule jobs regardless of worker type.
+            sorted_job_queue = sorted(entries,
+                                      key=lambda x: (x[2], x[3], x[4]),
+                                      reverse=True)
+        else:
+            # Schedule jobs in the order of v100, p100, k80.
+            sorted_job_queue = sorted(entries,
+                                      key=lambda x: (x[1], x[2], x[3], x[4]),
+                                      reverse=True)
 
-        for job_id, *_ in sorted_job_queue:
-            if num_workers_left == 0:
-                break
+        for job_id, worker_type, *_ in sorted_job_queue:
+            if num_workers_left[worker_type] == 0:
+                continue
             # Don't schedule jobs that have already been scheduled.
-            if ((not job_id.is_pair() and job_id in already_scheduled_jobs_set) or
+            if ((not job_id.is_pair() and job_id in already_scheduled_jobs) or
                 (job_id.is_pair() and
-                 (job_id.singletons()[0] in already_scheduled_jobs_set or
-                  job_id.singletons()[1] in already_scheduled_jobs_set))):
+                 (job_id.singletons()[0] in already_scheduled_jobs or
+                  job_id.singletons()[1] in already_scheduled_jobs))):
                 continue
 
             # Don't schedule jobs with 0 throughput.
@@ -543,16 +581,15 @@ class Scheduler:
                     continue
             else:
                 scale_factor = self._jobs[job_id].scale_factor
-            if scale_factor > num_workers_left:
+            if scale_factor > num_workers_left[worker_type]:
                 continue
-            num_workers_left -= scale_factor
+            num_workers_left[worker_type] -= scale_factor
 
             for single_job_id in job_id.singletons():
-                already_scheduled_jobs_set.add(single_job_id)
-            scheduled_jobs_on_worker_type.append((job_id,
-                                                  scale_factor))
+                already_scheduled_jobs.add(single_job_id)
+            scheduled_jobs[worker_type].append((job_id, scale_factor))
 
-        return scheduled_jobs_on_worker_type
+        return scheduled_jobs
 
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
@@ -568,15 +605,9 @@ class Scheduler:
         # in the upcoming round.
         self._update_priorities()
 
-        already_scheduled_jobs = []
-        scheduled_jobs = []
-
+        # TODO: Remove this?
         to_remove = []
         worker_types = ["v100", "p100", "k80"]
-
-        # TODO: Replace this with a single global queue containing all worker types.
-        if "Perf" not in self._policy.name and "Packing" not in self._policy.name:
-            self._worker_type_shuffler.shuffle(worker_types)
 
         for i, worker_type in enumerate(worker_types):
             if worker_type not in self._worker_type_to_worker_id_mapping:
@@ -584,27 +615,22 @@ class Scheduler:
         for i in reversed(to_remove):
             worker_types.pop(i)
 
-        for worker_type in worker_types:
+        worker_assignments = []
+        scheduled_jobs = self._schedule_jobs_on_workers_helper()
+
+        for worker_type in scheduled_jobs:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
             worker_id_ptr = 0
-            scheduled_jobs_on_worker_type = \
-                    self._schedule_jobs_on_workers_helper(
-                            worker_type, already_scheduled_jobs)
 
-            for (job_id, scale_factor) in scheduled_jobs_on_worker_type:
-                # Make sure a job is only scheduled on a single worker_type in
-                # a given round.
-                already_scheduled_jobs.append(job_id)
-                if job_id.is_pair():
-                    for single_job_id in job_id.singletons():
-                        already_scheduled_jobs.append(single_job_id)
-
+            for (job_id, scale_factor) in scheduled_jobs[worker_type]:
                 # For now, ignore locality. Place job_id on the first
                 # `scale_factor` workers of the desired type.
                 # assert(scale_factor == self._jobs[job_id].scale_factor)
-                worker_id_ptrs = [worker_id_ptr + i for i in range(scale_factor)]
-                scheduled_jobs.append((job_id,
-                                       tuple([worker_ids[i] for i in worker_id_ptrs])))
+                worker_id_ptrs = \
+                    [worker_id_ptr + i for i in range(scale_factor)]
+                worker_assignments.append(
+                        (job_id,
+                         tuple([worker_ids[i] for i in worker_id_ptrs])))
                 worker_id_ptr += scale_factor
 
                 for single_job_id in job_id.singletons():
@@ -627,7 +653,8 @@ class Scheduler:
                 worker_types = sorted(worker_types)
                 allocation_str = ''
                 for x in worker_types:
-                    allocation_str += ' [%4s %f]' % (x, self._allocation[job_id][x])
+                    allocation_str += \
+                        ' [%4s %f]' % (x, self._allocation[job_id][x])
                 print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
                        'Worker type: %s\tWorker ID(s): %s\t'
                        'Priority: %f\tDeficit: %f\t'
@@ -644,7 +671,7 @@ class Scheduler:
                                                        worker_type,
                                                        len(self._jobs)))
 
-        return scheduled_jobs
+        return worker_assignments
 
     def _get_num_steps(self, job_id, worker_type, single_job_id=None):
         if self._simulate:
@@ -823,7 +850,9 @@ class Scheduler:
             print('Running for fixed duration %d minutes' % (fixed_job_duration / 60.0))
             run_time = fixed_job_duration
         else:
-            run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
+            run_time = self._job_generator.choice(
+                           np.multiply([0.5, 1, 2, 4, 8], (3600 * 24)))
+            # run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
         num_steps = \
             run_time * self._oracle_throughputs['v100'][job_type]['null']
         assert(run_time > 0)
@@ -849,14 +878,25 @@ class Scheduler:
             if 0.0 <= r <= 0.2:
                 priority_weight = 5.0
 
+        SLO = None
+        if self._SLOs is not None:
+            r = self._SLO_generator.uniform(0, 1)
+            if 0.0 <= r < 0.33:
+                SLO = 1.2
+            elif 0.33 <= r < 0.67:
+                SLO = 2.0
+            else:
+                SLO = 10.0
+
         job = Job(job_id=None,
                   job_type=job_type,
                   command=command,
                   num_steps_arg=job_template.num_steps_arg,
                   total_steps=num_steps,
-                  duration=None,
+                  duration=run_time,
                   scale_factor=scale_factor,
-                  priority_weight=priority_weight)
+                  priority_weight=priority_weight,
+                  SLO=SLO)
 
         return job
 
@@ -1051,7 +1091,7 @@ class Scheduler:
             else:
                 while next_job_arrival_time <= self._current_timestamp:
                     if num_total_jobs is not None:
-                        if num_jobs_generated > num_total_jobs:
+                        if num_jobs_generated >= num_total_jobs:
                             break
                     job = self._generate_job(
                         fixed_job_duration=fixed_job_duration,
@@ -1209,6 +1249,24 @@ class Scheduler:
             print('Total cost: $%.2f' % (total_cost))
         return total_cost
 
+    def get_num_SLO_violations(self, verbose=True):
+        num_SLO_violations = 0
+        if self._SLOs is not None:
+            for job_id in self._SLOs:
+                SLO = self._SLOs[job_id]
+                completion_time = self._job_completion_times[job_id]
+                if verbose:
+                    print('%s: completion_time=%f, SLO=%f, '
+                          'completion_time / SLO = %f' % (job_id,
+                                                          completion_time,
+                                                          SLO,
+                                                          completion_time / SLO))
+                if completion_time > SLO:
+                    num_SLO_violations += 1
+        if verbose:
+            print('Number of SLO violations: %d' % (num_SLO_violations))
+        return num_SLO_violations
+
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
 
@@ -1318,10 +1376,27 @@ class Scheduler:
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
-            # TODO: Add SLAs
-            unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, scale_factors, self._cluster_spec,
-                self._per_worker_type_prices, {}, {})
+            # TODO: Add SLOs
+            if 'SLO' in self._policy.name:
+                SLOs = {}
+                num_steps_remaining = {}
+                if self._SLOs is not None:
+                    for job_id in self._jobs:
+                        SLOs[job_id] = \
+                            (self._SLOs[job_id] -
+                             self.get_current_timestamp(in_seconds=True))
+                        num_steps_remaining[job_id] = \
+                            (self._jobs[job_id].total_steps -
+                             self._total_steps_run[job_id])
+                unflattened_allocation = self._policy.get_allocation(
+                    self._throughputs, scale_factors, self._cluster_spec,
+                    instance_costs=self._per_worker_type_prices,
+                    SLOs=SLOs,
+                    num_steps_remaining=num_steps_remaining)
+            else:
+                unflattened_allocation = self._policy.get_allocation(
+                    self._throughputs, scale_factors, self._cluster_spec,
+                    instance_costs=self._per_worker_type_prices)
         else:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, self._cluster_spec)
@@ -1736,7 +1811,8 @@ class Scheduler:
                         utils.get_latest_price_for_worker_type(
                             worker_type,
                             self.get_current_timestamp(in_seconds=True),
-                            self._per_instance_type_prices)
+                            self._per_instance_type_spot_prices,
+                            self._available_clouds)
                 for job_id in self._jobs:
                     self._steps_run_so_far[job_id][worker_type] = 0
                     self._job_time_so_far[job_id][worker_type] = \
@@ -1815,9 +1891,10 @@ class Scheduler:
                             all_execution_times):
                     # TODO: Update total job cost so far using
                     # per-instance-type prices.
-                    self._job_cost_so_far[single_job_id] += \
-                        (self._per_worker_type_prices[worker_type] *
-                         execution_time / 3600.0)
+                    if self._per_worker_type_prices is not None:
+                        self._job_cost_so_far[single_job_id] += \
+                            (self._per_worker_type_prices[worker_type] *
+                             execution_time / 3600.0)
                     print('Job %s cost so far: $%.2f' % (single_job_id,
                                                          self._job_cost_so_far[single_job_id]))
                     # Job may be multi-GPU, and have already been removed from

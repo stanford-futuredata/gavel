@@ -602,23 +602,35 @@ class ThroughputSumWithPerf(Policy):
 
     def __init__(self, solver):
         self._name = 'ThroughputSumWithPerf'
-        self._policy = ThroughputNormalizedByCostSumWithPerf(solver)
+        self._policy = ThroughputNormalizedByCostSumWithPerfSLOs(solver)
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        cluster_spec):
-        # TODO: Handle scale factors.
         return self._policy.get_allocation(unflattened_throughputs,
                                            scale_factors,
                                            cluster_spec)
 
 class ThroughputNormalizedByCostSumWithPerf(Policy):
+    def __init__(self, solver):
+        self._name = 'ThroughputNormalizedByCostSum_Perf'
+        self._policy = ThroughputNormalizedByCostSumWithPerfSLOs(solver)
+
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       cluster_spec, instance_costs):
+        return self._policy.get_allocation(unflattened_throughputs,
+                                           scale_factors,
+                                           cluster_spec,
+                                           instance_costs=instance_costs)
+
+class ThroughputNormalizedByCostSumWithPerfSLOs(Policy):
 
     def __init__(self, solver):
         Policy.__init__(self, solver)
-        self._name = 'ThroughputNormalizedByCostSum_Perf'
+        self._name = 'ThroughputNormalizedByCostSum_PerfSLOs'
 
-    def get_allocation(self, unflattened_throughputs, scale_factors, cluster_spec,
-                       instance_costs=None, SLAs={}, num_steps_remaining={}):
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       cluster_spec, instance_costs=None, SLOs={},
+                       num_steps_remaining={}):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None
@@ -626,7 +638,6 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
         (job_ids, worker_types) = index
 
         scale = 1.0 / throughputs.sum(axis=1)
-        throughputs = throughputs * scale.reshape(m, 1)
 
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.
@@ -636,21 +647,14 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
                 scale_factors_array[i, j] = scale_factors[job_ids[i]]
 
         x = cp.Variable(throughputs.shape)
-        # Multiply throughputs by scale_factors to ensure that scale_factor
-        # is taken into account while allocating times to different jobs.
-        # A job run on 1 GPU should receive `scale_factor` more time than
-        # a job run on `scale_factor` GPUs if throughputs are equal.
-        if instance_costs is None:
-            objective = cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs, x),
-                                    axis=1)))
-        else:
-            instance_costs_array = np.zeros((1, n))
+        instance_costs_array = np.ones((1, n))
+        if instance_costs is not None:
             for i in range(n):
                 instance_costs_array[0, i] = instance_costs[worker_types[i]]
-            objective = \
-                cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs /
-                                                      instance_costs_array, x),
-                                          axis=1)))
+        objective = \
+            cp.Maximize(cp.sum(cp.sum(cp.multiply(throughputs /
+                                                  instance_costs_array, x),
+                                      axis=1)))
 
         # Make sure that a given job is not over-allocated resources.
         constraints = [
@@ -659,15 +663,110 @@ class ThroughputNormalizedByCostSumWithPerf(Policy):
                     scale_factors_array, x), axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
-        for job_id in SLAs:
+
+        SLO_constraints = []
+        for job_id in SLOs:
             i = job_ids.index(job_id)
             assert(job_id in num_steps_remaining)
-            constraints.append(
-                cp.sum(cp.multiply(throughputs / instance_costs_array, x),
-                       axis=1) >= (num_steps_remaining[job_id] / SLAs[job_id])
+            SLO_constraints.append(
+                cp.sum(cp.multiply(throughputs[i], x[i])) >=
+                    (num_steps_remaining[job_id] / SLOs[job_id])
             )
-        cvxprob = cp.Problem(objective, constraints)
+        cvxprob = cp.Problem(objective, constraints + SLO_constraints)
         result = cvxprob.solve(solver=self._solver)
+
+        if cvxprob.status != "optimal":
+            print('WARNING: Allocation returned by policy not optimal!')
+
+        if x.value is None:
+            print('WARNING: No allocation possible with provided SLOs!')
+            cvxprob = cp.Problem(objective, constraints)
+            result = cvxprob.solve(solver=self._solver)
+
+        return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
+
+class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
+
+    def __init__(self, solver):
+        Policy.__init__(self, solver)
+        self._name = 'ThroughputNormalizedByCostSum_PackingSLOs'
+
+    def get_allocation(self, unflattened_throughputs, scale_factors, cluster_spec,
+                       instance_costs=None, SLOs={}, num_steps_remaining={}):
+        all_throughputs, index = super().flatten(unflattened_throughputs,
+                                                 cluster_spec,
+                                                 normalize=False)
+        if all_throughputs is None or len(all_throughputs) == 0: return None
+        (m, n) = all_throughputs[0].shape
+        (job_ids, single_job_ids, worker_types, relevant_combinations) = index
+
+        # Row i of scale_factors_array is the scale_factor of job
+        # combination i repeated len(worker_types) times.
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            scale_factor = None
+            for single_job_id in job_ids[i].singletons():
+                if (scale_factor is not None and
+                    scale_factor != scale_factors[single_job_id]):
+                    scale_factor = 0
+                else:
+                    scale_factor = scale_factors[single_job_id]
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factor
+
+        x = cp.Variable((m, n))
+        instance_costs_array = np.ones((m, n))
+        if instance_costs is not None:
+            for i in range(m):
+                for j in range(n):
+                    instance_costs_array[i,j] = \
+                        instance_costs[worker_types[j]]
+
+        objective_terms = []
+        for i in range(len(single_job_ids)):
+            indexes = relevant_combinations[single_job_ids[i]]
+            objective_terms.append(cp.sum(cp.multiply(
+                all_throughputs[i][indexes] /\
+                    instance_costs_array[indexes], x[indexes])))
+
+        if len(objective_terms) == 1:
+            objective = cp.Maximize(objective_terms[0])
+        else:
+            objective = cp.Maximize(cp.sum(cp.hstack(objective_terms)))
+
+        # Make sure that a given job is not over-allocated resources.
+        constraints = [
+            x >= 0,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
+        ]
+        per_job_allocations = []
+        for single_job_id in single_job_ids:
+            indexes = relevant_combinations[single_job_id]
+            per_job_allocations.append(cp.sum(x[indexes]))
+        constraints.append(cp.vstack(per_job_allocations) <= 1)
+
+        SLO_constraints = []
+        per_job_throughputs = []
+        per_job_SLOs = []
+        for job_id in SLOs:
+            i = job_ids.index(job_id)
+            assert(job_id in num_steps_remaining)
+            indexes = relevant_combinations[single_job_ids[i]]
+            throughput = cp.sum(cp.multiply(
+                all_throughputs[i][indexes], x[indexes]))
+            per_job_throughputs.append(throughput)
+            per_job_SLOs.append(num_steps_remaining[job_id] / SLOs[job_id])
+        if len(per_job_throughputs) > 0:
+            SLO_constraints.append(cp.vstack(per_job_throughputs) >=
+                                   cp.vstack(per_job_SLOs))
+        cvxprob = cp.Problem(objective, constraints + SLO_constraints)
+        result = cvxprob.solve(solver=self._solver)
+
+        if x.value is None:
+            print('WARNING: No allocation possible with provided SLOs!')
+            cvxprob = cp.Problem(objective, constraints)
+            result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
