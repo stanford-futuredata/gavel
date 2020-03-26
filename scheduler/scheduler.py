@@ -1338,63 +1338,6 @@ class Scheduler:
         print('=' * 80)
         print('')
 
-    def _convert_job_type_allocation(self, allocation):
-        job_ids = sorted(allocation.keys())
-        worker_types = self._worker_types
-        job_types = sorted(self._job_type_to_job_ids.keys())
-
-        job_type_allocation = {}
-        for worker_type in worker_types:
-            job_type_allocation[worker_type] = {}
-            for job_type in job_types:
-                job_type_allocation[worker_type][job_type] = {}
-                job_type_allocation_ = \
-                    job_type_allocation[worker_type][job_type]
-                for other_job_type in [None] + job_types:
-                    job_type_allocation_[other_job_type] = 0.0
-
-        for worker_type in worker_types:
-            job_type_allocation_ = job_type_allocation[worker_type]
-            for job_id in allocation:
-                job_type = self._job_id_to_job_type[job_id]
-                for other_job_type in allocation[job_id][worker_type]:
-                    job_type_allocation_[job_type][other_job_type] += \
-                        allocation[job_id][worker_type][other_job_type]
-                    if other_job_type is None:
-                        continue
-                    job_type_allocation_[other_job_type][job_type] += \
-                        allocation[job_id][worker_type][other_job_type]
-
-        converted_allocation = {}
-        for i, job_id in enumerate(job_ids):
-            converted_allocation[job_id] = {}
-            job_type = self._job_id_to_job_type[job_id]
-            for worker_type in worker_types:
-                converted_allocation[job_id][worker_type] = \
-                    allocation[job_id][worker_type][None]
-            for other_job_id in job_ids[i+1:]:
-                other_job_type = self._job_id_to_job_type[other_job_id]
-                merged_job_id = \
-                    job_id_pair.JobIdPair(job_id[0], other_job_id[0])
-                converted_allocation[merged_job_id] = {}
-                for worker_type in worker_types:
-                    job_type_allocation_ = job_type_allocation[worker_type]
-                    current_job_type_allocation = \
-                        job_type_allocation_[job_type][other_job_type]
-                    if job_type == other_job_type:
-                        current_job_type_allocation -= \
-                            allocation[job_id][worker_type][job_type]
-                    if current_job_type_allocation > 0.0:
-                        converted_allocation[merged_job_id][worker_type] = \
-                            (allocation[job_id][worker_type][other_job_type] *\
-                             allocation[other_job_id][worker_type][job_type] /\
-                             current_job_type_allocation)
-                    else:
-                        converted_allocation[merged_job_id][worker_type] = 0.0
-
-        return converted_allocation
-
-
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _get_allocation(self):
         """Computes the allocation.
@@ -1422,20 +1365,6 @@ class Scheduler:
                 job_id: self._jobs[job_id].priority_weight
                 for job_id in self._jobs
             }
-            # TODO: Enable this when we have a correct, efficient solution.
-            """
-            if "Packing" in self._policy.name:
-                unflattened_allocation = \
-                    self._policy.get_allocation_v3(self._job_type_throughputs,
-                                                   self._job_id_to_job_type,
-                                                   scale_factors,
-                                                   priority_weights,
-                                                   self._cluster_spec)
-                if unflattened_allocation is not None:
-                    unflattened_allocation = \
-                        self._convert_job_type_allocation(
-                            unflattened_allocation)
-            """
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, priority_weights,
                 self._cluster_spec)
@@ -1447,7 +1376,6 @@ class Scheduler:
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
-            # TODO: Add SLOs
             if 'SLO' in self._policy.name:
                 SLOs = {}
                 num_steps_remaining = {}
@@ -1960,14 +1888,14 @@ class Scheduler:
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
-                    # TODO: Update total job cost so far using
-                    # per-instance-type prices.
                     if self._per_worker_type_prices is not None:
                         self._job_cost_so_far[single_job_id] += \
                             (self._per_worker_type_prices[worker_type] *
                              execution_time / 3600.0)
+                    job_cost_so_far = \
+                        self._job_cost_so_far[single_job_id]
                     print('Job %s cost so far: $%.2f' % (single_job_id,
-                                                         self._job_cost_so_far[single_job_id]))
+                                                         job_cost_so_far))
                     # Job may be multi-GPU, and have already been removed from
                     # running_jobs by another worker.
                     if single_job_id in self._running_jobs:
