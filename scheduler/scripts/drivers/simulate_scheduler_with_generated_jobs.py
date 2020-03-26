@@ -19,7 +19,7 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              simulate_steady_state, solver, debug,
              checkpoint_threshold, checkpoint_file,
              profiling_percentage, per_instance_type_prices_dir,
-             available_clouds, assign_SLOs):
+             available_clouds, assign_SLOs, enable_global_queue):
     policy = utils.get_policy(policy_name, solver=solver, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -30,7 +30,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                     profiling_percentage=profiling_percentage,
                     per_instance_type_prices_dir=per_instance_type_prices_dir,
                     available_clouds=available_clouds,
-                    assign_SLOs=assign_SLOs)
+                    assign_SLOs=assign_SLOs,
+                    enable_global_queue=enable_global_queue)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
@@ -97,7 +98,8 @@ def main(args):
                  args.profiling_percentage,
                  args.per_instance_type_prices_dir,
                  args.available_clouds,
-                 args.assign_SLOs)
+                 args.assign_SLOs,
+                 args.enable_global_queue)
 
     else:
         with open('/dev/null', 'w') as f:
@@ -115,7 +117,8 @@ def main(args):
                          args.profiling_percentage,
                          args.per_instance_type_prices_dir,
                          args.available_clouds,
-                         args.assign_SLOs)
+                         args.assign_SLOs,
+                         args.enable_global_queue)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -177,5 +180,10 @@ if __name__=='__main__':
                         help='Clouds available to rent machines from')
     parser.add_argument('--assign_SLOs', action='store_true', default=False,
                         help='If set, assigns SLOs to each job')
+    parser.add_argument('--enable_global_queue', action='store_true',
+                        default=False,
+                        help=('If set, schedules jobs regardless of '
+                              'worker type'))
+
     args = parser.parse_args()
     main(args)

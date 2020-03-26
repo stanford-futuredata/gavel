@@ -38,7 +38,8 @@ class Scheduler:
                  num_reference_models=16,
                  per_instance_type_prices_dir=None,
                  available_clouds=[],
-                 assign_SLOs=False):
+                 assign_SLOs=False,
+                 enable_global_queue=False):
 
         # Scheduling occurs in rounds.
         print('Running scheduler with policy=%s, schedule_in_rounds=True, '
@@ -56,6 +57,9 @@ class Scheduler:
         self._initialize_seeds(seed)
         # Initialize time in seconds each iteration should run for.
         self._time_per_iteration = time_per_iteration
+
+        # Sets whether to use a global queue across all worker types.
+        self._enable_global_queue = enable_global_queue
 
         if self._simulate:
             self._start_timestamp = 0
@@ -531,9 +535,16 @@ class Scheduler:
                                 self._deficits[worker_type][job_id],
                                 self._allocation[job_id][worker_type]))
 
-        sorted_job_queue = sorted(entries,
-                                  key=lambda x: (x[2], x[3], x[4]),
-                                  reverse=True)
+        if self._enable_global_queue:
+            # Schedule jobs regardless of worker type.
+            sorted_job_queue = sorted(entries,
+                                      key=lambda x: (x[2], x[3], x[4]),
+                                      reverse=True)
+        else:
+            # Schedule jobs in the order of v100, p100, k80.
+            sorted_job_queue = sorted(entries,
+                                      key=lambda x: (x[1], x[2], x[3], x[4]),
+                                      reverse=True)
 
         for job_id, worker_type, *_ in sorted_job_queue:
             if num_workers_left[worker_type] == 0:
