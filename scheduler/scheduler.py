@@ -12,7 +12,6 @@ import random
 import math
 import matrix_completion
 import warnings
-from scipy.optimize import lsq_linear
 
 # TODO: clean these up.
 from job import Job
