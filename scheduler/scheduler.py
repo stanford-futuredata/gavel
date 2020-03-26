@@ -429,7 +429,7 @@ class Scheduler:
                         del self._profiled_jobs[worker_type][job_id]
             self._remove_from_priorities(job_id)
             # TODO: Add a flag to choose whether to update allocation here.
-            # self._need_to_update_allocation = True
+            self._need_to_update_allocation = True
 
     def num_workers(self):
         """Returns the number of workers the scheduler is connected to."""

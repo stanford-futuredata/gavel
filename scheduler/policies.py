@@ -708,16 +708,19 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
                 scale_factors_array[i, j] = scale_factor
 
         x = cp.Variable((m, n))
-        instance_costs_array = np.ones((1, n))
+        instance_costs_array = np.ones((m, n))
         if instance_costs is not None:
-            for i in range(n):
-                instance_costs_array[0, i] = instance_costs[worker_types[i]]
+            for i in range(m):
+                for j in range(n):
+                    instance_costs_array[i,j] = \
+                        instance_costs[worker_types[j]]
 
         objective_terms = []
         for i in range(len(single_job_ids)):
             indexes = relevant_combinations[single_job_ids[i]]
             objective_terms.append(cp.sum(cp.multiply(
-                all_throughputs[i][indexes] / instance_costs_array, x[indexes])))
+                all_throughputs[i][indexes] /\
+                    instance_costs_array[indexes], x[indexes])))
 
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
