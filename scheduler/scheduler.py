@@ -282,6 +282,24 @@ class Scheduler:
                    '%s -> %s') % (job_id, worker_type, str(old_throughput),
                                   str(self._throughputs[job_id][worker_type])))
 
+    def _read_throughputs_for_job_type(self, job_type):
+        self._job_type_throughputs[job_type] = {}
+        other_job_types = list(self._job_type_throughputs.keys())
+        for worker_type in self._worker_types:
+            self._job_type_throughputs[job_type][worker_type] = {}
+            self._job_type_throughputs[job_type][worker_type][None] = \
+                self._oracle_throughputs[worker_type][job_type]['null']
+            if self._job_packing:
+                for other_job_type in other_job_types:
+                    colocated_throughputs = \
+                        self._oracle_throughputs[worker_type][job_type][other_job_type]
+                    self._job_type_throughputs[job_type][worker_type][other_job_type] = \
+                        colocated_throughputs[0]
+                    self._job_type_throughputs[other_job_type][worker_type][job_type] = \
+                        colocated_throughputs[1]
+
+
+
     """
     ======================================================================
        Public-facing scheduler methods.
@@ -324,20 +342,7 @@ class Scheduler:
                     # TODO: Support throughput estimation.
                     pass
                 else:
-                    self._job_type_throughputs[job_type] = {}
-                    other_job_types = list(self._job_type_throughputs.keys())
-                    for worker_type in self._worker_types:
-                        self._job_type_throughputs[job_type][worker_type] = {}
-                        self._job_type_throughputs[job_type][worker_type][None] = \
-                            self._oracle_throughputs[worker_type][job_type]['null']
-                        if self._job_packing:
-                            for other_job_type in other_job_types:
-                                colocated_throughputs = \
-                                    self._oracle_throughputs[worker_type][job_type][other_job_type]
-                                self._job_type_throughputs[job_type][worker_type][other_job_type] = \
-                                    colocated_throughputs[0]
-                                self._job_type_throughputs[other_job_type][worker_type][job_type] = \
-                                    colocated_throughputs[1]
+                    self._read_throughputs_for_job_type(job_type)
             self._job_type_to_job_ids[job_type].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
