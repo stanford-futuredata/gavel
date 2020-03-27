@@ -4,7 +4,7 @@ import json
 import os
 
 import job
-import policies
+from policies import max_min_fairness, max_sum_throughput, min_total_duration, fifo
 
 def get_available_policies():
     return ['fifo', 'fifo_perf', 'fifo_packed',
@@ -183,32 +183,35 @@ def read_all_throughputs_json(throughputs_file):
 
 def get_policy(policy_name, solver, seed=None):
     if policy_name == 'max_min_fairness':
-        policy = policies.MaxMinFairnessPolicy(solver=solver)
+        policy = max_min_fairness.MaxMinFairnessPolicy(solver=solver)
     elif policy_name == 'max_min_fairness_perf':
-        policy = policies.MaxMinFairnessPolicyWithPerf(solver=solver)
+        policy = max_min_fairness.MaxMinFairnessPolicyWithPerf(solver=solver)
     elif policy_name == 'max_min_fairness_packed':
-        policy = policies.MaxMinFairnessPolicyWithPacking(solver=solver)
-    elif policy_name == 'max_sum_throughput_perf':
-        policy = policies.ThroughputSumWithPerf(solver=solver)
-    elif policy_name == 'max_sum_throughput_normalized_by_cost_perf':
-        policy = policies.ThroughputNormalizedByCostSumWithPerf(solver=solver)
-    elif policy_name == 'max_sum_throughput_normalized_by_cost_perf_SLOs':
         policy = \
-            policies.ThroughputNormalizedByCostSumWithPerfSLOs(solver=solver)
+            max_min_fairness.MaxMinFairnessPolicyWithPacking(solver=solver)
+    elif policy_name == 'max_sum_throughput_perf':
+        policy = max_sum_throughput.ThroughputSumWithPerf(solver=solver)
+    elif policy_name == 'max_sum_throughput_normalized_by_cost_perf':
+        policy = max_sum_throughput.ThroughputNormalizedByCostSumWithPerf(
+                    solver=solver)
+    elif policy_name == 'max_sum_throughput_normalized_by_cost_perf_SLOs':
+        policy = max_sum_throughput.ThroughputNormalizedByCostSumWithPerfSLOs(
+                    solver=solver)
     elif policy_name == 'max_sum_throughput_normalized_by_cost_packed_SLOs':
         policy = \
-            policies.ThroughputNormalizedByCostSumWithPackingSLOs(
+            max_sum_throughput.ThroughputNormalizedByCostSumWithPackingSLOs(
                                                         solver=solver)
     elif policy_name == 'min_total_duration':
-        policy = policies.MinTotalDurationPolicy(solver=solver)
+        policy = min_total_duration.MinTotalDurationPolicy(solver=solver)
     elif policy_name == 'min_total_duration_packed':
-        policy = policies.MinTotalDurationPolicyWithPacking(solver=solver)
+        policy = \
+            min_total_duration.MinTotalDurationPolicyWithPacking(solver=solver)
     elif policy_name == 'fifo':
-        policy = policies.FIFOPolicy(seed=seed)
+        policy = fifo.FIFOPolicy(seed=seed)
     elif policy_name == 'fifo_perf':
-        policy = policies.FIFOPolicyWithPerf()
+        policy = fifo.FIFOPolicyWithPerf()
     elif policy_name == 'fifo_packed':
-        policy = policies.FIFOPolicyWithPacking()
+        policy = fifo.FIFOPolicyWithPacking()
     else:
         raise ValueError('Unknown policy!')
     return policy
