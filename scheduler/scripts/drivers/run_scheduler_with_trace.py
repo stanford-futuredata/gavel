@@ -12,27 +12,11 @@ import policies
 import scheduler
 import utils
 
-def parse_trace(trace_file):
-    jobs = []
-    with open(trace_file, 'r') as f:
-        for line in f:
-            job_type, command, num_steps_arg, total_steps, arrival_time, scale_factor = \
-                    line.split('\t')
-            jobs.append((job.Job(job_id=None,
-                                 job_type=job_type,
-                                 command=command,
-                                 num_steps_arg=num_steps_arg,
-                                 total_steps=int(total_steps),
-                                 duration=None,
-                                 scale_factor=int(scale_factor)),
-                        int(arrival_time)))
-    return jobs
-
 def main(args):
-    jobs = parse_trace(args.trace_file)
+    jobs, arrival_times = utils.parse_trace(args.trace_file, args.run_dir)
     job_queue = queue.Queue()
-    for job in jobs:
-        job_queue.put(job)
+    for (job, arrival_time) in zip(jobs, arrival_times):
+        job_queue.put((job, arrival_time))
     policy = utils.get_policy(args.policy, solver=args.solver, seed=args.seed)
     sched = scheduler.Scheduler(policy,
                                 seed=args.seed)
@@ -65,4 +49,6 @@ if __name__=='__main__':
                         help='Random seed')
     parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
                         default='ECOS', help='CVXPY solver')
+    parser.add_argument('--run_dir', type=str, required=True,
+                        help='Directory to run jobs from')
     main(parser.parse_args())

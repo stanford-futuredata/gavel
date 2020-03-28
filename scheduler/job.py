@@ -9,7 +9,10 @@ class Job:
         self._duration = duration
         self._scale_factor = scale_factor
         self._priority_weight = priority_weight
-        self._SLO = SLO
+        if SLO < 0:
+            self._SLO = None
+        else:
+            self._SLO = SLO
 
     @staticmethod
     def from_proto(job_proto):

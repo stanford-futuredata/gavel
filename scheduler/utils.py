@@ -216,19 +216,20 @@ def get_policy(policy_name, solver, seed=None):
         raise ValueError('Unknown policy!')
     return policy
 
-def parse_trace(trace_file, run_dir):
+def parse_trace(trace_file, run_dir=None):
     jobs = []
     arrival_times = []
     with open(trace_file, 'r') as f:
         for line in f:
             (job_type, command, num_steps_arg, needs_data_dir, total_steps,
-             arrival_time, scale_factor) = line.split('\t')
-            if int(scale_factor) == 0:
-                continue
-            if int(needs_data_dir):
-                command = command % (run_dir, run_dir)
-            else:
-                command = command % (run_dir)
+             scale_factor, priority_weight, SLO,
+             arrival_time) = line.split('\t')
+            assert(int(scale_factor) >= 1)
+            if run_dir is not None:
+                if int(needs_data_dir):
+                    command = command % (run_dir, run_dir)
+                else:
+                    command = command % (run_dir)
             jobs.append(job.Job(job_id=None,
                                 job_type=job_type,
                                 command=command,
@@ -236,7 +237,8 @@ def parse_trace(trace_file, run_dir):
                                 total_steps=int(total_steps),
                                 duration=None,
                                 scale_factor=int(scale_factor),
-                                priority_weight=1.0))
+                                priority_weight=float(priority_weight),
+                                SLO=float(SLO)))
             arrival_times.append(float(arrival_time))
     return jobs, arrival_times
 
