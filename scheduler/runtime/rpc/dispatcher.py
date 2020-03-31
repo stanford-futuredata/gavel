@@ -16,7 +16,9 @@ class Dispatcher:
     def launch_job(self, job):
         start_time = time.time()
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(self._gpu_id))
-        command = '%s %s %d' % (job.command, job.num_steps_arg, job.total_steps)
+        command = '%s %s %d' % (job.command, job.num_steps_arg,
+                                job.total_steps)
+        print('Running \"%s\"' % (command))
         try:
             proc = subprocess.run(command,
                                   env=env,
@@ -42,6 +44,10 @@ class Dispatcher:
             if e.stderr is not None:
               print('Stderr: %s' % (e.stderr))
             execution_time = -1
+        except Exception as e:
+            print('Dispatcher failed: %s' % (e))
+            execution_time = -1
+
 
         sys.stdout.flush()
         self._worker_rpc_client.notify_scheduler(job.job_id,

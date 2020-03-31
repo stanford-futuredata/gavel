@@ -1,6 +1,6 @@
 class Job:
     def __init__(self, job_id, job_type, command, num_steps_arg, total_steps,
-                 duration, scale_factor, priority_weight, SLO=None):
+                 duration, scale_factor=1, priority_weight=1, SLO=None):
         self._job_id = job_id
         self._job_type = job_type
         self._command = command
@@ -9,7 +9,7 @@ class Job:
         self._duration = duration
         self._scale_factor = scale_factor
         self._priority_weight = priority_weight
-        if SLO < 0:
+        if SLO is not None and SLO < 0:
             self._SLO = None
         else:
             self._SLO = SLO
@@ -19,7 +19,6 @@ class Job:
         duration = None
         if job_proto.has_duration:
             duration = job_proto.duration
-        # TODO: Add scale_factor, priority_weight, and SLO here.
         return Job(job_proto.job_id, job_proto.job_type, job_proto.command,
                    job_proto.num_steps_arg, job_proto.num_steps, duration)
 

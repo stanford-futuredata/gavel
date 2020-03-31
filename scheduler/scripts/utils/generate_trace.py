@@ -14,7 +14,7 @@ def generate_interarrival_time(rng, lam):
 
 def get_total_steps(rng, durations, throughputs, job_type):
     duration = rng.choice(durations) * 3600
-    return int(throughputs['v100'][job_type]['null'] * duration)
+    return max(1, int(throughputs['v100'][job_type]['null'] * duration))
 
 def main(args):
     job_generator = random.Random()
@@ -37,7 +37,7 @@ def main(args):
             job_template = job_generator.choice(JobTable)
             job_type = job_template.model
             command = job_template.command
-            num_steps_arg = job_template.command
+            num_steps_arg = job_template.num_steps_arg
             needs_data_dir = job_template.needs_data_dir
             total_steps = get_total_steps(duration_generator,
                                           durations,
@@ -74,9 +74,9 @@ if __name__=='__main__':
     parser.add_argument('--throughputs_file', type=str,
                         default=('oracle_throughputs.json'),
                         help='Oracle throughputs file')
-    parser.add_argument('-a', '--min_duration', type=int, default=1,
+    parser.add_argument('-a', '--min_duration', type=float, default=1,
                         help='Minimum job duration in hours')
-    parser.add_argument('-b', '--max_duration', type=int, default=4,
+    parser.add_argument('-b', '--max_duration', type=float, default=4,
                         help='Maximum job duration in hours')
     parser.add_argument('-n', '--num_durations', type=int, default=4,
                         help='Number of possible job durations')

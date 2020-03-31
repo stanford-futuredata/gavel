@@ -2,9 +2,16 @@ import csv
 from datetime import datetime
 import json
 import os
+import socket
 
 import job
 from policies import max_min_fairness, max_sum_throughput, min_total_duration, fifo
+
+
+def get_ip_address():
+    hostname = socket.gethostname()
+    ip_address = socket.gethostbyname(hostname)
+    return ip_address
 
 def get_available_policies():
     return ['fifo', 'fifo_perf', 'fifo_packed',

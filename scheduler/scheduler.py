@@ -23,7 +23,7 @@ import utils
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
 INFINITY = float("inf")
-DEFAULT_THROUGHPUT = INFINITY
+DEFAULT_THROUGHPUT = 1
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
@@ -41,15 +41,18 @@ class Scheduler:
                  assign_SLOs=False,
                  enable_global_queue=False):
 
-        # Scheduling occurs in rounds.
-        print('Running scheduler with policy=%s, schedule_in_rounds=True, '
-               'seed=%d, time_per_iteration=%d, '
-               'profiling_percentage=%f, '
-               'num_reference_models=%d' % (policy.name,
-                                            seed,
-                                            time_per_iteration,
-                                            profiling_percentage,
-                                            num_reference_models))
+
+        # Print config information.
+        if simulate:
+            print('Running scheduler in simulation with the following args:')
+        else:
+            print('Running scheduler at %s:%s with the '
+                  'following args:' % (utils.get_ip_address(), SCHEDULER_PORT))
+        print('policy=%s' % (policy.name))
+        print('seed=%d' % (seed))
+        print('time_per_iteration=%d' % (time_per_iteration))
+        print('profiling_percentage=%f' % (profiling_percentage))
+        print('num_reference_models=%d' % (num_reference_models))
 
         # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
@@ -277,7 +280,10 @@ class Scheduler:
                 if old_throughput != INFINITY:
                     new_throughput *= EMA_ALPHA
                     new_throughput += (1 - EMA_ALPHA) * old_throughput[i]
-                self._throughputs[job_id][worker_type][i] = new_throughput
+                if job_id.is_pair():
+                    self._throughputs[job_id][worker_type][i] = new_throughput
+                else:
+                    self._throughputs[job_id][worker_type] = new_throughput
             print(('[DEBUG] Job %s throughput on worker type %s: '
                    '%s -> %s') % (job_id, worker_type, str(old_throughput),
                                   str(self._throughputs[job_id][worker_type])))
@@ -706,8 +712,13 @@ class Scheduler:
             else:
                 num_steps = int(self._throughputs[job_id][worker_type] *
                                 self._time_per_iteration)
-        return min(num_steps,
-                   self._get_remaining_steps(single_job_id))
+
+        if single_job_id is not None:
+            return min(num_steps,
+                       self._get_remaining_steps(single_job_id))
+        else:
+            return min(num_steps,
+                       self._get_remaining_steps(job_id))
 
     def _get_job_steps_and_finish_times(self, job_id, worker_type):
         """Returns the number of steps to execute and and latest finish time(s)
@@ -1156,11 +1167,15 @@ class Scheduler:
         """
 
         while True:
+            time.sleep(5)
             with self._scheduler_lock:
-                num_workers = len(self.worker_ids)
+                num_workers = len(self._worker_ids)
+                num_jobs = len(self._jobs)
+                if num_workers == 0 or num_jobs == 0:
+                    continue
                 # Reset available_worker_ids to the desired size.
-                self._available_worker_ids = queue.Queue(self.num_workers)
-                for worker_id in self.worker_ids:
+                self._available_worker_ids = queue.Queue(num_workers)
+                for worker_id in self._worker_ids:
                     self._add_available_worker_id(worker_id)
                 scheduled_jobs = self._schedule_jobs_on_workers()
                 for (job_id, worker_ids) in scheduled_jobs:
@@ -1173,7 +1188,9 @@ class Scheduler:
                               self._jobs[job_id].num_steps_arg,
                               num_steps)])
                         self._remove_available_worker_id(worker_id)
-            self._wait_until_all_workers_available(num_workers)
+            while not self._available_worker_ids.full():
+                time.sleep(2)
+                continue
 
     def schedule(self):
         """Schedules jobs on workers."""
@@ -1824,10 +1841,9 @@ class Scheduler:
                     if self._job_packing:
                         self._populate_job_combination_metadata(job_id,
                                                                 worker_type)
-                    self._initialize_num_steps_per_iteration(job_id, worker_type)
                     # Add to relevant priority data structure.
                     self._add_to_priorities(job_id, worker_type=worker_type)
-                    if self._throughput_estimation:
+                    if self._estimate_throughputs:
                         self._jobs_to_profile[worker_type][job_id] = set()
                 if worker_type not in self._worker_time_so_far:
                     self._worker_time_so_far[worker_type] = 0.0
@@ -1945,9 +1961,9 @@ class Scheduler:
                 self._cumulative_worker_time_so_far[worker_id] += \
                     max_execution_time
 
-            self._update_throughput(job_id, worker_type,
-                                    all_num_steps,
-                                    all_execution_times)
+                self._update_throughput(job_id, worker_type,
+                                        all_num_steps,
+                                        all_execution_times)
 
         for single_job_id in to_remove:
             self.remove_job(single_job_id[0])
