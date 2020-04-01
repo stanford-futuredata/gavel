@@ -71,7 +71,6 @@ def serve(port, callbacks):
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)
     server.add_insecure_port('%s:%d' % (ip_address, port))
-    # server.add_insecure_port('[::]:%d' % (port))
     server.start()
     try:
         while True:

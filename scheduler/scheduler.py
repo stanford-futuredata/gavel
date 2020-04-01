@@ -1194,7 +1194,6 @@ class Scheduler:
                 for (job_id, worker_ids) in scheduled_jobs:
                     worker_type = \
                         self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                    # TODO: Support packing.
                     job_descriptions = []
                     for i, single_job_id in enumerate(job_id.singletons()):
                         if job_id.is_pair():
