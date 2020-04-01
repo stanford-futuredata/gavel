@@ -277,18 +277,29 @@ class Scheduler:
                     copy.deepcopy(self._throughputs[job_id][worker_type])
             else:
                 old_throughput = [self._throughputs[job_id][worker_type]]
+
             for i, single_job_id in enumerate(job_id.singletons()):
-                new_throughput = all_num_steps[i] / all_execution_times[i]
+                if all_execution_times[i] <= 0:
+                    new_throughput = 0
+                else:
+                    new_throughput = all_num_steps[i] / all_execution_times[i]
                 if old_throughput != INFINITY:
                     new_throughput *= EMA_ALPHA
                     new_throughput += (1 - EMA_ALPHA) * old_throughput[i]
                 if job_id.is_pair():
-                    self._throughputs[job_id][worker_type][i] = new_throughput
+                    self._throughputs[job_id][worker_type][i] =\
+                        new_throughput
                 else:
                     self._throughputs[job_id][worker_type] = new_throughput
+            # Manually set failed job pair throughputs to 0.
+            if np.min(all_execution_times) <= 0:
+                if job_id.is_pair():
+                    self._throughputs[job_id][worker_type] = [0.0, 0.0]
+            new_throughput_str =\
+                str(self._throughputs[job_id][worker_type])
             print(('[DEBUG] Job %s throughput on worker type %s: '
                    '%s -> %s') % (job_id, worker_type, str(old_throughput),
-                                  str(self._throughputs[job_id][worker_type])))
+                                  new_throughput_str))
 
     def _read_throughputs_for_job_type(self, job_type):
         self._job_type_throughputs[job_type] = {}
@@ -1975,9 +1986,9 @@ class Scheduler:
                 self._cumulative_worker_time_so_far[worker_id] += \
                     max_execution_time
 
-                self._update_throughput(job_id, worker_type,
-                                        all_num_steps,
-                                        all_execution_times)
+        self._update_throughput(job_id, worker_type,
+                                all_num_steps,
+                                all_execution_times)
 
         for single_job_id in to_remove:
             self.remove_job(single_job_id[0])

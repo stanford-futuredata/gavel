@@ -236,7 +236,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
             i + total_minibatches >= max_minibatches):
             finished_epoch = False
             break
-        elif (total_elapsed_time is not None and
+        elif (max_duration is not None and
               total_elapsed_time + elapsed_time >= max_duration):
             finished_epoch = False
             break
