@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import copy
 import heapq
 import numpy as np
 import os
@@ -272,7 +273,8 @@ class Scheduler:
             # Adjust the job throughput using an exponential moving average
             # between the old value and the new measurement.
             if job_id.is_pair():
-                old_throughput = self._throughputs[job_id][worker_type]
+                old_throughput = \
+                    copy.deepcopy(self._throughputs[job_id][worker_type])
             else:
                 old_throughput = [self._throughputs[job_id][worker_type]]
             for i, single_job_id in enumerate(job_id.singletons()):
@@ -435,7 +437,7 @@ class Scheduler:
                     del self._job_type_to_job_ids[job_type]
                     del self._job_type_throughputs[job_type]
                     for other_job_type in self._job_type_throughputs:
-                        for worker_type in self._worker_types:
+                        for worker_type in self._job_type_throughputs[other_job_type]:
                             del self._job_type_throughputs[other_job_type][worker_type][job_type]
             if self._estimate_throughputs:
                 for worker_type in self._profiled_jobs:
@@ -1690,7 +1692,6 @@ class Scheduler:
                 found = False
                 for other_job_id in self._priorities[worker_type]:
                     if job_id.overlaps_with(other_job_id):
-                        print('Removing self._priorities[%s][%s]' % (worker_type, other_job_id))
                         del self._priorities[worker_type][other_job_id]
                         del self._deficits[worker_type][other_job_id]
                         found = True
