@@ -1179,18 +1179,30 @@ class Scheduler:
                     self._add_available_worker_id(worker_id)
                 scheduled_jobs = self._schedule_jobs_on_workers()
                 for (job_id, worker_ids) in scheduled_jobs:
-                    worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
+                    worker_type = \
+                        self._worker_id_to_worker_type_mapping[worker_ids[0]]
                     # TODO: Support packing.
-                    num_steps = self._get_num_steps(job_id, worker_type)
+                    job_descriptions = []
+                    for i, single_job_id in enumerate(job_id.singletons()):
+                        if job_id.is_pair():
+                            num_steps = \
+                                self._get_num_steps(job_id, worker_type,
+                                                    single_job_id)
+                        else:
+                            num_steps = \
+                                self._get_num_steps(job_id, worker_type)
+                        job_descriptions.append(
+                                (single_job_id[0],
+                                 self._jobs[single_job_id].command,
+                                 self._jobs[single_job_id].num_steps_arg,
+                                 num_steps))
                     for worker_id in worker_ids:
                         self._worker_connections[worker_id].run(
-                            [(job_id[0], self._jobs[job_id].command,
-                              self._jobs[job_id].num_steps_arg,
-                              num_steps)])
+                                job_descriptions)
                         self._remove_available_worker_id(worker_id)
-            while not self._available_worker_ids.full():
-                time.sleep(2)
-                continue
+                while not self._available_worker_ids.full():
+                    time.sleep(2)
+                    continue
 
     def schedule(self):
         """Schedules jobs on workers."""
@@ -1429,7 +1441,6 @@ class Scheduler:
     def _populate_job_combination_metadata(self, job_id, worker_type):
         """Populate metadata for job combinations involving passed-in job_id."""
 
-        oracle_throughputs = self._oracle_throughputs[worker_type]
         job = self._jobs[job_id]
         for other_job_id in self._jobs:
             if other_job_id != job_id:
@@ -1443,7 +1454,8 @@ class Scheduler:
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
-                if (self._estimate_throughputs or
+                if (self._oracle_throughputs is None or
+                    self._estimate_throughputs or
                     job.scale_factor != other_job.scale_factor):
                     self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
                     if self._estimate_throughputs:
@@ -1463,7 +1475,7 @@ class Scheduler:
 
     def _set_initial_throughput(self, job_id, worker_type):
         assert(not job_id.is_pair())
-        if self._simulate:
+        if self._oracle_throughputs is not None:
             job_type = self._jobs[job_id].job_type
             self._throughputs[job_id][worker_type] = \
                 self._oracle_throughputs[worker_type][job_type]['null']
@@ -1678,6 +1690,7 @@ class Scheduler:
                 found = False
                 for other_job_id in self._priorities[worker_type]:
                     if job_id.overlaps_with(other_job_id):
+                        print('Removing self._priorities[%s][%s]' % (worker_type, other_job_id))
                         del self._priorities[worker_type][other_job_id]
                         del self._deficits[worker_type][other_job_id]
                         found = True

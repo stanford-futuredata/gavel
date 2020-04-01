@@ -46,12 +46,17 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
 
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
+        print('Received completion notification from worker...')
         try:
-            # TODO: Support packing
-            done_callback(JobIdPair(request.job_id, None), request.worker_id,
-                          [request.num_steps], [request.execution_time])
+            if len(request.job_id) > 1:
+                job_id = JobIdPair(request.job_id[0], request.job_id[1])
+            else:
+                job_id = JobIdPair(request.job_id[0], None)
+            done_callback(job_id, request.worker_id,
+                          request.num_steps, request.execution_time)
         except Exception as e:
             print(e)
+
         return common_pb2.Empty()
 
 def serve(port, callbacks):

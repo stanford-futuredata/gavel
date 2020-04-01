@@ -13,6 +13,7 @@ class Dispatcher:
         self._gpu_id = gpu_id
         self._worker_rpc_client = worker_rpc_client
 
+
     def launch_job(self, job):
         start_time = time.time()
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(self._gpu_id))
@@ -48,15 +49,22 @@ class Dispatcher:
             print('Dispatcher failed: %s' % (e))
             execution_time = -1
 
-
         sys.stdout.flush()
-        self._worker_rpc_client.notify_scheduler(job.job_id,
-                                                 self._worker_id,
-                                                 execution_time,
-                                                 job.total_steps)
 
-    def dispatch_job(self, job):
-        self._thread_pool.apply_async(self.launch_job, (job,))
+        return (job.job_id, execution_time, job.total_steps)
+
+    def _dispatch_jobs_helper(self, jobs):
+        results = []
+        for job in jobs:
+            results.append(self._thread_pool.apply_async(self.launch_job,
+                                                         (job,)))
+        job_descriptions = [result.get() for result in results]
+        print('All job(s) have completed - notifying scheduler...')
+        self._worker_rpc_client.notify_scheduler(self._worker_id,
+                                                 job_descriptions)
+
+    def dispatch_jobs(self, jobs):
+        self._thread_pool.apply_async(self._dispatch_jobs_helper, (jobs,))
 
     def shutdown(self):
         self._thread_pool.terminate()

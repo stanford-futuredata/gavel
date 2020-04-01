@@ -19,7 +19,8 @@ def main(args):
         job_queue.put((job, arrival_time))
     policy = utils.get_policy(args.policy, solver=args.solver, seed=args.seed)
     sched = scheduler.Scheduler(policy,
-                                seed=args.seed)
+                                seed=args.seed,
+                                throughputs_file=args.throughputs_file)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -51,4 +52,7 @@ if __name__=='__main__':
                         default='ECOS', help='CVXPY solver')
     parser.add_argument('--run_dir', type=str, required=True,
                         help='Directory to run jobs from')
+    parser.add_argument('--throughputs_file', type=str,
+                        default=None,
+                        help='Oracle throughputs file')
     main(parser.parse_args())

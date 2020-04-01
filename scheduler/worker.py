@@ -52,8 +52,7 @@ class Worker:
                 break
             except Exception as e:
               continue
-        for job in jobs:
-            self._dispatcher.dispatch_job(job)
+        self._dispatcher.dispatch_jobs(jobs)
 
     def _shutdown_callback(self):
         self._dispatcher.shutdown()
