@@ -27,10 +27,10 @@ message RegisterWorkerRequest {
 }
 
 message RegisterWorkerResponse {
-    oneof status {
-        uint64 worker_id = 1;
-        string error_message = 2;
-    }
+    bool success = 1;
+    uint64 worker_id = 2;
+    uint64 round_duration = 3;
+    string error_message = 4;
 }
 
 message Heartbeat {

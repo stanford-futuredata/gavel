@@ -416,9 +416,10 @@ class Scheduler:
             self._job_completion_times[job_id] = duration
             self._job_priority_weights[job_id] = \
                 self._jobs[job_id].priority_weight
+            del self._jobs[job_id]
             print("Job %d completed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n"
-                  "Number of active jobs: %d\n" % (
+                  "Number of remaining active jobs: %d\n" % (
                       job_id[0],
                       self._per_job_start_timestamps[job_id],
                       self._per_job_latest_timestamps[job_id],
@@ -426,7 +427,6 @@ class Scheduler:
                   )
             job_type = self._job_id_to_job_type[job_id]
             self._job_type_to_job_ids[job_type].remove(job_id)
-            del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._total_steps_run[job_id]
             del self._job_time_so_far[job_id]
@@ -1885,7 +1885,7 @@ class Scheduler:
             self._worker_start_times[worker_id] = self.get_current_timestamp()
             self._need_to_update_allocation = True
 
-        return worker_id
+        return (worker_id, self._time_per_iteration)
 
     def _done_callback(self, job_id, worker_id, all_num_steps,
                        all_execution_times):

@@ -7,9 +7,10 @@ import time
 import os
 
 class Dispatcher:
-    def __init__(self, worker_id, gpu_id, worker_rpc_client):
+    def __init__(self, worker_id, round_duration, gpu_id, worker_rpc_client):
         self._thread_pool = ThreadPool()
         self._worker_id = worker_id
+        self._round_duration = round_duration
         self._gpu_id = gpu_id
         self._worker_rpc_client = worker_rpc_client
 
@@ -17,8 +18,10 @@ class Dispatcher:
     def launch_job(self, job):
         start_time = time.time()
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(self._gpu_id))
-        command = '%s %s %d' % (job.command, job.num_steps_arg,
-                                job.total_steps)
+        command = '%s %s %d --max_duration %d' % (job.command,
+                                                  job.num_steps_arg,
+                                                  job.total_steps,
+                                                  self._round_duration)
         print('Running \"%s\"' % (command))
         try:
             proc = subprocess.run(command,

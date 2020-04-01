@@ -32,12 +32,13 @@ class Worker:
         self._server_thread.daemon = True
         self._server_thread.start()
 
-        self._worker_id, error = \
+        self._worker_id, self._round_duration, error = \
             self._worker_rpc_client.register_worker(self._devices)
         if error:
             raise RuntimeError(error)
         
         self._dispatcher = dispatcher.Dispatcher(self._worker_id,
+                                                 self._round_duration,
                                                  self._gpu_id,
                                                  self._worker_rpc_client)
         

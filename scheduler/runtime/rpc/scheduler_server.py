@@ -30,14 +30,18 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
             devices.append(self._device_proto_to_device(device_proto))
         register_worker_callback = self._callbacks['RegisterWorker']
         try:
-            worker_id = register_worker_callback(request.worker_type,
-                                                 request.ip_addr,
-                                                 request.port)
-            return w2s_pb2.RegisterWorkerResponse(worker_id=worker_id)
+            worker_id, round_duration =\
+                register_worker_callback(request.worker_type,
+                                         request.ip_addr,
+                                         request.port)
+            return w2s_pb2.RegisterWorkerResponse(success=True,
+                                                  worker_id=worker_id,
+                                                  round_duration=round_duration)
         except Exception as e:
             # TODO: catch a more specific exception?
             print(e)
-            return w2s_pb2.RegisterWorkerResponse(error_message=e)
+            return w2s_pb2.RegisterWorkerResponse(successful=False,
+                                                  error_message=e)
 
     def SendHeartbeat(self, request, context):
         send_heartbeat_callback = self._callbacks['SendHeartbeat']
@@ -46,8 +50,9 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
 
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
-        print('Received completion notification from worker...')
         try:
+            print('Received completion notification '
+                  'from worker %d...' % (request.worker_id))
             if len(request.job_id) > 1:
                 job_id = JobIdPair(request.job_id[0], request.job_id[1])
             else:

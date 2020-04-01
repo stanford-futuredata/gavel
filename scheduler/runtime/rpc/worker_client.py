@@ -40,9 +40,11 @@ class WorkerRpcClient:
                 print('Trying to register worker... attempt %d' % (attempts+1))
                 stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
                 response = stub.RegisterWorker(request)
-                if response.HasField('worker_id'):
-                    print('Succesfully registered worker with id %d' % (response.worker_id))
-                    return (response.worker_id, None)
+                if response.success:
+                    print('Succesfully registered worker with id %d, '
+                          'round_duration=%d' % (response.worker_id,
+                                                 response.round_duration))
+                    return (response.worker_id, response.round_duration, None)
                 elif attempts == MAX_ATTEMPTS:
                     assert(response.HasField('error'))
                     return (None, response.error)
