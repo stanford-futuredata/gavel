@@ -119,6 +119,11 @@ parser.add_argument(
     type=int,
     default=None,
     help='Steps between logging steps completed')
+parser.add_argument(
+    '--max_duration',
+    type=int,
+    default=None,
+    help='Maximum duration in seconds')
 
 # Based on
 # https://github.com/pytorch/examples/tree/master/mnist_hogwild

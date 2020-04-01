@@ -37,7 +37,9 @@ def train(rank, args, shared_model, optimizer, env_conf):
     player.model.train()
     player.eps_len += 2
     steps = 0
+    elapsed_time = 0
     while True:
+        start_time = time.time()
         if steps % 100 == 0:
           print('Finished step %d' % (steps), flush=True)
         if gpu_id >= 0:
@@ -108,11 +110,15 @@ def train(rank, args, shared_model, optimizer, env_conf):
         optimizer.step()
         player.clear_actions()
         steps += 1
+        elapsed_time += time.time() - start_time
 
         if (args.throughput_estimation_interval is not None and
             steps % args.throughput_estimation_interval == 0 and
             rank == 0):
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), steps))
 
-        if steps >= args.max_steps:
+        if args.max_steps is not None and steps >= args.max_steps:
+          return
+        if (args.max_duration is not None and
+            elapsed_time >= args.max_duration):
           return
