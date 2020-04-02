@@ -17,14 +17,11 @@ class MinTotalDurationPolicy(Policy):
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster, and that the
         # currently active jobs can finish in time T.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
-            cp.sum(x, axis=1) <= 1,
+        constraints = self.get_constraints(x, scale_factors_array)
+        constraints.append(
             cp.sum(cp.multiply(throughputs, x), axis=1) >= (
-                self._num_steps_remaining / T),
-        ]
+                self._num_steps_remaining / T)
+        )
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
 

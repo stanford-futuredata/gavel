@@ -69,12 +69,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
             cp.min(cp.sum(cp.multiply(
                 np.multiply(throughputs, scale_factors_array), x), axis=1)))
         # Make sure that the allocation can fit in the cluster.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
-            cp.sum(x, axis=1) <= 1,
-        ]
+        constraints = self.get_constraints(x, scale_factors_array)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
 

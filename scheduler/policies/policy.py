@@ -45,6 +45,16 @@ class Policy:
                 d[job_ids[i]][worker_types[j]] = m[i][j]
         return d
 
+    def get_constraints(self, x, scale_factors_array):
+        """Return base constraints."""
+
+        return [
+            x >= 0,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
+            cp.sum(x, axis=1) <= 1,
+        ]
+
 
 class PolicyWithPacking(Policy):
 

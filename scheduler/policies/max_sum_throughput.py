@@ -65,13 +65,7 @@ class ThroughputNormalizedByCostSumWithPerfSLOs(Policy):
                                       axis=1)))
 
         # Make sure that a given job is not over-allocated resources.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                    scale_factors_array, x), axis=0) <= self._num_workers,
-            cp.sum(x, axis=1) <= 1,
-        ]
-
+        constraints = get_constraints(x, scale_factors_array)
         SLO_constraints = []
         for job_id in SLOs:
             i = job_ids.index(job_id)
