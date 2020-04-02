@@ -69,7 +69,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
             cp.min(cp.sum(cp.multiply(
                 np.multiply(throughputs, scale_factors_array), x), axis=1)))
         # Make sure that the allocation can fit in the cluster.
-        constraints = self.get_constraints(x, scale_factors_array)
+        constraints = self.get_base_constraints(x, scale_factors_array)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
 
@@ -309,8 +309,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         else:
             objective = cp.Maximize(cp.minimum(*objective_terms))
         # Make sure the allocation can fit in the cluster.
-        constraints = self.get_constraints(x, scale_factors_array,
-                                           relevant_combinations)
+        constraints = self.get_base_constraints(x, scale_factors_array,
+                                               relevant_combinations)
 
         # Explicitly constrain all allocation values with an effective scale
         # factor of 0 to be 0.

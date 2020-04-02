@@ -17,7 +17,7 @@ class MinTotalDurationPolicy(Policy):
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster, and that the
         # currently active jobs can finish in time T.
-        constraints = self.get_constraints(x, scale_factors_array)
+        constraints = self.get_base_constraints(x, scale_factors_array)
         constraints.append(
             cp.sum(cp.multiply(throughputs, x), axis=1) >= (
                 self._num_steps_remaining / T)
@@ -84,8 +84,8 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
         x = cp.Variable(all_throughputs[0].shape)
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster.
-        constraints = self.get_constraints(x, scale_factors_array,
-                                           relevant_combinations)
+        constraints = self.get_base_constraints(x, scale_factors_array,
+                                                relevant_combinations)
 
         # See if passed in T is feasible.
         for i, (throughputs, num_steps_remaining) in \

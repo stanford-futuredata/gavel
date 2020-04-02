@@ -45,7 +45,7 @@ class Policy:
                 d[job_ids[i]][worker_types[j]] = m[i][j]
         return d
 
-    def get_constraints(self, x, scale_factors_array):
+    def get_base_constraints(self, x, scale_factors_array):
         """Return base constraints."""
 
         return [
@@ -153,7 +153,7 @@ class PolicyWithPacking(Policy):
                 d[job_id_combinations[i]][worker_types[j]] = m[i][j]
         return d
 
-    def get_constraints(self, x, scale_factors_array, relevant_combinations):
+    def get_base_constraints(self, x, scale_factors_array, relevant_combinations):
         """Return base constraints."""
         constraints = [
             x >= 0,
