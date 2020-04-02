@@ -17,14 +17,11 @@ class MinTotalDurationPolicy(Policy):
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster, and that the
         # currently active jobs can finish in time T.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
-            cp.sum(x, axis=1) <= 1,
+        constraints = self.get_base_constraints(x, scale_factors_array)
+        constraints.append(
             cp.sum(cp.multiply(throughputs, x), axis=1) >= (
-                self._num_steps_remaining / T),
-        ]
+                self._num_steps_remaining / T)
+        )
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
 
@@ -87,16 +84,11 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
         x = cp.Variable(all_throughputs[0].shape)
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
-        ]
+        constraints = self.get_base_constraints(x, single_job_ids,
+                                                scale_factors_array,
+                                                relevant_combinations)
 
-        # Every job cannot receive a total time share sum greater than 1.0.
-        for single_job_id in single_job_ids:
-            indexes = relevant_combinations[single_job_id]
-            constraints.append(cp.sum(x[indexes]) <= 1)
+        # See if passed in T is feasible.
         for i, (throughputs, num_steps_remaining) in \
             enumerate(zip(all_throughputs, self._num_steps_remaining)):
             indexes = relevant_combinations[single_job_ids[i]]

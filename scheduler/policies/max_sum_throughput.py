@@ -65,13 +65,7 @@ class ThroughputNormalizedByCostSumWithPerfSLOs(Policy):
                                       axis=1)))
 
         # Make sure that a given job is not over-allocated resources.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                    scale_factors_array, x), axis=0) <= self._num_workers,
-            cp.sum(x, axis=1) <= 1,
-        ]
-
+        constraints = self.get_base_constraints(x, scale_factors_array)
         SLO_constraints = []
         for job_id in SLOs:
             i = job_ids.index(job_id)
@@ -143,16 +137,9 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
             objective = cp.Maximize(cp.sum(cp.hstack(objective_terms)))
 
         # Make sure that a given job is not over-allocated resources.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
-        ]
-        per_job_allocations = []
-        for single_job_id in single_job_ids:
-            indexes = relevant_combinations[single_job_id]
-            per_job_allocations.append(cp.sum(x[indexes]))
-        constraints.append(cp.vstack(per_job_allocations) <= 1)
+        constraints = self.get_base_constraints(x, single_job_ids,
+                                                scale_factors_array,
+                                                relevant_combinations)
 
         SLO_constraints = []
         per_job_throughputs = []

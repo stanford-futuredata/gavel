@@ -1,12 +1,13 @@
 import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
-import policies
+from policies import max_sum_throughput
 import unittest
 
 class TestPolicies(unittest.TestCase):
 
     def test_throughput_sum(self):
-        policy = policies.ThroughputNormalizedByCostSumWithPerf(solver='ECOS')
+        policy = max_sum_throughput.ThroughputNormalizedByCostSumWithPerf(
+            solver='ECOS')
         unflattened_throughputs = {
             0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
             1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
@@ -25,7 +26,8 @@ class TestPolicies(unittest.TestCase):
                               instance_costs=None)
 
     def test_throughput_sum_normalized_by_cost(self):
-        policy = policies.ThroughputNormalizedByCostSumWithPerf(solver='ECOS')
+        policy = max_sum_throughput.ThroughputNormalizedByCostSumWithPerf(
+            solver='ECOS')
         unflattened_throughputs = {
             0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
             1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
@@ -44,7 +46,8 @@ class TestPolicies(unittest.TestCase):
                               instance_costs={'v100': 3.1, 'p100': 2.0, 'k80': 0.8})
 
     def test_throughput_sum_normalized_by_cost_with_SLOs(self):
-        policy = policies.ThroughputNormalizedByCostSumWithPerfSLOs(solver='ECOS')
+        policy = max_sum_throughput.ThroughputNormalizedByCostSumWithPerfSLOs(
+            solver='ECOS')
         unflattened_throughputs = {
             0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
             1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
@@ -64,7 +67,8 @@ class TestPolicies(unittest.TestCase):
                               SLOs={0: 1000}, num_steps_remaining={0: 100})
 
     def test_throughput_sum_normalized_by_cost_with_packing_and_SLOs(self):
-        policy = policies.ThroughputNormalizedByCostSumWithPackingSLOs(solver='ECOS')
+        policy = max_sum_throughput.ThroughputNormalizedByCostSumWithPackingSLOs(
+            solver='ECOS')
         unflattened_throughputs = {
             JobIdPair(0, None): {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
             JobIdPair(1, None): {'v100': 3.0, 'p100': 2.0, 'k80': 1.0},
@@ -87,7 +91,8 @@ class TestPolicies(unittest.TestCase):
                               num_steps_remaining={JobIdPair(0, None): 100})
 
     def test_throughput_sum_normalized_by_cost_with_packing_and_SLOs_v2(self):
-        policy = policies.ThroughputNormalizedByCostSumWithPackingSLOs(solver='ECOS')
+        policy = max_sum_throughput.ThroughputNormalizedByCostSumWithPackingSLOs(
+            solver='ECOS')
         unflattened_throughputs = {
             JobIdPair(0, None): {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
             JobIdPair(1, None): {'v100': 3.0, 'p100': 2.0, 'k80': 1.0},
