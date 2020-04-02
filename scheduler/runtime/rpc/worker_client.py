@@ -14,7 +14,7 @@ class WorkerRpcClient:
     """Worker client for sending RPC requests to a scheduler server."""
   
     def __init__(self, worker_type, worker_ip_addr, worker_port,
-                 sched_ip_addr, sched_port):
+                 sched_ip_addr, sched_port, write_queue):
         self._worker_type = worker_type
         self._worker_ip_addr = worker_ip_addr
         self._worker_port = worker_port
@@ -22,29 +22,27 @@ class WorkerRpcClient:
         self._sched_port = sched_port
         # TODO: Remove self._sched_ip_addr and self._sched_port?
         self._sched_loc = '%s:%d' % (sched_ip_addr, sched_port)
-        #TODO: Get list of devices
+        self._write_queue = write_queue
 
-    def _to_device_proto(self, device):
-        return None
-
-    def register_worker(self, devices):
+    def register_worker(self, num_gpus):
         attempts = 0
-        device_protos = [self.to_device_proto(device) for device in devices]
         request = w2s_pb2.RegisterWorkerRequest(
             worker_type=self._worker_type,
             ip_addr=self._worker_ip_addr,
             port=self._worker_port,
-            devices=device_protos)
+            num_gpus=num_gpus)
         with grpc.insecure_channel(self._sched_loc) as channel:
             while attempts < MAX_ATTEMPTS:
-                print('Trying to register worker... attempt %d' % (attempts+1))
+                self._write_queue.put('Trying to register worker... '
+                                      'attempt %d' % (attempts+1))
                 stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
                 response = stub.RegisterWorker(request)
                 if response.success:
-                    print('Succesfully registered worker with id %d, '
-                          'round_duration=%d' % (response.worker_id,
-                                                 response.round_duration))
-                    return (response.worker_id, response.round_duration, None)
+                    self._write_queue.put(
+                            'Succesfully registered worker with id(s) %s, '
+                            'round_duration=%d' % (str(response.worker_ids),
+                                                   response.round_duration))
+                    return (response.worker_ids, response.round_duration, None)
                 elif attempts == MAX_ATTEMPTS:
                     assert(response.HasField('error'))
                     return (None, response.error)
