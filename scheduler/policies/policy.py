@@ -1,6 +1,7 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
+import cvxpy as cp
 import numpy as np
 
 import job_id_pair
@@ -153,7 +154,8 @@ class PolicyWithPacking(Policy):
                 d[job_id_combinations[i]][worker_types[j]] = m[i][j]
         return d
 
-    def get_base_constraints(self, x, scale_factors_array, relevant_combinations):
+    def get_base_constraints(self, x, single_job_ids,
+                             scale_factors_array, relevant_combinations):
         """Return base constraints."""
         constraints = [
             x >= 0,

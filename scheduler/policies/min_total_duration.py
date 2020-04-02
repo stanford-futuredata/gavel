@@ -84,7 +84,8 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
         x = cp.Variable(all_throughputs[0].shape)
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster.
-        constraints = self.get_base_constraints(x, scale_factors_array,
+        constraints = self.get_base_constraints(x, single_job_ids,
+                                                scale_factors_array,
                                                 relevant_combinations)
 
         # See if passed in T is feasible.
