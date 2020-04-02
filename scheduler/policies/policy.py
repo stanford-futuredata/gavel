@@ -48,7 +48,6 @@ class Policy:
 
     def get_base_constraints(self, x, scale_factors_array):
         """Return base constraints."""
-
         return [
             x >= 0,
             cp.sum(cp.multiply(
