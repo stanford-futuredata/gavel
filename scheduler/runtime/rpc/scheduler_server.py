@@ -24,18 +24,15 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
         return None
 
     def RegisterWorker(self, request, context):
-        # TODO(keshav2): Remove devices
-        devices = []
-        for device_proto in request.devices:
-            devices.append(self._device_proto_to_device(device_proto))
         register_worker_callback = self._callbacks['RegisterWorker']
         try:
-            worker_id, round_duration =\
-                register_worker_callback(request.worker_type,
-                                         request.ip_addr,
-                                         request.port)
+            worker_ids, round_duration =\
+                register_worker_callback(worker_type=request.worker_type,
+                                         num_gpus=request.num_gpus,
+                                         ip_addr=request.ip_addr,
+                                         port=request.port)
             return w2s_pb2.RegisterWorkerResponse(success=True,
-                                                  worker_id=worker_id,
+                                                  worker_ids=worker_ids,
                                                   round_duration=round_duration)
         except Exception as e:
             # TODO: catch a more specific exception?
@@ -68,8 +65,7 @@ def serve(port, callbacks):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     w2s_pb2_grpc.add_WorkerToSchedulerServicer_to_server(
             SchedulerRpcServer(callbacks), server)
-    hostname = socket.gethostname()
-    ip_address = socket.gethostbyname(hostname)
+    ip_address = socket.gethostbyname(socket.gethostname())
     server.add_insecure_port('%s:%d' % (ip_address, port))
     server.start()
     try:

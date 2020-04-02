@@ -1211,7 +1211,7 @@ class Scheduler:
                                  num_steps))
                     for worker_id in worker_ids:
                         self._worker_connections[worker_id].run(
-                                job_descriptions)
+                                job_descriptions, worker_id)
                         self._remove_available_worker_id(worker_id)
                 while not self._available_worker_ids.full():
                     time.sleep(2)
@@ -1805,7 +1805,8 @@ class Scheduler:
     ======================================================================
     """
 
-    def _register_worker_callback(self, worker_type, ip_addr=None, port=None):
+    def _register_worker_callback(self, worker_type, num_gpus=1,
+                                  ip_addr=None, port=None):
         """Registers a worker with the scheduler.
 
         Initializes state for a new worker and assigns it an id.
@@ -1816,6 +1817,8 @@ class Scheduler:
         can make fine-grained scheduling decisions.
 
         Args:
+            worker_type: The type of GPU available on the worker.
+            num_gpus: The number of GPUs available on the worker.
             ip_addr: IP address of the worker's RPC server.
             port: Port number for the worker's RPC server.
             devices: List of available devices on the worker.
@@ -1824,18 +1827,17 @@ class Scheduler:
             The worker_id of the newly registered worker.
         """
 
+        # Share a single RPC client for each GPU on the worker.
+        if not self._simulate:
+            rpc_client = scheduler_client.SchedulerRpcClient(ip_addr, port)
+
         with self._scheduler_lock:
-            worker_id = self._worker_id_counter
-            self._worker_ids.append(worker_id)
-            self._worker_id_counter += 1
-            self._worker_types.add(worker_type)
-            self._worker_id_to_worker_type_mapping[worker_id] = worker_type
-            self._cumulative_worker_time_so_far[worker_id] = 0.0
+            # Update relevant data structures if worker type was
+            # previously unseen.
             found = True
             if worker_type not in self._worker_type_to_worker_id_mapping:
                 found = False
                 self._worker_type_to_worker_id_mapping[worker_type] = []
-            self._worker_type_to_worker_id_mapping[worker_type].append(worker_id)
 
             if not found:
                 self._priorities[worker_type] = {}
@@ -1873,19 +1875,31 @@ class Scheduler:
                 if worker_type not in self._worker_time_so_far:
                     self._worker_time_so_far[worker_type] = 0.0
 
-            self._add_available_worker_id(worker_id)
+            # Update relevant data structures for each GPU available
+            # on the worker.
+            per_worker_ids = []
+            for i in range(num_gpus):
+                worker_id = self._worker_id_counter
+                per_worker_ids.append(worker_id)
+                self._worker_ids.append(worker_id)
+                self._worker_id_counter += 1
+                self._worker_types.add(worker_type)
+                self._cumulative_worker_time_so_far[worker_id] = 0.0
 
-            if worker_type not in self._cluster_spec:
-                self._cluster_spec[worker_type] = 0
-            self._cluster_spec[worker_type] += 1
-            if not self._simulate:
-                self._worker_connections[worker_id] = \
-                    scheduler_client.SchedulerRpcClient(ip_addr, port)
+                self._worker_type_to_worker_id_mapping[worker_type].append(worker_id)
+                self._worker_id_to_worker_type_mapping[worker_id] = worker_type
+                self._add_available_worker_id(worker_id)
 
-            self._worker_start_times[worker_id] = self.get_current_timestamp()
+                if worker_type not in self._cluster_spec:
+                    self._cluster_spec[worker_type] = 0
+                self._cluster_spec[worker_type] += 1
+                if not self._simulate:
+                    self._worker_connections[worker_id] = rpc_client
+
+                self._worker_start_times[worker_id] = self.get_current_timestamp()
             self._need_to_update_allocation = True
 
-        return (worker_id, self._time_per_iteration)
+        return (per_worker_ids, self._time_per_iteration)
 
     def _done_callback(self, job_id, worker_id, all_num_steps,
                        all_execution_times):

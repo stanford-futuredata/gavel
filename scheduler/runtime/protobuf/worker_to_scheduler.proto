@@ -1,7 +1,6 @@
 syntax = "proto3";
 
 import "common.proto";
-import "enums.proto";
 
 service WorkerToScheduler {
     // Registers the worker with the scheduler
@@ -15,20 +14,15 @@ service WorkerToScheduler {
 }
 
 message RegisterWorkerRequest {
-    message Device {
-        uint32 device_id = 1;
-        DeviceType device_type = 2;
-        float available_memory = 3;
-        }
     string worker_type = 1;
-    string ip_addr = 2;
-    uint32 port = 3;
-    repeated Device devices = 4;
+    uint32 num_gpus = 2;
+    string ip_addr = 3;
+    uint32 port = 4;
 }
 
 message RegisterWorkerResponse {
     bool success = 1;
-    uint64 worker_id = 2;
+    repeated uint64 worker_ids = 2;
     uint64 round_duration = 3;
     string error_message = 4;
 }

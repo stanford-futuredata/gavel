@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import os
 import socket
+import subprocess
 
 import job
 from policies import max_min_fairness, max_sum_throughput, min_total_duration, fifo
@@ -12,6 +13,12 @@ def get_ip_address():
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)
     return ip_address
+
+def get_num_gpus():
+    command = 'nvidia-smi -L'
+    output = subprocess.run(command, stdout=subprocess.PIPE, check=True,
+                            shell=True).stdout.decode('utf-8').strip()
+    return len(output.split('\n'))
 
 def get_available_policies():
     return ['fifo', 'fifo_perf', 'fifo_packed',
