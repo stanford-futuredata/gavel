@@ -84,16 +84,10 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
         x = cp.Variable(all_throughputs[0].shape)
         objective = cp.Maximize(1)
         # Make sure the allocation can fit in the cluster.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
-        ]
+        constraints = self.get_constraints(x, scale_factors_array,
+                                           relevant_combinations)
 
-        # Every job cannot receive a total time share sum greater than 1.0.
-        for single_job_id in single_job_ids:
-            indexes = relevant_combinations[single_job_id]
-            constraints.append(cp.sum(x[indexes]) <= 1)
+        # See if passed in T is feasible.
         for i, (throughputs, num_steps_remaining) in \
             enumerate(zip(all_throughputs, self._num_steps_remaining)):
             indexes = relevant_combinations[single_job_ids[i]]

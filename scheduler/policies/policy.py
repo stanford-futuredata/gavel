@@ -153,6 +153,23 @@ class PolicyWithPacking(Policy):
                 d[job_id_combinations[i]][worker_types[j]] = m[i][j]
         return d
 
+    def get_constraints(self, x, scale_factors_array, relevant_combinations):
+        """Return base constraints."""
+        constraints = [
+            x >= 0,
+            cp.sum(cp.multiply(
+                scale_factors_array, x), axis=0) <= self._num_workers,
+        ]
+
+        # Every job cannot receive a total time share sum greater than 1.0.
+        per_job_allocations = []
+        for single_job_id in single_job_ids:
+            indexes = relevant_combinations[single_job_id]
+            per_job_allocations.append(cp.sum(x[indexes]))
+        constraints.append(cp.vstack(per_job_allocations) <= 1)
+
+        return constraints
+
     def convert_job_type_allocation(self, allocation, job_id_to_job_type):
         """Converts a job-job_type allocation to a job-job allocation."""
         job_ids = sorted(allocation.keys())

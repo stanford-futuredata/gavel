@@ -309,14 +309,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         else:
             objective = cp.Maximize(cp.minimum(*objective_terms))
         # Make sure the allocation can fit in the cluster.
-        constraints = [
-            x >= 0,
-            cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
-        ]
-        for single_job_id in single_job_ids:
-            indexes = relevant_combinations[single_job_id]
-            constraints.append(cp.sum(x[indexes]) <= 1)
+        constraints = self.get_constraints(x, scale_factors_array,
+                                           relevant_combinations)
 
         # Explicitly constrain all allocation values with an effective scale
         # factor of 0 to be 0.
