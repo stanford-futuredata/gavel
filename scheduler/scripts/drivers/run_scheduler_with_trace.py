@@ -13,7 +13,7 @@ import scheduler
 import utils
 
 def main(args):
-    jobs, arrival_times = utils.parse_trace(args.trace_file, args.run_dir)
+    jobs, arrival_times = utils.parse_trace(args.trace_file)
     job_queue = queue.Queue()
     for (job, arrival_time) in zip(jobs, arrival_times):
         job_queue.put((job, arrival_time))
@@ -50,8 +50,6 @@ if __name__=='__main__':
                         help='Random seed')
     parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
                         default='ECOS', help='CVXPY solver')
-    parser.add_argument('--run_dir', type=str, required=True,
-                        help='Directory to run jobs from')
     parser.add_argument('--throughputs_file', type=str,
                         default=None,
                         help='Oracle throughputs file')

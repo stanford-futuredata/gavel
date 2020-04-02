@@ -232,14 +232,10 @@ def parse_trace(trace_file, run_dir=None):
              scale_factor, priority_weight, SLO,
              arrival_time) = line.split('\t')
             assert(int(scale_factor) >= 1)
-            if run_dir is not None:
-                if int(needs_data_dir):
-                    command = command % (run_dir, run_dir)
-                else:
-                    command = command % (run_dir)
             jobs.append(job.Job(job_id=None,
                                 job_type=job_type,
                                 command=command,
+                                needs_data_dir=bool(needs_data_dir),
                                 num_steps_arg=num_steps_arg,
                                 total_steps=int(total_steps),
                                 duration=None,

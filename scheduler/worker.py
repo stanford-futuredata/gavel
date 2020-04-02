@@ -1,4 +1,6 @@
 import argparse
+import os
+import shutil
 import socket
 import sys
 import threading
@@ -7,9 +9,11 @@ from runtime.rpc import dispatcher
 from runtime.rpc import worker_client
 from runtime.rpc import worker_server
 
+CHECKPOINT_DIR_NAME = 'checkpoints'
+
 class Worker:
     def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port,
-                 gpu_id):
+                 gpu_id, run_dir):
         self._gpu_id = gpu_id
         self._worker_type = worker_type
         self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
@@ -37,10 +41,22 @@ class Worker:
         if error:
             raise RuntimeError(error)
         
+        checkpoint_dir = os.path.join(run_dir, CHECKPOINT_DIR_NAME)
+        if not os.path.isdir(checkpoint_dir):
+            # Set up a new checkpoint directory if does not already exist.
+            os.mkdir(checkpoint_dir)
+        else:
+            # Clear the checkpoints if they have already been created.
+            for dirname in os.listdir(checkpoint_dir):
+                if os.path.isdir(os.path.join(checkpoint_dir, dirname)):
+                    shutil.rmtree(os.path.join(checkpoint_dir, dirname))
+
         self._dispatcher = dispatcher.Dispatcher(self._worker_id,
                                                  self._round_duration,
                                                  self._gpu_id,
-                                                 self._worker_rpc_client)
+                                                 self._worker_rpc_client,
+                                                 run_dir,
+                                                 checkpoint_dir)
         
         self._server_thread.join()
 
@@ -74,9 +90,12 @@ if __name__=='__main__':
                         help='Port number for worker server')
     parser.add_argument('-g', '--gpu_id', type=int, required=True,
                         help='GPU ID')
+    parser.add_argument('--run_dir', type=str, required=True,
+                        help='Directory to run jobs from')
     args = parser.parse_args()
     opt_dict = vars(args)
 
+    # TODO: Just pass args directly to maintain consistency with other code.
     worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
                     opt_dict['sched_port'], opt_dict['worker_port'],
-                    opt_dict['gpu_id'])
+                    opt_dict['gpu_id'], opt_dict['run_dir'])
