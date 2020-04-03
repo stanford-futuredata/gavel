@@ -86,8 +86,8 @@ try:
       num_iterations = int(math.ceil(args.num_epochs / args.throughput_estimation_interval))
       epochs_per_iteration = args.throughput_estimation_interval
   else:
-      num_iterations = 1
-      epochs_per_iteration = args.num_epochs
+      num_iterations = int(math.ceil(args.num_epochs / 10))
+      epochs_per_iteration = 10
   epochs = 0
   total_elapsed_time = 0
   for i in range(num_iterations):
