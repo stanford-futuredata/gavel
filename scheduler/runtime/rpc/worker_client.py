@@ -65,3 +65,11 @@ class WorkerRpcClient:
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
             response = stub.Done(request)
+            job_ids = \
+              [job_description[0] for job_description in job_descriptions]
+            if len(job_ids) == 1:
+              self._write_queue.put('Notified scheduler that '
+                                    'job %d has completed' % (job_ids[0]))
+            else:
+              self._write_queue.put('Notified scheduler that '
+                                    'jobs %s has completed' % (str(job_ids)))
