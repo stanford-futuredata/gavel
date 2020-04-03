@@ -132,8 +132,8 @@ def train(epoch, cumulative_steps=None, cumulative_time=None):
     total = 0
     done = False
     finished_epoch = True
+    start_time = time.time()
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-        start_time = time.time()
         inputs, targets = inputs.cuda(), targets.cuda()
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -159,6 +159,7 @@ def train(epoch, cumulative_steps=None, cumulative_time=None):
                 cumulative_time > args.max_duration):
                 done = True
                 finished_epoch = False
+            start_time = time.time()
         if cumulative_steps is not None:
             cumulative_steps += 1
             if (args.throughput_estimation_interval is not None and

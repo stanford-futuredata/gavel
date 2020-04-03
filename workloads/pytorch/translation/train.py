@@ -69,10 +69,10 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
     n_word_correct = 0
     done = False
 
+    start_time = time.time()
     for batch in tqdm(
             training_data, mininterval=2,
             desc='  - (Training)   ', leave=False):
-        start_time = time.time()
 
         # prepare data
         src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)
@@ -109,6 +109,7 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
               break
         if cumulative_time is not None:
           cumulative_time += time.time() - start_time
+          start_time = time.time()
 
           if max_duration is not None and cumulative_time >= max_duration:
             done = True
@@ -209,7 +210,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                 'elapse: {elapse:3.3f} min'.format(
                     ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu,
                     elapse=(time.time()-start)/60))
-
+        cumulative_time += time.time() - start
         valid_accus += [valid_accu]
 
         model_state_dict = model.state_dict()

@@ -229,6 +229,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
     # switch to train mode
     model.train()
 
+    start = time.time()
     end = time.time()
     finished_epoch = True
     for i, (input, target) in enumerate(train_loader):
@@ -240,7 +241,6 @@ def train(train_loader, model, criterion, optimizer, epoch,
               total_elapsed_time + elapsed_time >= max_duration):
             finished_epoch = False
             break
-        start = time.time()
 
         # measure data loading time
         data_time.update(time.time() - end)
@@ -267,6 +267,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         batch_time.update(time.time() - end)
         end = time.time()
         elapsed_time += (end - start)
+        start = time.time()
 
         if i % args.print_freq == 0:
             print('Epoch: [{0}][{1}/{2}]\t'
