@@ -75,12 +75,12 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
                                       axis=1)
         expected_time_fractions = []
         for i in range(len(job_ids)):
-            effective_throughput = cp.sum(cp.multiply(throughputs[i], x[i]))
+            allocation_throughput = cp.sum(cp.multiply(throughputs[i], x[i]))
             expected_time_isolated = times_since_start[job_ids[i]] + \
                 (num_steps_remaining[job_ids[i]] / isolated_throughputs[i])
-            expected_time_fraction = times_since_start[job_ids[i]] / expected_time_isolated
-            expected_time_fraction += ((num_steps_remaining[job_ids[i]] / expected_time_isolated) *
-                cp.inv_pos(effective_throughput))
+            expected_time_allocation = times_since_start[job_ids[i]] + \
+                (num_steps_remaining[job_ids[i]] * cp.inv_pos(allocation_throughput))
+            expected_time_fraction = expected_time_allocation / expected_time_isolated
             expected_time_fractions.append(expected_time_fraction)
         if len(expected_time_fractions) == 1:
             objective = cp.Minimize(expected_time_fractions[0])
@@ -154,14 +154,14 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
             isolated_throughput = np.sum(np.multiply(
                 all_throughputs[i][indexes],
                 x_isolated[indexes]))
-            effective_throughput = cp.sum(cp.multiply(
+            allocation_throughput = cp.sum(cp.multiply(
                 all_throughputs[i][indexes],
                 x[indexes]))
             expected_time_isolated = times_since_start[single_job_ids[i]] + \
                 (num_steps_remaining[single_job_ids[i]] / isolated_throughput)
-            expected_time_fraction = times_since_start[single_job_ids[i]] / expected_time_isolated
-            expected_time_fraction += ((num_steps_remaining[single_job_ids[i]] / expected_time_isolated) *
-                cp.inv_pos(effective_throughput))
+            expected_time_allocation = times_since_start[single_job_ids[i]] + \
+                (num_steps_remaining[single_job_ids[i]] * cp.inv_pos(allocation_throughput))
+            expected_time_fraction = expected_time_allocation / expected_time_isolated
             expected_time_fractions.append(expected_time_fraction)
         if len(expected_time_fractions) == 1:
             objective = cp.Minimize(expected_time_fractions[0])
