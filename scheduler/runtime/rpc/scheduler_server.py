@@ -47,9 +47,9 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
 
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
+        print('Received completion notification '
+              'from worker %d...' % (request.worker_id))
         try:
-            print('Received completion notification '
-                  'from worker %d...' % (request.worker_id))
             if len(request.job_id) > 1:
                 job_id = JobIdPair(request.job_id[0], request.job_id[1])
             else:
@@ -62,7 +62,7 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
         return common_pb2.Empty()
 
 def serve(port, callbacks):
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor())
     w2s_pb2_grpc.add_WorkerToSchedulerServicer_to_server(
             SchedulerRpcServer(callbacks), server)
     ip_address = socket.gethostbyname(socket.gethostname())

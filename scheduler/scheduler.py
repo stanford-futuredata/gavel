@@ -40,7 +40,8 @@ class Scheduler:
                  per_instance_type_prices_dir=None,
                  available_clouds=[],
                  assign_SLOs=False,
-                 enable_global_queue=False):
+                 enable_global_queue=False,
+                 expected_num_workers=None):
 
 
         # Print config information.
@@ -64,6 +65,8 @@ class Scheduler:
 
         # Sets whether to use a global queue across all worker types.
         self._enable_global_queue = enable_global_queue
+
+        self._expected_num_workers = expected_num_workers
 
         if self._simulate:
             self._start_timestamp = 0
@@ -1186,6 +1189,11 @@ class Scheduler:
                 num_jobs = len(self._jobs)
                 if num_workers == 0 or num_jobs == 0:
                     continue
+                elif (self._expected_num_workers is not None and
+                      num_workers < self._expected_num_workers):
+                    # Hack to allow scheduler to wait for all workers to be
+                    # launched before starting to dispatch jobs.
+                    continue
                 # Reset available_worker_ids to the desired size.
                 self._available_worker_ids = queue.Queue(num_workers)
                 for worker_id in self._worker_ids:
@@ -1916,8 +1924,6 @@ class Scheduler:
             all_num_steps: List of the number of steps each job ran for.
         """
 
-        self._add_available_worker_id(worker_id)
-
         to_remove = []
         with self._scheduler_lock:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
@@ -2006,3 +2012,6 @@ class Scheduler:
 
         for single_job_id in to_remove:
             self.remove_job(single_job_id[0])
+
+        self._add_available_worker_id(worker_id)
+

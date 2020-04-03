@@ -20,7 +20,9 @@ def main(args):
     policy = utils.get_policy(args.policy, solver=args.solver, seed=args.seed)
     sched = scheduler.Scheduler(policy,
                                 seed=args.seed,
-                                throughputs_file=args.throughputs_file)
+                                throughputs_file=args.throughputs_file,
+                                time_per_iteration=args.time_per_iteration,
+                                expected_num_workers=args.expected_num_workers)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -53,4 +55,8 @@ if __name__=='__main__':
     parser.add_argument('--throughputs_file', type=str,
                         default=None,
                         help='Oracle throughputs file')
+    parser.add_argument('--expected_num_workers', type=int, default=None,
+                        help='Total number of workers expected')
+    parser.add_argument('--time_per_iteration', type=int, default=1920,
+                        help='Time per iteration in seconds')
     main(parser.parse_args())
