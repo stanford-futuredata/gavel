@@ -1,9 +1,33 @@
 import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
-from policies import max_sum_throughput
+from policies import finish_time_fairness, max_sum_throughput
 import unittest
 
 class TestPolicies(unittest.TestCase):
+
+    def test_finish_time_fairness(self):
+        policy = finish_time_fairness.FinishTimeFairnessPolicyWithPerf(
+            solver='ECOS')
+        unflattened_throughputs = {
+            0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
+        }
+        scale_factors = {
+            0: 1,
+            1: 1
+        }
+        unflattened_priority_weights = {0: 1, 1: 1}
+        times_since_start = {0: 0, 1: 0}
+        num_steps_remaining = {0: 300, 1: 500}
+        cluster_spec = {
+            'v100': 1,
+            'p100': 1,
+            'k80': 1
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              unflattened_priority_weights,
+                              times_since_start, num_steps_remaining,
+                              cluster_spec)
 
     def test_throughput_sum(self):
         policy = max_sum_throughput.ThroughputNormalizedByCostSumWithPerf(
