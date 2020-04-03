@@ -73,19 +73,19 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
 
         isolated_throughputs = np.sum(np.multiply(throughputs, x_isolated),
                                       axis=1)
-        objective_terms = []
+        expected_time_fractions = []
         for i in range(len(job_ids)):
             effective_throughput = cp.sum(cp.multiply(throughputs[i], x[i]))
-            denominator = times_since_start[job_ids[i]] + \
+            expected_time_isolated = times_since_start[job_ids[i]] + \
                 (num_steps_remaining[job_ids[i]] / isolated_throughputs[i])
-            objective_term = times_since_start[job_ids[i]] / denominator
-            objective_term += ((num_steps_remaining[job_ids[i]] / denominator) *
+            expected_time_fraction = times_since_start[job_ids[i]] / expected_time_isolated
+            expected_time_fraction += ((num_steps_remaining[job_ids[i]] / expected_time_isolated) *
                 cp.inv_pos(effective_throughput))
-            objective_terms.append(objective_term)
-        if len(objective_terms) == 1:
-            objective = cp.Minimize(objective_terms[0])
+            expected_time_fractions.append(expected_time_fraction)
+        if len(expected_time_fractions) == 1:
+            objective = cp.Minimize(expected_time_fractions[0])
         else:
-            objective = cp.Minimize(cp.maximum(*objective_terms))
+            objective = cp.Minimize(cp.maximum(*expected_time_fractions))
 
         # Make sure that the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, scale_factors_array)
@@ -148,7 +148,7 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
                     x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
 
         single_throughputs = np.zeros((len(single_job_ids), n))
-        objective_terms = []
+        expected_time_fractions = []
         for i in range(len(all_throughputs)):
             indexes = relevant_combinations[single_job_ids[i]]
             isolated_throughput = np.sum(np.multiply(
@@ -157,16 +157,16 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
             effective_throughput = cp.sum(cp.multiply(
                 all_throughputs[i][indexes],
                 x[indexes]))
-            denominator = times_since_start[single_job_ids[i]] + \
+            expected_time_isolated = times_since_start[single_job_ids[i]] + \
                 (num_steps_remaining[single_job_ids[i]] / isolated_throughput)
-            objective_term = times_since_start[single_job_ids[i]] / denominator
-            objective_term += ((num_steps_remaining[single_job_ids[i]] / denominator) *
+            expected_time_fraction = times_since_start[single_job_ids[i]] / expected_time_isolated
+            expected_time_fraction += ((num_steps_remaining[single_job_ids[i]] / expected_time_isolated) *
                 cp.inv_pos(effective_throughput))
-            objective_terms.append(objective_term)
-        if len(objective_terms) == 1:
-            objective = cp.Minimize(objective_terms[0])
+            expected_time_fractions.append(expected_time_fraction)
+        if len(expected_time_fractions) == 1:
+            objective = cp.Minimize(expected_time_fractions[0])
         else:
-            objective = cp.Minimize(cp.maximum(*objective_terms))
+            objective = cp.Minimize(cp.maximum(*expected_time_fractions))
 
         # Make sure the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, single_job_ids,

@@ -21,8 +21,8 @@ class TestPolicies(unittest.TestCase):
         num_steps_remaining = {0: 300, 1: 500}
         cluster_spec = {
             'v100': 1,
-            'p100': 1,
-            'k80': 1
+            'p100': 2,
+            'k80': 3
         }
         policy.get_allocation(unflattened_throughputs, scale_factors,
                               unflattened_priority_weights,
