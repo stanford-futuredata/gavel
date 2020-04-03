@@ -5,6 +5,7 @@ import cvxpy as cp
 import numpy as np
 
 from policy import Policy, PolicyWithPacking
+import max_min_fairness
 
 class FinishTimeFairnessPolicy(Policy):
 
@@ -36,6 +37,7 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
     def __init__(self, solver):
         Policy.__init__(self, solver)
         self._name = 'FinishTimeFairness_Perf'
+        self._isolated_policy = max_min_fairness.MaxMinFairnessPolicy(solver)
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights,
@@ -61,10 +63,13 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
 
         # Create allocation variable, and isolated allocation.
         x = cp.Variable(throughputs.shape)
-        self._num_workers = np.array(self._num_workers)
-        x_isolated = np.ones(throughputs.shape) * (self._num_workers / m)
-        print(x_isolated)
-        x_isolated = x_isolated.clip(min=0.0).clip(max=1.0)
+        x_isolated_dict = self._isolated_policy.get_allocation(
+            unflattened_throughputs, scale_factors, unflattened_priority_weights,
+            cluster_spec)
+        x_isolated = np.zeros(throughputs.shape)
+        for i in range(m):
+            for j in range(n):
+                x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
 
         isolated_throughputs = np.sum(np.multiply(throughputs, x_isolated),
                                       axis=1)
@@ -74,16 +79,19 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
             denominator = times_since_start[job_ids[i]] + \
                 (num_steps_remaining[job_ids[i]] / isolated_throughputs[i])
             objective_term = times_since_start[job_ids[i]] / denominator
-            objective_term += ((num_steps_remaining[job_ids[i]] / denominator) /
-                effective_throughput)
+            objective_term += ((num_steps_remaining[job_ids[i]] / denominator) *
+                cp.inv_pos(effective_throughput))
             objective_terms.append(objective_term)
+        if len(objective_terms) == 1:
+            objective = cp.Minimize(objective_terms[0])
+        else:
+            objective = cp.Minimize(cp.maximum(*objective_terms))
 
-        objective = cp.Maximize(cp.minimum(*objective_terms))
         # Make sure that the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, scale_factors_array)
 
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver=self._solver, qcp=True)
+        result = cvxprob.solve(solver=self._solver)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
@@ -96,9 +104,12 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
     def __init__(self, solver):
         PolicyWithPacking.__init__(self, solver)
         self._name = 'FinishTimeFairness_Packing'
+        self._isolated_policy = max_min_fairness.MaxMinFairnessPolicy(solver)
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
-                       unflattened_priority_weights, cluster_spec):
+                       unflattened_priority_weights,
+                       times_since_start,
+                       num_steps_remaining, cluster_spec):
         all_throughputs, index = \
             self.flatten(d=unflattened_throughputs,
                          cluster_spec=cluster_spec,
@@ -122,21 +133,41 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
             for j in range(n):
                 scale_factors_array[i, j] = scale_factor
 
+        unflattened_throughputs_no_packed_jobs = {}
+        for single_job_id in single_job_ids:
+            unflattened_throughputs_no_packed_jobs[single_job_id] = {}
+            for worker_type in worker_types:
+                unflattened_throughputs_no_packed_jobs[single_job_id][worker_type] = 1.0
+        x_isolated_dict = self._isolated_policy.get_allocation(
+            unflattened_throughputs_no_packed_jobs, scale_factors,
+            unflattened_priority_weights, cluster_spec)
+        x_isolated = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                if not job_ids[i].is_pair():
+                    x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
+
+        single_throughputs = np.zeros((len(single_job_ids), n))
         objective_terms = []
-        # Multiply throughputs by scale_factors to ensure that scale_factor
-        # is taken into account while allocating times to different jobs.
-        # A job run on 1 GPU should receive `scale_factor` more time than
-        # a job run on `scale_factor` GPUs.
         for i in range(len(all_throughputs)):
             indexes = relevant_combinations[single_job_ids[i]]
-            # TODO: Fix this objective.
-            objective_terms.append(cp.sum(cp.multiply(
+            isolated_throughput = np.sum(np.multiply(
                 all_throughputs[i][indexes],
-                x[indexes])))
+                x_isolated[indexes]))
+            effective_throughput = cp.sum(cp.multiply(
+                all_throughputs[i][indexes],
+                x[indexes]))
+            denominator = times_since_start[single_job_ids[i]] + \
+                (num_steps_remaining[single_job_ids[i]] / isolated_throughput)
+            objective_term = times_since_start[single_job_ids[i]] / denominator
+            objective_term += ((num_steps_remaining[single_job_ids[i]] / denominator) *
+                cp.inv_pos(effective_throughput))
+            objective_terms.append(objective_term)
         if len(objective_terms) == 1:
-            objective = cp.Maximize(objective_terms[0])
+            objective = cp.Minimize(objective_terms[0])
         else:
-            objective = cp.Maximize(cp.minimum(*objective_terms))
+            objective = cp.Minimize(cp.maximum(*objective_terms))
+
         # Make sure the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, single_job_ids,
                                                 scale_factors_array,
