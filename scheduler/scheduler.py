@@ -1414,33 +1414,41 @@ class Scheduler:
             job_id: self._jobs[job_id].scale_factor
             for job_id in self._jobs
         }
-        if self._policy.name.startswith("MaxMinFairness"):
-            priority_weights = {
-                job_id: self._jobs[job_id].priority_weight
-                for job_id in self._jobs
-            }
+        priority_weights = {
+            job_id: self._jobs[job_id].priority_weight
+            for job_id in self._jobs
+        }
+        num_steps_remaining = {
+            job_id: self._get_remaining_steps(job_id)
+            for job_id in self._jobs
+        }
+        times_since_start = {
+            job_id: self.get_current_timestamp() - self._per_job_start_timestamps[job_id]
+            for job_id in self._jobs
+        }
+        if self._policy.name.startswith("FinishTimeFairness"):
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, scale_factors, priority_weights,
+                times_since_start, num_steps_remaining,
+                self._cluster_spec)
+        elif self._policy.name.startswith("MaxMinFairness"):
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, priority_weights,
                 self._cluster_spec)
         elif self._policy.name.startswith("MinTotalDuration"):
-            num_steps_remaining = {
-                job_id: self._get_remaining_steps(job_id)
-                for job_id in self._jobs}
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
         elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
             if 'SLO' in self._policy.name:
                 SLOs = {}
-                num_steps_remaining = {}
                 if self._SLOs is not None:
                     for job_id in self._jobs:
                         SLOs[job_id] = \
                             (self._SLOs[job_id] -
                              self.get_current_timestamp(in_seconds=True))
-                        num_steps_remaining[job_id] = \
-                            (self._jobs[job_id].total_steps -
-                             self._total_steps_run[job_id])
+                else:
+                    num_steps_remaining = {}
                 unflattened_allocation = self._policy.get_allocation(
                     self._throughputs, scale_factors, self._cluster_spec,
                     instance_costs=self._per_worker_type_prices,
