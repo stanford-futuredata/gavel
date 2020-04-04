@@ -105,7 +105,7 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        num_steps_remaining, cluster_spec):
         all_throughputs, index = super().flatten(unflattened_throughputs,
-                                                 cluster_spec, normalize=False)
+                                                 cluster_spec)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         if index is None: return None
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
