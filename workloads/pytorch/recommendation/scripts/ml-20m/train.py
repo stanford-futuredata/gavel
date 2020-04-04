@@ -88,6 +88,8 @@ try:
   else:
       num_iterations = int(math.ceil(args.num_epochs / 10))
       epochs_per_iteration = 10
+      # num_iterations = 1
+      # epochs_per_iteration = args.num_epochs
   epochs = 0
   total_elapsed_time = 0
   for i in range(num_iterations):
@@ -95,7 +97,13 @@ try:
       if args.num_epochs is not None:
           epochs_per_iteration = min(epochs_per_iteration,
                                      args.num_epochs - epochs)
+          if epochs_per_iteration <= 0:
+            break
       print('Running for %d epochs' % (epochs_per_iteration))
+      # Reinstantiate trainer to eliminate internal state keeping track of
+      # completed epochs. Note that this will prevent the model from converging.
+      trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
+                        loss='logistic', user_based=False)
       trainer.train(train_dataset=train_dataset, val_dataset=val_tr_dataset,
                     batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
                     num_epochs=epochs_per_iteration, negative_sampling=True,
@@ -105,7 +113,8 @@ try:
                     metrics=metrics, eval_freq=0)
       epochs += epochs_per_iteration
       if args.max_duration is not None:
-          total_elapsed_time += time.time() - start_time
+          iteration_time = time.time () - start_time
+          total_elapsed_time += iteration_time
           if total_elapsed_time >= args.max_duration:
               break
       if args.throughput_estimation_interval is not None:
