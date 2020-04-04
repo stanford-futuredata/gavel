@@ -6,7 +6,7 @@ import socket
 import subprocess
 
 import job
-from policies import max_min_fairness, max_sum_throughput, min_total_duration, fifo
+from policies import fifo, finish_time_fairness, max_min_fairness, max_sum_throughput, min_total_duration
 
 
 def get_ip_address():
@@ -22,15 +22,18 @@ def get_num_gpus():
 
 def get_available_policies():
     return ['fifo', 'fifo_perf', 'fifo_packed',
+            'finish_time_fairness',
+            'finish_time_fairness_perf',
+            'finish_time_fairness_packed',
             'max_min_fairness',
             'max_min_fairness_perf',
             'max_min_fairness_packed',
-            'min_total_duration',
-            'min_total_duration_packed',
             'max_sum_throughput_perf',
             'max_sum_throughput_normalized_by_cost_perf',
             'max_sum_throughput_normalized_by_cost_perf_SLOs',
             'max_sum_throughput_normalized_by_cost_packed_SLOs'
+            'min_total_duration',
+            'min_total_duration_packed',
             ]
 
 def read_per_instance_type_spot_prices_aws(directory):
@@ -196,7 +199,22 @@ def read_all_throughputs_json(throughputs_file):
     return throughputs
 
 def get_policy(policy_name, solver, seed=None):
-    if policy_name == 'max_min_fairness':
+    if policy_name == 'fifo':
+        policy = fifo.FIFOPolicy(seed=seed)
+    elif policy_name == 'fifo_perf':
+        policy = fifo.FIFOPolicyWithPerf()
+    elif policy_name == 'fifo_packed':
+        policy = fifo.FIFOPolicyWithPacking()
+    elif policy_name == 'finish_time_fairness':
+        policy = finish_time_fairness.FinishTimeFairnessPolicy(solver=solver)
+    elif policy_name == 'finish_time_fairness_perf':
+        policy = \
+            finish_time_fairness.FinishTimeFairnessPolicyWithPerf(solver=solver)
+    elif policy_name == 'finish_time_fairness_packed':
+        policy = \
+            finish_time_fairness.FinishTimeFairnessPolicyWithPacking(
+                solver=solver)
+    elif policy_name == 'max_min_fairness':
         policy = max_min_fairness.MaxMinFairnessPolicy(solver=solver)
     elif policy_name == 'max_min_fairness_perf':
         policy = max_min_fairness.MaxMinFairnessPolicyWithPerf(solver=solver)
@@ -220,12 +238,6 @@ def get_policy(policy_name, solver, seed=None):
     elif policy_name == 'min_total_duration_packed':
         policy = \
             min_total_duration.MinTotalDurationPolicyWithPacking(solver=solver)
-    elif policy_name == 'fifo':
-        policy = fifo.FIFOPolicy(seed=seed)
-    elif policy_name == 'fifo_perf':
-        policy = fifo.FIFOPolicyWithPerf()
-    elif policy_name == 'fifo_packed':
-        policy = fifo.FIFOPolicyWithPacking()
     else:
         raise ValueError('Unknown policy!')
     return policy

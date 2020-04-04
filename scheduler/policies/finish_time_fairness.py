@@ -15,7 +15,9 @@ class FinishTimeFairnessPolicy(Policy):
             FinishTimeFairnessPolicyWithPerf(solver)
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
-                       priority_weights, cluster_spec):
+                       unflattened_priority_weights,
+                       times_since_start,
+                       num_steps_remaining, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None
@@ -28,8 +30,10 @@ class FinishTimeFairnessPolicy(Policy):
                  new_unflattened_throughputs[job_id][worker_type] = 1.0
 
         return self._finish_time_fairness_perf_policy.get_allocation(
-            new_unflattened_throughputs, scale_factors, priority_weights,
-            cluster_spec)
+            new_unflattened_throughputs, scale_factors,
+            unflattened_priority_weights,
+            times_since_start,
+            num_steps_remaining, cluster_spec)
 
 
 class FinishTimeFairnessPolicyWithPerf(Policy):
