@@ -61,8 +61,7 @@ class PolicyWithPacking(Policy):
     def __init__(self, solver='ECOS'):
         Policy.__init__(self, solver)
 
-    def flatten(self, d, cluster_spec, normalize=True,
-                priority_weights=None):
+    def flatten(self, d, cluster_spec, priority_weights=None):
         """
         Converts a 2-level dict to a NumPy array.
 
@@ -71,7 +70,7 @@ class PolicyWithPacking(Policy):
         If an integer, represents a single job / application run on the
         GPU.
 
-        Returns a list of each user's normalized throughput matrix and an
+        Returns a list of each user's throughput matrix and an
         index to reconstruct the allocation as a dict.
         """
         job_ids = sorted(list(d.keys()))
@@ -97,17 +96,6 @@ class PolicyWithPacking(Policy):
                     if single_job_id not in relevant_combinations:
                         relevant_combinations[single_job_id] = []
                     relevant_combinations[single_job_id].append(i)
-
-        # Compute normalizing factor for each individual job, this normalizing
-        # factor will be used to normalize throughputs for the same job in job
-        # combinations as well.
-        if normalize:
-            normalizing_factors = {}
-            for single_job_id in single_job_ids:
-                normalizing_factor = 0.0
-                for worker_type in worker_types:
-                    normalizing_factor += d[single_job_id][worker_type]
-                normalizing_factors[single_job_id] = normalizing_factor
 
         if len(worker_types) == 0:
             return None, None
@@ -135,11 +123,8 @@ class PolicyWithPacking(Policy):
                             throughputs = d[job_id][worker_type]
                             all_m[i][j][k] = d[job_id][worker_type][index]
             # Normalize.
-            if normalize:
-                if normalizing_factors[single_job_id] > 0:
-                    all_m[i] /= normalizing_factors[single_job_id]
-                if priority_weights is not None:
-                    all_m[i] /= priority_weights[single_job_id]
+            if priority_weights is not None:
+                all_m[i] /= priority_weights[single_job_id]
         return all_m, (job_ids, sorted_single_job_ids, worker_types,
                        relevant_combinations)
 

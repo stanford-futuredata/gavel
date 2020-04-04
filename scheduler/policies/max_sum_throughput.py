@@ -96,8 +96,7 @@ class ThroughputNormalizedByCostSumWithPackingSLOs(PolicyWithPacking):
     def get_allocation(self, unflattened_throughputs, scale_factors, cluster_spec,
                        instance_costs=None, SLOs={}, num_steps_remaining={}):
         all_throughputs, index = super().flatten(unflattened_throughputs,
-                                                 cluster_spec,
-                                                 normalize=False)
+                                                 cluster_spec)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         (m, n) = all_throughputs[0].shape
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
