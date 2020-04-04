@@ -113,7 +113,8 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         all_throughputs, index = \
             self.flatten(d=unflattened_throughputs,
                          cluster_spec=cluster_spec,
-                         priority_weights=unflattened_priority_weights)
+                         priority_weights=unflattened_priority_weights,
+                         normalize=False)
         if all_throughputs is None or len(all_throughputs) == 0: return None
         (m, n) = all_throughputs[0].shape
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
