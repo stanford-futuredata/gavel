@@ -1,24 +1,29 @@
 class Job:
-    def __init__(self, job_id, job_type, command, num_steps_arg, total_steps,
-                 duration, scale_factor, priority_weight, SLO=None):
+    def __init__(self, job_id, job_type, command, num_steps_arg,
+                 total_steps, duration, scale_factor=1,
+                 priority_weight=1, SLO=None, needs_data_dir=False):
         self._job_id = job_id
         self._job_type = job_type
         self._command = command
+        self._needs_data_dir = needs_data_dir
         self._num_steps_arg = num_steps_arg
         self._total_steps = total_steps
         self._duration = duration
         self._scale_factor = scale_factor
         self._priority_weight = priority_weight
-        self._SLO = SLO
+        if SLO is not None and SLO < 0:
+            self._SLO = None
+        else:
+            self._SLO = SLO
 
     @staticmethod
     def from_proto(job_proto):
         duration = None
         if job_proto.has_duration:
             duration = job_proto.duration
-        # TODO: Add scale_factor, priority_weight, and SLO here.
         return Job(job_proto.job_id, job_proto.job_type, job_proto.command,
-                   job_proto.num_steps_arg, job_proto.num_steps, duration)
+                   job_proto.num_steps_arg, job_proto.num_steps, duration,
+                   needs_data_dir=job_proto.needs_data_dir)
 
     @property
     def job_id(self):
@@ -31,6 +36,10 @@ class Job:
     @property
     def command(self):
         return self._command
+
+    @property
+    def needs_data_dir(self):
+        return self._needs_data_dir
 
     @property
     def num_steps_arg(self):

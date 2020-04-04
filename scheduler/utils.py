@@ -2,9 +2,23 @@ import csv
 from datetime import datetime
 import json
 import os
+import socket
+import subprocess
 
 import job
 from policies import max_min_fairness, max_sum_throughput, min_total_duration, fifo
+
+
+def get_ip_address():
+    hostname = socket.gethostname()
+    ip_address = socket.gethostbyname(hostname)
+    return ip_address
+
+def get_num_gpus():
+    command = 'nvidia-smi -L'
+    output = subprocess.run(command, stdout=subprocess.PIPE, check=True,
+                            shell=True).stdout.decode('utf-8').strip()
+    return len(output.split('\n'))
 
 def get_available_policies():
     return ['fifo', 'fifo_perf', 'fifo_packed',
@@ -216,27 +230,25 @@ def get_policy(policy_name, solver, seed=None):
         raise ValueError('Unknown policy!')
     return policy
 
-def parse_trace(trace_file, run_dir):
+def parse_trace(trace_file, run_dir=None):
     jobs = []
     arrival_times = []
     with open(trace_file, 'r') as f:
         for line in f:
             (job_type, command, num_steps_arg, needs_data_dir, total_steps,
-             arrival_time, scale_factor) = line.split('\t')
-            if int(scale_factor) == 0:
-                continue
-            if int(needs_data_dir):
-                command = command % (run_dir, run_dir)
-            else:
-                command = command % (run_dir)
+             scale_factor, priority_weight, SLO,
+             arrival_time) = line.split('\t')
+            assert(int(scale_factor) >= 1)
             jobs.append(job.Job(job_id=None,
                                 job_type=job_type,
                                 command=command,
+                                needs_data_dir=bool(needs_data_dir),
                                 num_steps_arg=num_steps_arg,
                                 total_steps=int(total_steps),
                                 duration=None,
                                 scale_factor=int(scale_factor),
-                                priority_weight=1.0))
+                                priority_weight=float(priority_weight),
+                                SLO=float(SLO)))
             arrival_times.append(float(arrival_time))
     return jobs, arrival_times
 

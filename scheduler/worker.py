@@ -1,4 +1,8 @@
 import argparse
+import datetime
+import os
+import queue
+import shutil
 import socket
 import sys
 import threading
@@ -7,43 +11,70 @@ from runtime.rpc import dispatcher
 from runtime.rpc import worker_client
 from runtime.rpc import worker_server
 
+import utils
+
+CHECKPOINT_DIR_NAME = 'checkpoints'
+
 class Worker:
     def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port,
-                 gpu_id):
-        self._gpu_id = gpu_id
+                 num_gpus, run_dir):
+        num_available_gpus = utils.get_num_gpus()
+        if num_gpus > num_available_gpus:
+            raise ValueError('%d GPUs requested active, but only %d total '
+                             'GPUs are available' % (num_gpus,
+                                                     num_available_gpus))
+        self._write_queue = queue.Queue()
+        self._gpu_ids = list(range(num_gpus))
         self._worker_type = worker_type
         self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
         self._worker_port = worker_port
         self._worker_rpc_client = worker_client.WorkerRpcClient(
                 self._worker_type, self._worker_ip_addr,
-                self._worker_port, sched_ip_addr, sched_port)
-        self._devices = [] # TODO: get devices
+                self._worker_port, sched_ip_addr, sched_port,
+                self._write_queue)
 
-        print('Starting server at port %d' % (worker_port))
+        self._write_queue.put('Starting server at port %d' % (worker_port))
 
         callbacks = {
             'Run': self._run_callback,
             'Shutdown': self._shutdown_callback,
         }
-        
+
+        self._logging_thread = threading.Thread(target=self._print_logs)
+        self._logging_thread.daemon = True
+        self._logging_thread.start()
+
         self._server_thread = threading.Thread(
             target=worker_server.serve,
-            args=(worker_port, callbacks,))
+            args=(worker_port, callbacks, self._write_queue,))
         self._server_thread.daemon = True
         self._server_thread.start()
 
-        self._worker_id, error = \
-            self._worker_rpc_client.register_worker(self._devices)
+        self._worker_ids, self._round_duration, error = \
+            self._worker_rpc_client.register_worker(len(self._gpu_ids))
         if error:
             raise RuntimeError(error)
-        
-        self._dispatcher = dispatcher.Dispatcher(self._worker_id,
-                                                 self._gpu_id,
-                                                 self._worker_rpc_client)
-        
+
+        checkpoint_dir = os.path.join(run_dir, CHECKPOINT_DIR_NAME)
+        if not os.path.isdir(checkpoint_dir):
+            # Set up a new checkpoint directory if does not already exist.
+            os.mkdir(checkpoint_dir)
+        else:
+            # Clear the checkpoints if they have already been created.
+            for dirname in os.listdir(checkpoint_dir):
+                if os.path.isdir(os.path.join(checkpoint_dir, dirname)):
+                    shutil.rmtree(os.path.join(checkpoint_dir, dirname))
+
+        self._dispatcher = dispatcher.Dispatcher(self._round_duration,
+                                                 self._gpu_ids,
+                                                 self._worker_rpc_client,
+                                                 run_dir,
+                                                 checkpoint_dir,
+                                                 self._write_queue)
+
         self._server_thread.join()
 
-    def _run_callback(self, jobs):
+    def _run_callback(self, jobs, worker_id):
         # hack to prevent a job being dispatched before the dispatcher is set up
         # TODO: fix this by sending a "I'm ready" message to scheduler
         while True:
@@ -52,11 +83,15 @@ class Worker:
                 break
             except Exception as e:
               continue
-        for job in jobs:
-            self._dispatcher.dispatch_job(job)
+        self._dispatcher.dispatch_jobs(jobs, worker_id)
 
     def _shutdown_callback(self):
         self._dispatcher.shutdown()
+
+    def _print_logs(self):
+        while True:
+            output = self._write_queue.get()
+            print('[%s] %s' % (str(datetime.datetime.now()), output))
 
     def join(self):
         self._server_thread.join()
@@ -72,11 +107,14 @@ if __name__=='__main__':
                         help='Port number for scheduler server')
     parser.add_argument('-w', '--worker_port', type=int, default=50061,
                         help='Port number for worker server')
-    parser.add_argument('-g', '--gpu_id', type=int, required=True,
-                        help='GPU ID')
+    parser.add_argument('-g', '--num_gpus', type=int, required=True,
+                        help='Number of available GPUs')
+    parser.add_argument('--run_dir', type=str, required=True,
+                        help='Directory to run jobs from')
     args = parser.parse_args()
     opt_dict = vars(args)
 
+    # TODO: Just pass args directly to maintain consistency with other code.
     worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
                     opt_dict['sched_port'], opt_dict['worker_port'],
-                    opt_dict['gpu_id'])
+                    opt_dict['num_gpus'], opt_dict['run_dir'])

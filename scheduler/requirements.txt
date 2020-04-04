@@ -4,3 +4,12 @@ grpcio
 grpcio-tools
 preconditions
 matrix_completion
+gym
+torch==1.2.0
+torchvision==0.4.0
+pillow==6.1
+opencv-python
+setproctitle
+gym[atari]
+glog
+recsys-recoder

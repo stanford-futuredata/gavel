@@ -18,16 +18,17 @@ import job
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
 class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
-    def __init__(self, callbacks, condition):
+    def __init__(self, callbacks, condition, write_queue):
         self._callbacks = callbacks
         self._condition = condition
+        self._write_queue = write_queue
 
     def Run(self, request, context):
         jobs = []
         for job_description in request.job_descriptions:
             jobs.append(job.Job.from_proto(job_description))
         run_callback = self._callbacks['Run']
-        run_callback(jobs)
+        run_callback(jobs, request.worker_id)
         return common_pb2.Empty()
 
     def Shutdown(self, request, context):
@@ -42,13 +43,13 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
 
         return common_pb2.Empty()
 
-def serve(port, callbacks):
+def serve(port, callbacks, write_queue):
     condition = threading.Condition()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(
-            WorkerServer(callbacks, condition), server)
+            WorkerServer(callbacks, condition, write_queue), server)
 
-    print('Starting server at port %s' % (str(port)))
+    write_queue.put('Starting server at port %s' % (str(port)))
     server.add_insecure_port('[::]:%d' % (port))
     server.start()
 

@@ -12,30 +12,17 @@ import policies
 import scheduler
 import utils
 
-def parse_trace(trace_file):
-    jobs = []
-    with open(trace_file, 'r') as f:
-        for line in f:
-            job_type, command, num_steps_arg, total_steps, arrival_time, scale_factor = \
-                    line.split('\t')
-            jobs.append((job.Job(job_id=None,
-                                 job_type=job_type,
-                                 command=command,
-                                 num_steps_arg=num_steps_arg,
-                                 total_steps=int(total_steps),
-                                 duration=None,
-                                 scale_factor=int(scale_factor)),
-                        int(arrival_time)))
-    return jobs
-
 def main(args):
-    jobs = parse_trace(args.trace_file)
+    jobs, arrival_times = utils.parse_trace(args.trace_file)
     job_queue = queue.Queue()
-    for job in jobs:
-        job_queue.put(job)
+    for (job, arrival_time) in zip(jobs, arrival_times):
+        job_queue.put((job, arrival_time))
     policy = utils.get_policy(args.policy, solver=args.solver, seed=args.seed)
     sched = scheduler.Scheduler(policy,
-                                seed=args.seed)
+                                seed=args.seed,
+                                throughputs_file=args.throughputs_file,
+                                time_per_iteration=args.time_per_iteration,
+                                expected_num_workers=args.expected_num_workers)
     start_time = datetime.datetime.now()
     while not job_queue.empty():
         job, arrival_time = job_queue.get()
@@ -65,4 +52,11 @@ if __name__=='__main__':
                         help='Random seed')
     parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
                         default='ECOS', help='CVXPY solver')
+    parser.add_argument('--throughputs_file', type=str,
+                        default=None,
+                        help='Oracle throughputs file')
+    parser.add_argument('--expected_num_workers', type=int, default=None,
+                        help='Total number of workers expected')
+    parser.add_argument('--time_per_iteration', type=int, default=1920,
+                        help='Time per iteration in seconds')
     main(parser.parse_args())

@@ -13,12 +13,14 @@ message JobDescription {
     uint64 job_id = 1;
     string job_type = 2;
     string command = 3;
-    string num_steps_arg = 4;
-    uint64 num_steps = 5;
-    bool has_duration = 6;
-    uint64 duration = 7;
+    bool needs_data_dir = 4;
+    string num_steps_arg = 5;
+    uint64 num_steps = 6;
+    bool has_duration = 7;
+    uint64 duration = 8;
 }
 
 message RunRequest {
     repeated JobDescription job_descriptions = 1;
+    uint64 worker_id = 2;
 }

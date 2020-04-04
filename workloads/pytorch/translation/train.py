@@ -58,8 +58,8 @@ def cal_loss(pred, gold, smoothing):
 
 
 def train_epoch(model, training_data, optimizer, device, smoothing,
-                step=None, cumulative_step=None,
-                throughput_estimation_interval=None):
+                step=None, max_duration=None, cumulative_step=None,
+                cumulative_time=None, throughput_estimation_interval=None):
     ''' Epoch operation in training phase'''
 
     model.train()
@@ -69,6 +69,7 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
     n_word_correct = 0
     done = False
 
+    start_time = time.time()
     for batch in tqdm(
             training_data, mininterval=2,
             desc='  - (Training)   ', leave=False):
@@ -106,10 +107,17 @@ def train_epoch(model, training_data, optimizer, device, smoothing,
           if step is not None and cumulative_step >= step:
               done = True
               break
+        if cumulative_time is not None:
+          cumulative_time += time.time() - start_time
+          start_time = time.time()
+
+          if max_duration is not None and cumulative_time >= max_duration:
+            done = True
+            break
 
     loss_per_word = total_loss/n_word_total
     accuracy = n_word_correct/n_word_total
-    return loss_per_word, accuracy, cumulative_step, done
+    return loss_per_word, accuracy, cumulative_step, cumulative_time, done
 
 def eval_epoch(model, validation_data, device):
     ''' Epoch operation in evaluation phase '''
@@ -178,16 +186,19 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     if opt.epoch is None:
         opt.epoch = opt.step
     cumulative_step = 0
+    cumulative_time = 0
     for epoch_i in range(start_epoch, opt.epoch):
         print('[ Epoch', epoch_i, ']')
 
         start = time.time()
-        train_loss, train_accu, cumulative_step, done = train_epoch(
-            model, training_data, optimizer, device,
-            smoothing=opt.label_smoothing,
-            step=opt.step,
-            cumulative_step=cumulative_step,
-            throughput_estimation_interval=opt.throughput_estimation_interval)
+        train_loss, train_accu, cumulative_step, cumulative_time, done =\
+                train_epoch(model, training_data, optimizer, device,
+                            smoothing=opt.label_smoothing,
+                            step=opt.step,
+                            max_duration=opt.max_duration,
+                            cumulative_step=cumulative_step,
+                            cumulative_time=cumulative_time,
+                            throughput_estimation_interval=opt.throughput_estimation_interval)
         print('  - (Training)   ppl: {ppl: 8.5f}, accuracy: {accu:3.3f} %, '\
               'elapse: {elapse:3.3f} min'.format(
                   ppl=math.exp(min(train_loss, 100)), accu=100*train_accu,
@@ -199,7 +210,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                 'elapse: {elapse:3.3f} min'.format(
                     ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu,
                     elapse=(time.time()-start)/60))
-
+        cumulative_time += time.time() - start
         valid_accus += [valid_accu]
 
         model_state_dict = model.state_dict()
@@ -283,6 +294,8 @@ def main():
     parser.add_argument('--throughput_estimation_interval', type=int,
                         default=None,
                         help='Steps between logging steps completed')
+    parser.add_argument('--max_duration', type=int, default=None,
+                        help='Maximum duration in seconds')
 
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda

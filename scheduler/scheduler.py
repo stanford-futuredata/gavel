@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import copy
 import heapq
 import numpy as np
 import os
@@ -23,7 +24,7 @@ import utils
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
 INFINITY = float("inf")
-DEFAULT_THROUGHPUT = INFINITY
+DEFAULT_THROUGHPUT = 1
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
@@ -39,17 +40,21 @@ class Scheduler:
                  per_instance_type_prices_dir=None,
                  available_clouds=[],
                  assign_SLOs=False,
-                 enable_global_queue=False):
+                 enable_global_queue=False,
+                 expected_num_workers=None):
 
-        # Scheduling occurs in rounds.
-        print('Running scheduler with policy=%s, schedule_in_rounds=True, '
-               'seed=%d, time_per_iteration=%d, '
-               'profiling_percentage=%f, '
-               'num_reference_models=%d' % (policy.name,
-                                            seed,
-                                            time_per_iteration,
-                                            profiling_percentage,
-                                            num_reference_models))
+
+        # Print config information.
+        if simulate:
+            print('Running scheduler in simulation with the following args:')
+        else:
+            print('Running scheduler at %s:%s with the '
+                  'following args:' % (utils.get_ip_address(), SCHEDULER_PORT))
+        print('policy=%s' % (policy.name))
+        print('seed=%d' % (seed))
+        print('time_per_iteration=%d' % (time_per_iteration))
+        print('profiling_percentage=%f' % (profiling_percentage))
+        print('num_reference_models=%d' % (num_reference_models))
 
         # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
@@ -60,6 +65,8 @@ class Scheduler:
 
         # Sets whether to use a global queue across all worker types.
         self._enable_global_queue = enable_global_queue
+
+        self._expected_num_workers = expected_num_workers
 
         if self._simulate:
             self._start_timestamp = 0
@@ -269,18 +276,51 @@ class Scheduler:
             # Adjust the job throughput using an exponential moving average
             # between the old value and the new measurement.
             if job_id.is_pair():
-                old_throughput = self._throughputs[job_id][worker_type]
+                old_throughput = \
+                    copy.deepcopy(self._throughputs[job_id][worker_type])
             else:
                 old_throughput = [self._throughputs[job_id][worker_type]]
+
             for i, single_job_id in enumerate(job_id.singletons()):
-                new_throughput = all_num_steps[i] / all_execution_times[i]
+                if all_execution_times[i] <= 0:
+                    new_throughput = 0
+                else:
+                    new_throughput = all_num_steps[i] / all_execution_times[i]
                 if old_throughput != INFINITY:
                     new_throughput *= EMA_ALPHA
                     new_throughput += (1 - EMA_ALPHA) * old_throughput[i]
-                self._throughputs[job_id][worker_type][i] = new_throughput
+                if job_id.is_pair():
+                    self._throughputs[job_id][worker_type][i] =\
+                        new_throughput
+                else:
+                    self._throughputs[job_id][worker_type] = new_throughput
+            # Manually set failed job pair throughputs to 0.
+            if np.min(all_execution_times) <= 0:
+                if job_id.is_pair():
+                    self._throughputs[job_id][worker_type] = [0.0, 0.0]
+            new_throughput_str =\
+                str(self._throughputs[job_id][worker_type])
             print(('[DEBUG] Job %s throughput on worker type %s: '
                    '%s -> %s') % (job_id, worker_type, str(old_throughput),
-                                  str(self._throughputs[job_id][worker_type])))
+                                  new_throughput_str))
+
+    def _read_throughputs_for_job_type(self, job_type):
+        self._job_type_throughputs[job_type] = {}
+        other_job_types = list(self._job_type_throughputs.keys())
+        for worker_type in self._worker_types:
+            self._job_type_throughputs[job_type][worker_type] = {}
+            self._job_type_throughputs[job_type][worker_type][None] = \
+                self._oracle_throughputs[worker_type][job_type]['null']
+            if self._job_packing:
+                for other_job_type in other_job_types:
+                    colocated_throughputs = \
+                        self._oracle_throughputs[worker_type][job_type][other_job_type]
+                    self._job_type_throughputs[job_type][worker_type][other_job_type] = \
+                        colocated_throughputs[0]
+                    self._job_type_throughputs[other_job_type][worker_type][job_type] = \
+                        colocated_throughputs[1]
+
+
 
     """
     ======================================================================
@@ -324,20 +364,7 @@ class Scheduler:
                     # TODO: Support throughput estimation.
                     pass
                 else:
-                    self._job_type_throughputs[job_type] = {}
-                    other_job_types = list(self._job_type_throughputs.keys())
-                    for worker_type in self._worker_types:
-                        self._job_type_throughputs[job_type][worker_type] = {}
-                        self._job_type_throughputs[job_type][worker_type][None] = \
-                            self._oracle_throughputs[worker_type][job_type]['null']
-                        if self._job_packing:
-                            for other_job_type in other_job_types:
-                                colocated_throughputs = \
-                                    self._oracle_throughputs[worker_type][job_type][other_job_type]
-                                self._job_type_throughputs[job_type][worker_type][other_job_type] = \
-                                    colocated_throughputs[0]
-                                self._job_type_throughputs[other_job_type][worker_type][job_type] = \
-                                    colocated_throughputs[1]
+                    self._read_throughputs_for_job_type(job_type)
             self._job_type_to_job_ids[job_type].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
@@ -392,9 +419,10 @@ class Scheduler:
             self._job_completion_times[job_id] = duration
             self._job_priority_weights[job_id] = \
                 self._jobs[job_id].priority_weight
+            del self._jobs[job_id]
             print("Job %d completed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n"
-                  "Number of active jobs: %d\n" % (
+                  "Number of remaining active jobs: %d\n" % (
                       job_id[0],
                       self._per_job_start_timestamps[job_id],
                       self._per_job_latest_timestamps[job_id],
@@ -402,7 +430,6 @@ class Scheduler:
                   )
             job_type = self._job_id_to_job_type[job_id]
             self._job_type_to_job_ids[job_type].remove(job_id)
-            del self._jobs[job_id]
             del self._steps_run_so_far[job_id]
             del self._total_steps_run[job_id]
             del self._job_time_so_far[job_id]
@@ -424,7 +451,7 @@ class Scheduler:
                     del self._job_type_to_job_ids[job_type]
                     del self._job_type_throughputs[job_type]
                     for other_job_type in self._job_type_throughputs:
-                        for worker_type in self._worker_types:
+                        for worker_type in self._job_type_throughputs[other_job_type]:
                             del self._job_type_throughputs[other_job_type][worker_type][job_type]
             if self._estimate_throughputs:
                 for worker_type in self._profiled_jobs:
@@ -701,8 +728,13 @@ class Scheduler:
             else:
                 num_steps = int(self._throughputs[job_id][worker_type] *
                                 self._time_per_iteration)
-        return min(num_steps,
-                   self._get_remaining_steps(single_job_id))
+
+        if single_job_id is not None:
+            return min(num_steps,
+                       self._get_remaining_steps(single_job_id))
+        else:
+            return min(num_steps,
+                       self._get_remaining_steps(job_id))
 
     def _get_job_steps_and_finish_times(self, job_id, worker_type):
         """Returns the number of steps to execute and and latest finish time(s)
@@ -1151,24 +1183,47 @@ class Scheduler:
         """
 
         while True:
+            time.sleep(5)
             with self._scheduler_lock:
-                num_workers = len(self.worker_ids)
+                num_workers = len(self._worker_ids)
+                num_jobs = len(self._jobs)
+                if num_workers == 0 or num_jobs == 0:
+                    continue
+                elif (self._expected_num_workers is not None and
+                      num_workers < self._expected_num_workers):
+                    # Hack to allow scheduler to wait for all workers to be
+                    # launched before starting to dispatch jobs.
+                    continue
                 # Reset available_worker_ids to the desired size.
-                self._available_worker_ids = queue.Queue(self.num_workers)
-                for worker_id in self.worker_ids:
+                self._available_worker_ids = queue.Queue(num_workers)
+                for worker_id in self._worker_ids:
                     self._add_available_worker_id(worker_id)
                 scheduled_jobs = self._schedule_jobs_on_workers()
                 for (job_id, worker_ids) in scheduled_jobs:
-                    worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                    # TODO: Support packing.
-                    num_steps = self._get_num_steps(job_id, worker_type)
+                    worker_type = \
+                        self._worker_id_to_worker_type_mapping[worker_ids[0]]
+                    job_descriptions = []
+                    for i, single_job_id in enumerate(job_id.singletons()):
+                        if job_id.is_pair():
+                            num_steps = \
+                                self._get_num_steps(job_id, worker_type,
+                                                    single_job_id)
+                        else:
+                            num_steps = \
+                                self._get_num_steps(job_id, worker_type)
+                        job_descriptions.append(
+                                (single_job_id[0],
+                                 self._jobs[single_job_id].command,
+                                 self._jobs[single_job_id].needs_data_dir,
+                                 self._jobs[single_job_id].num_steps_arg,
+                                 num_steps))
                     for worker_id in worker_ids:
                         self._worker_connections[worker_id].run(
-                            [(job_id[0], self._jobs[job_id].command,
-                              self._jobs[job_id].num_steps_arg,
-                              num_steps)])
+                                job_descriptions, worker_id)
                         self._remove_available_worker_id(worker_id)
-            self._wait_until_all_workers_available(num_workers)
+                while not self._available_worker_ids.full():
+                    time.sleep(2)
+                    continue
 
     def schedule(self):
         """Schedules jobs on workers."""
@@ -1407,7 +1462,6 @@ class Scheduler:
     def _populate_job_combination_metadata(self, job_id, worker_type):
         """Populate metadata for job combinations involving passed-in job_id."""
 
-        oracle_throughputs = self._oracle_throughputs[worker_type]
         job = self._jobs[job_id]
         for other_job_id in self._jobs:
             if other_job_id != job_id:
@@ -1421,7 +1475,8 @@ class Scheduler:
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
-                if (self._estimate_throughputs or
+                if (self._oracle_throughputs is None or
+                    self._estimate_throughputs or
                     job.scale_factor != other_job.scale_factor):
                     self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
                     if self._estimate_throughputs:
@@ -1441,7 +1496,7 @@ class Scheduler:
 
     def _set_initial_throughput(self, job_id, worker_type):
         assert(not job_id.is_pair())
-        if self._simulate:
+        if self._oracle_throughputs is not None:
             job_type = self._jobs[job_id].job_type
             self._throughputs[job_id][worker_type] = \
                 self._oracle_throughputs[worker_type][job_type]['null']
@@ -1758,7 +1813,8 @@ class Scheduler:
     ======================================================================
     """
 
-    def _register_worker_callback(self, worker_type, ip_addr=None, port=None):
+    def _register_worker_callback(self, worker_type, num_gpus=1,
+                                  ip_addr=None, port=None):
         """Registers a worker with the scheduler.
 
         Initializes state for a new worker and assigns it an id.
@@ -1769,6 +1825,8 @@ class Scheduler:
         can make fine-grained scheduling decisions.
 
         Args:
+            worker_type: The type of GPU available on the worker.
+            num_gpus: The number of GPUs available on the worker.
             ip_addr: IP address of the worker's RPC server.
             port: Port number for the worker's RPC server.
             devices: List of available devices on the worker.
@@ -1777,18 +1835,17 @@ class Scheduler:
             The worker_id of the newly registered worker.
         """
 
+        # Share a single RPC client for each GPU on the worker.
+        if not self._simulate:
+            rpc_client = scheduler_client.SchedulerRpcClient(ip_addr, port)
+
         with self._scheduler_lock:
-            worker_id = self._worker_id_counter
-            self._worker_ids.append(worker_id)
-            self._worker_id_counter += 1
-            self._worker_types.add(worker_type)
-            self._worker_id_to_worker_type_mapping[worker_id] = worker_type
-            self._cumulative_worker_time_so_far[worker_id] = 0.0
+            # Update relevant data structures if worker type was
+            # previously unseen.
             found = True
             if worker_type not in self._worker_type_to_worker_id_mapping:
                 found = False
                 self._worker_type_to_worker_id_mapping[worker_type] = []
-            self._worker_type_to_worker_id_mapping[worker_type].append(worker_id)
 
             if not found:
                 self._priorities[worker_type] = {}
@@ -1819,27 +1876,38 @@ class Scheduler:
                     if self._job_packing:
                         self._populate_job_combination_metadata(job_id,
                                                                 worker_type)
-                    self._initialize_num_steps_per_iteration(job_id, worker_type)
                     # Add to relevant priority data structure.
                     self._add_to_priorities(job_id, worker_type=worker_type)
-                    if self._throughput_estimation:
+                    if self._estimate_throughputs:
                         self._jobs_to_profile[worker_type][job_id] = set()
                 if worker_type not in self._worker_time_so_far:
                     self._worker_time_so_far[worker_type] = 0.0
 
-            self._add_available_worker_id(worker_id)
+            # Update relevant data structures for each GPU available
+            # on the worker.
+            per_worker_ids = []
+            for i in range(num_gpus):
+                worker_id = self._worker_id_counter
+                per_worker_ids.append(worker_id)
+                self._worker_ids.append(worker_id)
+                self._worker_id_counter += 1
+                self._worker_types.add(worker_type)
+                self._cumulative_worker_time_so_far[worker_id] = 0.0
 
-            if worker_type not in self._cluster_spec:
-                self._cluster_spec[worker_type] = 0
-            self._cluster_spec[worker_type] += 1
-            if not self._simulate:
-                self._worker_connections[worker_id] = \
-                    scheduler_client.SchedulerRpcClient(ip_addr, port)
+                self._worker_type_to_worker_id_mapping[worker_type].append(worker_id)
+                self._worker_id_to_worker_type_mapping[worker_id] = worker_type
+                self._add_available_worker_id(worker_id)
 
-            self._worker_start_times[worker_id] = self.get_current_timestamp()
+                if worker_type not in self._cluster_spec:
+                    self._cluster_spec[worker_type] = 0
+                self._cluster_spec[worker_type] += 1
+                if not self._simulate:
+                    self._worker_connections[worker_id] = rpc_client
+
+                self._worker_start_times[worker_id] = self.get_current_timestamp()
             self._need_to_update_allocation = True
 
-        return worker_id
+        return (per_worker_ids, self._time_per_iteration)
 
     def _done_callback(self, job_id, worker_id, all_num_steps,
                        all_execution_times):
@@ -1855,8 +1923,6 @@ class Scheduler:
             worker_id: The id of the worker where the job(s) were completed.
             all_num_steps: List of the number of steps each job ran for.
         """
-
-        self._add_available_worker_id(worker_id)
 
         to_remove = []
         with self._scheduler_lock:
@@ -1940,9 +2006,12 @@ class Scheduler:
                 self._cumulative_worker_time_so_far[worker_id] += \
                     max_execution_time
 
-            self._update_throughput(job_id, worker_type,
-                                    all_num_steps,
-                                    all_execution_times)
+        self._update_throughput(job_id, worker_type,
+                                all_num_steps,
+                                all_execution_times)
 
         for single_job_id in to_remove:
             self.remove_job(single_job_id[0])
+
+        self._add_available_worker_id(worker_id)
+

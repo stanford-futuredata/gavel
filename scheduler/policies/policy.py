@@ -136,7 +136,8 @@ class PolicyWithPacking(Policy):
                             all_m[i][j][k] = d[job_id][worker_type][index]
             # Normalize.
             if normalize:
-                all_m[i] /= normalizing_factors[single_job_id]
+                if normalizing_factors[single_job_id] > 0:
+                    all_m[i] /= normalizing_factors[single_job_id]
                 if priority_weights is not None:
                     all_m[i] /= priority_weights[single_job_id]
         return all_m, (job_ids, sorted_single_job_ids, worker_types,

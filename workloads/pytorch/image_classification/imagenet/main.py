@@ -73,12 +73,15 @@ parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
+parser.add_argument('--max_duration', type=int, default=None,
+                    help='Maximum duration in seconds')
 
 best_acc1 = 0
 total_minibatches = 0
+total_elapsed_time = 0
 
 def main():
-    global args, best_acc1, total_minibatches
+    global args, best_acc1, total_minibatches, total_elapsed_time
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -183,14 +186,20 @@ def main():
         adjust_learning_rate(optimizer, epoch)
 
         # train for one epoch
-        num_minibatches, finished_epoch = \
+        num_minibatches, elapsed_time, finished_epoch = \
             train(train_loader, model, criterion, optimizer,
                   epoch, total_minibatches,
-                  max_minibatches=args.num_minibatches)
+                  max_minibatches=args.num_minibatches,
+                  total_elapsed_time=total_elapsed_time,
+                  max_duration=args.max_duration)
         total_minibatches += num_minibatches
+        total_elapsed_time += elapsed_time
 
         if (args.num_minibatches is not None and
             total_minibatches >= args.num_minibatches):
+            break
+        elif(args.max_duration is not None and
+             total_elapsed_time >= args.max_duration):
             break
 
         # evaluate on validation set
@@ -208,16 +217,19 @@ def main():
 
 
 def train(train_loader, model, criterion, optimizer, epoch,
-          total_minibatches, max_minibatches):
+          total_minibatches, max_minibatches, total_elapsed_time,
+          max_duration):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
+    elapsed_time = 0
 
     # switch to train mode
     model.train()
 
+    start = time.time()
     end = time.time()
     finished_epoch = True
     for i, (input, target) in enumerate(train_loader):
@@ -225,6 +237,11 @@ def train(train_loader, model, criterion, optimizer, epoch,
             i + total_minibatches >= max_minibatches):
             finished_epoch = False
             break
+        elif (max_duration is not None and
+              total_elapsed_time + elapsed_time >= max_duration):
+            finished_epoch = False
+            break
+
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -249,6 +266,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
+        elapsed_time += (end - start)
+        start = time.time()
 
         if i % args.print_freq == 0:
             print('Epoch: [{0}][{1}/{2}]\t'
@@ -263,7 +282,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if (args.throughput_estimation_interval is not None and
             i % args.throughput_estimation_interval == 0):
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), i))
-    return i, finished_epoch
+    return i, elapsed_time, finished_epoch
 
 def validate(val_loader, model, criterion):
     batch_time = AverageMeter()

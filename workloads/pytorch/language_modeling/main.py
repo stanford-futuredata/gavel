@@ -66,6 +66,8 @@ parser.add_argument('--master_addr', default=None, type=str,
                             help='Master address to use for distributed run')
 parser.add_argument('--master_port', default=None, type=int,
                             help='Master port to use for distributed run')
+parser.add_argument('--max_duration', type=int, default=None,
+                    help='Maximum duration in seconds')
 
 args = parser.parse_args()
 
@@ -132,7 +134,7 @@ test_data = batchify(corpus.test, eval_batch_size)
 ntokens = len(corpus.dictionary)
 
 if not os.path.isdir(args.checkpoint_dir):
-    os.mkdir(checkpoint_dir)
+    os.mkdir(args.checkpoint_dir)
 checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
 if os.path.exists(checkpoint_path):
     print('Loading checkpoint from %s...' % (checkpoint_path))
@@ -142,6 +144,7 @@ if os.path.exists(checkpoint_path):
 else:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
 cumulative_steps = 0
+cumulative_time = 0
 
 criterion = nn.CrossEntropyLoss()
 
@@ -190,7 +193,7 @@ def evaluate(data_source):
     return total_loss / (len(data_source) - 1)
 
 
-def train(cumulative_steps=None):
+def train(cumulative_steps=None, cumulative_time=None):
     # Turn on training mode which enables dropout.
     model.train()
     total_loss = 0.
@@ -199,6 +202,7 @@ def train(cumulative_steps=None):
     hidden = model.init_hidden(args.batch_size)
     done = False
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
+        total_duration_tracker_start = time.time()
         data, targets = get_batch(train_data, i)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
@@ -226,7 +230,6 @@ def train(cumulative_steps=None):
             start_time = time.time()
         if cumulative_steps is not None:
           cumulative_steps += 1
-
           if (args.throughput_estimation_interval is not None and
               cumulative_steps % args.throughput_estimation_interval == 0):
               print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
@@ -235,7 +238,14 @@ def train(cumulative_steps=None):
           if args.steps is not None and cumulative_steps >= args.steps:
             done = True
             break
-    return (cumulative_steps, done)
+        if args.max_duration is not None:
+          cumulative_time += time.time() - total_duration_tracker_start
+          total_duration_tracker_start = time.time()
+          if cumulative_time >= args.max_duration:
+            done = True
+            break
+
+    return (cumulative_steps, cumulative_time, done)
 
 def export_onnx(path, batch_size, seq_len):
     print('The model is also exported in ONNX format at {}'.
@@ -256,7 +266,8 @@ try:
         args.epochs = args.steps
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
-        cumulative_steps, done = train(cumulative_steps)
+        cumulative_steps, cumulative_time, done = train(cumulative_steps,
+                                                        cumulative_time)
         #val_loss = evaluate(val_data)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s'.format(epoch, (time.time() - epoch_start_time)))

@@ -44,6 +44,8 @@ parser.add_argument("--lambda_cyc", type=float, default=10.0, help="cycle loss w
 parser.add_argument("--lambda_id", type=float, default=5.0, help="identity loss weight")
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
+parser.add_argument('--max_duration', type=int, default=None,
+                    help='Maximum duration in seconds')
 opt = parser.parse_args()
 print(opt)
 
@@ -176,13 +178,18 @@ def sample_images(batches_done):
 
 done = False
 steps = 0
+elapsed_time = 0
 prev_time = time.time()
 for epoch in range(start_epoch, opt.n_epochs):
     for i, batch in enumerate(dataloader):
 
-        if steps >= opt.n_steps:
+        if opt.n_steps is not None and steps >= opt.n_steps:
             done = True
             break
+        elif opt.max_duration is not None and elapsed_time >= opt.max_duration:
+            done = True
+            break
+
         # Set model input
         real_A = Variable(batch["A"].type(Tensor))
         real_B = Variable(batch["B"].type(Tensor))
@@ -272,6 +279,7 @@ for epoch in range(start_epoch, opt.n_epochs):
         batches_done = epoch * len(dataloader) + i
         batches_left = opt.n_epochs * len(dataloader) - batches_done
         time_left = datetime.timedelta(seconds=batches_left * (time.time() - prev_time))
+        elapsed_time += time.time() - prev_time
         prev_time = time.time()
 
         # Print log
