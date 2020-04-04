@@ -50,6 +50,64 @@ class TestPolicies(unittest.TestCase):
                               unflattened_priority_weights,
                               cluster_spec)
 
+    def test_max_min_fairness_with_packing_using_job_type_throughputs(self):
+        policy = max_min_fairness.MaxMinFairnessPolicyWithPacking(
+            solver='ECOS')
+        unflattened_job_type_throughputs = {
+            'A': {
+                'v100': {
+                    None: 2.0,
+                    'A': 0.0,
+                    'B': 1.0,
+                },
+                'p100': {
+                    None: 1.0,
+                    'A': 0.0,
+                    'B': 0.5,
+                },
+                'k80': {
+                    None: 0.5,
+                    'A': 0.0,
+                    'B': 0.25,
+                },
+            },
+            'B': {
+                'v100': {
+                    None: 10.0,
+                    'A': 5.0,
+                    'B': 0.0,
+                },
+                'p100': {
+                    None: 5.0,
+                    'A': 2.5,
+                    'B': 0.0,
+                },
+                'k80': {
+                    None: 2.5,
+                    'A': 1.25,
+                    'B': 0.0
+                },
+            },
+        }
+        scale_factors = {
+            JobIdPair(0, None): 1,
+            JobIdPair(1, None): 1
+        }
+        unflattened_priority_weights = {JobIdPair(0, None): 1,
+                                        JobIdPair(1, None): 1}
+        job_id_to_job_type = {
+            JobIdPair(0, None): 'A',
+            JobIdPair(1, None): 'B',
+        }
+        cluster_spec = {
+            'v100': 1,
+            'p100': 1,
+            'k80': 1
+        }
+        policy.get_allocation_using_job_type_throughputs(
+                unflattened_job_type_throughputs, job_id_to_job_type,
+                scale_factors, unflattened_priority_weights, cluster_spec)
+
     def test_finish_time_fairness(self):
         policy = finish_time_fairness.FinishTimeFairnessPolicyWithPerf(
             solver='ECOS')

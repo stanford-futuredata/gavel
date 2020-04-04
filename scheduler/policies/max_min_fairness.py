@@ -107,7 +107,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
     def get_allocation_using_job_type_throughputs(
             self, unflattened_job_type_throughputs, job_id_to_job_type,
-            scale_factors, priority_weights, cluster_spec):
+            scale_factors, unflattened_priority_weights, cluster_spec):
         # TODO: Rename unflattened_job_type_throughputs ->
         #       unflattened_throughputs
         job_ids = sorted(job_id_to_job_type.keys())
@@ -247,25 +247,35 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         x_isolated_dict = self._isolated_policy.get_allocation(
             unflattened_throughputs_no_packed_jobs, scale_factors,
             unflattened_priority_weights, cluster_spec)
-        x_isolated = np.zeros((m, n))
-        for i in range(m):
-            for j in range(n):
-                if not job_ids[i].is_pair():
-                    x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
+        x_isolated = np.zeros((n, m))
+        for i in range(n):
+            for j in range(m):
+                x_isolated[i, j] = x_isolated_dict[job_ids[i]][worker_types[j]]
+
+        # Construct isolated flattened job type throughputs.
+        flattened_isolated_job_type_throughputs = np.zeros((n, m))
+        for i in range(n):
+            for j in range(m):
+                flattened_isolated_job_type_throughputs[i, j] =\
+                    flattened_job_type_throughputs[i, j*(1+a)]
 
         # Allocation coefficients.
         all_coefficients = np.zeros((n, num_vars_per_job * m))
         for i, job_id in enumerate(job_ids):
-            # TODO: Compute isolated_throughput from x_isolated (perhaps format of x_isolated needs to be changed).
             job_type = job_id_to_job_type[job_id]
             job_type_idx = job_types.index(job_type)
             if len(job_type_to_job_idx[job_type]) == 1:
                 for k, worker_type in enumerate(worker_types):
                     offset = k * num_vars_per_job + 1 + job_type_idx
                     constraints.append(x[i,offset] == 0.0)
+            isolated_throughput = \
+                np.sum(np.multiply(
+                        flattened_isolated_job_type_throughputs[job_idx],
+                        x_isolated[i]))
             all_coefficients[i] = \
                 np.multiply(flattened_job_type_throughputs[job_type_idx],
-                            scale_factors_array[i]) / (priority_weights[job_id] * isolated_throughput)
+                            scale_factors_array[i]) /\
+                    (unflattened_priority_weights[job_id] * isolated_throughput)
         objective = \
             cp.Maximize(cp.min(cp.sum(cp.multiply(all_coefficients, x),
                                       axis=1)))
