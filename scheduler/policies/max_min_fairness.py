@@ -135,19 +135,6 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         # Num varibles per job.
         num_vars_per_job = 1 + a
 
-        # Compute normalizing factor for each job type.
-        # This normalizing factor will be used to normalize throughputs for the
-        # same job type in job-job type combinations, as well.
-        normalizing_factors = {}
-        for job_type in job_types:
-            unflattened_throughputs = \
-                unflattened_job_type_throughputs[job_type]
-            normalizing_factor = 0.0
-            for worker_type in worker_types:
-                normalizing_factor += \
-                    unflattened_throughputs[worker_type][None]
-            normalizing_factors[job_type] = normalizing_factor
-
         # Set up flattened job type throughputs.
         flattened_job_type_throughputs = np.zeros(shape=(a, (1 + a) * m),
                                                   dtype=np.float32)
@@ -158,8 +145,6 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                 for j, other_job_type in enumerate([None] + job_types):
                     flattened_job_type_throughputs[i,k*(1+a)+j] = \
                         unflattened_throughputs[worker_type][other_job_type]
-        for i, job_type in enumerate(job_types):
-            flattened_job_type_throughputs[i] /= normalizing_factors[job_type]
 
         # Set up scale factors.
         flattened_scale_factors = \
@@ -252,9 +237,26 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                 c = cp.Variable()
                 constraints.append(cp.hstack(same_job_type_vars) == c)
 
+        # Construct isolated allocation to compute isolated throughputs
+        # downstream.
+        unflattened_throughputs_no_packed_jobs = {}
+        for job_id in job_ids:
+            unflattened_throughputs_no_packed_jobs[job_id] = {}
+            for worker_type in worker_types:
+                unflattened_throughputs_no_packed_jobs[job_id][worker_type] = 1.0
+        x_isolated_dict = self._isolated_policy.get_allocation(
+            unflattened_throughputs_no_packed_jobs, scale_factors,
+            unflattened_priority_weights, cluster_spec)
+        x_isolated = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                if not job_ids[i].is_pair():
+                    x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
+
         # Allocation coefficients.
         all_coefficients = np.zeros((n, num_vars_per_job * m))
         for i, job_id in enumerate(job_ids):
+            # TODO: Compute isolated_throughput from x_isolated (perhaps format of x_isolated needs to be changed).
             job_type = job_id_to_job_type[job_id]
             job_type_idx = job_types.index(job_type)
             if len(job_type_to_job_idx[job_type]) == 1:
@@ -263,7 +265,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                     constraints.append(x[i,offset] == 0.0)
             all_coefficients[i] = \
                 np.multiply(flattened_job_type_throughputs[job_type_idx],
-                            scale_factors_array[i]) / priority_weights[job_id]
+                            scale_factors_array[i]) / (priority_weights[job_id] * isolated_throughput)
         objective = \
             cp.Maximize(cp.min(cp.sum(cp.multiply(all_coefficients, x),
                                       axis=1)))
