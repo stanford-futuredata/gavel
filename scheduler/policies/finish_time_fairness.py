@@ -44,8 +44,8 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
         self._name = 'FinishTimeFairness_Perf'
         self._isolated_policy = max_min_fairness.MaxMinFairnessPolicy(solver)
         self._cumulative_isolated_time = {}
-        self._isolated_throughputs_last_iteration = {}
-        self._num_steps_remaining_last_iteration = {}
+        self._isolated_throughputs_prev_iteration = {}
+        self._num_steps_remaining_prev_iteration = {}
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights,
@@ -54,8 +54,8 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None:
-            self._isolated_throughputs_last_iteration = {}
-            self._num_steps_remaining_last_iteration = {}
+            self._isolated_throughputs_prev_iteration = {}
+            self._num_steps_remaining_prev_iteration = {}
             return None
         (m, n) = throughputs.shape
         (job_ids, worker_types) = index
@@ -88,10 +88,11 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
         for i in range(len(job_ids)):
             if job_ids[i] not in self._cumulative_isolated_time:
                 self._cumulative_isolated_time[job_ids[i]] = 0
-            if job_ids[i] in self._num_steps_remaining_last_iteration:
+            if job_ids[i] in self._num_steps_remaining_prev_iteration:
                 self._cumulative_isolated_time[job_ids[i]] += (
-                    self._num_steps_remaining_last_iteration[job_ids[i]] -
-                    num_steps_remaining[job_ids[i]]) / self._isolated_throughputs_last_iteration[job_ids[i]]
+                    self._num_steps_remaining_prev_iteration[job_ids[i]] -
+                    num_steps_remaining[job_ids[i]]) / \
+                    self._isolated_throughputs_prev_iteration[job_ids[i]]
 
             allocation_throughput = cp.sum(cp.multiply(throughputs[i], x[i]))
             expected_time_isolated = self._cumulative_isolated_time[job_ids[i]] + \
@@ -114,10 +115,10 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
-        self._num_steps_remaining_last_iteration = copy.copy(num_steps_remaining)
-        self._isolated_throughputs_last_iteration = {}
+        self._num_steps_remaining_prev_iteration = copy.copy(num_steps_remaining)
+        self._isolated_throughputs_prev_iteration = {}
         for i in range(m):
-            self._isolated_throughputs_last_iteration[job_ids[i]] = \
+            self._isolated_throughputs_prev_iteration[job_ids[i]] = \
                 isolated_throughputs[i]
 
         return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
@@ -130,8 +131,8 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         self._name = 'FinishTimeFairness_Packing'
         self._isolated_policy = max_min_fairness.MaxMinFairnessPolicy(solver)
         self._cumulative_isolated_time = {}
-        self._isolated_throughputs_last_iteration = {}
-        self._num_steps_remaining_last_iteration = {}
+        self._isolated_throughputs_prev_iteration = {}
+        self._num_steps_remaining_prev_iteration = {}
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights,
@@ -142,8 +143,8 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
                          cluster_spec=cluster_spec,
                          priority_weights=unflattened_priority_weights)
         if all_throughputs is None or len(all_throughputs) == 0:
-            self._isolated_throughputs_last_iteration = {}
-            self._num_steps_remaining_last_iteration = {}
+            self._isolated_throughputs_prev_iteration = {}
+            self._num_steps_remaining_prev_iteration = {}
             return None
 
         (m, n) = all_throughputs[0].shape
@@ -184,11 +185,11 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         for i in range(len(all_throughputs)):
             if single_job_ids[i] not in self._cumulative_isolated_time:
                 self._cumulative_isolated_time[single_job_ids[i]] = 0
-            if single_job_ids[i] in self._num_steps_remaining_last_iteration:
+            if single_job_ids[i] in self._num_steps_remaining_prev_iteration:
                 self._cumulative_isolated_time[single_job_ids[i]] += (
-                    self._num_steps_remaining_last_iteration[single_job_ids[i]] -
-                    num_steps_remaining[single_job_ids[i]]) / self._isolated_throughputs_last_iteration[single_job_ids[i]]
-
+                    self._num_steps_remaining_prev_iteration[single_job_ids[i]] -
+                    num_steps_remaining[single_job_ids[i]]) / \
+                    self._isolated_throughputs_prev_iteration[single_job_ids[i]]
 
             indexes = relevant_combinations[single_job_ids[i]]
             isolated_throughput = np.sum(np.multiply(
@@ -229,10 +230,10 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
-        self._num_steps_remaining_last_iteration = copy.copy(num_steps_remaining)
-        self._isolated_throughputs_last_iteration = {}
+        self._num_steps_remaining_prev_iteration = copy.copy(num_steps_remaining)
+        self._isolated_throughputs_prev_iteration = {}
         for i in range(len(all_throughputs)):
-            self._isolated_throughputs_last_iteration[single_job_ids[i]] = \
+            self._isolated_throughputs_prev_iteration[single_job_ids[i]] = \
                 isolated_throughputs[i]
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
