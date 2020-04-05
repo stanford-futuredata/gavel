@@ -129,6 +129,9 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         PolicyWithPacking.__init__(self, solver)
         self._name = 'FinishTimeFairness_Packing'
         self._isolated_policy = max_min_fairness.MaxMinFairnessPolicy(solver)
+        self._cumulative_isolated_time = {}
+        self._isolated_throughputs_last_iteration = {}
+        self._num_steps_remaining_last_iteration = {}
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights,
@@ -138,7 +141,11 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
             self.flatten(d=unflattened_throughputs,
                          cluster_spec=cluster_spec,
                          priority_weights=unflattened_priority_weights)
-        if all_throughputs is None or len(all_throughputs) == 0: return None
+        if all_throughputs is None or len(all_throughputs) == 0:
+            self._isolated_throughputs_last_iteration = {}
+            self._num_steps_remaining_last_iteration = {}
+            return None
+
         (m, n) = all_throughputs[0].shape
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         x = cp.Variable((m, n))
@@ -173,7 +180,16 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
 
         single_throughputs = np.zeros((len(single_job_ids), n))
         expected_time_fractions = []
+        isolated_throughputs = []
         for i in range(len(all_throughputs)):
+            if single_job_ids[i] not in self._cumulative_isolated_time:
+                self._cumulative_isolated_time[single_job_ids[i]] = 0
+            if single_job_ids[i] in self._num_steps_remaining_last_iteration:
+                self._cumulative_isolated_time[single_job_ids[i]] += (
+                    self._num_steps_remaining_last_iteration[single_job_ids[i]] -
+                    num_steps_remaining[single_job_ids[i]]) / self._isolated_throughputs_last_iteration[single_job_ids[i]]
+
+
             indexes = relevant_combinations[single_job_ids[i]]
             isolated_throughput = np.sum(np.multiply(
                 all_throughputs[i][indexes],
@@ -181,12 +197,13 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
             allocation_throughput = cp.sum(cp.multiply(
                 all_throughputs[i][indexes],
                 x[indexes]))
-            expected_time_isolated = times_since_start[single_job_ids[i]] + \
+            expected_time_isolated = self._cumulative_isolated_time[single_job_ids[i]] + \
                 (num_steps_remaining[single_job_ids[i]] / isolated_throughput)
             expected_time_allocation = times_since_start[single_job_ids[i]] + \
                 (num_steps_remaining[single_job_ids[i]] * cp.inv_pos(allocation_throughput))
             expected_time_fraction = expected_time_allocation / expected_time_isolated
             expected_time_fractions.append(expected_time_fraction)
+            isolated_throughputs.append(isolated_throughput)
         if len(expected_time_fractions) == 1:
             objective = cp.Minimize(expected_time_fractions[0])
         else:
@@ -211,5 +228,11 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
+
+        self._num_steps_remaining_last_iteration = copy.copy(num_steps_remaining)
+        self._isolated_throughputs_last_iteration = {}
+        for i in range(len(all_throughputs)):
+            self._isolated_throughputs_last_iteration[single_job_ids[i]] = \
+                isolated_throughputs[i]
 
         return self.unflatten(x.value.clip(min=0.0).clip(max=1.0), index)

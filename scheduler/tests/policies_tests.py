@@ -131,6 +131,7 @@ class TestPolicies(unittest.TestCase):
                               unflattened_priority_weights,
                               times_since_start, num_steps_remaining,
                               cluster_spec)
+        num_steps_remaining = {0: 200, 1: 300}
         policy.get_allocation(unflattened_throughputs, scale_factors,
                               unflattened_priority_weights,
                               times_since_start, num_steps_remaining,
@@ -158,6 +159,11 @@ class TestPolicies(unittest.TestCase):
             'p100': 1,
             'k80': 1
         }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              unflattened_priority_weights,
+                              times_since_start, num_steps_remaining,
+                              cluster_spec)
+        num_steps_remaining = {JobIdPair(0, None): 200, JobIdPair(1, None): 300}
         policy.get_allocation(unflattened_throughputs, scale_factors,
                               unflattened_priority_weights,
                               times_since_start, num_steps_remaining,
