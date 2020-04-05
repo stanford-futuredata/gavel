@@ -5,13 +5,14 @@ import cvxpy as cp
 import numpy as np
 
 from policy import Policy, PolicyWithPacking
+from isolated import IsolatedPolicy
 
 class MaxMinFairnessPolicy(Policy):
 
     def __init__(self, solver):
         self._name = 'MaxMinFairness'
         self._max_min_fairness_perf_policy = \
-            MaxMinFairnessPolicyWithPerf(solver, isolated_policy=True)
+            MaxMinFairnessPolicyWithPerf(solver)
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        priority_weights, cluster_spec):
@@ -33,12 +34,10 @@ class MaxMinFairnessPolicy(Policy):
 
 class MaxMinFairnessPolicyWithPerf(Policy):
 
-    def __init__(self, solver, isolated_policy=False):
+    def __init__(self, solver):
         Policy.__init__(self, solver)
         self._name = 'MaxMinFairness_Perf'
-        self._isolated_policy = None
-        if not isolated_policy:
-            self._isolated_policy = MaxMinFairnessPolicy(solver)
+        self._isolated_policy = IsolatedPolicy(solver)
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
@@ -61,18 +60,15 @@ class MaxMinFairnessPolicyWithPerf(Policy):
 
         # If policy has throughputs passed in, normalize each application by
         # the normalized throughput. Otherwise, do not normalize.
-        if self._isolated_policy is not None:
-            x_isolated_dict = self._isolated_policy.get_allocation(
-                unflattened_throughputs, scale_factors, unflattened_priority_weights,
-                cluster_spec)
-            x_isolated = np.zeros(throughputs.shape)
-            for i in range(m):
-                for j in range(n):
-                    x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
-            isolated_throughputs = np.sum(np.multiply(throughputs, x_isolated),
-                                          axis=1).reshape((m, 1))
-        else:
-            isolated_throughputs = np.ones((m, 1))
+        x_isolated_dict = self._isolated_policy.get_allocation(
+            unflattened_throughputs, scale_factors, unflattened_priority_weights,
+            cluster_spec)
+        x_isolated = np.zeros(throughputs.shape)
+        for i in range(m):
+            for j in range(n):
+                x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
+        isolated_throughputs = np.sum(np.multiply(throughputs, x_isolated),
+                                      axis=1).reshape((m, 1))
         priority_weights = np.multiply(priority_weights.reshape((m, 1)),
                                        1.0 / isolated_throughputs.reshape((m, 1)))
 
@@ -98,12 +94,10 @@ class MaxMinFairnessPolicyWithPerf(Policy):
 
 class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
-    def __init__(self, solver, isolated_policy=False):
+    def __init__(self, solver):
         PolicyWithPacking.__init__(self, solver)
         self._name = 'MaxMinFairness_Packing'
-        self._isolated_policy = None
-        if not isolated_policy:
-            self._isolated_policy = MaxMinFairnessPolicy(solver)
+        self._isolated_policy = IsolatedPolicy(solver)
 
     def get_allocation_using_job_type_throughputs(
             self, unflattened_job_type_throughputs, job_id_to_job_type,

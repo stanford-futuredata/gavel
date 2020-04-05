@@ -29,8 +29,8 @@ class IsolatedPolicy(Policy):
         # Normalize to ensure \sum_j x[i, j] <= 1 for all i.
         x = np.array([[cluster_spec[worker_type] / m for worker_type in worker_types]
                       for i in range(m)])
-        x_per_row_sum = np.sum(x, axis=1)[0]
-        x = x / x_per_row_sum
         x = x / scale_factors_array
+        max_per_row_sum = np.sum(x, axis=1).max()
+        x = x / max_per_row_sum
 
         return super().unflatten(x, index)
