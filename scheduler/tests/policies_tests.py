@@ -131,6 +131,10 @@ class TestPolicies(unittest.TestCase):
                               unflattened_priority_weights,
                               times_since_start, num_steps_remaining,
                               cluster_spec)
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              unflattened_priority_weights,
+                              times_since_start, num_steps_remaining,
+                              cluster_spec)
 
     def test_finish_time_fairness_with_packing(self):
         policy = finish_time_fairness.FinishTimeFairnessPolicyWithPacking(

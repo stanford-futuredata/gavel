@@ -1,6 +1,7 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
+import copy
 import cvxpy as cp
 import numpy as np
 
@@ -42,6 +43,9 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
         Policy.__init__(self, solver)
         self._name = 'FinishTimeFairness_Perf'
         self._isolated_policy = max_min_fairness.MaxMinFairnessPolicy(solver)
+        self._cumulative_isolated_time = {}
+        self._isolated_throughputs_last_iteration = {}
+        self._num_steps_remaining_last_iteration = {}
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights,
@@ -49,7 +53,10 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
                        num_steps_remaining, cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
-        if throughputs is None: return None
+        if throughputs is None:
+            self._isolated_throughputs_last_iteration = {}
+            self._num_steps_remaining_last_iteration = {}
+            return None
         (m, n) = throughputs.shape
         (job_ids, worker_types) = index
 
@@ -79,8 +86,15 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
                                       axis=1)
         expected_time_fractions = []
         for i in range(len(job_ids)):
+            if job_ids[i] not in self._cumulative_isolated_time:
+                self._cumulative_isolated_time[job_ids[i]] = 0
+            if job_ids[i] in self._num_steps_remaining_last_iteration:
+                self._cumulative_isolated_time[job_ids[i]] += (
+                    self._num_steps_remaining_last_iteration[job_ids[i]] -
+                    num_steps_remaining[job_ids[i]]) / self._isolated_throughputs_last_iteration[job_ids[i]]
+
             allocation_throughput = cp.sum(cp.multiply(throughputs[i], x[i]))
-            expected_time_isolated = times_since_start[job_ids[i]] + \
+            expected_time_isolated = self._cumulative_isolated_time[job_ids[i]] + \
                 (num_steps_remaining[job_ids[i]] / isolated_throughputs[i])
             expected_time_allocation = times_since_start[job_ids[i]] + \
                 (num_steps_remaining[job_ids[i]] * cp.inv_pos(allocation_throughput))
@@ -99,6 +113,12 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
+
+        self._num_steps_remaining_last_iteration = copy.copy(num_steps_remaining)
+        self._isolated_throughputs_last_iteration = {}
+        for i in range(m):
+            self._isolated_throughputs_last_iteration[job_ids[i]] = \
+                isolated_throughputs[i]
 
         return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
