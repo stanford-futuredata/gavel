@@ -1,11 +1,53 @@
 import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
-from policies import finish_time_fairness, max_min_fairness, max_sum_throughput
+from policies import finish_time_fairness, isolated, max_min_fairness, max_sum_throughput
 import unittest
 
 class TestPolicies(unittest.TestCase):
 
+    def test_isolated(self):
+        policy = isolated.IsolatedPolicy(
+            solver='ECOS')
+        unflattened_throughputs = {
+            0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
+        }
+        scale_factors = {
+            0: 1,
+            1: 1
+        }
+        unflattened_priority_weights = {0: 1, 1: 1}
+        cluster_spec = {
+            'v100': 1,
+            'p100': 1,
+            'k80': 1
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              unflattened_priority_weights,
+                              cluster_spec)
+
     def test_max_min_fairness(self):
+        policy = max_min_fairness.MaxMinFairnessPolicy(
+            solver='ECOS')
+        unflattened_throughputs = {
+            0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
+        }
+        scale_factors = {
+            0: 1,
+            1: 2
+        }
+        unflattened_priority_weights = {0: 1, 1: 1}
+        cluster_spec = {
+            'v100': 1,
+            'p100': 1,
+            'k80': 1
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              unflattened_priority_weights,
+                              cluster_spec)
+
+    def test_max_min_fairness_with_perf(self):
         policy = max_min_fairness.MaxMinFairnessPolicyWithPerf(
             solver='ECOS')
         unflattened_throughputs = {
