@@ -6,7 +6,7 @@ import cvxpy as cp
 import numpy as np
 
 from policy import Policy, PolicyWithPacking
-import max_min_fairness
+from isolated import IsolatedPolicy
 
 class FinishTimeFairnessPolicy(Policy):
 
@@ -43,7 +43,7 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
     def __init__(self, solver):
         Policy.__init__(self, solver)
         self._name = 'FinishTimeFairness_Perf'
-        self._isolated_policy = max_min_fairness.MaxMinFairnessPolicy(solver)
+        self._isolated_policy = IsolatedPolicy(solver)
         self._cumulative_isolated_time = {}
         self._isolated_throughputs_prev_iteration = {}
         self._num_steps_remaining_prev_iteration = {}
@@ -130,7 +130,7 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
     def __init__(self, solver):
         PolicyWithPacking.__init__(self, solver)
         self._name = 'FinishTimeFairness_Packing'
-        self._isolated_policy = max_min_fairness.MaxMinFairnessPolicy(solver)
+        self._isolated_policy = IsolatedPolicy(solver)
         self._cumulative_isolated_time = {}
         self._isolated_throughputs_prev_iteration = {}
         self._num_steps_remaining_prev_iteration = {}
