@@ -1,51 +1,54 @@
 import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
 from policies import finish_time_fairness, isolated, max_min_fairness, max_sum_throughput
+
+import itertools
+import numpy as np
 import unittest
 
 class TestPolicies(unittest.TestCase):
 
     def test_isolated(self):
-        policy = isolated.IsolatedPolicy(
+        isolated_policy = isolated.IsolatedPolicy(
+            solver='ECOS')
+        max_min_fairness_policy = max_min_fairness.MaxMinFairnessPolicy(
             solver='ECOS')
         unflattened_throughputs = {
             0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
             1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
         }
-        scale_factors = {
-            0: 1,
-            1: 1
-        }
         unflattened_priority_weights = {0: 1, 1: 1}
-        cluster_spec = {
-            'v100': 1,
-            'p100': 1,
-            'k80': 1
-        }
-        policy.get_allocation(unflattened_throughputs, scale_factors,
-                              unflattened_priority_weights,
-                              cluster_spec)
-
-    def test_max_min_fairness(self):
-        policy = max_min_fairness.MaxMinFairnessPolicy(
-            solver='ECOS')
-        unflattened_throughputs = {
-            0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
-            1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
-        }
-        scale_factors = {
-            0: 1,
-            1: 2
-        }
-        unflattened_priority_weights = {0: 1, 1: 1}
-        cluster_spec = {
-            'v100': 1,
-            'p100': 1,
-            'k80': 1
-        }
-        policy.get_allocation(unflattened_throughputs, scale_factors,
-                              unflattened_priority_weights,
-                              cluster_spec)
+        all_scale_factors = [
+            {0: 1, 1: 1}, {0: 2, 1: 1}, {0: 2, 1: 2}, {0:4, 1:1}
+        ]
+        all_cluster_specs = [
+            {'v100': 4, 'p100': 4, 'k80': 4},
+            {'v100': 4, 'p100': 8, 'k80': 6}
+        ]
+        for scale_factors, cluster_spec in itertools.product(
+            all_scale_factors, all_cluster_specs):
+            isolated_allocation = isolated_policy.get_allocation(
+                unflattened_throughputs, scale_factors,
+                unflattened_priority_weights, cluster_spec)
+            max_min_fairness_allocation = max_min_fairness_policy.get_allocation(
+                unflattened_throughputs, scale_factors,
+                unflattened_priority_weights, cluster_spec)
+            isolated_objectives = []
+            max_min_fairness_objectives = []
+            for job_id in unflattened_throughputs:
+                isolated_objective = 0.0
+                max_min_fairness_objective = 0.0
+                for worker_type in cluster_spec:
+                    isolated_objective += (
+                        isolated_allocation[job_id][worker_type] *
+                        scale_factors[job_id])
+                    max_min_fairness_objective += (
+                        max_min_fairness_allocation[job_id][worker_type] *
+                        scale_factors[job_id])
+                isolated_objectives.append(isolated_objective)
+                max_min_fairness_objectives.append(max_min_fairness_objective)
+            assert(np.isclose(min(isolated_objectives),
+                              min(max_min_fairness_objectives)))
 
     def test_max_min_fairness_with_perf(self):
         policy = max_min_fairness.MaxMinFairnessPolicyWithPerf(
