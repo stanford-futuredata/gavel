@@ -28,7 +28,7 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
         for job_description in request.job_descriptions:
             jobs.append(job.Job.from_proto(job_description))
         run_callback = self._callbacks['Run']
-        run_callback(jobs, request.worker_id)
+        run_callback(jobs, request.worker_id, request.send_output)
         return common_pb2.Empty()
 
     def Shutdown(self, request, context):

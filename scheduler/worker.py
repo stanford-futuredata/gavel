@@ -74,7 +74,7 @@ class Worker:
 
         self._server_thread.join()
 
-    def _run_callback(self, jobs, worker_id):
+    def _run_callback(self, jobs, worker_id, send_output):
         # hack to prevent a job being dispatched before the dispatcher is set up
         # TODO: fix this by sending a "I'm ready" message to scheduler
         while True:
@@ -83,7 +83,7 @@ class Worker:
                 break
             except Exception as e:
               continue
-        self._dispatcher.dispatch_jobs(jobs, worker_id)
+        self._dispatcher.dispatch_jobs(jobs, worker_id, send_output)
 
     def _shutdown_callback(self):
         self._dispatcher.shutdown()

@@ -1212,7 +1212,7 @@ class Scheduler:
                             num_steps = \
                                 self._get_num_steps(job_id, worker_type)
                         job_descriptions.append(
-                                (single_job_id[0],
+                                (single_job_id,
                                  self._jobs[single_job_id].command,
                                  self._jobs[single_job_id].needs_data_dir,
                                  self._jobs[single_job_id].num_steps_arg,
