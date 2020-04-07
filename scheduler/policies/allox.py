@@ -11,8 +11,7 @@ from policy import Policy, PolicyWithPacking
 class AlloXPolicy(Policy):
     def __init__(self):
         self._name = 'AlloX'
-        self._allocation = {}
-        self._scale_factors = {}
+        self._prev_allocation = {}
 
     def get_allocation(self, unflattened_throughputs,
                        scale_factors, num_steps_remaining,
@@ -23,19 +22,17 @@ class AlloXPolicy(Policy):
         (m, n) = throughputs.shape
         (job_ids, worker_types) = index
 
-        available_workers = copy.deepcopy(cluster_spec)
-
-        # Update the internal representation of scale_factors.
+        # Make sure all scale factors are 1, since AlloX only supports jobs
+        # with scale factors of 1.
         for job_id in scale_factors:
-            # AlloX only supports jobs with scale factors of 1.
             assert(scale_factors[job_id] == 1)
-            self._scale_factors[job_id] = scale_factors[job_id]
 
         # TODO: Don't change the allocation for unfinished jobs (AlloX does not
         # support preemption).
         # TODO: Support online arrival of jobs.
 
-        # m is the number of jobs, n is the total number of workers.
+        # m is the number of jobs, n is the total number of workers (not the
+        # total number of worker types).
         (m, _) = throughputs.shape
         n = 0
         worker_id_to_worker_type_mapping = {}
@@ -44,6 +41,7 @@ class AlloXPolicy(Policy):
                 worker_id_to_worker_type_mapping[worker_id] = worker_type
             n += cluster_spec[worker_type]
 
+        # Construct matrix of processing times for each job on each worker.
         q_base = np.zeros((m, n))
         for i in range(m):
             j_counter = 0
@@ -52,16 +50,17 @@ class AlloXPolicy(Policy):
                     q_base[i, j] = num_steps_remaining[job_ids[i]] / \
                         unflattened_throughputs[job_ids[i]][worker_type]
                 j_counter += cluster_spec[worker_type]
+        # q = [q_base q_base*2 q_base*3 ... q_base*n].
         q = np.copy(q_base)
         for i in range(2, m+1):
             scaled_q_base = i * q_base
             q = np.concatenate((q, scaled_q_base), axis=1)
 
-        worker_order = {i: [] for i in range(n)}
+        # Solve assignment problem using Hungarian method (implemented in scipy).
         row_indices, col_indices = linear_sum_assignment(q)
 
         # Extract assignment of jobs to worker types.
-        # TODO: Remember job assignments that are queued up.
+        worker_order = {i: [] for i in range(n)}
         for (row_index, col_index) in zip(row_indices, col_indices):
             job_id = row_index
             worker_id = col_index % n
@@ -78,4 +77,17 @@ class AlloXPolicy(Policy):
                   [num_steps_remaining[job_ids[x[0]]] / unflattened_throughputs[job_ids[x[0]]][worker_type]
                    for x in worker_order[worker_id]])
 
-        return {}
+        # Construct allocation. Don't remember allocations beyond the first
+        # for each worker, since these can be recomputed the next time the
+        # policy is run.
+        allocation = {}
+        for job_id in job_ids:
+            allocation[job_id] = \
+                {worker_type: 0.0 for worker_type in cluster_spec}
+        for worker_id in range(n):
+            job_id = worker_order[worker_id][0][0]
+            worker_type = worker_id_to_worker_type_mapping[worker_id]
+            allocation[job_id][worker_type] = 1.0
+        self._prev_allocation = copy.copy(allocation)
+
+        return allocation
