@@ -31,7 +31,7 @@ def get_available_policies():
             'max_sum_throughput_perf',
             'max_sum_throughput_normalized_by_cost_perf',
             'max_sum_throughput_normalized_by_cost_perf_SLOs',
-            'max_sum_throughput_normalized_by_cost_packed_SLOs'
+            'max_sum_throughput_normalized_by_cost_packed_SLOs',
             'min_total_duration',
             'min_total_duration_packed',
             ]

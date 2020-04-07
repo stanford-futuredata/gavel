@@ -1221,9 +1221,9 @@ class Scheduler:
                         self._worker_connections[worker_id].run(
                                 job_descriptions, worker_id)
                         self._remove_available_worker_id(worker_id)
-                while not self._available_worker_ids.full():
-                    time.sleep(2)
-                    continue
+            while not self._available_worker_ids.full():
+                time.sleep(2)
+                continue
 
     def schedule(self):
         """Schedules jobs on workers."""
@@ -1949,6 +1949,7 @@ class Scheduler:
                         print(('%s]\t[Job failed]\t'
                                'Job ID: %s') % (current_timestamp, job_id))
                         to_remove.append(job_id)
+                self._need_to_update_allocation = True
 
             else:
                 print(('%s]\t[Micro-task succeeded]\t'
@@ -2022,4 +2023,3 @@ class Scheduler:
             self.remove_job(single_job_id[0])
 
         self._add_available_worker_id(worker_id)
-
