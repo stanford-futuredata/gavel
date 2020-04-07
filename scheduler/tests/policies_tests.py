@@ -1,12 +1,31 @@
 import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
-from policies import finish_time_fairness, isolated, max_min_fairness, max_sum_throughput
+from policies import allox, finish_time_fairness, isolated, max_min_fairness, max_sum_throughput
 
 import itertools
 import numpy as np
 import unittest
 
 class TestPolicies(unittest.TestCase):
+
+    def test_allox(self):
+        policy = allox.AlloXPolicy()
+        unflattened_throughputs = {
+            0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0},
+            2: {'v100': 4.0, 'p100': 3.0, 'k80': 2.0},
+            3: {'v100': 1.0, 'p100': 1.0, 'k80': 1.0}
+        }
+        scale_factors = {0: 1, 1: 1, 2: 1, 3: 1}
+        num_steps_remaining = {0: 300, 1: 500, 2: 1000, 3: 500}
+        cluster_spec = {
+            'v100': 2,
+            'p100': 1,
+            'k80': 1
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              num_steps_remaining,
+                              cluster_spec)
 
     def test_isolated(self):
         isolated_policy = isolated.IsolatedPolicy(
