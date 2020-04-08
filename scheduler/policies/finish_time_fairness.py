@@ -142,6 +142,11 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         x = cp.Variable((m, n))
 
+        # Row i of scale_factors_array is the scale_factor of job
+        # combination i repeated len(worker_types) times.
+        scale_factors_array = self.scale_factors_array(
+            scale_factors, job_ids, m, n)
+
         throughputs_no_packed_jobs = np.zeros((len(single_job_ids), n))
         for i, single_job_id in enumerate(single_job_ids):
             for j, worker_type in enumerate(worker_types):
@@ -179,11 +184,6 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
             objective = cp.Minimize(expected_time_fractions[0])
         else:
             objective = cp.Minimize(cp.maximum(*expected_time_fractions))
-
-        # Row i of scale_factors_array is the scale_factor of job
-        # combination i repeated len(worker_types) times.
-        scale_factors_array = self.scale_factors_array(
-            scale_factors, job_ids, m, n)
 
         # Make sure the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, single_job_ids,
