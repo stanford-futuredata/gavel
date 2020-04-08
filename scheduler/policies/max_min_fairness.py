@@ -60,7 +60,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
              for job_id in job_ids])
 
         isolated_throughputs = self._isolated_policy.get_throughputs(
-            throughputs, index, scale_factors_array, cluster_spec)
+            throughputs, index, scale_factors, cluster_spec)
         priority_weights = np.multiply(priority_weights.reshape((m, 1)),
                                        1.0 / isolated_throughputs.reshape((m, 1)))
 
@@ -132,12 +132,6 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                     flattened_job_type_throughputs[i,k*(1+a)+j] = \
                         unflattened_throughputs[worker_type][other_job_type]
 
-        # Get isolated throughputs.
-        scale_factors_array = np.zeros((len(job_ids), len(worker_types)))
-        for i in range(len(job_ids)):
-            for j in range(len(worker_types)):
-                scale_factors_array[i, j] = scale_factors[job_ids[i]]
-
         throughputs_no_packed_jobs = np.zeros((len(job_ids), len(worker_types)))
         for i, job_id in enumerate(job_ids):
             for j, worker_type in enumerate(worker_types):
@@ -147,7 +141,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         isolated_throughputs = self._isolated_policy.get_throughputs(
             throughputs_no_packed_jobs,
             (job_ids, worker_types),
-            scale_factors_array,
+            scale_factors,
             cluster_spec)
 
         # Set up scale factors.
@@ -298,12 +292,6 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         x = cp.Variable((m, n))
 
-        # Scale factors for each individual job.
-        scale_factors_array = np.zeros((len(single_job_ids), n))
-        for i in range(len(single_job_ids)):
-            for j in range(n):
-                scale_factors_array[i, j] = scale_factors[single_job_ids[i]]
-
         throughputs_no_packed_jobs = np.zeros((len(single_job_ids), n))
         for i, single_job_id in enumerate(single_job_ids):
             for j, worker_type in enumerate(worker_types):
@@ -312,7 +300,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         isolated_throughputs = self._isolated_policy.get_throughputs(
             throughputs_no_packed_jobs,
             (single_job_ids, worker_types),
-            scale_factors_array,
+            scale_factors,
             cluster_spec)
 
         # Row i of scale_factors_array is the scale_factor of job

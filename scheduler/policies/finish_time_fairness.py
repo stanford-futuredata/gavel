@@ -76,7 +76,7 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
         # Create allocation variable, and isolated allocation.
         x = cp.Variable(throughputs.shape)
         isolated_throughputs = self._isolated_policy.get_throughputs(
-            throughputs, index, scale_factors_array, cluster_spec)
+            throughputs, index, scale_factors, cluster_spec)
         expected_time_fractions = []
         for i in range(len(job_ids)):
             if job_ids[i] not in self._cumulative_isolated_time:
@@ -144,12 +144,6 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         x = cp.Variable((m, n))
 
-        # Scale factors for each individual job.
-        scale_factors_array = np.zeros((len(single_job_ids), n))
-        for i in range(len(single_job_ids)):
-            for j in range(n):
-                scale_factors_array[i, j] = scale_factors[single_job_ids[i]]
-
         throughputs_no_packed_jobs = np.zeros((len(single_job_ids), n))
         for i, single_job_id in enumerate(single_job_ids):
             for j, worker_type in enumerate(worker_types):
@@ -158,7 +152,7 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         isolated_throughputs = self._isolated_policy.get_throughputs(
             throughputs_no_packed_jobs,
             (single_job_ids, worker_types),
-            scale_factors_array,
+            scale_factors,
             cluster_spec)
 
         single_throughputs = np.zeros((len(single_job_ids), n))
