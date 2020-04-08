@@ -16,7 +16,6 @@ class SchedulerRpcClient:
     def run(self, job_descriptions, worker_id, request_output=False):
         with grpc.insecure_channel(self._server_loc) as channel:
             stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
-
             request = s2w_pb2.RunRequest()
             for (job_id, command, needs_data_dir,
                  num_steps_arg, num_steps) in job_descriptions:
@@ -34,4 +33,4 @@ class SchedulerRpcClient:
     def shutdown(self):
         with grpc.insecure_channel(self._server_loc) as channel:
             stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
-            stub.Shutdown(common_pb2.Empty())
+            response = stub.Shutdown(common_pb2.Empty())

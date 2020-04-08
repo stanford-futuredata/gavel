@@ -5,6 +5,7 @@ import grpc
 import os
 import sys
 import threading
+import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../rpc_stubs'))
 
@@ -57,3 +58,6 @@ def serve(port, callbacks, write_queue):
     condition.acquire()
     condition.wait()
     condition.release()
+
+    # Wait for shutdown message to be sent to scheduler.
+    time.sleep(5)

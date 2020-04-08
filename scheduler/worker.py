@@ -4,6 +4,7 @@ import os
 import queue
 import shutil
 import socket
+import signal
 import sys
 import threading
 
@@ -23,6 +24,7 @@ class Worker:
             raise ValueError('%d GPUs requested active, but only %d total '
                              'GPUs are available' % (num_gpus,
                                                      num_available_gpus))
+        signal.signal(signal.SIGINT, self._signal_handler)
         self._write_queue = queue.Queue()
         self._gpu_ids = list(range(num_gpus))
         self._worker_type = worker_type
@@ -85,6 +87,10 @@ class Worker:
               continue
         self._dispatcher.dispatch_jobs(jobs, worker_id, send_output)
 
+    def _signal_handler(self, sig, frame):
+        self._dispatcher.shutdown()
+        sys.exit(0)
+
     def _shutdown_callback(self):
         self._dispatcher.shutdown()
 
@@ -96,7 +102,6 @@ class Worker:
     def join(self):
         self._server_thread.join()
 
-#TODO: Move this to a separate driver?
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run a worker process')
     parser.add_argument('-t', '--worker_type', type=str, required=True,
