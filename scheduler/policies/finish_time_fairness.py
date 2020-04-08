@@ -63,10 +63,8 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
 
         # Row i of scale_factors_array is the scale_factor of job i
         # repeated len(worker_types) times.
-        scale_factors_array = np.zeros((m, n))
-        for i in range(m):
-            for j in range(n):
-                scale_factors_array[i, j] = scale_factors[job_ids[i]]
+        scale_factors_array = self.scale_factors_array(
+             scale_factors, job_ids, m, n)
 
         # TODO: Do something with these priority_weights.
         priority_weights = np.array(
@@ -184,17 +182,8 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
 
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.
-        scale_factors_array = np.zeros((m, n))
-        for i in range(m):
-            scale_factor = None
-            for single_job_id in job_ids[i].singletons():
-                if (scale_factor is not None and
-                    scale_factor != scale_factors[single_job_id]):
-                    scale_factor = 0
-                else:
-                    scale_factor = scale_factors[single_job_id]
-            for j in range(n):
-                scale_factors_array[i, j] = scale_factor
+        scale_factors_array = self.scale_factors_array(
+            scale_factors, job_ids, m, n)
 
         # Make sure the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, single_job_ids,

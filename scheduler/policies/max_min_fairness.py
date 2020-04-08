@@ -50,10 +50,8 @@ class MaxMinFairnessPolicyWithPerf(Policy):
 
         # Row i of scale_factors_array is the scale_factor of job i
         # repeated len(worker_types) times.
-        scale_factors_array = np.zeros((m, n))
-        for i in range(m):
-            for j in range(n):
-                scale_factors_array[i, j] = scale_factors[job_ids[i]]
+        scale_factors_array = self.scale_factors_array(
+             scale_factors, job_ids, m, n)
 
         priority_weights = np.array(
             [1. / unflattened_priority_weights[job_id]
@@ -305,17 +303,8 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
 
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.
-        scale_factors_array = np.zeros((m, n))
-        for i in range(m):
-            scale_factor = None
-            for single_job_id in job_ids[i].singletons():
-                if (scale_factor is not None and
-                    scale_factor != scale_factors[single_job_id]):
-                    scale_factor = 0
-                else:
-                    scale_factor = scale_factors[single_job_id]
-            for j in range(n):
-                scale_factors_array[i, j] = scale_factor
+        scale_factors_array = self.scale_factors_array(
+            scale_factors, job_ids, m, n)
 
         objective_terms = []
         # Multiply throughputs by scale_factors to ensure that scale_factor

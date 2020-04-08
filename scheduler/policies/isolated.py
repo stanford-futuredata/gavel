@@ -11,20 +11,13 @@ class IsolatedPolicy(Policy):
     def __init__(self, solver):
         self._name = 'Isolated'
 
-    def _scale_factors_array(self, scale_factors, job_ids, m, n):
-        scale_factors_array = np.zeros((m, n))
-        for i in range(m):
-            for j in range(n):
-                scale_factors_array[i, j] = scale_factors[job_ids[i]]
-        return scale_factors_array
-
     def get_throughputs(self, throughputs, index, scale_factors,
                         cluster_spec):
         (job_ids, worker_types) = index
         if throughputs is None: return None
         (m, n) = throughputs.shape
 
-        scale_factors_array = self._scale_factors_array(
+        scale_factors_array = self.scale_factors_array(
             scale_factors, job_ids, m, n)
         for i in range(m):
             for j in range(n):
@@ -62,7 +55,7 @@ class IsolatedPolicy(Policy):
         if throughputs is None: return None
         (m, n) = throughputs.shape
 
-        scale_factors_array = self._scale_factors_array(
+        scale_factors_array = self.scale_factors_array(
             scale_factors, job_ids, m, n)
 
         x = self._get_allocation(throughputs, index,

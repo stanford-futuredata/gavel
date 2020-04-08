@@ -16,6 +16,13 @@ class Policy:
     def name(self):
         return self._name
 
+    def scale_factors_array(self, scale_factors, job_ids, m, n):
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factors[job_ids[i]]
+        return scale_factors_array
+
     def flatten(self, d, cluster_spec):
         """Converts a 2-level dict to a NumPy array."""
 
@@ -60,6 +67,20 @@ class PolicyWithPacking(Policy):
 
     def __init__(self, solver='ECOS'):
         Policy.__init__(self, solver)
+
+    def scale_factors_array(self, scale_factors, job_ids, m, n):
+        scale_factors_array = np.zeros((m, n))
+        for i in range(m):
+            scale_factor = None
+            for single_job_id in job_ids[i].singletons():
+                if (scale_factor is not None and
+                    scale_factor != scale_factors[single_job_id]):
+                    scale_factor = 0
+                else:
+                    scale_factor = scale_factors[single_job_id]
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factor
+        return scale_factors_array
 
     def flatten(self, d, cluster_spec, priority_weights=None):
         """
