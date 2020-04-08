@@ -5,6 +5,7 @@ import grpc
 import os
 import sys
 import threading
+import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../rpc_stubs'))
 
@@ -28,7 +29,7 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
         for job_description in request.job_descriptions:
             jobs.append(job.Job.from_proto(job_description))
         run_callback = self._callbacks['Run']
-        run_callback(jobs, request.worker_id)
+        run_callback(jobs, request.worker_id, request.send_output)
         return common_pb2.Empty()
 
     def Shutdown(self, request, context):
@@ -57,3 +58,6 @@ def serve(port, callbacks, write_queue):
     condition.acquire()
     condition.wait()
     condition.release()
+
+    # Wait for shutdown message to be sent to scheduler.
+    time.sleep(5)

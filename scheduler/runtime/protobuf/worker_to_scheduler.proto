@@ -37,4 +37,6 @@ message DoneRequest {
     repeated uint64 job_id = 2;
     repeated uint64 num_steps = 3;
     repeated double execution_time = 4;
+    bool has_output = 5;
+    repeated string output = 6;
 }
