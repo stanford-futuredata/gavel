@@ -1426,7 +1426,11 @@ class Scheduler:
             job_id: self.get_current_timestamp() - self._per_job_start_timestamps[job_id]
             for job_id in self._jobs
         }
-        if self._policy.name.startswith("FinishTimeFairness"):
+        if self._policy.name == "AlloX":
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, scale_factors, num_steps_remaining,
+                self._cluster_spec)
+        elif self._policy.name.startswith("FinishTimeFairness"):
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, priority_weights,
                 times_since_start, num_steps_remaining,

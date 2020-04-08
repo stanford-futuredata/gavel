@@ -21,7 +21,8 @@ def get_num_gpus():
     return len(output.split('\n'))
 
 def get_available_policies():
-    return ['fifo', 'fifo_perf', 'fifo_packed',
+    return ['allox',
+            'fifo', 'fifo_perf', 'fifo_packed',
             'finish_time_fairness',
             'finish_time_fairness_perf',
             'finish_time_fairness_packed',
@@ -199,7 +200,9 @@ def read_all_throughputs_json(throughputs_file):
     return throughputs
 
 def get_policy(policy_name, solver, seed=None):
-    if policy_name == 'fifo':
+    if policy_name == 'allox':
+        policy = allox.AlloXPolicy()
+    elif policy_name == 'fifo':
         policy = fifo.FIFOPolicy(seed=seed)
     elif policy_name == 'fifo_perf':
         policy = fifo.FIFOPolicyWithPerf()
