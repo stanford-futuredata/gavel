@@ -11,18 +11,30 @@ class IsolatedPolicy(Policy):
     def __init__(self, solver):
         self._name = 'Isolated'
 
-    def get_allocation(self, unflattened_throughputs, scale_factors,
-                       priority_weights, cluster_spec):
-        throughputs, index = super().flatten(unflattened_throughputs,
-                                             cluster_spec)
-        if throughputs is None: return None
+    def get_throughputs(self, throughputs, index, scale_factors,
+                        cluster_spec):
         (job_ids, worker_types) = index
-
+        if throughputs is None: return None
         (m, n) = throughputs.shape
-        scale_factors_array = np.zeros((m, n))
+
+        scale_factors_array = self.scale_factors_array(
+            scale_factors, job_ids, m, n)
         for i in range(m):
             for j in range(n):
                 scale_factors_array[i, j] = scale_factors[job_ids[i]]
+
+        x_isolated = self._get_allocation(
+            throughputs, index,
+            scale_factors_array,
+            cluster_spec)
+        isolated_throughputs = np.sum(np.multiply(throughputs, x_isolated),
+                                      axis=1).reshape((m, 1))
+        return isolated_throughputs
+
+    def _get_allocation(self, throughputs, index, scale_factors_array,
+                        cluster_spec):
+        (_, worker_types) = index
+        (m, n) = throughputs.shape
 
         # Split cluster over users (m). By construction,
         # \sum_i (x[i, j] * scale_factor[i]) = num_workers[j].
@@ -32,5 +44,22 @@ class IsolatedPolicy(Policy):
         x = x / scale_factors_array
         max_per_row_sum = np.sum(x, axis=1).max()
         x = x / max_per_row_sum
+
+        return x
+
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        (job_ids, worker_types) = index
+        if throughputs is None: return None
+        (m, n) = throughputs.shape
+
+        scale_factors_array = self.scale_factors_array(
+            scale_factors, job_ids, m, n)
+
+        x = self._get_allocation(throughputs, index,
+                                 scale_factors_array,
+                                 cluster_spec)
 
         return super().unflatten(x, index)

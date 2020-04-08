@@ -76,8 +76,9 @@ class TestPolicies(unittest.TestCase):
         for scale_factors, cluster_spec in itertools.product(
             all_scale_factors, all_cluster_specs):
             isolated_allocation = isolated_policy.get_allocation(
-                unflattened_throughputs, scale_factors,
-                unflattened_priority_weights, cluster_spec)
+                unflattened_throughputs,
+                scale_factors,
+                cluster_spec)
             max_min_fairness_allocation = max_min_fairness_policy.get_allocation(
                 unflattened_throughputs, scale_factors,
                 unflattened_priority_weights, cluster_spec)
