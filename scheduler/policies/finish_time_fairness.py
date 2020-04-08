@@ -75,16 +75,8 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
 
         # Create allocation variable, and isolated allocation.
         x = cp.Variable(throughputs.shape)
-        x_isolated_dict = self._isolated_policy.get_allocation(
-            unflattened_throughputs, scale_factors,
-            cluster_spec)
-        x_isolated = np.zeros(throughputs.shape)
-        for i in range(m):
-            for j in range(n):
-                x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
-
-        isolated_throughputs = np.sum(np.multiply(throughputs, x_isolated),
-                                      axis=1)
+        isolated_throughputs = self._isolated_policy.get_throughputs(
+            throughputs, index, scale_factors_array, cluster_spec)
         expected_time_fractions = []
         for i in range(len(job_ids)):
             if job_ids[i] not in self._cumulative_isolated_time:
@@ -152,6 +144,50 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
         x = cp.Variable((m, n))
 
+        # Scale factors for each individual job.
+        scale_factors_array = np.zeros((len(single_job_ids), n))
+        for i in range(len(single_job_ids)):
+            for j in range(n):
+                scale_factors_array[i, j] = scale_factors[single_job_ids[i]]
+
+        throughputs_no_packed_jobs = np.zeros((len(single_job_ids), n))
+        for i, single_job_id in enumerate(single_job_ids):
+            for j, worker_type in enumerate(worker_types):
+                throughputs_no_packed_jobs[i, j] = \
+                    unflattened_throughputs[single_job_id][worker_type]
+        isolated_throughputs = self._isolated_policy.get_throughputs(
+            throughputs_no_packed_jobs,
+            (single_job_ids, worker_types),
+            scale_factors_array,
+            cluster_spec)
+
+        single_throughputs = np.zeros((len(single_job_ids), n))
+        expected_time_fractions = []
+        for i in range(len(all_throughputs)):
+            if single_job_ids[i] not in self._cumulative_isolated_time:
+                self._cumulative_isolated_time[single_job_ids[i]] = 0
+            if single_job_ids[i] in self._num_steps_remaining_prev_iteration:
+                self._cumulative_isolated_time[single_job_ids[i]] += (
+                    self._num_steps_remaining_prev_iteration[single_job_ids[i]] -
+                    num_steps_remaining[single_job_ids[i]]) / \
+                    self._isolated_throughputs_prev_iteration[single_job_ids[i]]
+
+            indexes = relevant_combinations[single_job_ids[i]]
+            isolated_throughput = isolated_throughputs[i]
+            allocation_throughput = cp.sum(cp.multiply(
+                all_throughputs[i][indexes],
+                x[indexes]))
+            expected_time_isolated = self._cumulative_isolated_time[single_job_ids[i]] + \
+                (num_steps_remaining[single_job_ids[i]] / isolated_throughput)
+            expected_time_allocation = times_since_start[single_job_ids[i]] + \
+                (num_steps_remaining[single_job_ids[i]] * cp.inv_pos(allocation_throughput))
+            expected_time_fraction = expected_time_allocation / expected_time_isolated
+            expected_time_fractions.append(expected_time_fraction)
+        if len(expected_time_fractions) == 1:
+            objective = cp.Minimize(expected_time_fractions[0])
+        else:
+            objective = cp.Minimize(cp.maximum(*expected_time_fractions))
+
         # Row i of scale_factors_array is the scale_factor of job
         # combination i repeated len(worker_types) times.
         scale_factors_array = np.zeros((m, n))
@@ -165,52 +201,6 @@ class FinishTimeFairnessPolicyWithPacking(PolicyWithPacking):
                     scale_factor = scale_factors[single_job_id]
             for j in range(n):
                 scale_factors_array[i, j] = scale_factor
-
-        unflattened_throughputs_no_packed_jobs = {}
-        for single_job_id in single_job_ids:
-            unflattened_throughputs_no_packed_jobs[single_job_id] = {}
-            for worker_type in worker_types:
-                unflattened_throughputs_no_packed_jobs[single_job_id][worker_type] = 1.0
-        x_isolated_dict = self._isolated_policy.get_allocation(
-            unflattened_throughputs_no_packed_jobs,
-            scale_factors,
-            cluster_spec)
-        x_isolated = np.zeros((m, n))
-        for i in range(m):
-            for j in range(n):
-                if not job_ids[i].is_pair():
-                    x_isolated[(i, j)] = x_isolated_dict[job_ids[i]][worker_types[j]]
-
-        single_throughputs = np.zeros((len(single_job_ids), n))
-        expected_time_fractions = []
-        isolated_throughputs = []
-        for i in range(len(all_throughputs)):
-            if single_job_ids[i] not in self._cumulative_isolated_time:
-                self._cumulative_isolated_time[single_job_ids[i]] = 0
-            if single_job_ids[i] in self._num_steps_remaining_prev_iteration:
-                self._cumulative_isolated_time[single_job_ids[i]] += (
-                    self._num_steps_remaining_prev_iteration[single_job_ids[i]] -
-                    num_steps_remaining[single_job_ids[i]]) / \
-                    self._isolated_throughputs_prev_iteration[single_job_ids[i]]
-
-            indexes = relevant_combinations[single_job_ids[i]]
-            isolated_throughput = np.sum(np.multiply(
-                all_throughputs[i][indexes],
-                x_isolated[indexes]))
-            allocation_throughput = cp.sum(cp.multiply(
-                all_throughputs[i][indexes],
-                x[indexes]))
-            expected_time_isolated = self._cumulative_isolated_time[single_job_ids[i]] + \
-                (num_steps_remaining[single_job_ids[i]] / isolated_throughput)
-            expected_time_allocation = times_since_start[single_job_ids[i]] + \
-                (num_steps_remaining[single_job_ids[i]] * cp.inv_pos(allocation_throughput))
-            expected_time_fraction = expected_time_allocation / expected_time_isolated
-            expected_time_fractions.append(expected_time_fraction)
-            isolated_throughputs.append(isolated_throughput)
-        if len(expected_time_fractions) == 1:
-            objective = cp.Minimize(expected_time_fractions[0])
-        else:
-            objective = cp.Minimize(cp.maximum(*expected_time_fractions))
 
         # Make sure the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, single_job_ids,
