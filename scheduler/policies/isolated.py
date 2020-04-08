@@ -12,7 +12,7 @@ class IsolatedPolicy(Policy):
         self._name = 'Isolated'
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
-                       priority_weights, cluster_spec):
+                       cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None

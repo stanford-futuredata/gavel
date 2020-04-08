@@ -62,7 +62,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
         # If policy has throughputs passed in, normalize each application by
         # the normalized throughput. Otherwise, do not normalize.
         x_isolated_dict = self._isolated_policy.get_allocation(
-            unflattened_throughputs, scale_factors, unflattened_priority_weights,
+            unflattened_throughputs, scale_factors,
             cluster_spec)
         x_isolated = np.zeros(throughputs.shape)
         for i in range(m):
@@ -240,8 +240,9 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             for worker_type in worker_types:
                 unflattened_throughputs_no_packed_jobs[job_id][worker_type] = 1.0
         x_isolated_dict = self._isolated_policy.get_allocation(
-            unflattened_throughputs_no_packed_jobs, scale_factors,
-            unflattened_priority_weights, cluster_spec)
+            unflattened_throughputs_no_packed_jobs,
+            scale_factors,
+            cluster_spec)
         x_isolated = np.zeros((n, m))
         for i in range(n):
             for j in range(m):
@@ -327,8 +328,9 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
             for worker_type in worker_types:
                 unflattened_throughputs_no_packed_jobs[single_job_id][worker_type] = 1.0
         x_isolated_dict = self._isolated_policy.get_allocation(
-            unflattened_throughputs_no_packed_jobs, scale_factors,
-            unflattened_priority_weights, cluster_spec)
+            unflattened_throughputs_no_packed_jobs,
+            scale_factors,
+            cluster_spec)
         x_isolated = np.zeros((m, n))
         for i in range(m):
             for j in range(n):
