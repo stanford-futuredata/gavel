@@ -6,6 +6,11 @@ import subprocess
 import sys
 import time
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+import utils
+
+THROUGHPUT_ESTIMATION_INTERVAL = 10
 
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
@@ -21,7 +26,7 @@ class Dispatcher:
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
 
-    def _construct_command(self, job):
+    def _construct_command(self, job, gpu_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
                                       'job_id=%d' % (job.job_id))
         if not os.path.isdir(checkpoint_dir):
@@ -31,6 +36,10 @@ class Dispatcher:
             command = job.command % (self._run_dir, self._run_dir)
         else:
             command = job.command % (self._run_dir)
+
+        command = '%s --local_rank %d' % (command, gpu_id)
+        command = '%s --throughput_estimation_interval %d' % (
+                    command, THROUGHPUT_ESTIMATION_INTERVAL)
 
         command = ('%s %s %d --checkpoint_dir %s '
                    '--max_duration %d') % (command,
@@ -42,12 +51,9 @@ class Dispatcher:
 
     def launch_job(self, job, command, gpu_id):
         start_time = time.time()
-        env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu_id))
         output = ''
         try:
             proc = subprocess.run(command,
-                                  env=env,
-                                  check=True,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,
                                   shell=True)
@@ -73,15 +79,17 @@ class Dispatcher:
                 error_message += 'Stderr: %s' % (e.stderr)
             self._write_queue.put(error_message)
             execution_time = -1
+            output = ''
         except Exception as e:
             self._write_queue.put('Dispatcher failed: %s' % (e))
             execution_time = -1
+            output = ''
 
-        return (job.job_id, execution_time, job.total_steps, output)
+        return [job.job_id, execution_time, output]
 
-    def _dispatch_jobs_helper(self, jobs, worker_id, send_output):
-        commands = [self._construct_command(job) for job in jobs]
+    def _dispatch_jobs_helper(self, jobs, worker_id):
         gpu_id = self._gpu_queue.get()
+        commands = [self._construct_command(job, gpu_id) for job in jobs]
         results = []
         for job, command in zip(jobs, commands):
             self._write_queue.put('Running job %d on GPU %d, '
@@ -92,6 +100,10 @@ class Dispatcher:
                                                           gpu_id,)))
         job_descriptions = [result.get() for result in results]
         self._gpu_queue.put(gpu_id)
+        outputs = [x[-1] for x in job_descriptions]
+        all_num_steps = utils.get_steps_from_job_output(outputs)
+        for i in range(len(all_num_steps)):
+            job_descriptions[i][-1] = all_num_steps[i]
         if len(jobs) == 1:
             self._write_queue.put('Job %d has completed, '
                                   'notifying scheduler...' % (jobs[0].job_id))
@@ -100,12 +112,11 @@ class Dispatcher:
             self._write_queue.put('Jobs %s have completed, '
                                   'notifying scheduler...' % (str(job_ids)))
         self._worker_rpc_client.notify_scheduler(worker_id,
-                                                 job_descriptions,
-                                                 send_output)
+                                                 job_descriptions)
 
-    def dispatch_jobs(self, jobs, worker_id, send_output):
+    def dispatch_jobs(self, jobs, worker_id):
         self._thread_pool.apply_async(self._dispatch_jobs_helper,
-                                      (jobs, worker_id, send_output,))
+                                      (jobs, worker_id,))
 
     def shutdown(self):
         self._thread_pool.terminate()

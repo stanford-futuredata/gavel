@@ -15,7 +15,6 @@ from runtime.rpc import scheduler_server, scheduler_client
 
 SERVER_PORT = 50060
 INFINITY = 1000000
-THROUGHPUT_ESTIMATION_INTERVAL = 10
 MULTI_GPU_JOB_TYPES = ['ResNet-18', 'ResNet-50', 'Transformer', 'LM']
 
 class Profiler:
@@ -24,8 +23,6 @@ class Profiler:
         self._num_workers = num_workers
         self._measurement_time = measurement_time
         self._log_file = log_file
-        # TODO: Make this configurable?
-        self._throughput_estimation_interval = THROUGHPUT_ESTIMATION_INTERVAL
 
         # Job metadata.
         self._job_id_counter = 0
@@ -104,10 +101,7 @@ class Profiler:
                     job_type += ' (scale factor %d)' % (scale_factor)
                     self._initialize_throughputs(job_type=job_type)
                 self._job_id_to_job_type[job_id] = job_type
-            interval = self._throughput_estimation_interval
-            command = '%s --throughput_estimation_interval %d' % (
-                    job_description.command, THROUGHPUT_ESTIMATION_INTERVAL)
-            task.append([job_id, command,
+            task.append([job_id, job_description.command,
                          job_description.needs_data_dir,
                          job_description.num_steps_arg,
                          INFINITY])
@@ -193,42 +187,6 @@ class Profiler:
             job_types.append(None)
         return job_types
 
-    def _get_throughputs(self, outputs):
-        """Parses the job outputs and returns the throughputs."""
-        earliest_end_time = None
-        for output in outputs:
-            lines = output.split('\n')
-            for i in range(len(lines) - 1, -1, -1):
-                if '[THROUGHPUT_ESTIMATION]' in lines[i]:
-                    _, time, _ = lines[i].split('\t')
-                    if (earliest_end_time is None or
-                        float(time) < earliest_end_time):
-                        earliest_end_time = float(time)
-                    break
-
-        throughputs = None
-        for output in outputs:
-            lines = output.split('\n')
-            start_time = None
-            for line in lines:
-                if '[THROUGHPUT_ESTIMATION]' in line:
-                    _, time, steps = line.split('\t')
-                    if start_time is None:
-                        start_time = float(time)
-                        start_steps = int(steps)
-                    elif float(time) > earliest_end_time:
-                        break
-            if start_time is None:
-                return (-1, -1)
-            throughput =\
-                (int(steps) - start_steps) / (float(time) - start_time)
-            if throughputs is None:
-                throughputs = (throughput,)
-            else:
-                throughputs += (throughput,)
-
-        return throughputs
-
     def _shutdown_workers(self):
         """Sends a shutdown message to all workers."""
         for worker_id in self._worker_connections:
@@ -267,14 +225,20 @@ class Profiler:
         return (per_worker_ids, self._measurement_time)
 
     def _done_callback(self, job_id, worker_id, all_num_steps,
-                       all_execution_times, all_outputs):
+                       all_execution_times):
         """Updates the throughput of the associated job(s)."""
         with self._lock:
             worker_type = self._worker_id_to_worker_type[worker_id]
             job_types = self._get_job_types_from_job_id(job_id)
             all_throughputs = self._throughputs[worker_type]
-            job_throughputs = self._get_throughputs(all_outputs)
             scale_factor = self._scale_factors[job_id]
+            job_throughputs = []
+            for (num_steps, execution_time) in \
+                zip(all_num_steps, all_execution_times):
+                if execution_time <= 0:
+                    job_throughputs.append(0)
+                else:
+                    job_throughputs.append(num_steps / execution_time)
 
             # Initialize/reset throughputs if necessary.
             job_failed = min(all_execution_times) <= 0
@@ -388,8 +352,8 @@ class Profiler:
                                                            rank)
                                 task[j][1] = command
                         self._worker_queue.put(worker_id)
-                        self._worker_connections[worker_id].run(
-                                task, worker_id, request_output=True)
+                        self._worker_connections[worker_id].run(task,
+                                                                worker_id)
                     worker_id_ptr += scale_factor
                     num_remaining_worker_ids -= scale_factor
                 while not unschedulable_queue.empty():

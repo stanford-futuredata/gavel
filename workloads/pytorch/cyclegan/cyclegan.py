@@ -46,6 +46,8 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
+parser.add_argument('--local_rank', default=0, type=int,
+                    help='Local rank')
 opt = parser.parse_args()
 print(opt)
 
@@ -53,6 +55,8 @@ if opt.n_steps is not None and opt.n_epochs is not None:
   raise ValueError('Only one of n_steps and n_epochs can be set')
 elif opt.n_steps is None and opt.n_epochs is None:
   raise ValueError('One of n_steps and n_epochs must be set')
+
+torch.cuda.set_device(opt.local_rank)
 
 # Create sample and checkpoint directories
 os.makedirs("images/%s" % opt.dataset_name, exist_ok=True)

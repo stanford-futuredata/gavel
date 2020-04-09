@@ -124,6 +124,10 @@ parser.add_argument(
     type=int,
     default=None,
     help='Maximum duration in seconds')
+parser.add_argument('--local_rank',
+        default=0,
+        type=int,
+        help='Local rank')
 
 # Based on
 # https://github.com/pytorch/examples/tree/master/mnist_hogwild
@@ -133,8 +137,9 @@ parser.add_argument(
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    torch.cuda.set_device(args.local_rank)
     torch.manual_seed(args.seed)
-    args.gpu_ids = [0]
+    args.gpu_ids = [args.local_rank]
     torch.cuda.manual_seed(args.seed)
     mp.set_start_method('spawn')
     setup_json = read_config(args.env_config)
