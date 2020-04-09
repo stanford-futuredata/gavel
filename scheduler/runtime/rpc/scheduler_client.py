@@ -13,7 +13,7 @@ class SchedulerRpcClient:
     def __init__(self, server_ip_addr, port):
         self._server_loc = '%s:%d' % (server_ip_addr, port)
 
-    def run(self, job_descriptions, worker_id, request_output=False):
+    def run(self, job_descriptions, worker_id):
         with grpc.insecure_channel(self._server_loc) as channel:
             stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
             request = s2w_pb2.RunRequest()
@@ -26,7 +26,6 @@ class SchedulerRpcClient:
                 job_description.num_steps_arg = num_steps_arg
                 job_description.num_steps = num_steps
             request.worker_id = worker_id
-            request.send_output = request_output
             response = stub.Run(request)
 
 

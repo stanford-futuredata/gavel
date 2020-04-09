@@ -62,13 +62,8 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
                 job_id = JobIdPair(request.job_id[0], request.job_id[1])
             else:
                 job_id = JobIdPair(request.job_id[0], None)
-            if request.has_output:
-                done_callback(job_id, request.worker_id,
-                              request.num_steps, request.execution_time,
-                              request.output)
-            else:
-                done_callback(job_id, request.worker_id,
-                              request.num_steps, request.execution_time)
+            done_callback(job_id, request.worker_id,
+                          request.num_steps, request.execution_time)
         except Exception as e:
             print(e)
 

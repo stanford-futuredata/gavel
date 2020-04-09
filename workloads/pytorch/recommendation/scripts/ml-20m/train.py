@@ -30,9 +30,14 @@ parser.add_argument('--checkpoint_dir', type=str,
                     help='Checkpoint dir')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
+parser.add_argument('--local_rank', default=0, type=int,
+                    help='Local rank')
 args = parser.parse_args()
 
 data_dir = args.data_dir
+
+torch.cuda.set_device(args.local_rank)
+
 
 if not os.path.isdir(args.checkpoint_dir):
   os.makedirs(args.checkpoint_dir)
