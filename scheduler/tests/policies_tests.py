@@ -57,8 +57,7 @@ class TestPolicies(unittest.TestCase):
                 assert(num_workers_used[worker_type] <= cluster_spec[worker_type])
 
     def test_isolated(self):
-        isolated_policy = isolated.IsolatedPolicy(
-            solver='ECOS')
+        isolated_policy = isolated.IsolatedPolicy()
         max_min_fairness_policy = max_min_fairness.MaxMinFairnessPolicy(
             solver='ECOS')
         unflattened_throughputs = {

@@ -38,7 +38,7 @@ class MaxMinFairnessPolicyWithPerf(Policy):
     def __init__(self, solver):
         Policy.__init__(self, solver)
         self._name = 'MaxMinFairness_Perf'
-        self._isolated_policy = IsolatedPolicy(solver)
+        self._isolated_policy = IsolatedPolicy()
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec):
@@ -87,7 +87,7 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
     def __init__(self, solver):
         PolicyWithPacking.__init__(self, solver)
         self._name = 'MaxMinFairness_Packing'
-        self._isolated_policy = IsolatedPolicy(solver)
+        self._isolated_policy = IsolatedPolicy()
 
     def get_allocation_using_job_type_throughputs(
             self, unflattened_job_type_throughputs, job_id_to_job_type,

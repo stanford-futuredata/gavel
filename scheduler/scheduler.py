@@ -1435,6 +1435,9 @@ class Scheduler:
                 self._throughputs, scale_factors, priority_weights,
                 times_since_start, num_steps_remaining,
                 self._cluster_spec)
+        elif self._policy.name == "Isolated":
+            unflattened_allocation = self._policy.get_allocation(
+                self._throughputs, scale_factors, self._cluster_spec)
         elif self._policy.name.startswith("MaxMinFairness"):
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, priority_weights,

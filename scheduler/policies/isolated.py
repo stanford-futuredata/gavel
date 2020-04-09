@@ -8,13 +8,13 @@ from policy import Policy
 
 class IsolatedPolicy(Policy):
 
-    def __init__(self, solver):
+    def __init__(self):
         self._name = 'Isolated'
 
     def get_throughputs(self, throughputs, index, scale_factors,
                         cluster_spec):
-        (job_ids, worker_types) = index
         if throughputs is None: return None
+        (job_ids, worker_types) = index
         (m, n) = throughputs.shape
 
         scale_factors_array = self.scale_factors_array(
@@ -51,8 +51,8 @@ class IsolatedPolicy(Policy):
                        cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
-        (job_ids, worker_types) = index
         if throughputs is None: return None
+        (job_ids, worker_types) = index
         (m, n) = throughputs.shape
 
         scale_factors_array = self.scale_factors_array(
