@@ -14,7 +14,8 @@ class AlloXPolicy(Policy):
         self._prev_allocation = {}
 
     def get_allocation(self, unflattened_throughputs,
-                       scale_factors, num_steps_remaining,
+                       scale_factors, times_since_start,
+                       num_steps_remaining,
                        cluster_spec):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
@@ -62,6 +63,19 @@ class AlloXPolicy(Policy):
         for i in range(2, m+1):
             scaled_q_base = i * q_base
             q = np.concatenate((q, scaled_q_base), axis=1)
+
+        # Construct matrix of delay times for each job on each worker.
+        d_base = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                d_base[i, j] = times_since_start[unallocated_job_ids[i]]
+        # d is computed as [d_base d_base d_base ... d_base].
+        d = np.copy(d_base)
+        for i in range(2, m+1):
+            d = np.concatenate((d, d_base), axis=1)
+
+        # Add d to q.
+        q = q + d
 
         # Solve assignment problem using Hungarian method (implemented in scipy).
         row_indices, col_indices = linear_sum_assignment(q)

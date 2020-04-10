@@ -1428,7 +1428,8 @@ class Scheduler:
         }
         if self._policy.name == "AlloX":
             unflattened_allocation = self._policy.get_allocation(
-                self._throughputs, scale_factors, num_steps_remaining,
+                self._throughputs, scale_factors,
+                times_since_start, num_steps_remaining,
                 self._cluster_spec)
         elif self._policy.name.startswith("FinishTimeFairness"):
             unflattened_allocation = self._policy.get_allocation(
