@@ -9,7 +9,7 @@ import unittest
 class TestPolicies(unittest.TestCase):
 
     def test_allox(self):
-        policy = allox.AlloXPolicy()
+        policy = allox.AlloXPolicy(alpha=0.5)
         unflattened_throughputs = {
             0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
             1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0},

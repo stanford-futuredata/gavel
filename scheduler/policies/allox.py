@@ -9,8 +9,9 @@ from scipy.optimize import linear_sum_assignment
 from policy import Policy, PolicyWithPacking
 
 class AlloXPolicy(Policy):
-    def __init__(self):
+    def __init__(self, alpha=0.3):
         self._name = 'AlloX'
+        self._alpha = alpha
         self._prev_allocation = {}
 
     def get_allocation(self, unflattened_throughputs,
@@ -37,7 +38,6 @@ class AlloXPolicy(Policy):
                 unallocated_job_ids.append(job_id)
             else:
                 already_allocated_job_ids.append(job_id)
-        m = len(unallocated_job_ids)
 
         n = 0
         worker_id_to_worker_type_mapping = {}
@@ -49,6 +49,14 @@ class AlloXPolicy(Policy):
             for worker_id in range(n, n+num_workers):
                 worker_id_to_worker_type_mapping[worker_id] = worker_type
                 n += 1
+
+        # Sort job IDs according to arrival time.
+        unallocated_job_ids.sort(key=lambda x: -times_since_start[x])
+
+        # Look at only alpha fraction of jobs in the interest of fairness.
+        m = max(n, int(self._alpha * len(unallocated_job_ids)))
+        m = min(m, len(unallocated_job_ids))
+        unallocated_job_ids = unallocated_job_ids[:m]
 
         # Construct matrix of processing times for each job on each worker,
         # taking into account the type of each worker.
