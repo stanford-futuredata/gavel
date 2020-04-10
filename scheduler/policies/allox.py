@@ -73,6 +73,8 @@ class AlloXPolicy(Policy):
         d = np.copy(d_base)
         for i in range(2, m+1):
             d = np.concatenate((d, d_base), axis=1)
+
+        # Add d to q.
         q = q + d
 
         # Solve assignment problem using Hungarian method (implemented in scipy).
