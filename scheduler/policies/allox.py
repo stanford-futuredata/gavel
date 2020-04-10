@@ -69,7 +69,7 @@ class AlloXPolicy(Policy):
         for i in range(m):
             for j in range(n):
                 d_base[i, j] = times_since_start[unallocated_job_ids[i]]
-        # d is computed as [d d d ... d].
+        # d is computed as [d_base d_base d_base ... d_base].
         d = np.copy(d_base)
         for i in range(2, m+1):
             d = np.concatenate((d, d_base), axis=1)
