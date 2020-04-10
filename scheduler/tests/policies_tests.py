@@ -17,6 +17,7 @@ class TestPolicies(unittest.TestCase):
             3: {'v100': 1.0, 'p100': 1.0, 'k80': 1.0}
         }
         scale_factors = {0: 1, 1: 1, 2: 1, 3: 1}
+        times_since_start = {0: 0, 1: 0, 2: 0, 3: 0}
         num_steps_remaining = {0: 300, 1: 500, 2: 1000, 3: 500}
         cluster_spec = {
             'v100': 2,
@@ -25,6 +26,7 @@ class TestPolicies(unittest.TestCase):
         }
         allocation1 = policy.get_allocation(unflattened_throughputs,
                                             scale_factors,
+                                            times_since_start,
                                             num_steps_remaining,
                                             cluster_spec)
 
@@ -35,9 +37,11 @@ class TestPolicies(unittest.TestCase):
             4: {'v100': 4.0, 'p100': 2.0, 'k80': 1.0}
         }
         scale_factors = {1: 1, 2: 1, 3: 1, 4: 1}
+        times_since_start = {1: 200, 2: 200, 3: 200, 4: 0}
         num_steps_remaining = {1: 100, 2: 800, 3: 400, 4: 100}
         allocation2 = policy.get_allocation(unflattened_throughputs,
                                             scale_factors,
+                                            times_since_start,
                                             num_steps_remaining,
                                             cluster_spec)
 
