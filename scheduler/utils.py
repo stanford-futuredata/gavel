@@ -56,7 +56,7 @@ def get_num_gpus():
     return len(output.split('\n'))
 
 def get_available_policies():
-    return ['allox_alpha=0.3',
+    return ['allox', 'allox_alpha=0.3',
             'fifo', 'fifo_perf', 'fifo_packed',
             'finish_time_fairness',
             'finish_time_fairness_perf',
@@ -237,8 +237,11 @@ def read_all_throughputs_json(throughputs_file):
 
 def get_policy(policy_name, solver, seed=None):
     if policy_name.startswith('allox'):
-        alpha = float(policy_name.split("allox_alpha=")[1])
-        policy = allox.AlloXPolicy()
+        if policy_name == 'allox':
+            alpha = 1.0
+        else:
+            alpha = float(policy_name.split("allox_alpha=")[1])
+        policy = allox.AlloXPolicy(alpha=alpha)
     elif policy_name == 'fifo':
         policy = fifo.FIFOPolicy(seed=seed)
     elif policy_name == 'fifo_perf':
