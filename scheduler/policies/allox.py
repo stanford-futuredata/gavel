@@ -9,7 +9,7 @@ from scipy.optimize import linear_sum_assignment
 from policy import Policy, PolicyWithPacking
 
 class AlloXPolicy(Policy):
-    def __init__(self, alpha=0.3):
+    def __init__(self, alpha=1.0):
         self._name = 'AlloX'
         self._alpha = alpha
         self._prev_allocation = {}
@@ -59,10 +59,7 @@ class AlloXPolicy(Policy):
         # Sort job IDs according to arrival time.
         unallocated_job_ids.sort(key=lambda x: -times_since_start[x])
 
-        # Look at only alpha fraction of jobs in the interest of fairness.
-        m = max(n, int(self._alpha * len(unallocated_job_ids)))
-        m = min(m, len(unallocated_job_ids))
-        unallocated_job_ids = unallocated_job_ids[:m]
+        # TODO: Do something with alpha.
 
         # Construct matrix of processing times for each job on each worker,
         # taking into account the type of each worker.
