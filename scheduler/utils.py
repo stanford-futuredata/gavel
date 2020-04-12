@@ -236,8 +236,12 @@ def read_all_throughputs_json(throughputs_file):
     return throughputs
 
 def get_policy(policy_name, solver, seed=None):
-    if policy_name == 'allox':
-        policy = allox.AlloXPolicy()
+    if policy_name.startswith('allox'):
+        if policy_name == 'allox':
+            alpha = 1.0
+        else:
+            alpha = float(policy_name.split("allox_alpha=")[1])
+        policy = allox.AlloXPolicy(alpha=alpha)
     elif policy_name == 'fifo':
         policy = fifo.FIFOPolicy(seed=seed)
     elif policy_name == 'fifo_perf':

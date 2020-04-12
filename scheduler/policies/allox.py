@@ -9,8 +9,9 @@ from scipy.optimize import linear_sum_assignment
 from policy import Policy, PolicyWithPacking
 
 class AlloXPolicy(Policy):
-    def __init__(self):
+    def __init__(self, alpha=1.0):
         self._name = 'AlloX'
+        self._alpha = alpha
         self._prev_allocation = {}
 
     def get_allocation(self, unflattened_throughputs,
@@ -36,9 +37,15 @@ class AlloXPolicy(Policy):
             if job_id not in self._prev_allocation:
                 unallocated_job_ids.append(job_id)
             else:
-                already_allocated_job_ids.append(job_id)
-        m = len(unallocated_job_ids)
+                total_allocation = 0.0
+                for worker_type in worker_types:
+                    total_allocation += self._prev_allocation[job_id][worker_type]
+                if total_allocation == 1.0:
+                    already_allocated_job_ids.append(job_id)
+                else:
+                    unallocated_job_ids.append(job_id)
 
+        m = len(unallocated_job_ids)
         n = 0
         worker_id_to_worker_type_mapping = {}
         for worker_type in worker_types:
@@ -50,14 +57,22 @@ class AlloXPolicy(Policy):
                 worker_id_to_worker_type_mapping[worker_id] = worker_type
                 n += 1
 
+        # Sort job IDs according to arrival time.
+        unallocated_job_ids.sort(key=lambda x: -times_since_start[x])
+
+        # TODO: Do something with alpha.
+
         # Construct matrix of processing times for each job on each worker,
         # taking into account the type of each worker.
         q_base = np.zeros((m, n))
         for i in range(m):
             for j in range(n):
                 worker_type = worker_id_to_worker_type_mapping[j]
+                throughput = unflattened_throughputs[unallocated_job_ids[i]][worker_type]
+                if throughput == 0.0:
+                    throughput = 1e-10
                 q_base[i, j] = num_steps_remaining[unallocated_job_ids[i]] / \
-                    unflattened_throughputs[unallocated_job_ids[i]][worker_type]
+                    throughput
         # q is computed as [q_base q_base*2 q_base*3 ... q_base*n].
         q = np.copy(q_base)
         for i in range(2, m+1):
@@ -102,14 +117,18 @@ class AlloXPolicy(Policy):
         for job_id in job_ids:
             allocation[job_id] = \
                 {worker_type: 0.0 for worker_type in cluster_spec}
+        for job_id in job_ids:
+            if job_id in self._prev_allocation:
+                allocation[job_id] = copy.copy(self._prev_allocation[job_id])
         for worker_id in range(n):
             if len(per_worker_id_job_assignment[worker_id]) > 0:
                 job_id = per_worker_id_job_assignment[worker_id][0][0]
                 worker_type = worker_id_to_worker_type_mapping[worker_id]
                 allocation[job_id][worker_type] = 1.0
+        total_workers_allocated = 0
         for job_id in job_ids:
-            if job_id in self._prev_allocation:
-                allocation[job_id] = copy.copy(self._prev_allocation[job_id])
+            for worker_type in worker_types:
+                total_workers_allocated += allocation[job_id][worker_type]
         self._prev_allocation = copy.copy(allocation)
 
         return allocation
