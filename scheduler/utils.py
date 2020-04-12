@@ -56,7 +56,7 @@ def get_num_gpus():
     return len(output.split('\n'))
 
 def get_available_policies():
-    return ['allox', 'allox_alpha=0.3',
+    return ['allox',
             'fifo', 'fifo_perf', 'fifo_packed',
             'finish_time_fairness',
             'finish_time_fairness_perf',
