@@ -45,6 +45,7 @@ class AlloXPolicy(Policy):
                 else:
                     unallocated_job_ids.append(job_id)
 
+        m = len(unallocated_job_ids)
         n = 0
         worker_id_to_worker_type_mapping = {}
         for worker_type in worker_types:
