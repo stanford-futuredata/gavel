@@ -50,7 +50,7 @@ if __name__=='__main__':
                         help='Scheduler policy')
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')
-    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI', 'SCS'],
                         default='ECOS', help='CVXPY solver')
     parser.add_argument('--throughputs_file', type=str,
                         default=None,

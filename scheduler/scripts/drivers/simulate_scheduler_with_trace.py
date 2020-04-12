@@ -55,7 +55,7 @@ if __name__=='__main__':
                         help='Random seed')
     parser.add_argument('--run_dir', type=str, default='/tmp',
                         help='Run directory')
-    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI', 'SCS'],
                         default='ECOS', help='CVXPY solver')
     parser.add_argument('-d', '--debug', action='store_true', default=False,
                         help='Debug')

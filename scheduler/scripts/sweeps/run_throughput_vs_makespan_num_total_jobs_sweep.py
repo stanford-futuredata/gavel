@@ -221,7 +221,7 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, generates multi-GPU jobs according to '
                               'a pre-defined distribution'))
-    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI', 'SCS'],
                         default='ECOS', help='CVXPY solver')
     parser.add_argument('-v', '--verbose', action='store_true', default=True,
                         help='Verbose')

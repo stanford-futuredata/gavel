@@ -239,7 +239,7 @@ if __name__=='__main__':
     parser.add_argument('-c', '--cluster-spec', type=str, default='3:3:3',
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
-    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI'],
+    parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI', 'SCS'],
                         default='ECOS', help='CVXPY solver')
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Verbose')
