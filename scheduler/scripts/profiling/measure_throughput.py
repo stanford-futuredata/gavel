@@ -81,9 +81,8 @@ class Profiler:
                 with open(self._log_file, 'a') as f:
                     f.write('[%s] %s' % (str(datetime.datetime.now()),
                                          output))
-            else:
-                print('[%s] %s' % (str(datetime.datetime.now()),
-                                   output))
+            print('[%s] %s' % (str(datetime.datetime.now()),
+                               output))
 
     def _initialize_throughputs(self, worker_type=None, job_type=None):
         """Initialize throughputs data structure."""

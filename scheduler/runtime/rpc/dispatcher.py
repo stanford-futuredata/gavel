@@ -114,7 +114,14 @@ class Dispatcher:
         return [job.job_id, execution_time, completed_steps]
 
     def _dispatch_jobs_helper(self, jobs, worker_id):
+        job_ids = [job.job_id for job in jobs]
+        self._write_queue.put(
+            'Requesting GPU for job(s) %s (worker %d)...' % (str(job_ids),
+                                                             worker_id))
         gpu_id = self._gpu_queue.get()
+        self._write_queue.put('Using GPU %d for job(s) '
+                              '%s (worker %d)' % (gpu_id, str(job_ids),
+                                                  worker_id))
         commands = \
             [self._construct_command(job, gpu_id, worker_id) for job in jobs]
         results = []
@@ -148,6 +155,9 @@ class Dispatcher:
         self._write_queue.put('Resetting dispatcher')
         self.shutdown()
         self._thread_pool = ThreadPool()
+        self._gpu_queue = queue.Queue(len(self._gpu_ids))
+        for gpu_id in self._gpu_ids:
+            self._gpu_queue.put(gpu_id)
 
     def shutdown(self):
         self._thread_pool.terminate()
