@@ -13,6 +13,7 @@ from job_id_pair import JobIdPair
 from job_table import JobTable
 from runtime.rpc import scheduler_server, scheduler_client
 
+BASE_DISTRIBUTED_LEASE_STEPS = 150
 SERVER_PORT = 50060
 INFINITY = 1000000
 MULTI_GPU_JOB_TYPES = ['ResNet-18', 'ResNet-50', 'Transformer']
@@ -260,7 +261,7 @@ class Profiler:
             if scale_factor == 1:
                 return (INFINITY, self._measurement_time)
             else:
-                return (100, self._measurement_time)
+                return (BASE_DISTRIBUTED_LEASE_STEPS, self._measurement_time)
         elif scale_factor == 1:
             return (max_steps, max_duration)
         else:
@@ -346,6 +347,9 @@ class Profiler:
                             job_throughputs[i]
                         all_throughputs[job_types[1]][job_types[0]][1-i] += \
                             job_throughputs[i]
+                    if job_types[0] == job_types[1]:
+                        for i in range(len(job_throughputs)):
+                            all_throughputs[job_types[0]][job_types[1]][i] /= 2
                 else:
                     all_throughputs[job_types[0]][job_types[1]]+= \
                         job_throughputs[0]
