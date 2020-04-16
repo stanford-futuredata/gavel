@@ -343,13 +343,13 @@ class Profiler:
             else:
                 if job_id.is_pair():
                     for i in range(len(job_throughputs)):
+                        throughput = job_throughputs[i]
+                        if job_types[0] == job_types[1]:
+                            throughput /= 2.0
                         all_throughputs[job_types[0]][job_types[1]][i] += \
-                            job_throughputs[i]
+                            throughput
                         all_throughputs[job_types[1]][job_types[0]][1-i] += \
-                            job_throughputs[i]
-                    if job_types[0] == job_types[1]:
-                        for i in range(len(job_throughputs)):
-                            all_throughputs[job_types[0]][job_types[1]][i] /= 2
+                            throughput
                 else:
                     all_throughputs[job_types[0]][job_types[1]]+= \
                         job_throughputs[0]
