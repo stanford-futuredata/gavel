@@ -87,11 +87,11 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
-parser.add_argument('--job_id', type=int, default=0, help='Job ID')
-parser.add_argument('--worker_id', type=int, default=0, help='Worker ID')
-parser.add_argument('--sched_addr', type=str, default='127.0.1.1',
+parser.add_argument('--job_id', type=int, default=None, help='Job ID')
+parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
+parser.add_argument('--sched_addr', type=str, default=None,
                     help='Scheduler server')
-parser.add_argument('--sched_port', type=int, default=50060,
+parser.add_argument('--sched_port', type=int, default=None,
                     help='Scheduler port')
 
 best_acc1 = 0
@@ -123,6 +123,10 @@ def main():
                                 world_size=args.world_size,
                                 rank=args.rank,
                                 timeout=datetime.timedelta(seconds=30))
+
+    args.enable_gavel_iterator = False
+    if args.job_id is not None:
+        args.enable_gavel_iterator = True
 
     # create model
     if args.pretrained:
@@ -202,9 +206,10 @@ def main():
         validate(val_loader, model, criterion)
         return
 
-    train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
-                                 args.distributed,
-                                 args.sched_addr, args.sched_port)
+    if args.enable_gavel_iterator:
+        train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
+                                     args.distributed,
+                                     args.sched_addr, args.sched_port)
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -220,7 +225,7 @@ def main():
         total_minibatches += num_minibatches
         total_elapsed_time += elapsed_time
 
-        if train_loader.done:
+        if args.enable_gavel_iterator and train_loader.done:
             break
         elif (args.num_minibatches is not None and
             total_minibatches >= args.num_minibatches):
