@@ -14,10 +14,13 @@ THROUGHPUT_ESTIMATION_INTERVAL = 10
 
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
-                 run_dir, checkpoint_dir, write_queue):
+                 sched_addr, sched_port, run_dir, checkpoint_dir,
+                 write_queue):
         self._thread_pool = ThreadPool()
         self._round_duration = round_duration
         self._worker_rpc_client = worker_rpc_client
+        self._sched_addr = sched_addr
+        self._sched_port = sched_port
         self._run_dir = run_dir
         self._checkpoint_dir = checkpoint_dir
         self._gpu_ids = gpu_ids
@@ -26,7 +29,7 @@ class Dispatcher:
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
 
-    def _construct_command(self, job, gpu_id):
+    def _construct_command(self, job, gpu_id, worker_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
                                       'job_id=%d' % (job.job_id))
         if not os.path.isdir(checkpoint_dir):
@@ -38,35 +41,44 @@ class Dispatcher:
             command = job.command % (self._run_dir)
 
         command = '%s --local_rank %d' % (command, gpu_id)
-        command = '%s --throughput_estimation_interval %d' % (
-                    command, THROUGHPUT_ESTIMATION_INTERVAL)
-
-        command = ('%s %s %d --checkpoint_dir %s '
-                   '--max_duration %d') % (command,
-                                           job.num_steps_arg,
-                                           job.total_steps,
-                                           checkpoint_dir,
-                                           self._round_duration)
+        command = '%s %s %d' % (command, job.num_steps_arg, job.total_steps)
+        command = '%s --checkpoint_dir %s' % (command, checkpoint_dir)
+        command = ('%s --job_id %d --worker_id %d --sched_addr %s '
+                   '--sched_port %d' % (command, job.job_id, worker_id,
+                                        self._sched_addr, self._sched_port))
         return command
 
-    def launch_job(self, job, command, gpu_id):
+    def _get_steps_from_output(self, output):
+        steps = None
+        for line in output.split('\n'):
+            if line.startswith('[GavelIterator]'):
+                steps = int(line.split('[GavelIterator]')[-1])
+        return steps
+
+    def launch_job(self, job, command):
         start_time = time.time()
         output = ''
         try:
             proc = subprocess.run(command,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,
+                                  timeout=(self._round_duration + 60),
                                   shell=True)
             execution_time = time.time() - start_time
             output = proc.stdout.decode('utf-8').strip()
-            self._write_queue.put('Job ID: %s, '
-                                  'Num_steps: %d, '
-                                  'Execution time: %.3f seconds, '
-                                  'Output:\n%s' % (str(job.job_id),
-                                                   job.total_steps,
-                                                   execution_time,
-                                                   output))
-
+            completed_steps = self._get_steps_from_output(output)
+            if completed_steps is None:
+                self._write_queue.put('Could not get completed steps for '
+                                      'job %s' % (str(job.job_id)))
+                self._write_queue.put(output)
+            else:
+                self._write_queue.put('Job ID: %s, '
+                                      'Num steps: %d, '
+                                      'Execution time: %.3f seconds, '
+                                      'Output:\n%s' % (str(job.job_id),
+                                                       completed_steps,
+                                                       execution_time,
+                                                       output))
         except subprocess.CalledProcessError as e:
             error_message =\
                 'Job %s failed with error code %s' % (str(job.job_id),
@@ -79,31 +91,45 @@ class Dispatcher:
                 error_message += 'Stderr: %s' % (e.stderr)
             self._write_queue.put(error_message)
             execution_time = -1
+            completed_steps = 0
+            output = ''
+        except subprocess.TimeoutExpired as e:
+            error_message = 'Job %s timed out' % (str(job.job_id))
+            if e.args is not None:
+                error_message += '\nArgs: %s' % (str(e.args))
+            if e.stdout is not None:
+                error_message += 'Stdout: %s' % (e.stdout)
+            if e.stderr is not None:
+                error_message += 'Stderr: %s' % (e.stderr)
+            self._write_queue.put(error_message)
+            execution_time = -1
+            completed_steps = 0
             output = ''
         except Exception as e:
             self._write_queue.put('Dispatcher failed: %s' % (e))
             execution_time = -1
+            completed_steps = 0
             output = ''
 
-        return [job.job_id, execution_time, output]
+        return [job.job_id, execution_time, completed_steps]
 
     def _dispatch_jobs_helper(self, jobs, worker_id):
         gpu_id = self._gpu_queue.get()
-        commands = [self._construct_command(job, gpu_id) for job in jobs]
+        commands = \
+            [self._construct_command(job, gpu_id, worker_id) for job in jobs]
         results = []
+
+        # Launch the jobs.
         for job, command in zip(jobs, commands):
             self._write_queue.put('Running job %d on GPU %d, '
                                   'command: "%s"' % (job.job_id, gpu_id,
                                                      command))
             results.append(self._thread_pool.apply_async(self.launch_job,
-                                                         (job, command,
-                                                          gpu_id,)))
+                                                         (job, command,)))
         job_descriptions = [result.get() for result in results]
+
+        # Cleanup and notify the scheduler.
         self._gpu_queue.put(gpu_id)
-        outputs = [x[-1] for x in job_descriptions]
-        all_num_steps = utils.get_steps_from_job_output(outputs)
-        for i in range(len(all_num_steps)):
-            job_descriptions[i][-1] = all_num_steps[i]
         if len(jobs) == 1:
             self._write_queue.put('Job %d has completed, '
                                   'notifying scheduler...' % (jobs[0].job_id))
@@ -118,5 +144,11 @@ class Dispatcher:
         self._thread_pool.apply_async(self._dispatch_jobs_helper,
                                       (jobs, worker_id,))
 
+    def reset(self):
+        self._write_queue.put('Resetting dispatcher')
+        self.shutdown()
+        self._thread_pool = ThreadPool()
+
     def shutdown(self):
         self._thread_pool.terminate()
+        self._thread_pool.join()

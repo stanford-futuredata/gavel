@@ -9,41 +9,6 @@ import job
 from policies import fifo, finish_time_fairness, max_min_fairness, max_sum_throughput, min_total_duration
 
 
-def get_steps_from_job_output(outputs):
-    """Parses the job outputs and returns the number of steps executed."""
-    earliest_end_time = None
-    for output in outputs:
-        lines = output.split('\n')
-        for i in range(len(lines) - 1, -1, -1):
-            if '[THROUGHPUT_ESTIMATION]' in lines[i]:
-                _, time, _ = lines[i].split('\t')
-                if (earliest_end_time is None or
-                    float(time) < earliest_end_time):
-                    earliest_end_time = float(time)
-                break
-
-    num_steps = []
-    for output in outputs:
-        lines = output.split('\n')
-        start_time = None
-        for line in lines:
-            if '[THROUGHPUT_ESTIMATION]' in line:
-                _, time, steps = line.split('\t')
-                if start_time is None:
-                    start_time = float(time)
-                    start_steps = int(steps)
-                elif float(time) > earliest_end_time:
-                    break
-        if start_time is None:
-            return [0, 0]
-        elapsed_time = float(time) - start_time
-        if elapsed_time <= 0:
-            return [0, 0]
-        num_steps.append(int(steps) - start_steps)
-
-    return num_steps
-
-
 def get_ip_address():
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)

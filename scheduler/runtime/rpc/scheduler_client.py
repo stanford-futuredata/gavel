@@ -28,6 +28,10 @@ class SchedulerRpcClient:
             request.worker_id = worker_id
             response = stub.Run(request)
 
+    def reset(self):
+        with grpc.insecure_channel(self._server_loc) as channel:
+            stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
+            response = stub.Reset(common_pb2.Empty())
 
     def shutdown(self):
         with grpc.insecure_channel(self._server_loc) as channel:

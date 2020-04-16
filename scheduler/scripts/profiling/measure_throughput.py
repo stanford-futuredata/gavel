@@ -15,7 +15,7 @@ from runtime.rpc import scheduler_server, scheduler_client
 
 SERVER_PORT = 50060
 INFINITY = 1000000
-MULTI_GPU_JOB_TYPES = ['ResNet-18', 'ResNet-50', 'Transformer', 'LM']
+MULTI_GPU_JOB_TYPES = ['ResNet-18', 'ResNet-50', 'Transformer']
 
 class Profiler:
     def __init__(self, num_workers, measurement_time, log_file=None):
@@ -29,6 +29,10 @@ class Profiler:
         self._job_id_to_job_type = {}
         self._throughputs = {}
         self._scale_factors = {}
+        self._completed_steps = {}
+        self._max_steps = {}
+        self._elapsed_time = {}
+        self._lease_update_requests = {}
         self._num_throughput_updates = {}
 
         # Worker metadata.
@@ -39,6 +43,7 @@ class Profiler:
         self._worker_type_to_worker_ids = {}
         self._worker_addrs = {}
         self._worker_queue = queue.Queue()
+        self._all_rpc_clients = []
 
         # Synchronization lock.
         self._lock = threading.Lock()
@@ -53,6 +58,7 @@ class Profiler:
         callbacks = {
             'RegisterWorker': self._register_worker_callback,
             'Done': self._done_callback,
+            'UpdateLease': self._update_lease_callback,
         }
         self.server_thread = threading.Thread(
             target=scheduler_server.serve,
@@ -89,6 +95,20 @@ class Profiler:
             for worker_type in self._throughputs:
                 self._throughputs[worker_type][job_type] = {}
 
+    def _initialize_completed_steps_and_elapsed_time(self, job_id=None,
+                                                     worker_type=None):
+        if job_id is not None:
+            assert not job_id.is_pair()
+            self._completed_steps[job_id] = {}
+            self._elapsed_time[job_id] = {}
+            for worker_type in self._cluster_spec:
+                self._completed_steps[job_id][worker_type] = 0
+                self._elapsed_time[job_id][worker_type] = 0.0
+        elif worker_type is not None:
+            for job_id in self._completed_steps:
+                self._completed_steps[job_id][worker_type] = 0
+                self._elapsed_time[job_id][worker_type] = 0.0
+
     def _initialize_task(self, job_descriptions, scale_factor=1):
         """Initialize a task to submit to the worker."""
         task = []
@@ -99,17 +119,16 @@ class Profiler:
                 job_type = job_description.model
                 if scale_factor > 1:
                     job_type += ' (scale factor %d)' % (scale_factor)
-                    self._initialize_throughputs(job_type=job_type)
+                self._initialize_throughputs(job_type=job_type)
+                self._initialize_completed_steps_and_elapsed_time(
+                        job_id=job_id)
+                self._max_steps[job_id] = {}
                 self._job_id_to_job_type[job_id] = job_type
+                self._scale_factors[job_id] = scale_factor
             task.append([job_id, job_description.command,
                          job_description.needs_data_dir,
                          job_description.num_steps_arg,
                          INFINITY])
-        if len(job_descriptions) > 1:
-            merged_job_id = JobIdPair(task[0][0][0], task[1][0][0])
-        else:
-            merged_job_id = task[0][0]
-        self._scale_factors[merged_job_id] = scale_factor
         return task
 
     def _can_be_run_multi_gpu(self, job_type):
@@ -147,12 +166,14 @@ class Profiler:
                     if scale_factor > self._cluster_spec[worker_type]:
                         continue
                     for i in range(len(JobTable)):
+                        job_type = JobTable[i].model
                         if (scale_factor > 1 and
-                            not self._can_be_run_multi_gpu(JobTable[i].model)):
+                            not self._can_be_run_multi_gpu(job_type)):
                             continue
                         for j in range(i, len(JobTable)):
-                            if (scale_factor > 1 and         
-                                not self._can_be_run_multi_gpu(JobTable[j].model)):
+                            job_type = JobTable[j].model
+                            if (scale_factor > 1 and
+                                not self._can_be_run_multi_gpu(job_type)):
                                 continue
                             task = self._initialize_task(
                                     [JobTable[i], JobTable[j]],
@@ -187,10 +208,15 @@ class Profiler:
             job_types.append(None)
         return job_types
 
+    def _reset_workers(self):
+        """Sends a reset message to all workers."""
+        for rpc_client in self._all_rpc_clients:
+            rpc_client.reset()
+
     def _shutdown_workers(self):
         """Sends a shutdown message to all workers."""
-        for worker_id in self._worker_connections:
-            self._worker_connections[worker_id].shutdown()
+        for rpc_client in self._all_rpc_clients:
+            rpc_client.shutdown()
 
     """
     =====================================================================
@@ -201,6 +227,7 @@ class Profiler:
     def _register_worker_callback(self, worker_type, num_gpus, ip_addr, port):
         """Registers a new worker."""
         rpc_client = scheduler_client.SchedulerRpcClient(ip_addr, port)
+        self._all_rpc_clients.append(rpc_client)
         per_worker_ids = []
         with self._lock:
             if worker_type not in self._cluster_spec:
@@ -208,6 +235,8 @@ class Profiler:
                 self._throughputs[worker_type] = {}
                 self._worker_type_to_worker_ids[worker_type] = []
                 self._initialize_throughputs(worker_type=worker_type)
+                self._initialize_completed_steps_and_elapsed_time(
+                        worker_type=worker_type)
             self._cluster_spec[worker_type] += num_gpus
             for i in range(num_gpus):
                 worker_id = self._worker_id_counter
@@ -224,6 +253,64 @@ class Profiler:
                                                             port))
         return (per_worker_ids, self._measurement_time)
 
+    def _update_lease_callback(self, job_id, worker_id, steps, duration,
+                               max_steps, max_duration):
+        scale_factor = self._scale_factors[job_id]
+        if steps == 0 or duration == 0:
+            if scale_factor == 1:
+                return (INFINITY, self._measurement_time)
+            else:
+                return (100, self._measurement_time)
+        elif scale_factor == 1:
+            return (max_steps, max_duration)
+        else:
+            worker_type = self._worker_id_to_worker_type[worker_id]
+            with self._lock:
+                update_id = len(self._lease_update_requests[job_id])
+                self._lease_update_requests[job_id].append((steps, duration,
+                                                            max_steps,
+                                                            max_duration))
+
+            # The first worker to request a lease update computes the new
+            # lease for all workers.
+            if update_id == 0:
+                # Wait for all workers to request a lease update.
+                while True:
+                    with self._lock:
+                        if (len(self._lease_update_requests[job_id]) ==
+                            self._scale_factors[job_id]):
+                            break
+                    # TODO: Sleep for less time?
+                    self._write_queue.put('Job %s (worker %d) waiting for '
+                                          'all workers to request lease '
+                                          'update...' % (job_id, worker_id))
+                    time.sleep(1)
+                # Compute the new lease.
+                self._write_queue.put('All workers for job %s have requested '
+                                      'lease update, now computing '
+                                      'new lease...' % (job_id))
+                with self._lock:
+                    remaining_time = \
+                        (self._measurement_time -
+                         duration % self._measurement_time)
+                    throughput = steps / duration
+                    remaining_steps = max(1, int(remaining_time * throughput))
+                    max_completed_steps = \
+                        max([request[0] for request in \
+                                self._lease_update_requests[job_id]])
+                    self._max_steps[job_id][worker_type] = \
+                        max_completed_steps + remaining_steps
+                    return (self._max_steps[job_id][worker_type], INFINITY)
+            else:
+                # Wait for the first update to complete.
+                while True:
+                    with self._lock:
+                        if worker_type in self._max_steps[job_id]:
+                            break
+                    # TODO: Sleep for less time?
+                    time.sleep(1)
+                return (self._max_steps[job_id][worker_type], INFINITY)
+
     def _done_callback(self, job_id, worker_id, all_num_steps,
                        all_execution_times):
         """Updates the throughput of the associated job(s)."""
@@ -231,11 +318,11 @@ class Profiler:
             worker_type = self._worker_id_to_worker_type[worker_id]
             job_types = self._get_job_types_from_job_id(job_id)
             all_throughputs = self._throughputs[worker_type]
-            scale_factor = self._scale_factors[job_id]
+            scale_factor = self._scale_factors[job_id.singletons()[0]]
             job_throughputs = []
             for (num_steps, execution_time) in \
                 zip(all_num_steps, all_execution_times):
-                if execution_time <= 0:
+                if min(all_num_steps) <= 0 or min(all_execution_times) <= 0:
                     job_throughputs.append(0)
                 else:
                     job_throughputs.append(num_steps / execution_time)
@@ -303,27 +390,46 @@ class Profiler:
             for worker_type in per_worker_type_task_queues:
                 num_tasks += per_worker_type_task_queues[worker_type].qsize()
             assert(num_tasks > 0)
+
+            # Schedule tasks for each worker type.
             for worker_type in self._cluster_spec:
                 worker_ids = self._worker_type_to_worker_ids[worker_type]
                 worker_id_ptr = 0
                 num_remaining_worker_ids = len(worker_ids)
                 unschedulable_queue = queue.Queue()
+
+                # Continue scheduling tasks until there are no remaining tasks
+                # or no remaining workers.
                 while (num_remaining_worker_ids > 0 and
                         not per_worker_type_task_queues[worker_type].empty()):
                     (task, scale_factor) = \
                         per_worker_type_task_queues[worker_type].get()
+
+                    # If there are not enough remaining workers to
+                    # schedule this task, try again later.
                     if scale_factor > num_remaining_worker_ids:
                         unschedulable_queue.put((task, scale_factor))
                         continue
+
                     if len(task) > 1:
-                        merged_job_id = JobIdPair(task[0][0][0], task[1][0][0])
+                        merged_job_id = JobIdPair(task[0][0][0],
+                                                  task[1][0][0])
                     else:
                         merged_job_id = task[0][0]
                     self._num_throughput_updates[merged_job_id] = 0
+
+                    # Schedule the task.
                     for i in range(worker_id_ptr, worker_id_ptr+scale_factor):
                         worker_id = worker_ids[i]
                         for j, job_description in enumerate(task):
                             job_id = job_description[0]
+
+                            # Reset any existing lease information.
+                            self._lease_update_requests[job_id] = []
+                            if worker_type in self._max_steps[job_id]:
+                                del self._max_steps[job_id][worker_type]
+
+                            # Log task.
                             job_type = self._job_id_to_job_type[job_id]
                             self._write_queue.put(
                                     'Scheduling job %s (%s) on '
@@ -331,23 +437,26 @@ class Profiler:
                                                         job_type,
                                                         worker_id,
                                                         worker_type))
+
+                            # Add necessary arguments for distributed jobs.
                             if scale_factor > 1:
                                 if i == worker_id_ptr:
                                     if j == 0:
                                         base_commands = []
                                     base_commands.append(job_description[1])
-                                command = copy.deepcopy(base_commands[j])
                                 master_id = worker_ids[worker_id_ptr]
                                 (master_addr, master_port) = \
                                     self._worker_addrs[master_id]
+                                offset_master_port = \
+                                    master_port + 1 + master_id + j
                                 world_size = scale_factor
                                 rank = i - worker_id_ptr
                                 command = ('%s --master_addr %s '
                                            '--master_port %d '
                                            '--world_size %d '
-                                           '--rank %d') % (command,
+                                           '--rank %d') % (base_commands[j],
                                                            master_addr,
-                                                           master_port+1+master_id+j,
+                                                           offset_master_port,
                                                            world_size,
                                                            rank)
                                 task[j][1] = command
@@ -356,6 +465,8 @@ class Profiler:
                                                                 worker_id)
                     worker_id_ptr += scale_factor
                     num_remaining_worker_ids -= scale_factor
+
+                # Move all previously un-schedulable tasks back to the queue.
                 while not unschedulable_queue.empty():
                     (task, scale_factor) = unschedulable_queue.get()
                     per_worker_type_task_queues[worker_type].put(
@@ -367,6 +478,7 @@ class Profiler:
                 if not per_worker_type_task_queues[worker_type].empty():
                     done = False
                     break
+            self._reset_workers()
 
         self._shutdown_workers()
 
@@ -376,9 +488,9 @@ class Profiler:
             f.write(json.dumps(self._throughputs, indent=4))
 
 def main(args):
-    if not args.isolated and not args.packed and not args.distributed:
-        raise ValueError('At least one of "--isolated", "--packed", and '
-                         '"--distributed" must be set')
+    if not args.isolated and not args.packed:
+        raise ValueError('At least one of "--isolated" or "--packed"'
+                         'must be set')
 
     profiler = Profiler(args.num_workers, args.measurement_time)
     profiler.profile(args.isolated, args.packed, args.distributed)
