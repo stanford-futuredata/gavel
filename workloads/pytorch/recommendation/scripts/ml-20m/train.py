@@ -117,13 +117,13 @@ try:
                     checkpoint_freq=0, eval_num_recommendations=0,
                     metrics=metrics, eval_freq=0)
       epochs += epochs_per_iteration
+      if args.throughput_estimation_interval is not None:
+            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), epochs))
       if args.max_duration is not None:
           iteration_time = time.time () - start_time
           total_elapsed_time += iteration_time
           if total_elapsed_time >= args.max_duration:
               break
-      if args.throughput_estimation_interval is not None:
-            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), epochs))
   current_state = {
       'model_params': trainer.model.model_params(),
       'last_epoch': trainer.current_epoch,

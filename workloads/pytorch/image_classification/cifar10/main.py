@@ -76,7 +76,9 @@ if args.master_addr is not None:
                             init_method=args.dist_url,
                             world_size=args.world_size,
                             rank=args.rank)
-    net = torch.nn.parallel.DistributedDataParallel(net)
+    net = torch.nn.parallel.DistributedDataParallel(
+            net, device_ids=[args.local_rank],
+            output_device=args.local_rank)
 
 # Data
 print('==> Preparing data..')

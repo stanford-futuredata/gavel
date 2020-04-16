@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "common.proto";
+
+service IteratorToScheduler {
+    // Updates the lease.
+    rpc UpdateLease (UpdateLeaseRequest) returns (UpdateLeaseResponse);
+}
+
+message UpdateLeaseRequest {
+    uint64 job_id = 1;
+    uint64 worker_id = 2;
+    uint64 steps = 3;
+    double duration = 4;
+    uint64 max_steps = 5;
+    double max_duration = 6;
+}
+
+message UpdateLeaseResponse {
+    uint64 max_steps = 1;
+    double max_duration = 2;
+}

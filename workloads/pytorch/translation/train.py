@@ -351,7 +351,8 @@ def main():
         dropout=opt.dropout).to(device)
 
     if distributed:
-        transformer = DDP(transformer)
+        transformer = DDP(transformer, device_ids=[opt.local_rank],
+                          output_device=opt.local_rank)
 
 
     optimizer = ScheduledOptim(

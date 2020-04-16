@@ -17,7 +17,7 @@ import utils
 CHECKPOINT_DIR_NAME = 'checkpoints'
 
 class Worker:
-    def __init__(self, worker_type, sched_ip_addr, sched_port, worker_port,
+    def __init__(self, worker_type, sched_addr, sched_port, worker_port,
                  num_gpus, run_dir):
         num_available_gpus = utils.get_num_gpus()
         if num_gpus > num_available_gpus:
@@ -28,17 +28,18 @@ class Worker:
         self._write_queue = queue.Queue()
         self._gpu_ids = list(range(num_gpus))
         self._worker_type = worker_type
-        self._worker_ip_addr = socket.gethostbyname(socket.gethostname())
+        self._worker_addr = socket.gethostbyname(socket.gethostname())
         self._worker_port = worker_port
         self._worker_rpc_client = worker_client.WorkerRpcClient(
-                self._worker_type, self._worker_ip_addr,
-                self._worker_port, sched_ip_addr, sched_port,
+                self._worker_type, self._worker_addr,
+                self._worker_port, sched_addr, sched_port,
                 self._write_queue)
 
         self._write_queue.put('Starting server at port %d' % (worker_port))
 
         callbacks = {
             'Run': self._run_callback,
+            'Reset': self._reset_callback,
             'Shutdown': self._shutdown_callback,
         }
 
@@ -70,6 +71,8 @@ class Worker:
         self._dispatcher = dispatcher.Dispatcher(self._round_duration,
                                                  self._gpu_ids,
                                                  self._worker_rpc_client,
+                                                 sched_addr,
+                                                 sched_port,
                                                  run_dir,
                                                  checkpoint_dir,
                                                  self._write_queue)
@@ -91,6 +94,9 @@ class Worker:
     def _signal_handler(self, sig, frame):
         self._dispatcher.shutdown()
         sys.exit(0)
+
+    def _reset_callback(self):
+        self._dispatcher.reset()
 
     def _shutdown_callback(self):
         self._dispatcher.shutdown()

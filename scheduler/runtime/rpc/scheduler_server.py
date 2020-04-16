@@ -10,6 +10,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import worker_to_scheduler_pb2 as w2s_pb2
 import worker_to_scheduler_pb2_grpc as w2s_pb2_grpc
+import iterator_to_scheduler_pb2 as i2s_pb2
+import iterator_to_scheduler_pb2_grpc as i2s_pb2_grpc
 import common_pb2
 from job_id_pair import JobIdPair
 
@@ -69,10 +71,47 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
 
         return common_pb2.Empty()
 
+class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
+    def __init__(self, callbacks, write_queue):
+        self._callbacks = callbacks
+        self._write_queue = write_queue
+
+    def UpdateLease(self, request, context):
+        self._write_queue.put('Received lease update request: '
+                              'job_id=%s, '
+                              'worker_id=%d, '
+                              'steps=%d, '
+                              'duration=%f, '
+                              'max_steps=%d,'
+                              'max_duration=%f' % (request.job_id,
+                                                   request.worker_id,
+                                                   request.steps,
+                                                   request.duration,
+                                                   request.max_steps,
+                                                   request.max_duration))
+        update_lease_callback = self._callbacks['UpdateLease']
+        (max_steps, max_duration) = \
+            update_lease_callback(job_id=JobIdPair(request.job_id, None),
+                                  worker_id=request.worker_id,
+                                  steps=request.steps,
+                                  duration=request.duration,
+                                  max_steps=request.max_steps,
+                                  max_duration=request.max_duration)
+        self._write_queue.put('Sending new lease to job %d (worker %d) '
+                              'with max_steps=%d, '
+                              'max_duration=%f' % (request.job_id,
+                                                   request.worker_id,
+                                                   max_steps,
+                                                   max_duration))
+        return i2s_pb2.UpdateLeaseResponse(max_steps=max_steps,
+                                           max_duration=max_duration)
+
 def serve(port, callbacks, write_queue=None):
     server = grpc.server(futures.ThreadPoolExecutor())
     w2s_pb2_grpc.add_WorkerToSchedulerServicer_to_server(
             SchedulerRpcServer(callbacks, write_queue), server)
+    i2s_pb2_grpc.add_IteratorToSchedulerServicer_to_server(
+            SchedulerIteratorRpcServer(callbacks, write_queue), server)
     ip_address = socket.gethostbyname(socket.gethostname())
     server.add_insecure_port('%s:%d' % (ip_address, port))
     # TODO: Remove option to not pass write_queue.
