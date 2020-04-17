@@ -71,6 +71,7 @@ class Dispatcher:
                 self._write_queue.put('Could not get completed steps for '
                                       'job %s' % (str(job.job_id)))
                 self._write_queue.put(output)
+                completed_steps = 0
             else:
                 self._write_queue.put('Job ID: %s, '
                                       'Num steps: %d, '

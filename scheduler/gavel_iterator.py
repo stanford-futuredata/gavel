@@ -13,19 +13,13 @@ class GavelIterator:
     def __init__(self, data, job_id, worker_id, distributed,
                  server_addr, server_port):
         self._prev_time = time.time()
-        if isinstance(data, list):
-            self._data = data
-            self._iter_data = iter(data)
-        elif isinstance(data, DataLoader):
-            self._data = data
-            self._iter_data = iter(data)
-        else:
+        if not isinstance(data, list) and not isinstance(data, DataLoader):
             raise ValueError('Unknown data type %s' % (type(data)))
-
+        else:
+            self._data = data
         self._rpc_client = iterator_client.IteratorRpcClient(job_id, worker_id,
                                                              server_addr,
                                                              server_port)
-
         self._job_id = job_id
         self._worker_id = worker_id
         self._steps = 0
@@ -36,6 +30,7 @@ class GavelIterator:
         self._update_lease()
 
     def __iter__(self):
+        self._iter_data = iter(self._data)
         return self
 
     def __next__(self):
@@ -53,10 +48,16 @@ class GavelIterator:
         # Check if the lease has expired.
         if self._duration > self._lease.max_duration:
             self._done = True
+            print('Gavel lease expired: %f seconds '
+                  '(max %f seconds)' % (self._duration,
+                                        self._lease.max_duration))
             print('[GavelIterator] %d' % (self._steps))
             raise StopIteration
         elif self._steps > self._lease.max_steps:
             self._done = True
+            print('Gavel lease expired: %d steps '
+                  '(max %d steps)' % (self._steps,
+                                      self._lease.max_steps))
             print('[GavelIterator] %d' % (self._steps))
             raise StopIteration
 
@@ -65,7 +66,6 @@ class GavelIterator:
             self._steps += 1
             val = next(self._iter_data)
         except StopIteration as e:
-            self._done = True
             print('[GavelIterator] %d' % (self._steps))
             raise StopIteration
 
