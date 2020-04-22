@@ -113,19 +113,23 @@ corpus = data.Corpus(args.data)
 # dependence of e. g. 'g' on 'f' can not be learned, but allows more efficient
 # batch processing.
 
-def batchify(data, bsz):
-    # Work out how cleanly we can divide the dataset into bsz parts.
-    nbatch = data.size(0) // bsz
-    # Trim off any extra elements that wouldn't cleanly fit (remainders).
-    data = data.narrow(0, 0, nbatch * bsz)
-    # Evenly divide the data across the bsz batches.
-    data = data.view(bsz, -1).t().contiguous()
-    return data.to(device)
+class CorpusDataset(torch.utils.data.Dataset):
+    def __init__(self, data):
+        self._data = data
+
+    def __len__(self):
+        return self._data.size(0)
+
+    def __getitem__(self, idx):
+        return _self.data[i].to(device)
 
 eval_batch_size = 10
-train_data = batchify(corpus.train, args.batch_size)
-val_data = batchify(corpus.valid, eval_batch_size)
-test_data = batchify(corpus.test, eval_batch_size)
+train_data = torch.utils.data.DataLoader(CorpusDataset(corpus.train),
+                                         batch_size=args.batch_size)
+val_data = torch.utils.data.DataLoader(CorpusDataset(corpus.valid),
+                                       batch_size=eval_batch_size)
+test_data = torch.utils.data.DataLoader(CorpusDataset(corpus.test),
+                                        batch_size=eval_batch_size)
 
 ###############################################################################
 # Build the model
@@ -230,8 +234,7 @@ def train(cumulative_steps=None, cumulative_time=None):
 
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-        for p in model.parameters():
-            p.data.add_(-lr, p.grad.data)
+        optimizer.step()
 
         total_loss += loss.item()
 
