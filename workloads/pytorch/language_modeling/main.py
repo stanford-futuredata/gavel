@@ -142,11 +142,27 @@ if os.path.exists(checkpoint_path):
         state = torch.load(f)
         model = state['model']
 else:
-    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
+    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
+                           args.nlayers, args.dropout, args.tied).to(device)
+
+args.distributed = False
+if args.master_addr is not None:
+    args.distributed = True
+    os.environ['MASTER_ADDR'] = args.master_addr
+    os.environ['MASTER_PORT'] = str(args.master_port)
+    dist.init_process_group(backend=args.dist_backend,
+                            init_method=args.dist_url,
+                            world_size=args.world_size,
+                            rank=args.rank)
+
+if args.distributed:
+    model = torch.nn.parallel.DistributedDataParallel(model)
+
 cumulative_steps = 0
 cumulative_time = 0
 
 criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(model.parameters(), args.lr)
 
 ###############################################################################
 # Training code
@@ -268,7 +284,6 @@ try:
         epoch_start_time = time.time()
         cumulative_steps, cumulative_time, done = train(cumulative_steps,
                                                         cumulative_time)
-        #val_loss = evaluate(val_data)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s'.format(epoch, (time.time() - epoch_start_time)))
         if done:
