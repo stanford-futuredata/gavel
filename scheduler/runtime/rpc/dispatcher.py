@@ -2,6 +2,7 @@ from __future__ import print_function
 
 from multiprocessing.pool import ThreadPool
 import queue
+import signal
 import subprocess
 import sys
 import time
@@ -10,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import utils
 
-THROUGHPUT_ESTIMATION_INTERVAL = 10
+BUFFER_TIME = 120
 
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
@@ -62,15 +63,15 @@ class Dispatcher:
             proc = subprocess.run(command,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,
-                                  timeout=(self._round_duration + 60),
+                                  timeout=(self._round_duration + BUFFER_TIME),
                                   shell=True)
             execution_time = time.time() - start_time
             output = proc.stdout.decode('utf-8').strip()
             completed_steps = self._get_steps_from_output(output)
             if completed_steps is None:
-                self._write_queue.put('Could not get completed steps for '
-                                      'job %s' % (str(job.job_id)))
-                self._write_queue.put(output)
+                self._write_queue.put('Could not get completed steps for job '
+                                      '%s, Output:\n%s' % (str(job.job_id),
+                                                           output))
                 completed_steps = 0
             else:
                 self._write_queue.put('Job ID: %s, '
@@ -87,9 +88,9 @@ class Dispatcher:
             if e.args is not None:
                 error_message += '\nArgs: %s' % (str(e.args))
             if e.stdout is not None:
-                error_message += 'Stdout: %s' % (e.stdout)
+                error_message += '\nStdout: %s' % (e.stdout)
             if e.stderr is not None:
-                error_message += 'Stderr: %s' % (e.stderr)
+                error_message += '\nStderr: %s' % (e.stderr)
             self._write_queue.put(error_message)
             execution_time = -1
             completed_steps = 0
@@ -99,18 +100,16 @@ class Dispatcher:
             if e.args is not None:
                 error_message += '\nArgs: %s' % (str(e.args))
             if e.stdout is not None:
-                error_message += 'Stdout: %s' % (e.stdout)
+                error_message += '\nStdout: %s' % (e.stdout)
             if e.stderr is not None:
-                error_message += 'Stderr: %s' % (e.stderr)
+                error_message += '\nStderr: %s' % (e.stderr)
             self._write_queue.put(error_message)
             execution_time = -1
             completed_steps = 0
-            output = ''
         except Exception as e:
             self._write_queue.put('Dispatcher failed: %s' % (e))
             execution_time = -1
             completed_steps = 0
-            output = ''
 
         return [job.job_id, execution_time, completed_steps]
 
@@ -154,6 +153,10 @@ class Dispatcher:
 
     def reset(self):
         self._write_queue.put('Resetting dispatcher')
+        pids = utils.get_gpu_processes()
+        for pid in pids:
+            self._write_queue.put('Killing process %d' % (pid))
+            os.kill(pid, signal.SIGKILL)
         self.shutdown()
         self._thread_pool = ThreadPool()
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
