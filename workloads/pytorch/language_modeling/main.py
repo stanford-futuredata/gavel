@@ -45,7 +45,7 @@ parser.add_argument('--cuda', action='store_true',
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
 parser.add_argument('--checkpoint_dir', type=str,
-                    default='/lfs/1/keshav2/checkpoints/lm',
+                    default=None,
                     help='Checkpoint dir')
 parser.add_argument('--onnx-export', type=str, default='',
                     help='path to export the final model in onnx format')
@@ -85,16 +85,6 @@ if torch.cuda.is_available():
 torch.cuda.set_device(args.local_rank)
 device = torch.device("cuda" if args.cuda else "cpu")
 
-args.distributed = False
-if args.master_addr is not None:
-    args.distributed = True
-    os.environ['MASTER_ADDR'] = args.master_addr
-    os.environ['MASTER_PORT'] = str(args.master_port)
-    dist.init_process_group(backend=args.dist_backend,
-                            init_method=args.dist_url,
-                            world_size=args.world_size,
-                            rank=args.rank)
-
 ###############################################################################
 # Load data
 ###############################################################################
@@ -113,19 +103,49 @@ corpus = data.Corpus(args.data)
 # dependence of e. g. 'g' on 'f' can not be learned, but allows more efficient
 # batch processing.
 
-def batchify(data, bsz):
-    # Work out how cleanly we can divide the dataset into bsz parts.
-    nbatch = data.size(0) // bsz
-    # Trim off any extra elements that wouldn't cleanly fit (remainders).
-    data = data.narrow(0, 0, nbatch * bsz)
-    # Evenly divide the data across the bsz batches.
-    data = data.view(bsz, -1).t().contiguous()
-    return data.to(device)
+class CorpusDataset(torch.utils.data.Dataset):
+    def __init__(self, data, batch_size, bptt):
+        self._data = data.narrow(0, 0, (data.size(0) // batch_size) * batch_size)
+        # Evenly divide the data across the bsz batches.
+        self._data = self._data.view(batch_size, -1).t().contiguous().to(device)
+        self._data_length = data.size(0)
+        self._batch_size = batch_size
+        self._bptt = bptt
+
+    # get_input subdivides the source data into chunks of length args.bptt.
+    # If source is equal to the example output of the batchify function, with
+    # a bptt-limit of 2, we'd get the following two Variables for i = 0:
+    # ┌ a g m s ┐ ┌ b h n t ┐
+    # └ b h n t ┘ └ c i o u ┘
+    # Note that despite the name of the function, the subdivison of data is not
+    # done along the batch dimension (i.e. dimension 1), since that was handled
+    # by the batchify function. The chunks are along dimension 0, corresponding
+    # to the seq_len dimension in the LSTM.
+    def get_input(self, row_idx, col_idx):
+        seq_len = min(self._bptt, len(self._data) - 1 - row_idx)
+        data = self._data[row_idx: row_idx+seq_len, col_idx]
+        target = self._data[row_idx+1: row_idx+1+seq_len, col_idx].view(data.size())
+        data = torch.cat([data, data.new_zeros(self._bptt - data.size(0))])
+        target = torch.cat([target, target.new_zeros(self._bptt - target.size(0))])
+        return data, target
+
+    def __len__(self):
+        return self._data_length // self._bptt
+
+    def __getitem__(self, idx):
+        return self.get_input((idx // self._batch_size) * self._bptt,
+                              idx % self._batch_size)
 
 eval_batch_size = 10
-train_data = batchify(corpus.train, args.batch_size)
-val_data = batchify(corpus.valid, eval_batch_size)
-test_data = batchify(corpus.test, eval_batch_size)
+train_dataset = CorpusDataset(corpus.train,
+                              args.batch_size,
+                              args.bptt)
+val_dataset = CorpusDataset(corpus.valid,
+                            eval_batch_size,
+                            args.bptt)
+test_dataset = CorpusDataset(corpus.test,
+                             eval_batch_size,
+                             args.bptt)
 
 ###############################################################################
 # Build the model
@@ -142,11 +162,42 @@ if os.path.exists(checkpoint_path):
         state = torch.load(f)
         model = state['model']
 else:
-    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
+    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
+                           args.nlayers, args.dropout, args.tied).to(device)
+
+args.distributed = False
+if args.master_addr is not None:
+    args.distributed = True
+    os.environ['MASTER_ADDR'] = args.master_addr
+    os.environ['MASTER_PORT'] = str(args.master_port)
+    dist.init_process_group(backend=args.dist_backend,
+                            init_method=args.dist_url,
+                            world_size=args.world_size,
+                            rank=args.rank)
+
+if args.distributed:
+    model = torch.nn.parallel.DistributedDataParallel(model)
+    train_sampler = torch.utils.data.distributed.DistributedSampler(
+        train_dataset, shuffle=False)
+else:
+    train_sampler = None
+
+train_loader = torch.utils.data.DataLoader(train_dataset,
+                                           batch_size=args.batch_size,
+                                           shuffle=False,
+                                           sampler=train_sampler)
+val_loader = torch.utils.data.DataLoader(val_dataset,
+                                         batch_size=eval_batch_size,
+                                         shuffle=False)
+test_loader = torch.utils.data.DataLoader(test_dataset,
+                                          batch_size=eval_batch_size,
+                                          shuffle=False)
+
 cumulative_steps = 0
 cumulative_time = 0
 
 criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(model.parameters(), args.lr)
 
 ###############################################################################
 # Training code
@@ -159,38 +210,23 @@ def repackage_hidden(h):
     else:
         return tuple(repackage_hidden(v) for v in h)
 
-
-# get_batch subdivides the source data into chunks of length args.bptt.
-# If source is equal to the example output of the batchify function, with
-# a bptt-limit of 2, we'd get the following two Variables for i = 0:
-# ┌ a g m s ┐ ┌ b h n t ┐
-# └ b h n t ┘ └ c i o u ┘
-# Note that despite the name of the function, the subdivison of data is not
-# done along the batch dimension (i.e. dimension 1), since that was handled
-# by the batchify function. The chunks are along dimension 0, corresponding
-# to the seq_len dimension in the LSTM.
-
-def get_batch(source, i):
-    seq_len = min(args.bptt, len(source) - 1 - i)
-    data = source[i:i+seq_len]
-    target = source[i+1:i+1+seq_len].view(-1)
-    return data, target
-
-
-def evaluate(data_source):
+def evaluate(loader):
     # Turn on evaluation mode which disables dropout.
     model.eval()
     total_loss = 0.
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(eval_batch_size)
     with torch.no_grad():
-        for i in range(0, data_source.size(0) - 1, args.bptt):
-            data, targets = get_batch(data_source, i)
+        for i, batch in enumerate(loader):
+            (data, targets) = batch
+            data = data.t()
+            targets = targets.t()
+
             output, hidden = model(data, hidden)
             output_flat = output.view(-1, ntokens)
-            total_loss += len(data) * criterion(output_flat, targets).item()
+            total_loss += len(data) * criterion(output_flat, targets.flatten()).item()
             hidden = repackage_hidden(hidden)
-    return total_loss / (len(data_source) - 1)
+    return total_loss / (len(loader) - 1)
 
 
 def train(cumulative_steps=None, cumulative_time=None):
@@ -199,32 +235,41 @@ def train(cumulative_steps=None, cumulative_time=None):
     total_loss = 0.
     start_time = time.time()
     ntokens = len(corpus.dictionary)
-    hidden = model.init_hidden(args.batch_size)
+    if args.distributed:
+        hidden = model.module.init_hidden(args.batch_size)
+    else:
+        hidden = model.init_hidden(args.batch_size)
     done = False
-    for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
+    for i, batch in enumerate(train_loader):
         total_duration_tracker_start = time.time()
-        data, targets = get_batch(train_data, i)
+
+        # Batch size should be the second dimension, not first.
+        (data, targets) = batch
+        data = data.t()
+        targets = targets.t()
+
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
         model.zero_grad()
         output, hidden = model(data, hidden)
-        loss = criterion(output.view(-1, ntokens), targets)
+
+        # Shape of output and targets need to align.
+        loss = criterion(output.view(-1, ntokens), targets.flatten())
         loss.backward()
 
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-        for p in model.parameters():
-            p.data.add_(-lr, p.grad.data)
+        optimizer.step()
 
         total_loss += loss.item()
 
-        if batch % args.log_interval == 0 and batch > 0:
+        if i % args.log_interval == 0 and i > 0:
             cur_loss = total_loss / args.log_interval
             elapsed = time.time() - start_time
             print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
                     'loss {:5.2f} | ppl {:8.2f}'.format(
-                epoch, batch, len(train_data) // args.bptt, lr,
+                epoch, i, len(train_loader), lr,
                 elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
             total_loss = 0
             start_time = time.time()
@@ -268,7 +313,6 @@ try:
         epoch_start_time = time.time()
         cumulative_steps, cumulative_time, done = train(cumulative_steps,
                                                         cumulative_time)
-        #val_loss = evaluate(val_data)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s'.format(epoch, (time.time() - epoch_start_time)))
         if done:
@@ -276,10 +320,12 @@ try:
         print('-' * 89)
     with open(checkpoint_path, 'wb') as f:
         print('Saving checkpoint at %s...' % (checkpoint_path))
-        state = {
-            'model': model,
-        }
-        torch.save(state, f)
+        if args.distributed:
+            state = {'model': model.module}
+        else:
+            state = {'model': model}
+        if args.rank == 0:
+            torch.save(state, f)
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
