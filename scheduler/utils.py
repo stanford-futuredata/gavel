@@ -2,6 +2,7 @@ import csv
 from datetime import datetime
 import json
 import os
+import re
 import socket
 import subprocess
 
@@ -19,6 +20,21 @@ def get_num_gpus():
     output = subprocess.run(command, stdout=subprocess.PIPE, check=True,
                             shell=True).stdout.decode('utf-8').strip()
     return len(output.split('\n'))
+
+def get_gpu_processes():
+    output = subprocess.check_output('nvidia-smi').decode('utf-8')
+    pids = []
+    processes_flag = False
+    for line in output.split('\n'):
+        if 'Processes' in line:
+            processes_flag = True
+            continue
+        if processes_flag:
+            res = re.search('(\d+) *(\d+) *(\w+) *(\w+) *(\d+)MiB', line)
+            if res is not None:
+                pid = int(res.group(2))
+                pids.append(pid)
+    return pids
 
 def get_available_policies():
     return ['allox',
