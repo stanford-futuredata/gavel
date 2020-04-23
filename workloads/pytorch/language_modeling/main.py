@@ -85,16 +85,6 @@ if torch.cuda.is_available():
 torch.cuda.set_device(args.local_rank)
 device = torch.device("cuda" if args.cuda else "cpu")
 
-args.distributed = False
-if args.master_addr is not None:
-    args.distributed = True
-    os.environ['MASTER_ADDR'] = args.master_addr
-    os.environ['MASTER_PORT'] = str(args.master_port)
-    dist.init_process_group(backend=args.dist_backend,
-                            init_method=args.dist_url,
-                            world_size=args.world_size,
-                            rank=args.rank)
-
 ###############################################################################
 # Load data
 ###############################################################################
@@ -135,6 +125,8 @@ class CorpusDataset(torch.utils.data.Dataset):
         seq_len = min(self._bptt, len(self._data) - 1 - row_idx)
         data = self._data[row_idx: row_idx+seq_len, col_idx]
         target = self._data[row_idx+1: row_idx+1+seq_len, col_idx].view(data.size())
+        data = torch.cat([data, data.new_zeros(self._bptt - data.size(0))])
+        target = torch.cat([target, target.new_zeros(self._bptt - target.size(0))])
         return data, target
 
     def __len__(self):
@@ -185,7 +177,8 @@ if args.master_addr is not None:
 
 if args.distributed:
     model = torch.nn.parallel.DistributedDataParallel(model)
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_loaderset)
+    train_sampler = torch.utils.data.distributed.DistributedSampler(
+        train_dataset, shuffle=False)
 else:
     train_sampler = None
 
@@ -242,7 +235,10 @@ def train(cumulative_steps=None, cumulative_time=None):
     total_loss = 0.
     start_time = time.time()
     ntokens = len(corpus.dictionary)
-    hidden = model.init_hidden(args.batch_size)
+    if args.distributed:
+        hidden = model.module.init_hidden(args.batch_size)
+    else:
+        hidden = model.init_hidden(args.batch_size)
     done = False
     for i, batch in enumerate(train_loader):
         total_duration_tracker_start = time.time()
@@ -324,10 +320,12 @@ try:
         print('-' * 89)
     with open(checkpoint_path, 'wb') as f:
         print('Saving checkpoint at %s...' % (checkpoint_path))
-        state = {
-            'model': model,
-        }
-        torch.save(state, f)
+        if args.distributed:
+            state = {'model': model.module}
+        else:
+            state = {'model': model}
+        if args.rank == 0:
+            torch.save(state, f)
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
