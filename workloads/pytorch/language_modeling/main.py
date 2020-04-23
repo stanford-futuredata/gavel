@@ -145,21 +145,15 @@ class CorpusDataset(torch.utils.data.Dataset):
                               idx % self._batch_size)
 
 eval_batch_size = 10
-train_data = torch.utils.data.DataLoader(CorpusDataset(corpus.train,
-                                                       args.batch_size,
-                                                       args.bptt),
-                                         batch_size=args.batch_size,
-                                         shuffle=False)
-val_data = torch.utils.data.DataLoader(CorpusDataset(corpus.valid,
-                                                     eval_batch_size,
-                                                     args.bptt),
-                                       batch_size=eval_batch_size,
-                                       shuffle=False)
-test_data = torch.utils.data.DataLoader(CorpusDataset(corpus.test,
-                                                      eval_batch_size,
-                                                      args.bptt),
-                                        batch_size=eval_batch_size,
-                                        shuffle=False)
+train_dataset = CorpusDataset(corpus.train,
+                              args.batch_size,
+                              args.bptt)
+val_dataset = CorpusDataset(corpus.valid,
+                            eval_batch_size,
+                            args.bptt)
+test_dataset = CorpusDataset(corpus.test,
+                             eval_batch_size,
+                             args.bptt)
 
 ###############################################################################
 # Build the model
@@ -191,6 +185,20 @@ if args.master_addr is not None:
 
 if args.distributed:
     model = torch.nn.parallel.DistributedDataParallel(model)
+    train_sampler = torch.utils.data.distributed.DistributedSampler(train_loaderset)
+else:
+    train_sampler = None
+
+train_loader = torch.utils.data.DataLoader(train_dataset,
+                                           batch_size=args.batch_size,
+                                           shuffle=False,
+                                           sampler=train_sampler)
+val_loader = torch.utils.data.DataLoader(val_dataset,
+                                         batch_size=eval_batch_size,
+                                         shuffle=False)
+test_loader = torch.utils.data.DataLoader(test_dataset,
+                                          batch_size=eval_batch_size,
+                                          shuffle=False)
 
 cumulative_steps = 0
 cumulative_time = 0
@@ -209,14 +217,14 @@ def repackage_hidden(h):
     else:
         return tuple(repackage_hidden(v) for v in h)
 
-def evaluate(data_source):
+def evaluate(loader):
     # Turn on evaluation mode which disables dropout.
     model.eval()
     total_loss = 0.
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(eval_batch_size)
     with torch.no_grad():
-        for i, batch in enumerate(data_source):
+        for i, batch in enumerate(loader):
             (data, targets) = batch
             data = data.t()
             targets = targets.t()
@@ -225,7 +233,7 @@ def evaluate(data_source):
             output_flat = output.view(-1, ntokens)
             total_loss += len(data) * criterion(output_flat, targets.flatten()).item()
             hidden = repackage_hidden(hidden)
-    return total_loss / (len(data_source) - 1)
+    return total_loss / (len(loader) - 1)
 
 
 def train(cumulative_steps=None, cumulative_time=None):
@@ -236,7 +244,7 @@ def train(cumulative_steps=None, cumulative_time=None):
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(args.batch_size)
     done = False
-    for i, batch in enumerate(train_data):
+    for i, batch in enumerate(train_loader):
         total_duration_tracker_start = time.time()
 
         # Batch size should be the second dimension, not first.
@@ -265,7 +273,7 @@ def train(cumulative_steps=None, cumulative_time=None):
             elapsed = time.time() - start_time
             print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
                     'loss {:5.2f} | ppl {:8.2f}'.format(
-                epoch, i, len(train_data), lr,
+                epoch, i, len(train_loader), lr,
                 elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
             total_loss = 0
             start_time = time.time()
