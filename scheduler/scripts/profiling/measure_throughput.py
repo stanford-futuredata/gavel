@@ -16,7 +16,7 @@ from runtime.rpc import scheduler_server, scheduler_client
 BASE_DISTRIBUTED_LEASE_STEPS = 150
 SERVER_PORT = 50060
 INFINITY = 1000000
-MULTI_GPU_JOB_TYPES = ['ResNet-18', 'ResNet-50', 'Transformer']
+MULTI_GPU_JOB_TYPES = ['ResNet-18', 'ResNet-50', 'Transformer', 'LM']
 
 class Profiler:
     def __init__(self, num_workers, measurement_time, log_file=None):
