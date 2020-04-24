@@ -7,9 +7,19 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.onnx
+import sys
 
 import data
 import model
+
+# TODO: Figure out a cleaner way of including gavel_iterator.
+lm_dir = os.path.dirname(os.path.realpath(__file__))
+pytorch_dir = os.path.dirname(lm_dir)
+workloads_dir = os.path.dirname(pytorch_dir)
+gpusched_dir = os.path.dirname(workloads_dir)
+scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
+sys.path.append(scheduler_dir)
+from gavel_iterator import GavelIterator
 
 parser = argparse.ArgumentParser(description='PyTorch Wikitext-2 RNN/LSTM Language Model')
 parser.add_argument('--data', type=str, required=True,
@@ -68,6 +78,12 @@ parser.add_argument('--master_port', default=None, type=int,
                             help='Master port to use for distributed run')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
+parser.add_argument('--job_id', type=int, default=None, help='Job ID')
+parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
+parser.add_argument('--sched_addr', type=str, default=None,
+                    help='Scheduler server')
+parser.add_argument('--sched_port', type=int, default=None,
+                    help='Scheduler port')
 
 args = parser.parse_args()
 
@@ -176,11 +192,17 @@ if args.master_addr is not None:
                             rank=args.rank)
 
 if args.distributed:
-    model = torch.nn.parallel.DistributedDataParallel(model)
+    model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[args.local_rank],
+                output_device=args.local_rank)
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset, shuffle=False)
 else:
     train_sampler = None
+
+args.enable_gavel_iterator = False
+if args.job_id is not None:
+    args.enable_gavel_iterator = True
 
 train_loader = torch.utils.data.DataLoader(train_dataset,
                                            batch_size=args.batch_size,
@@ -195,6 +217,12 @@ test_loader = torch.utils.data.DataLoader(test_dataset,
                                           batch_size=eval_batch_size,
                                           shuffle=False,
                                           drop_last=True)
+
+if args.enable_gavel_iterator:
+    train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
+                                 args.distributed,
+                                 args.sched_addr, args.sched_port)
+
 
 cumulative_steps = 0
 cumulative_time = 0
@@ -318,7 +346,7 @@ try:
                                                         cumulative_time)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s'.format(epoch, (time.time() - epoch_start_time)))
-        if done:
+        if done or (args.enable_gavel_iterator and train_loader.done):
           break
         print('-' * 89)
     with open(checkpoint_path, 'wb') as f:
