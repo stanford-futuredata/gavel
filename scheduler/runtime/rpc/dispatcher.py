@@ -36,8 +36,9 @@ class Dispatcher:
     def _construct_command(self, job, gpu_id, worker_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
                                       'job_id=%d' % (job.job_id))
-        if not os.path.isdir(checkpoint_dir):
-            os.mkdir(checkpoint_dir)
+        with self._lock:
+            if not os.path.isdir(checkpoint_dir):
+                os.mkdir(checkpoint_dir)
 
         if job.needs_data_dir:
             command = job.command % (self._run_dir, self._run_dir)
