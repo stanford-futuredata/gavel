@@ -158,6 +158,9 @@ class Dispatcher:
                     self._job_assignments[job_id] = []
                 self._job_assignments[job_id].append(gpu_id)
 
+        self._write_queue.put('Constructing commands for '
+                              'worker %d...' % (worker_id))
+
         commands = \
             [self._construct_command(job, gpu_id, worker_id) for job in jobs]
         results = []
