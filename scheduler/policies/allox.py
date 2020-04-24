@@ -59,8 +59,8 @@ class AlloXPolicy(Policy):
 
         # Sort job IDs according to arrival time.
         unallocated_job_ids.sort(key=lambda x: -times_since_start[x])
-
-        # TODO: Do something with alpha.
+        unallocated_job_ids = unallocated_job_ids[:max(int(self._alpha * m), n)]
+        m = len(unallocated_job_ids)
 
         # Construct matrix of processing times for each job on each worker,
         # taking into account the type of each worker.

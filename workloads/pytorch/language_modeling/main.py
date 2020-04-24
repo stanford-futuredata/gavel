@@ -185,13 +185,16 @@ else:
 train_loader = torch.utils.data.DataLoader(train_dataset,
                                            batch_size=args.batch_size,
                                            shuffle=False,
-                                           sampler=train_sampler)
+                                           sampler=train_sampler,
+                                           drop_last=True)
 val_loader = torch.utils.data.DataLoader(val_dataset,
                                          batch_size=eval_batch_size,
-                                         shuffle=False)
+                                         shuffle=False,
+                                         drop_last=True)
 test_loader = torch.utils.data.DataLoader(test_dataset,
                                           batch_size=eval_batch_size,
-                                          shuffle=False)
+                                          shuffle=False,
+                                          drop_last=True)
 
 cumulative_steps = 0
 cumulative_time = 0
