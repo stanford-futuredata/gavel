@@ -23,7 +23,7 @@ def get_num_gpus():
 
 def get_gpu_processes():
     output = subprocess.check_output('nvidia-smi').decode('utf-8')
-    pids = []
+    gpu_processes = {}
     processes_flag = False
     for line in output.split('\n'):
         if 'Processes' in line:
@@ -32,9 +32,12 @@ def get_gpu_processes():
         if processes_flag:
             res = re.search('(\d+) *(\d+) *(\w+) *(\w+) *(\d+)MiB', line)
             if res is not None:
+                gpu_id = int(res.group(1))
+                if gpu_id not in gpu_processes:
+                    gpu_processes[gpu_id] = []
                 pid = int(res.group(2))
-                pids.append(pid)
-    return pids
+                gpu_processes[gpu_id].append(pid)
+    return gpu_processes
 
 def get_available_policies():
     return ['allox',

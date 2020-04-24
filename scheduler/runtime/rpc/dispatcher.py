@@ -5,13 +5,14 @@ import queue
 import signal
 import subprocess
 import sys
+import threading
 import time
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import utils
 
-BUFFER_TIME = 120
+BUFFER_TIME = 180
 
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
@@ -27,6 +28,8 @@ class Dispatcher:
         self._gpu_ids = gpu_ids
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
         self._write_queue = write_queue
+        self._job_assignments = {}
+        self._lock = threading.Lock()
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
 
@@ -56,7 +59,25 @@ class Dispatcher:
                 steps = int(line.split('[GavelIterator]')[-1])
         return steps
 
-    def launch_job(self, job, command):
+    def _kill_jobs(self, job_id=None):
+        with self._lock:
+            gpu_processes = utils.get_gpu_processes()
+            if job_id is not None:
+                for gpu_id in self._job_assignments[job_id]:
+                    if gpu_id not in gpu_processes:
+                        continue
+                    for pid in gpu_processes[gpu_id]:
+                        self._write_queue.put(
+                            'Killing process %d on GPU %d' % (pid, gpu_id))
+                        os.kill(pid, signal.SIGKILL)
+            else:
+                for gpu_id in gpu_processes:
+                    for pid in gpu_processes[gpu_id]:
+                        self._write_queue.put(
+                            'Killing process %d on GPU %d' % (pid, gpu_id))
+                        os.kill(pid, signal.SIGKILL)
+
+    def launch_job(self, job, command, worker_id):
         start_time = time.time()
         output = ''
         try:
@@ -70,21 +91,27 @@ class Dispatcher:
             completed_steps = self._get_steps_from_output(output)
             if completed_steps is None:
                 self._write_queue.put('Could not get completed steps for job '
-                                      '%s, Output:\n%s' % (str(job.job_id),
-                                                           output))
+                                      '%s (worker %d), '
+                                      'Output:\n%s' % (str(job.job_id),
+                                                       worker_id,
+                                                       output))
                 completed_steps = 0
+                self._kill_jobs(job_id=job.job_id)
             else:
                 self._write_queue.put('Job ID: %s, '
+                                      'Worker ID: %d '
                                       'Num steps: %d, '
                                       'Execution time: %.3f seconds, '
                                       'Output:\n%s' % (str(job.job_id),
+                                                       worker_id,
                                                        completed_steps,
                                                        execution_time,
                                                        output))
         except subprocess.CalledProcessError as e:
-            error_message =\
-                'Job %s failed with error code %s' % (str(job.job_id),
-                                                      str(e.returncode))
+            error_message = ('Job %s (worker %d) failed with '
+                             'error code %s' % (str(job.job_id),
+                                                worker_id,
+                                                str(e.returncode)))
             if e.args is not None:
                 error_message += '\nArgs: %s' % (str(e.args))
             if e.stdout is not None:
@@ -95,8 +122,10 @@ class Dispatcher:
             execution_time = -1
             completed_steps = 0
             output = ''
+            self._kill_jobs(job_id=job.job_id)
         except subprocess.TimeoutExpired as e:
-            error_message = 'Job %s timed out' % (str(job.job_id))
+            error_message = 'Job %s (worker %d) timed out' % (str(job.job_id),
+                                                              worker_id)
             if e.args is not None:
                 error_message += '\nArgs: %s' % (str(e.args))
             if e.stdout is not None:
@@ -106,6 +135,7 @@ class Dispatcher:
             self._write_queue.put(error_message)
             execution_time = -1
             completed_steps = 0
+            self._kill_jobs(job_id=job.job_id)
         except Exception as e:
             self._write_queue.put('Dispatcher failed: %s' % (e))
             execution_time = -1
@@ -122,6 +152,12 @@ class Dispatcher:
         self._write_queue.put('Using GPU %d for job(s) '
                               '%s (worker %d)' % (gpu_id, str(job_ids),
                                                   worker_id))
+        with self._lock:
+            for job_id in job_ids:
+                if job_id not in self._job_assignments:
+                    self._job_assignments[job_id] = []
+                self._job_assignments[job_id].append(gpu_id)
+
         commands = \
             [self._construct_command(job, gpu_id, worker_id) for job in jobs]
         results = []
@@ -132,7 +168,8 @@ class Dispatcher:
                                   'command: "%s"' % (job.job_id, gpu_id,
                                                      command))
             results.append(self._thread_pool.apply_async(self.launch_job,
-                                                         (job, command,)))
+                                                         (job, command,
+                                                          worker_id)))
         job_descriptions = [result.get() for result in results]
 
         # Cleanup and notify the scheduler.
@@ -153,11 +190,9 @@ class Dispatcher:
 
     def reset(self):
         self._write_queue.put('Resetting dispatcher')
-        pids = utils.get_gpu_processes()
-        for pid in pids:
-            self._write_queue.put('Killing process %d' % (pid))
-            os.kill(pid, signal.SIGKILL)
+        self._kill_jobs()
         self.shutdown()
+        self._job_assignments = {}
         self._thread_pool = ThreadPool()
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
         for gpu_id in self._gpu_ids:
