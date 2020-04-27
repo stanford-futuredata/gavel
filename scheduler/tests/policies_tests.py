@@ -1,6 +1,6 @@
 import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
-from policies import allox, finish_time_fairness, isolated, max_min_fairness, max_sum_throughput
+from policies import allox, finish_time_fairness, gandiva, isolated, max_min_fairness, max_sum_throughput
 
 import itertools
 import numpy as np
@@ -101,6 +101,37 @@ class TestPolicies(unittest.TestCase):
                 max_min_fairness_objectives.append(max_min_fairness_objective)
             assert(np.isclose(min(isolated_objectives),
                               min(max_min_fairness_objectives)))
+
+    def test_gandiva(self):
+        policy = gandiva.GandivaPolicy()
+        unflattened_throughputs = {
+            JobIdPair(0, None): {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            JobIdPair(1, None): {'v100': 3.0, 'p100': 2.0, 'k80': 1.0},
+            JobIdPair(0, 1): {'v100': (2.0, 3.0), 'p100': (1.0, 2.0),
+                              'k80': (0.5, 1.0)},
+        }
+        scale_factors = {
+            JobIdPair(0, None): 1,
+            JobIdPair(1, None): 1
+        }
+        cluster_spec = {
+            'v100': 1,
+            'p100': 1,
+            'k80': 1
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              cluster_spec)
+
+        unflattened_throughputs = {
+            JobIdPair(0, None): {'v100': 2.0},
+            JobIdPair(1, None): {'v100': 3.0},
+            JobIdPair(0, 1): {'v100': (2.0, 3.0)},
+        }
+        cluster_spec = {
+            'v100': 1,
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              cluster_spec)
 
     def test_max_min_fairness_with_perf(self):
         policy = max_min_fairness.MaxMinFairnessPolicyWithPerf(
