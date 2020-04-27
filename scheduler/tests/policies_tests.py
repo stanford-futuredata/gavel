@@ -132,6 +132,7 @@ class TestPolicies(unittest.TestCase):
         }
         policy.get_allocation(unflattened_throughputs, scale_factors,
                               cluster_spec)
+
         unflattened_throughputs = {
             JobIdPair(0, None): {'v100': 2.0},
             JobIdPair(1, None): {'v100': 3.0},
