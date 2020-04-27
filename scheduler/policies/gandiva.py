@@ -44,6 +44,19 @@ class GandivaPolicy(PolicyWithPacking):
 
         return x
 
+    def _get_normalized_throughput(self, job_combination, throughputs, worker_types):
+        normalized_packed_throughput = 0.0
+        for worker_type in worker_types:
+            packed_throughput = throughputs[job_combination][worker_type]
+            for i, single_job_id in enumerate(job_combination.singletons()):
+                if packed_throughput[i] <= 0.0:
+                    continue
+                isolated_throughput = \
+                    throughputs[single_job_id][worker_type]
+                normalized_packed_throughput += \
+                    packed_throughput[i] / isolated_throughput
+        return normalized_packed_throughput
+
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        cluster_spec):
         all_throughputs, index = super().flatten(unflattened_throughputs,
@@ -51,13 +64,20 @@ class GandivaPolicy(PolicyWithPacking):
         (m, n) = all_throughputs[0].shape
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
 
-        for job_id in self._assigned_combinations:
+        assigned_combination_keys = self._assigned_combinations.keys()
+        to_delete = []
+        for job_id in assigned_combination_keys:
+            (job_combination, other_job_id) = self._assigned_combinations[job_id]
             if job_id not in job_ids:
-                (job_combination, other_job_id) = self._assigned_combinations[
-                    job_id]
-                del self._assigned_combinations[job_id]
-                if other_job_id is not None:
-                    del self._assigned_combinations[other_job_id]
+                to_delete.extend([job_id, other_job_id])
+            # Stop using combinations with normalized throughput < 1.0.
+            if self._get_normalized_throughput(job_combination, unflattened_throughputs,
+                                               worker_types) < 1.0:
+                to_delete.extend([job_id, other_job_id])
+        for job_id in to_delete:
+            if job_id is not None:
+                if job_id in self._assigned_combinations:
+                    del self._assigned_combinations[job_id]
 
         num_workers_requested = 0
         for single_job_id in single_job_ids:

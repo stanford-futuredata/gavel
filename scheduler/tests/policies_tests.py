@@ -132,6 +132,13 @@ class TestPolicies(unittest.TestCase):
         }
         policy.get_allocation(unflattened_throughputs, scale_factors,
                               cluster_spec)
+        unflattened_throughputs = {
+            JobIdPair(0, None): {'v100': 2.0},
+            JobIdPair(1, None): {'v100': 3.0},
+            JobIdPair(0, 1): {'v100': (1.0, 1.0)},
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              cluster_spec)
 
     def test_max_min_fairness_with_perf(self):
         policy = max_min_fairness.MaxMinFairnessPolicyWithPerf(
