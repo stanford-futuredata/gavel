@@ -6,7 +6,8 @@ import socket
 import subprocess
 
 import job
-from policies import allox, fifo, finish_time_fairness, isolated, max_min_fairness, max_sum_throughput, min_total_duration
+from policies import allox, fifo, finish_time_fairness, gandiva, isolated, \
+    max_min_fairness, max_sum_throughput, min_total_duration
 
 
 def get_steps_from_job_output(outputs):
@@ -61,6 +62,7 @@ def get_available_policies():
             'finish_time_fairness',
             'finish_time_fairness_perf',
             'finish_time_fairness_packed',
+            'gandiva',
             'isolated',
             'max_min_fairness',
             'max_min_fairness_perf',
@@ -257,6 +259,8 @@ def get_policy(policy_name, solver, seed=None):
         policy = \
             finish_time_fairness.FinishTimeFairnessPolicyWithPacking(
                 solver=solver)
+    elif policy_name == 'gandiva':
+        policy = gandiva.GandivaPolicy(seed=seed)
     elif policy_name == 'isolated':
         policy = isolated.IsolatedPolicy()
     elif policy_name == 'max_min_fairness':
