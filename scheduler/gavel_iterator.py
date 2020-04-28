@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import time
 
 import torch
@@ -13,8 +14,8 @@ class GavelIterator:
     def __init__(self, data, job_id, worker_id, distributed,
                  server_addr, server_port):
         self._prev_time = time.time()
-        if not isinstance(data, list) and not isinstance(data, DataLoader):
-            raise ValueError('Unknown data type %s' % (type(data)))
+        if not isinstance(data, Iterable):
+            raise ValueError('Data is of uniterable type %s' % (type(data)))
         else:
             self._data = data
         self._rpc_client = iterator_client.IteratorRpcClient(job_id, worker_id,

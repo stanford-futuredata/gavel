@@ -12,4 +12,3 @@ opencv-python
 setproctitle
 gym[atari]
 glog
-recsys-recoder
