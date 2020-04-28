@@ -1,6 +1,7 @@
 import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
-from policies import allox, finish_time_fairness, gandiva, isolated, max_min_fairness, max_sum_throughput
+from policies import allox, finish_time_fairness, gandiva, isolated, \
+    max_min_fairness, max_sum_throughput
 
 import itertools
 import numpy as np
