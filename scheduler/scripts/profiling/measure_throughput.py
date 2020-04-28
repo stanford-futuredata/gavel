@@ -257,10 +257,7 @@ class Profiler:
                                max_steps, max_duration):
         scale_factor = self._scale_factors[job_id]
         if steps == 0 or duration == 0:
-            if scale_factor == 1:
-                return (INFINITY, self._measurement_time)
-            else:
-                return (BASE_DISTRIBUTED_LEASE_STEPS, self._measurement_time)
+            return (INFINITY, self._measurement_time)
         elif scale_factor == 1:
             return (max_steps, max_duration)
         else:
@@ -270,25 +267,14 @@ class Profiler:
                 self._lease_update_requests[job_id].append((steps, duration,
                                                             max_steps,
                                                             max_duration))
+                if update_id == 0:
+                    if (job_id in self._max_steps and
+                        worker_type in self._max_steps[job_id]):
+                        del self._max_steps[job_id][worker_type]
 
             # The first worker to request a lease update computes the new
             # lease for all workers.
             if update_id == 0:
-                # Wait for all workers to request a lease update.
-                while True:
-                    with self._lock:
-                        if (len(self._lease_update_requests[job_id]) ==
-                            self._scale_factors[job_id]):
-                            break
-                    # TODO: Sleep for less time?
-                    self._write_queue.put('Job %s (worker %d) waiting for '
-                                          'all workers to request lease '
-                                          'update...' % (job_id, worker_id))
-                    time.sleep(1)
-                # Compute the new lease.
-                self._write_queue.put('All workers for job %s have requested '
-                                      'lease update, now computing '
-                                      'new lease...' % (job_id))
                 with self._lock:
                     remaining_time = \
                         (self._measurement_time -

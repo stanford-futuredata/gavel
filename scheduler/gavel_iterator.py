@@ -82,9 +82,6 @@ class GavelIterator:
         return self._done
 
     def _update_lease(self):
-        if self._distributed:
-            assert(torch.distributed.get_world_size() > 1)
-            torch.distributed.barrier()
         (updated_max_steps, updated_max_duration) = \
             self._rpc_client.update_lease(self._steps,
                                           self._duration,
@@ -92,6 +89,7 @@ class GavelIterator:
                                           self._lease.max_duration)
         self._lease.max_steps = updated_max_steps
         self._lease.max_duration = updated_max_duration
+        # TODO: Fix this when lease extends to subsequent round.
         self._steps_until_next_lease_update = \
             self._lease.max_steps * LEASE_UPDATE_FRACTION
         self._time_until_next_lease_update = \
