@@ -1,111 +1,111 @@
 {
     "v100": {
-        "ResNet-18 (batch size 16)": {
+        "('ResNet-18 (batch size 16)', 1)": {
             "null": 60.19445008481747
         },
-        "ResNet-18 (batch size 32)": {
+        "('ResNet-18 (batch size 32)', 1)": {
             "null": 56.278593161152315
         },
-        "ResNet-18 (batch size 64)": {
+        "('ResNet-18 (batch size 64)', 1)": {
             "null": 42.51166705558994
         },
-        "ResNet-50 (batch size 16)": {
+        "('ResNet-50 (batch size 16)', 1)": {
             "null": 5.145631400201961
         },
-        "ResNet-50 (batch size 32)": {
+        "('ResNet-50 (batch size 32)', 1)": {
             "null": 2.6515489016056826
         },
-        "ResNet-50 (batch size 64)": {
+        "('ResNet-50 (batch size 64)', 1)": {
             "null": 1.2885289394105548
         },
-        "Transformer (batch size 16)": {
+        "('Transformer (batch size 16)', 1)": {
             "null": 10.312126181932081
         },
-        "Transformer (batch size 32)": {
+        "('Transformer (batch size 32)', 1)": {
             "null": 10.053367719735537
         },
-        "Transformer (batch size 64)": {
+        "('Transformer (batch size 64)', 1)": {
             "null": 8.623964893805848
         },
-        "LM (batch size 5)": {
+        "('LM (batch size 5)', 1)": {
             "null": 95.97660775293116
         },
-        "LM (batch size 10)": {
+        "('LM (batch size 10)', 1)": {
             "null": 84.6159463284825
         },
-        "LM (batch size 20)": {
+        "('LM (batch size 20)', 1)": {
             "null": 67.58427776584747
         },
-        "ResNet-18 (batch size 16) (scale factor 2)": {
+        "('ResNet-18 (batch size 16)', 2)": {
             "null": 95.23518283873392
         },
-        "ResNet-18 (batch size 32) (scale factor 2)": {
+        "('ResNet-18 (batch size 32)', 2)": {
             "null": 93.81276973018295
         },
-        "ResNet-18 (batch size 64) (scale factor 2)": {
+        "('ResNet-18 (batch size 64)', 2)": {
             "null": 71.2567307653162
         },
-        "ResNet-50 (batch size 16) (scale factor 2)": {
+        "('ResNet-50 (batch size 16)', 2)": {
             "null": 10.81285269451638
         },
-        "ResNet-50 (batch size 32) (scale factor 2)": {
+        "('ResNet-50 (batch size 32)', 2)": {
             "null": 8.593590876298219
         },
-        "ResNet-50 (batch size 64) (scale factor 2)": {
+        "('ResNet-50 (batch size 64)', 2)": {
             "null": 7.61264303297526
         },
-        "Transformer (batch size 16) (scale factor 2)": {
+        "('Transformer (batch size 16)', 2)": {
             "null": 18.442223233878906
         },
-        "Transformer (batch size 32) (scale factor 2)": {
+        "('Transformer (batch size 32)', 2)": {
             "null": 17.84532925849016
         },
-        "Transformer (batch size 64) (scale factor 2)": {
+        "('Transformer (batch size 64)', 2)": {
             "null": 15.158208188981455
         },
-        "LM (batch size 5) (scale factor 2)": {
+        "('LM (batch size 5)', 2)": {
             "null": 160.86661402993212
         },
-        "LM (batch size 10) (scale factor 2)": {
+        "('LM (batch size 10)', 2)": {
             "null": 138.99586496915214
         },
-        "LM (batch size 20) (scale factor 2)": {
+        "('LM (batch size 20)', 2)": {
             "null": 113.17821022358754
         },
-        "ResNet-18 (batch size 16) (scale factor 4)": {
+        "('ResNet-18 (batch size 16)', 4)": {
             "null": 119.59789864246969
         },
-        "ResNet-18 (batch size 32) (scale factor 4)": {
+        "('ResNet-18 (batch size 32)', 4)": {
             "null": 107.84881057687326
         },
-        "ResNet-18 (batch size 64) (scale factor 4)": {
+        "('ResNet-18 (batch size 64)', 4)": {
             "null": 93.5961740252296
         },
-        "ResNet-50 (batch size 16) (scale factor 4)": {
+        "('ResNet-50 (batch size 16)', 4)": {
             "null": 33.36848157827663
         },
-        "ResNet-50 (batch size 32) (scale factor 4)": {
+        "('ResNet-50 (batch size 32)', 4)": {
             "null": 16.97002039967407
         },
-        "ResNet-50 (batch size 64) (scale factor 4)": {
+        "('ResNet-50 (batch size 64)', 4)": {
             "null": 10.990780289377444
         },
-        "Transformer (batch size 16) (scale factor 4)": {
+        "('Transformer (batch size 16)', 4)": {
             "null": 22.936877741849898
         },
-        "Transformer (batch size 32) (scale factor 4)": {
+        "('Transformer (batch size 32)', 4)": {
             "null": 21.601258662957992
         },
-        "Transformer (batch size 64) (scale factor 4)": {
+        "('Transformer (batch size 64)', 4)": {
             "null": 18.04324456774883
         },
-        "LM (batch size 5) (scale factor 4)": {
+        "('LM (batch size 5)', 4)": {
             "null": 113.80116098164865
         },
-        "LM (batch size 10) (scale factor 4)": {
+        "('LM (batch size 10)', 4)": {
             "null": 109.41989385795927
         },
-        "LM (batch size 20) (scale factor 4)": {
+        "('LM (batch size 20)', 4)": {
             "null": 98.93014971145614
         }
     }
