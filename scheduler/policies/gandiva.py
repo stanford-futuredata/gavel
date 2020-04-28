@@ -10,7 +10,7 @@ from policy import PolicyWithPacking
 class GandivaPolicy(PolicyWithPacking):
 
     def __init__(self, seed=None):
-        self._name = 'Gandiva'
+        self._name = 'Gandiva_Packing'
         self._assigned_combinations = {}
         self._rng = random.Random()
         if seed is not None:
@@ -46,6 +46,8 @@ class GandivaPolicy(PolicyWithPacking):
 
     def _get_normalized_throughput(self, job_combination, throughputs, worker_types):
         normalized_packed_throughput = 0.0
+        if not job_combination.is_pair():
+            return 0.0
         for worker_type in worker_types:
             packed_throughput = throughputs[job_combination][worker_type]
             for i, single_job_id in enumerate(job_combination.singletons()):
@@ -61,6 +63,8 @@ class GandivaPolicy(PolicyWithPacking):
                        cluster_spec):
         all_throughputs, index = super().flatten(unflattened_throughputs,
                                                  cluster_spec)
+        if all_throughputs is None or len(all_throughputs) == 0: return None
+
         (m, n) = all_throughputs[0].shape
         (job_ids, single_job_ids, worker_types, relevant_combinations) = index
 
@@ -70,6 +74,11 @@ class GandivaPolicy(PolicyWithPacking):
             (job_combination, other_job_id) = self._assigned_combinations[job_id]
             if job_id not in job_ids:
                 to_delete.extend([job_id, other_job_id])
+                continue
+            if other_job_id is not None:
+                if other_job_id not in job_ids:
+                    to_delete.extend([job_id, other_job_id])
+                    continue
             # Stop using combinations with normalized throughput < 1.0.
             if self._get_normalized_throughput(job_combination, unflattened_throughputs,
                                                worker_types) < 1.0:
