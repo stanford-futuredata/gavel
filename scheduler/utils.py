@@ -214,6 +214,36 @@ def get_latest_price_for_worker_type(worker_type, current_time,
 
     return min(prices)
 
+def parse_job_type(job_type):
+    print(job_type)
+    match = re.match('\(\'(.*)\', (\d+)\)', job_type)
+    if match is None:
+        return None
+    model = match.group(1)
+    scale_factor = int(match.group(2))
+    return (model, scale_factor)
+
+def read_all_throughputs_json_v2(file_name):
+    with open(file_name, 'r') as f:
+        raw_throughputs = json.load(f)
+    parsed_throughputs = {}
+    for worker_type in raw_throughputs:
+        parsed_throughputs[worker_type] = {}
+        for job_type in raw_throughputs[worker_type]:
+            key = parse_job_type(job_type)
+            assert(key is not None)
+            parsed_throughputs[worker_type][key] = {}
+            for other_job_type in raw_throughputs[worker_type][job_type]:
+                if other_job_type == 'null':
+                    parsed_throughputs[worker_type][key][other_job_type] =\
+                        raw_throughputs[worker_type][job_type][other_job_type]
+                else:
+                    other_key = parse_job_type(other_job_type)
+                    assert(other_key is not None)
+                    parsed_throughputs[worker_type][key][other_key] =\
+                        raw_throughputs[worker_type][job_type][other_job_type]
+    return parsed_throughputs
+
 def read_all_throughputs_json(throughputs_file):
     with open(throughputs_file, 'r') as f:
         throughputs = json.load(f)
