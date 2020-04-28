@@ -50,7 +50,7 @@ class GandivaPolicy(PolicyWithPacking):
             packed_throughput = throughputs[job_combination][worker_type]
             for i, single_job_id in enumerate(job_combination.singletons()):
                 if packed_throughput[i] <= 0.0:
-                    continue
+                    return 0.0
                 isolated_throughput = \
                     throughputs[single_job_id][worker_type]
                 normalized_packed_throughput += \
@@ -100,16 +100,15 @@ class GandivaPolicy(PolicyWithPacking):
 
             # Randomly group jobs.
             while len(to_be_assigned_combinations) > 1:
-                job1_id = self._rng.choice(to_be_assigned_combinations)
-                job2_id = self._rng.choice(to_be_assigned_combinations)
-                if job1_id != job2_id:
-                    to_be_assigned_combinations.remove(job1_id)
-                    to_be_assigned_combinations.remove(job2_id)
-                    job_combination = job_id_pair.JobIdPair(job1_id[0], job2_id[0])
-                    self._assigned_combinations[job1_id] = (job_combination,
-                                                            job2_id)
-                    self._assigned_combinations[job2_id] = (job_combination,
-                                                            job1_id)
+                [job1_id, job2_id] = self._rng.sample(
+                    to_be_assigned_combinations, 2)
+                to_be_assigned_combinations.remove(job1_id)
+                to_be_assigned_combinations.remove(job2_id)
+                job_combination = job_id_pair.JobIdPair(job1_id[0], job2_id[0])
+                self._assigned_combinations[job1_id] = (job_combination,
+                                                        job2_id)
+                self._assigned_combinations[job2_id] = (job_combination,
+                                                        job1_id)
             if len(to_be_assigned_combinations) == 1:
                 job_id = to_be_assigned_combinations[0]
                 self._assigned_combinations[job_id] = (job_id, None)
