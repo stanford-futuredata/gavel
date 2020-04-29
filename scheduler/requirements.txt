@@ -12,3 +12,5 @@ opencv-python
 setproctitle
 gym[atari]
 glog
+pandas
+annoy
