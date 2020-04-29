@@ -41,7 +41,8 @@ class Scheduler:
                  available_clouds=[],
                  assign_SLOs=False,
                  enable_global_queue=False,
-                 expected_num_workers=None):
+                 expected_num_workers=None,
+                 num_workers_per_server=4):
 
 
         # Print config information.
@@ -67,6 +68,7 @@ class Scheduler:
         self._enable_global_queue = enable_global_queue
 
         self._expected_num_workers = expected_num_workers
+        self._num_workers_per_server = num_workers_per_server
 
         if self._simulate:
             self._start_timestamp = 0
@@ -645,21 +647,34 @@ class Scheduler:
 
         worker_assignments = []
         scheduled_jobs = self._schedule_jobs_on_workers_helper()
+        num_workers_assigned = 0
 
         for worker_type in scheduled_jobs:
             worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
-            worker_id_ptr = 0
+            # Divide the workers into servers.
+            worker_ids = [worker_ids[i: i+self._num_workers_per_server]
+                          for i in range(0, len(worker_ids), self._num_workers_per_server)]
+            server_id_ptr = 0
+            # Sort jobs by the scale factor: want to assign jobs from largest to smallest
+            # scale factor to minimize fragmentation.
+            scheduled_jobs[worker_type].sort(key=lambda x: x[1], reverse=True)
 
             for (job_id, scale_factor) in scheduled_jobs[worker_type]:
-                # For now, ignore locality. Place job_id on the first
-                # `scale_factor` workers of the desired type.
-                # assert(scale_factor == self._jobs[job_id].scale_factor)
-                worker_id_ptrs = \
-                    [worker_id_ptr + i for i in range(scale_factor)]
+
+                # Assign workers to jobs. Assign workers in a strided fashion to
+                # minimize the number of servers used.
+                worker_ids_for_job = []
+                while len(worker_ids_for_job) < scale_factor:
+                    num_workers = min(len(worker_ids[server_id_ptr]),
+                                      scale_factor - len(worker_ids_for_job))
+                    worker_ids_for_job.extend(worker_ids[server_id_ptr][:num_workers])
+                    worker_ids[server_id_ptr] = worker_ids[server_id_ptr][num_workers:]
+                    server_id_ptr += 1
+                    server_id_ptr = server_id_ptr % len(worker_ids)
                 worker_assignments.append(
                         (job_id,
-                         tuple([worker_ids[i] for i in worker_id_ptrs])))
-                worker_id_ptr += scale_factor
+                         tuple(worker_ids_for_job)))
+                num_workers_assigned += scale_factor
 
                 for single_job_id in job_id.singletons():
                     num_steps = self._get_num_steps(job_id, worker_type,
@@ -688,16 +703,17 @@ class Scheduler:
                        'Priority: %f\tDeficit: %f\t'
                        'Allocation: %s') % (self.get_current_timestamp(),
                                            job_id, worker_type,
-                                           ",".join(["%d" % worker_ids[i]
-                                                     for i in worker_id_ptrs]),
+                                           ",".join(["%d" % x
+                                                     for x in worker_ids_for_job]),
                                            self._priorities[worker_type][job_id],
                                            self._deficits[worker_type][job_id],
                                            allocation_str))
-            if worker_id_ptr < len(worker_ids):
+            if num_workers_assigned < len(self._worker_type_to_worker_id_mapping[worker_type]):
                 print(('WARNING: %d GPUs of type %s left unused. '
-                       'Number of active jobs: %d') % (len(worker_ids) - worker_id_ptr,
-                                                       worker_type,
-                                                       len(self._jobs)))
+                       'Number of active jobs: %d') % (
+                    len(self._worker_type_to_worker_id_mapping[worker_type]) - num_workers_assigned,
+                    worker_type,
+                    len(self._jobs)))
 
         return worker_assignments
 
