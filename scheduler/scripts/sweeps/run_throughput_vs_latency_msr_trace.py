@@ -18,7 +18,7 @@ import utils
 def simulate_with_timeout(experiment_id, policy_name,
                           throughputs_file, cluster_spec, interval,
                           seed, vc, log_dir, trace_dir, run_dir, timeout,
-                          verbose):
+                          verbose, num_gpus_per_server):
     with open('traces/msr/steady_state_jobs.pickle', 'rb') as f:
         steady_state_jobs = pickle.load(f)
 
@@ -67,7 +67,8 @@ def simulate_with_timeout(experiment_id, policy_name,
             if timeout is None:
                 sched.simulate(cluster_spec, arrival_times=arrival_times,
                                jobs=jobs,
-                               jobs_to_complete=jobs_to_complete)
+                               jobs_to_complete=jobs_to_complete,
+                               num_gpus_per_server=num_gpus_per_server)
                 average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
@@ -77,7 +78,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                  kwargs={
                                     'arrival_times': arrival_times,
                                     'jobs': jobs,
-                                    'jobs_to_complete': jobs_to_complete
+                                    'jobs_to_complete': jobs_to_complete,
+                                    'num_gpus_per_server': num_gpus_per_server
                                 })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -98,7 +100,7 @@ def simulate_with_timeout(experiment_id, policy_name,
 
 def sweep_cluster_sizes_helper(experiment_id, throughputs_file, interval, vc,
                                seed, log_dir, trace_dir, run_dir,
-                               util_threshold):
+                               util_threshold, num_gpus_per_server):
     input_trace = os.path.join(trace_dir, 'seed=%d' % seed,
                                '%s.trace' % (vc))
     jobs, arrival_times = utils.parse_trace(input_trace, run_dir)
@@ -125,7 +127,7 @@ def sweep_cluster_sizes_helper(experiment_id, throughputs_file, interval, vc,
                                           num_v100s, seed, vc),
                       file=sys.stderr)
                 sched.simulate(cluster_spec, arrival_times=arrival_times,
-                               jobs=jobs)
+                               jobs=jobs, num_gpus_per_server=num_gpus_per_server)
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
                 current_time = datetime.datetime.now()
@@ -149,6 +151,12 @@ def sweep_cluster_sizes(args):
     if not os.path.isdir(cluster_size_log_dir):
         os.mkdir(cluster_size_log_dir)
 
+    num_gpus_per_server_split = args.num_gpus_per_server.split(':')
+    num_gpus_per_server = {
+        'v100': int(num_gpus_per_server_split[0]),
+        'p100': int(num_gpus_per_server_split[1]),
+        'k80': int(num_gpus_per_server_split[2]),
+    }
     for vc in args.vcs:
         vc_dir = os.path.join(cluster_size_log_dir, 'vc=%s' % (vc))
         if not os.path.isdir(vc_dir):
@@ -160,7 +168,8 @@ def sweep_cluster_sizes(args):
             all_args_list.append((experiment_id, args.throughputs_file,
                                   args.interval, vc, seed, seed_dir,
                                   args.trace_dir, args.run_dir,
-                                  args.util_threshold))
+                                  args.util_threshold,
+                                  num_gpus_per_server))
             experiment_id += 1
 
     if len(all_args_list) > 0:
@@ -207,6 +216,12 @@ def sweep_policies(args):
                 'p100': int(cluster_spec_str_split[1]),
                 'k80': int(cluster_spec_str_split[2]),
             }
+            num_gpus_per_server_split = args.num_gpus_per_server.split(':')
+            num_gpus_per_server = {
+                'v100': int(num_gpus_per_server_split[0]),
+                'p100': int(num_gpus_per_server_split[1]),
+                'k80': int(num_gpus_per_server_split[2]),
+            }
 
             vc_subdir = os.path.join(policy_log_dir, 'vc=%s' % vc)
             if not os.path.isdir(vc_subdir):
@@ -231,7 +246,8 @@ def sweep_policies(args):
                                           throughputs_file, cluster_spec,
                                           args.interval, seed, vc, policy_subdir,
                                           args.trace_dir, args.run_dir,
-                                          args.timeout, args.verbose))
+                                          args.timeout, args.verbose,
+                                          num_gpus_per_server))
                     experiment_id += 1
 
     if len(all_args_list) > 0:
@@ -275,8 +291,7 @@ if __name__=='__main__':
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
     parser.add_argument('--throughputs-file', type=str,
-                        default=('/lfs/1/keshav2/gpusched/scheduler/'
-                                 'oracle_throughputs.json'),
+                        default='oracle_throughputs.json',
                         help='Oracle throughputs file')
     parser.add_argument('--run_dir', type=str, default='/tmp',
                         help='Run directory')
@@ -292,6 +307,9 @@ if __name__=='__main__':
                              help='List of policies to sweep')
     parser.add_argument('-c', '--cluster-spec-file', type=str, required=True,
                         help=('Cluster specification file'))
+    parser.add_argument('--num_gpus_per_server', type=str, default='1:1:1',
+                        help=('Cluster specification in the form of '
+                              '#v100s:#p100s:#k80s'))
     cluster_size_args.add_argument('--sweep-cluster-sizes',
                                    action='store_true',
                                    default=False,

@@ -1,7 +1,6 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
-import cvxpy as cp
 import numpy as np
 
 from policy import Policy

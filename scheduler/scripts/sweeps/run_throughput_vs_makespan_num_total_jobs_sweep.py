@@ -24,7 +24,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                           seed, interval, fixed_job_duration,
                           generate_multi_gpu_jobs, enable_global_queue,
                           num_total_jobs, solver,
-                          log_dir, timeout, verbose):
+                          log_dir, timeout, verbose,
+                          num_gpus_per_server):
     # Add some random delay to prevent outputs from overlapping.
     # TODO: Replace this with postprocessing in the log parsing script.
     time.sleep(random.uniform(0, 5))
@@ -60,7 +61,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                 sched.simulate(cluster_spec, lam=lam,
                                fixed_job_duration=fixed_job_duration,
                                generate_multi_gpu_jobs=generate_multi_gpu_jobs,
-                               num_total_jobs=num_total_jobs)
+                               num_total_jobs=num_total_jobs,
+                               num_gpus_per_server=num_gpus_per_server)
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
                 makespan = sched.get_current_timestamp()
@@ -73,7 +75,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                     'lam': lam,
                                     'fixed_job_duration': fixed_job_duration,
                                     'generate_multi_gpu_jobs': generate_multi_gpu_jobs,
-                                    'num_total_jobs': num_total_jobs
+                                    'num_total_jobs': num_total_jobs,
+                                    'num_gpus_per_server': num_gpus_per_server
                                  })
                     average_jct = sched.get_average_jct()
                     utilization = sched.get_cluster_utilization()
@@ -128,6 +131,12 @@ def main(args):
             'p100': int(cluster_spec_str_split[1]),
             'k80': int(cluster_spec_str_split[2]),
         }
+        num_gpus_per_server_split = args.num_gpus_per_server.split(':')
+        num_gpus_per_server = {
+            'v100': int(num_gpus_per_server_split[0]),
+            'p100': int(num_gpus_per_server_split[1]),
+            'k80': int(num_gpus_per_server_split[2]),
+        }
 
         cluster_spec_str = 'v100=%d.p100=%d.k80=%d' % (cluster_spec['v100'],
                                                        cluster_spec['p100'],
@@ -170,7 +179,8 @@ def main(args):
                                           num_total_jobs,
                                           args.solver,
                                           raw_logs_seed_subdir,
-                                          args.timeout, args.verbose))
+                                          args.timeout, args.verbose,
+                                          num_gpus_per_server))
                     experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
@@ -205,6 +215,9 @@ if __name__=='__main__':
                         default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
+    parser.add_argument('--num_gpus_per_server', type=str, default='1:1:1',
+                        help=('Cluster specification in the form of '
+                              '#v100s:#p100s:#k80s'))
     parser.add_argument('--seeds', type=int, nargs='+',
                         default=[0, 1, 2, 3, 4],
                         help='List of random seeds')
@@ -214,8 +227,7 @@ if __name__=='__main__':
                         help=('If set, fixes the duration of all jobs to the '
                               'specified value (in seconds)'))
     parser.add_argument('--throughputs-file', type=str,
-                        default=('/lfs/1/keshav2/gpusched/scheduler/'
-                                 'oracle_throughputs.json'),
+                        default='oracle_throughputs.json',
                         help='Oracle throughputs file')
     parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true',
                         default=False,
