@@ -22,7 +22,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                           generate_multi_gpu_jobs,
                           generate_multi_priority_jobs, simulate_steady_state,
                           log_dir, timeout, verbose, checkpoint_threshold,
-                          profiling_percentage, num_reference_models):
+                          profiling_percentage, num_reference_models,
+                          num_gpus_per_server):
     lam_str = 'lambda=%f.log' % (lam)
     checkpoint_file = None
     if checkpoint_threshold is not None:
@@ -65,7 +66,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                generate_multi_priority_jobs=generate_multi_priority_jobs,
                                simulate_steady_state=simulate_steady_state,
                                checkpoint_file=checkpoint_file,
-                               checkpoint_threshold=checkpoint_threshold)
+                               checkpoint_threshold=checkpoint_threshold,
+                               num_gpus_per_server=num_gpus_per_server)
                 average_jct = sched.get_average_jct(jobs_to_complete)
                 utilization = sched.get_cluster_utilization()
             else:
@@ -80,7 +82,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                     'generate_multi_priority_jobs': generate_multi_priority_jobs,
                                     'simulate_steady_state': simulate_steady_state,
                                     'checkpoint_file': checkpoint_file,
-                                    'checkpoint_threshold': checkpoint_threshold
+                                    'checkpoint_threshold': checkpoint_threshold,
+                                    'num_gpus_per_server': num_gpus_per_server
                                  })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -105,7 +108,8 @@ def run_automatic_sweep(experiment_id, policy_name,
                         generate_multi_gpu_jobs, generate_multi_priority_jobs,
                         simulate_steady_state, log_dir,
                         timeout, verbose, checkpoint_threshold,
-                        profiling_percentage, num_reference_models):
+                        profiling_percentage, num_reference_models,
+                        num_gpus_per_server):
     all_lams = []
     average_jcts = []
     utilizations = []
@@ -124,7 +128,8 @@ def run_automatic_sweep(experiment_id, policy_name,
                                       simulate_steady_state, log_dir, timeout,
                                       verbose, checkpoint_threshold,
                                       profiling_percentage,
-                                      num_reference_models)
+                                      num_reference_models,
+                                      num_gpus_per_server)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -146,7 +151,8 @@ def run_automatic_sweep(experiment_id, policy_name,
                                      generate_multi_priority_jobs,
                                      simulate_steady_state, log_dir,
                                      timeout, verbose, checkpoint_threshold,
-                                     profiling_percentage, num_reference_models)
+                                     profiling_percentage, num_reference_models,
+                                     num_gpus_per_server)
 
         average_jcts.append(average_jct)
         utilizations.append(utilization)
@@ -231,6 +237,12 @@ def main(args):
             'v100': int(cluster_spec_str_split[0]),
             'p100': int(cluster_spec_str_split[1]),
             'k80': int(cluster_spec_str_split[2]),
+        }
+        num_gpus_per_server_split = args.num_gpus_per_server.split(':')
+        num_gpus_per_server = {
+            'v100': int(num_gpus_per_server_split[0]),
+            'p100': int(num_gpus_per_server_split[1]),
+            'k80': int(num_gpus_per_server_split[2]),
         }
 
         raw_logs_cluster_spec_subdir = \
@@ -340,7 +352,8 @@ def main(args):
                                                       args.verbose,
                                                       args.checkpoint_threshold,
                                                       profiling_percentage,
-                                                      num_reference_models))
+                                                      num_reference_models,
+                                                      num_gpus_per_server))
                                 experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
@@ -383,6 +396,9 @@ if __name__=='__main__':
                         help='List of policies to sweep')
     parser.add_argument('-c', '--cluster-spec', type=str, nargs='+',
                         default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
+                        help=('Cluster specification in the form of '
+                              '#v100s:#p100s:#k80s'))
+    parser.add_argument('--num_gpus_per_server', type=str, default='1:1:1',
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
     parser.add_argument('--seeds', type=int, nargs='+',

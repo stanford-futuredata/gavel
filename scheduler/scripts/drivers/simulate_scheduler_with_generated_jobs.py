@@ -19,7 +19,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              simulate_steady_state, solver, debug,
              checkpoint_threshold, checkpoint_file,
              profiling_percentage, per_instance_type_prices_dir,
-             available_clouds, assign_SLOs, enable_global_queue):
+             available_clouds, assign_SLOs, enable_global_queue,
+             num_gpus_per_server):
     policy = utils.get_policy(policy_name, solver=solver, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -56,7 +57,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                    num_total_jobs=num_total_jobs,
                    debug=debug,
                    checkpoint_threshold=checkpoint_threshold,
-                   checkpoint_file=checkpoint_file)
+                   checkpoint_file=checkpoint_file,
+                   num_gpus_per_server=num_gpus_per_server)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
     total_cost = sched.get_total_cost()
@@ -75,10 +77,16 @@ def main(args):
     throughputs_file = args.throughputs_file
     num_gpus = args.cluster_spec.split(':')
     cluster_spec = {
-            'v100': int(num_gpus[0]),
-            'p100': int(num_gpus[1]),
-            'k80': int(num_gpus[2]),
-        }
+        'v100': int(num_gpus[0]),
+        'p100': int(num_gpus[1]),
+        'k80': int(num_gpus[2]),
+    }
+    num_gpus_per_server_split = args.num_gpus_per_server.split(':')
+    num_gpus_per_server = {
+        'v100': int(num_gpus_per_server_split[0]),
+        'p100': int(num_gpus_per_server_split[1]),
+        'k80': int(num_gpus_per_server_split[2]),
+    }
 
     jobs_to_complete = set()
     for i in range(args.window_start, args.window_end):
@@ -99,7 +107,8 @@ def main(args):
                  args.per_instance_type_prices_dir,
                  args.available_clouds,
                  args.assign_SLOs,
-                 args.enable_global_queue)
+                 args.enable_global_queue,
+                 num_gpus_per_server)
 
     else:
         with open('/dev/null', 'w') as f:
@@ -118,12 +127,16 @@ def main(args):
                          args.per_instance_type_prices_dir,
                          args.available_clouds,
                          args.assign_SLOs,
-                         args.enable_global_queue)
+                         args.enable_global_queue,
+                         num_gpus_per_server)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
             description='Emulate scheduler with generated jobs')
     parser.add_argument('-c', '--cluster_spec', type=str, default='25:0:0',
+                        help=('Cluster specification in the form of '
+                              '#v100s:#p100s:#k80s'))
+    parser.add_argument('--num_gpus_per_server', type=str, default='1:1:1',
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
     parser.add_argument('-s', '--window-start', type=int, default=0,
