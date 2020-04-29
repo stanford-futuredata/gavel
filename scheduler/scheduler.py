@@ -952,7 +952,7 @@ class Scheduler:
                  simulate_steady_state=False, debug=False,
                  checkpoint_threshold=None,
                  checkpoint_file=None,
-                 num_gpus_per_server=4):
+                 num_gpus_per_server=None):
         """Simulates the scheduler execution.
 
            Simulation can be performed using a trace or with continuously
@@ -1022,9 +1022,12 @@ class Scheduler:
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
         for worker_type in worker_types:
-            for i in range(cluster_spec[worker_type] // num_gpus_per_server):
+            num_gpus = 1
+            if num_gpus_per_server is not None:
+                num_gpus = num_gpus_per_server[worker_type]
+            for i in range(cluster_spec[worker_type] // num_gpus):
                 self._register_worker_callback(worker_type,
-                                               num_gpus=num_gpus_per_server)
+                                               num_gpus=num_gpus)
 
         if checkpoint_file is not None and checkpoint_threshold is None:
             (completed_jobs,
