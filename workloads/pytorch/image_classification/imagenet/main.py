@@ -157,7 +157,7 @@ def main():
             print("=> loading checkpoint '{}'".format(checkpoint_path))
             checkpoint = torch.load(checkpoint_path)
             args.start_epoch = checkpoint['epoch']
-            best_acc1 = checkpoint['best_acc1']
+            # best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
@@ -235,15 +235,15 @@ def main():
             break
 
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion)
+        # acc1 = validate(val_loader, model, criterion)
 
         # remember best acc@1 and save checkpoint
-        best_acc1 = max(acc1, best_acc1)
+        #best_acc1 = max(acc1, best_acc1)
     save_checkpoint({
         'epoch': epoch + 1,
         'arch': args.arch,
         'state_dict': model.state_dict(),
-        'best_acc1': best_acc1,
+        # 'best_acc1': best_acc1,
         'optimizer' : optimizer.state_dict(),
     }, checkpoint_path)
 
