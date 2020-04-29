@@ -30,11 +30,11 @@ def main(args):
         'p100': int(num_gpus[1]),
         'k80': int(num_gpus[2]),
     }
-    num_gpus = args.num_gpus_per_server.split(':')
+    num_gpus_per_server_split = args.num_gpus_per_server.split(':')
     num_gpus_per_server = {
-        'v100': int(num_gpus[0]),
-        'p100': int(num_gpus[1]),
-        'k80': int(num_gpus[2]),
+        'v100': int(num_gpus_per_server_split[0]),
+        'p100': int(num_gpus_per_server_split[1]),
+        'k80': int(num_gpus_per_server_split[2]),
     }
     sched.simulate(cluster_spec, arrival_times, jobs,
                    debug=args.debug,
