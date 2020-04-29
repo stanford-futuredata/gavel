@@ -132,7 +132,7 @@ def main():
             print("=> loading checkpoint '{}'".format(checkpoint_path))
             checkpoint = torch.load(checkpoint_path)
             args.start_epoch = checkpoint['epoch']
-            best_acc1 = checkpoint['best_acc1']
+            # best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
@@ -143,7 +143,7 @@ def main():
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
+    traindir = os.path.join(args.data, 'train_small')
     valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
@@ -203,15 +203,15 @@ def main():
             break
 
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion)
+        # acc1 = validate(val_loader, model, criterion)
 
         # remember best acc@1 and save checkpoint
-        best_acc1 = max(acc1, best_acc1)
+        #best_acc1 = max(acc1, best_acc1)
     save_checkpoint({
         'epoch': epoch + 1,
         'arch': args.arch,
         'state_dict': model.state_dict(),
-        'best_acc1': best_acc1,
+        # 'best_acc1': best_acc1,
         'optimizer' : optimizer.state_dict(),
     }, checkpoint_path)
 

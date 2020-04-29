@@ -29,25 +29,25 @@ JobTable = [
     JobTemplate(model='ResNet-50 (batch size 16)',
               command=('cd %s/gpusched/workloads/pytorch/'
                        'image_classification/imagenet && python3 '
-                       'main.py -j 4 -a resnet50 -b 16 '
+                       'main.py -j 8 -a resnet50 -b 16 '
                        '%s/data/imagenet/pytorch'),
               num_steps_arg='--num_minibatches'),
     JobTemplate(model='ResNet-50 (batch size 32)',
               command=('cd %s/gpusched/workloads/pytorch/'
                        'image_classification/imagenet && python3 '
-                       'main.py -j 4 -a resnet50 -b 32 '
+                       'main.py -j 8 -a resnet50 -b 32 '
                        '%s/data/imagenet/pytorch'),
               num_steps_arg='--num_minibatches'),
     JobTemplate(model='ResNet-50 (batch size 64)',
               command=('cd %s/gpusched/workloads/pytorch/'
                        'image_classification/imagenet && python3 '
-                       'main.py -j 4 -a resnet50 -b 64 '
+                       'main.py -j 8 -a resnet50 -b 64 '
                        '%s/data/imagenet/pytorch'),
               num_steps_arg='--num_minibatches'),
     JobTemplate(model='ResNet-50 (batch size 128)',
               command=('cd %s/gpusched/workloads/pytorch/'
                        'image_classification/imagenet && python3 '
-                       'main.py -j 4 -a resnet50 -b 128 '
+                       'main.py -j 8 -a resnet50 -b 128 '
                        '%s/data/imagenet/pytorch'),
               num_steps_arg='--num_minibatches'),
     JobTemplate(model='Transformer (batch size 16)',
