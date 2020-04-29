@@ -7,7 +7,19 @@ from utils import ensure_shared_grads
 from model import A3Clstm
 from player_util import Agent
 from torch.autograd import Variable
+import os
+import sys
 import time
+
+# TODO: Figure out a cleaner way of including gavel_iterator.
+rl_dir = os.path.dirname(os.path.realpath(__file__))
+pytorch_dir = os.path.dirname(rl_dir)
+workloads_dir = os.path.dirname(pytorch_dir)
+gpusched_dir = os.path.dirname(workloads_dir)
+scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
+sys.path.append(scheduler_dir)
+from gavel_iterator import GavelIterator
+
 
 def train(rank, args, shared_model, optimizer, env_conf):
     ptitle('Training Agent: {}'.format(rank))
@@ -36,12 +48,18 @@ def train(rank, args, shared_model, optimizer, env_conf):
             player.model = player.model.cuda()
     player.model.train()
     player.eps_len += 2
-    steps = 0
     elapsed_time = 0
     start_time = time.time()
-    while True:
-        if steps % 100 == 0:
-          print('Finished step %d' % (steps), flush=True)
+
+    iters = range(args.max_steps)
+    if args.enable_gavel_iterator and rank == 0:
+        iters = GavelIterator(iters, args.job_id, args.worker_id,
+                              args.distributed, args.sched_addr,
+                              args.sched_port)
+
+    for i in iters:
+        if i % 100 == 0:
+          print('GPU %d finished step %d' % (rank, i), flush=True)
         if gpu_id >= 0:
             with torch.cuda.device(gpu_id):
                 player.model.load_state_dict(shared_model.state_dict())
@@ -109,17 +127,14 @@ def train(rank, args, shared_model, optimizer, env_conf):
         ensure_shared_grads(player.model, shared_model, gpu=gpu_id >= 0)
         optimizer.step()
         player.clear_actions()
-        steps += 1
         elapsed_time += time.time() - start_time
         start_time = time.time()
 
         if (args.throughput_estimation_interval is not None and
-            steps % args.throughput_estimation_interval == 0 and
+            i % args.throughput_estimation_interval == 0 and
             rank == 0):
-            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), steps))
+            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), i))
 
-        if args.max_steps is not None and steps >= args.max_steps:
-          return
         if (args.max_duration is not None and
             elapsed_time >= args.max_duration):
           return
