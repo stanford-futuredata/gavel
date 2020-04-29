@@ -214,8 +214,17 @@ def get_latest_price_for_worker_type(worker_type, current_time,
 
     return min(prices)
 
-def parse_job_type(job_type):
-    print(job_type)
+def parse_job_type_str(job_type):
+    if job_type is None:
+        return None
+    match = re.match('(.*) \(scale factor (\d+)\)', job_type)
+    if match is None:
+        return (job_type, 1)
+    model = match.group(1)
+    scale_factor = int(match.group(2))
+    return (model, scale_factor)
+
+def parse_job_type_tuple(job_type):
     match = re.match('\(\'(.*)\', (\d+)\)', job_type)
     if match is None:
         return None
@@ -230,18 +239,17 @@ def read_all_throughputs_json_v2(file_name):
     for worker_type in raw_throughputs:
         parsed_throughputs[worker_type] = {}
         for job_type in raw_throughputs[worker_type]:
-            key = parse_job_type(job_type)
+            key = parse_job_type_tuple(job_type)
             assert(key is not None)
             parsed_throughputs[worker_type][key] = {}
             for other_job_type in raw_throughputs[worker_type][job_type]:
                 if other_job_type == 'null':
-                    parsed_throughputs[worker_type][key][other_job_type] =\
-                        raw_throughputs[worker_type][job_type][other_job_type]
+                    other_key = other_job_type
                 else:
-                    other_key = parse_job_type(other_job_type)
+                    other_key = parse_job_type_tuple(other_job_type)
                     assert(other_key is not None)
-                    parsed_throughputs[worker_type][key][other_key] =\
-                        raw_throughputs[worker_type][job_type][other_job_type]
+                parsed_throughputs[worker_type][key][other_key] =\
+                    raw_throughputs[worker_type][job_type][other_job_type]
     return parsed_throughputs
 
 def read_all_throughputs_json(throughputs_file):

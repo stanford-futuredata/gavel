@@ -12,6 +12,7 @@ import time
 from job_id_pair import JobIdPair
 from job_table import JobTable
 from runtime.rpc import scheduler_server, scheduler_client
+import utils
 
 BASE_DISTRIBUTED_LEASE_STEPS = 150
 SERVER_PORT = 50060
@@ -161,20 +162,14 @@ class Profiler:
                         per_worker_type_task_queues[worker_type].put(
                                     (task, scale_factor))
 
-            if packing:
+            # NOTE: We do not profile distributed + packed jobs because the
+            # performance dropoff is too significant.
+            if packing and scale_factor == 1:
                 for worker_type in per_worker_type_task_queues:
-                    if scale_factor > self._cluster_spec[worker_type]:
-                        continue
                     for i in range(len(JobTable)):
                         job_type = JobTable[i].model
-                        if (scale_factor > 1 and
-                            not self._can_be_run_multi_gpu(job_type)):
-                            continue
                         for j in range(i, len(JobTable)):
                             job_type = JobTable[j].model
-                            if (scale_factor > 1 and
-                                not self._can_be_run_multi_gpu(job_type)):
-                                continue
                             task = self._initialize_task(
                                     [JobTable[i], JobTable[j]],
                                     scale_factor=scale_factor)
@@ -473,8 +468,23 @@ class Profiler:
 
     def output(self, output_file):
         """Outputs the throughputs to a file in JSON format."""
+        # Make the output throughput keys a tuple of (model, scale_factor).
+        throughputs = {}
+        for worker_type in self._throughputs:
+            throughputs[worker_type] = {}
+            for job_type in self._throughputs[worker_type]:
+                key = str(utils.parse_job_type_str(job_type))
+                throughputs[worker_type][key] = {}
+                for other_job_type in self._throughputs[worker_type][job_type]:
+                    if other_job_type is None:
+                        other_key = None
+                    else:
+                        other_key = str(utils.parse_job_type_str(other_job_type))
+                    throughputs[worker_type][key][other_key] =\
+                        self._throughputs[worker_type][job_type][other_job_type]
+
         with open(output_file, 'w') as f:
-            f.write(json.dumps(self._throughputs, indent=4))
+            f.write(json.dumps(throughputs, indent=4))
 
 def main(args):
     if not args.isolated and not args.packed:
