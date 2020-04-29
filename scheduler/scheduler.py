@@ -41,8 +41,7 @@ class Scheduler:
                  available_clouds=[],
                  assign_SLOs=False,
                  enable_global_queue=False,
-                 expected_num_workers=None,
-                 num_workers_per_server=4):
+                 expected_num_workers=None):
 
 
         # Print config information.
@@ -68,7 +67,6 @@ class Scheduler:
         self._enable_global_queue = enable_global_queue
 
         self._expected_num_workers = expected_num_workers
-        self._num_workers_per_server = num_workers_per_server
 
         if self._simulate:
             self._start_timestamp = 0
@@ -548,8 +546,7 @@ class Scheduler:
         num_workers_left = {}
         for worker_type in self._worker_types:
             scheduled_jobs[worker_type] = []
-            num_workers = len(
-                self._worker_type_to_worker_id_mapping[worker_type])
+            num_workers = self._cluster_spec[worker_type]
             if self._estimate_throughputs:
                 num_workers_left[worker_type] = \
                     self._profile_with_reference_jobs(worker_type,
@@ -650,10 +647,9 @@ class Scheduler:
         num_workers_assigned = 0
 
         for worker_type in scheduled_jobs:
-            worker_ids = self._worker_type_to_worker_id_mapping[worker_type]
-            # Divide the workers into servers.
-            worker_ids = [worker_ids[i: i+self._num_workers_per_server]
-                          for i in range(0, len(worker_ids), self._num_workers_per_server)]
+            # Worker IDs organized into servers.
+            worker_ids = copy.copy(
+                self._worker_type_to_worker_id_mapping[worker_type])
             server_id_ptr = 0
             # Sort jobs by the scale factor: want to assign jobs from largest to smallest
             # scale factor to minimize fragmentation.
@@ -708,10 +704,10 @@ class Scheduler:
                                            self._priorities[worker_type][job_id],
                                            self._deficits[worker_type][job_id],
                                            allocation_str))
-            if num_workers_assigned < len(self._worker_type_to_worker_id_mapping[worker_type]):
+            if num_workers_assigned < self._cluster_spec[worker_type]:
                 print(('WARNING: %d GPUs of type %s left unused. '
                        'Number of active jobs: %d') % (
-                    len(self._worker_type_to_worker_id_mapping[worker_type]) - num_workers_assigned,
+                    self._cluster_spec[worker_type] - num_workers_assigned,
                     worker_type,
                     len(self._jobs)))
 
@@ -955,7 +951,8 @@ class Scheduler:
                  generate_multi_priority_jobs=False,
                  simulate_steady_state=False, debug=False,
                  checkpoint_threshold=None,
-                 checkpoint_file=None):
+                 checkpoint_file=None,
+                 num_gpus_per_server=4):
         """Simulates the scheduler execution.
 
            Simulation can be performed using a trace or with continuously
@@ -1025,8 +1022,9 @@ class Scheduler:
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
         for worker_type in worker_types:
-            for i in range(cluster_spec[worker_type]):
-                self._register_worker_callback(worker_type)
+            for i in range(cluster_spec[worker_type] // num_gpus_per_server):
+                self._register_worker_callback(worker_type,
+                                               num_gpus=num_gpus_per_server)
 
         if checkpoint_file is not None and checkpoint_threshold is None:
             (completed_jobs,
@@ -1924,7 +1922,6 @@ class Scheduler:
                 self._worker_types.add(worker_type)
                 self._cumulative_worker_time_so_far[worker_id] = 0.0
 
-                self._worker_type_to_worker_id_mapping[worker_type].append(worker_id)
                 self._worker_id_to_worker_type_mapping[worker_id] = worker_type
                 self._add_available_worker_id(worker_id)
 
@@ -1935,6 +1932,7 @@ class Scheduler:
                     self._worker_connections[worker_id] = rpc_client
 
                 self._worker_start_times[worker_id] = self.get_current_timestamp()
+            self._worker_type_to_worker_id_mapping[worker_type].append(per_worker_ids)
             self._need_to_update_allocation = True
 
         return (per_worker_ids, self._time_per_iteration)
