@@ -644,9 +644,8 @@ class Scheduler:
 
         worker_assignments = []
         scheduled_jobs = self._schedule_jobs_on_workers_helper()
-        num_workers_assigned = 0
 
-        for worker_type in scheduled_jobs:
+        for worker_type in worker_types:
             # Worker IDs organized into servers.
             worker_ids = copy.copy(
                 self._worker_type_to_worker_id_mapping[worker_type])
@@ -654,6 +653,7 @@ class Scheduler:
             # Sort jobs by the scale factor: want to assign jobs from largest to smallest
             # scale factor to minimize fragmentation.
             scheduled_jobs[worker_type].sort(key=lambda x: x[1], reverse=True)
+            num_workers_assigned = 0
 
             for (job_id, scale_factor) in scheduled_jobs[worker_type]:
 
