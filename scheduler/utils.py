@@ -37,7 +37,9 @@ def get_gpu_processes():
                 if gpu_id not in gpu_processes:
                     gpu_processes[gpu_id] = []
                 pid = int(res.group(2))
-                gpu_processes[gpu_id].append(pid)
+                process_name = res.group(4)
+                if process_name != 'nvidia-cuda-mps-server':
+                    gpu_processes[gpu_id].append(pid)
     return gpu_processes
 
 def get_available_policies():

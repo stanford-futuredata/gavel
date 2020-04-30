@@ -13,6 +13,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import utils
 
 BUFFER_TIME = 180
+CUDA_MPS_PIPE_DIRECTORY = '/tmp/nvidia-mps'
+CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
 
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
@@ -32,6 +34,54 @@ class Dispatcher:
         self._lock = threading.Lock()
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
+        self._mps_initially_enabled = self._mps_status()
+        if self._mps_initially_enabled:
+            self._write_queue.put('CUDA MPS already running.')
+        else:
+            mps_enabled = self._enable_mps()
+            if not mps_enabled:
+                raise RuntimeError('Failed to enable CUDA MPS')
+
+    def _mps_status(self):
+        """Returns True if MPS is running."""
+        command = 'ps -ef | grep mps'
+        output = subprocess.run(command, stdout=subprocess.PIPE, check=True,
+                                shell=True).stdout.decode('utf-8').strip()
+        running = False
+        for line in output.split('\n'):
+            if 'nvidia-cuda-mps-control -d' in line:
+                running = True
+                break
+        return running
+
+    def _enable_mps(self):
+        # Set logging environment variables.
+        os.environ['CUDA_MPS_PIPE_DIRECTORY'] = CUDA_MPS_PIPE_DIRECTORY
+        os.environ['CUDA_MPS_LOG_DIRECTORY'] = CUDA_MPS_LOG_DIRECTORY
+
+        # Start the daemon.
+        command = 'nvidia-cuda-mps-control -d'
+
+        try:
+            output =\
+                subprocess.run(command, stdout=subprocess.PIPE,
+                               check=True,
+                               shell=True).stdout.decode('utf-8').strip()
+            self._write_queue.put('Successfully enabled CUDA MPS')
+            return True
+        except subprocess.CalledProcessError as e:
+            error_message = 'Unable to start CUDA MPS:\n'
+            if e.stdout is not None:
+                error_message += 'Stdout:\n%s' % (e.stdout.decode('utf-8'))
+            if e.stderr is not None:
+                error_message += 'Stderr:\n%s' % (e.stderr.decode('utf-8'))
+            self._write_queue.put(error_message)
+        return False
+
+    def _shutdown_mps(self):
+        command = 'echo quit | nvidia-cuda-mps-control'
+        subprocess.run(command, shell=True)
+        self._write_queue.put('Shut down CUDA MPS')
 
     def _construct_command(self, job, gpu_id, worker_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
@@ -195,13 +245,15 @@ class Dispatcher:
     def reset(self):
         self._write_queue.put('Resetting dispatcher')
         self._kill_jobs()
-        self.shutdown()
+        self.shutdown(shut_down_mps=False)
         self._job_assignments = {}
         self._thread_pool = ThreadPool()
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
 
-    def shutdown(self):
+    def shutdown(self, shut_down_mps=True):
         self._thread_pool.terminate()
         self._thread_pool.join()
+        if shut_down_mps and not self._mps_initially_enabled:
+            self._shutdown_mps()
