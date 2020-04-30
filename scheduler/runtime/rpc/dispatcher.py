@@ -112,23 +112,34 @@ class Dispatcher:
                 steps = int(line.split('[GavelIterator]')[-1])
         return steps
 
+    def _kill_job(self, pid, gpu_id):
+        self._write_queue.put(
+            'Killing process %d on GPU %d' % (pid, gpu_id))
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError as e:
+            self._write_queue.put(
+                'Could not find process %d on GPU %d' % (pid, gpu_id))
+        except Exception as e:
+            self._write_queue.put(
+                'Could not kill process %d on GPU %d: %s' % (pid, gpu_id,
+                                                             str(e)))
+
+
     def _kill_jobs(self, job_id=None):
         with self._lock:
             gpu_processes = utils.get_gpu_processes()
             if job_id is not None:
+                # Kill all jobs.
                 for gpu_id in self._job_assignments[job_id]:
                     if gpu_id not in gpu_processes:
                         continue
                     for pid in gpu_processes[gpu_id]:
-                        self._write_queue.put(
-                            'Killing process %d on GPU %d' % (pid, gpu_id))
-                        os.kill(pid, signal.SIGKILL)
+                        self._kill_job(pid, gpu_id)
             else:
                 for gpu_id in gpu_processes:
                     for pid in gpu_processes[gpu_id]:
-                        self._write_queue.put(
-                            'Killing process %d on GPU %d' % (pid, gpu_id))
-                        os.kill(pid, signal.SIGKILL)
+                        self._kill_job(pid, gpu_id)
 
     def launch_job(self, job, command, worker_id):
         start_time = time.time()
@@ -168,9 +179,9 @@ class Dispatcher:
             if e.args is not None:
                 error_message += '\nArgs: %s' % (str(e.args))
             if e.stdout is not None:
-                error_message += '\nStdout: %s' % (e.stdout)
+                error_message += '\nStdout: %s' % (e.stdout.decode('utf-8'))
             if e.stderr is not None:
-                error_message += '\nStderr: %s' % (e.stderr)
+                error_message += '\nStderr: %s' % (e.stderr.decode('utf-8'))
             self._write_queue.put(error_message)
             execution_time = -1
             completed_steps = 0
@@ -182,15 +193,15 @@ class Dispatcher:
             if e.args is not None:
                 error_message += '\nArgs: %s' % (str(e.args))
             if e.stdout is not None:
-                error_message += '\nStdout: %s' % (e.stdout)
+                error_message += '\nStdout: %s' % (e.stdout.decode('utf-8'))
             if e.stderr is not None:
-                error_message += '\nStderr: %s' % (e.stderr)
+                error_message += '\nStderr: %s' % (e.stderr.decode('utf-8'))
             self._write_queue.put(error_message)
             execution_time = -1
             completed_steps = 0
             self._kill_jobs(job_id=job.job_id)
         except Exception as e:
-            self._write_queue.put('Dispatcher failed: %s' % (e))
+            self._write_queue.put('Dispatcher failed: %s' % (str(e)))
             execution_time = -1
             completed_steps = 0
 
