@@ -75,7 +75,8 @@ class Worker:
                                                  sched_port,
                                                  run_dir,
                                                  checkpoint_dir,
-                                                 self._write_queue)
+                                                 self._write_queue,
+                                                 use_mps=(worker_type == 'v100'))
 
         self._server_thread.join()
 

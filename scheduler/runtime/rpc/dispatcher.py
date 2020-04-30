@@ -19,7 +19,7 @@ CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
                  sched_addr, sched_port, run_dir, checkpoint_dir,
-                 write_queue):
+                 write_queue, use_mps=False):
         self._thread_pool = ThreadPool()
         self._round_duration = round_duration
         self._worker_rpc_client = worker_rpc_client
@@ -34,13 +34,15 @@ class Dispatcher:
         self._lock = threading.Lock()
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
-        self._mps_initially_enabled = self._mps_status()
-        if self._mps_initially_enabled:
-            self._write_queue.put('CUDA MPS already running.')
-        else:
-            mps_enabled = self._enable_mps()
-            if not mps_enabled:
-                raise RuntimeError('Failed to enable CUDA MPS')
+        self._use_mps = use_mps
+        if use_mps:
+            self._mps_initially_enabled = self._mps_status()
+            if self._mps_initially_enabled:
+                self._write_queue.put('CUDA MPS already running')
+            else:
+                mps_enabled = self._enable_mps()
+                if not mps_enabled:
+                    raise RuntimeError('Failed to enable CUDA MPS')
 
     def _mps_status(self):
         """Returns True if MPS is running."""
@@ -255,5 +257,5 @@ class Dispatcher:
     def shutdown(self, shut_down_mps=True):
         self._thread_pool.terminate()
         self._thread_pool.join()
-        if shut_down_mps and not self._mps_initially_enabled:
+        if self._use_mps and shut_down_mps and not self._mps_initially_enabled:
             self._shutdown_mps()
