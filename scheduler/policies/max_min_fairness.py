@@ -26,7 +26,7 @@ class MaxMinFairnessPolicy(Policy):
             new_unflattened_throughputs[job_id] = {}
             for worker_type in unflattened_throughputs[job_id]:
                  new_unflattened_throughputs[job_id][worker_type] = \
-                     unflattened_throughputs[job_id][worker_types[0]]
+                     unflattened_throughputs[job_id]['v100']
 
         return self._max_min_fairness_perf_policy.get_allocation(
             new_unflattened_throughputs, scale_factors, priority_weights,
