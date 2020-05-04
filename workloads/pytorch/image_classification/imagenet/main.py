@@ -263,6 +263,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
     start = time.time()
     end = time.time()
     finished_epoch = True
+    i = 0
     for i, (input, target) in enumerate(train_loader):
         if (total_minibatches is not None and
             i + total_minibatches >= max_minibatches):
