@@ -8,6 +8,7 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.onnx
 import sys
+import multiprocessing as mp
 
 import data
 import model
@@ -208,7 +209,8 @@ train_loader = torch.utils.data.DataLoader(train_dataset,
                                            batch_size=args.batch_size,
                                            shuffle=False,
                                            sampler=train_sampler,
-                                           drop_last=True)
+                                           drop_last=True,
+                                           num_workers=min(2, mp.cpu_count()))
 val_loader = torch.utils.data.DataLoader(val_dataset,
                                          batch_size=eval_batch_size,
                                          shuffle=False,

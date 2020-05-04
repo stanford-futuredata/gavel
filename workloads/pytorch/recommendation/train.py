@@ -101,7 +101,8 @@ try:
     trainer.train(train_dataset=train_dataset, val_dataset=val_tr_dataset,
                 batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
                 num_epochs=args.num_epochs, negative_sampling=True,
-                lr_milestones=[60, 80], num_data_workers=mp.cpu_count() if use_cuda else 0,
+                lr_milestones=[60, 80],
+                num_data_workers=min(8, mp.cpu_count()) if use_cuda else 0,
                 model_checkpoint_prefix=None,
                 checkpoint_freq=0, eval_num_recommendations=0,
                 metrics=metrics, eval_freq=0)
