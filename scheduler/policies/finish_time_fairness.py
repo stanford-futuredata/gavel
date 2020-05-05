@@ -29,7 +29,7 @@ class FinishTimeFairnessPolicy(Policy):
             new_unflattened_throughputs[job_id] = {}
             for worker_type in unflattened_throughputs[job_id]:
                  new_unflattened_throughputs[job_id][worker_type] = \
-                     unflattened_throughputs[job_id][worker_types[0]]
+                     unflattened_throughputs[job_id]['v100']
 
         return self._finish_time_fairness_perf_policy.get_allocation(
             new_unflattened_throughputs, scale_factors,
@@ -112,6 +112,9 @@ class FinishTimeFairnessPolicyWithPerf(Policy):
             self._isolated_throughputs_prev_iteration[job_ids[i]] = \
                 isolated_throughputs[i]
 
+        if x.value is None:
+            return self._isolated_policy.get_allocation(
+                unflattened_throughputs, scale_factors, cluster_spec)
         return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
 
 

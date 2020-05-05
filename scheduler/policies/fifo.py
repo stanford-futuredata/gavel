@@ -4,6 +4,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import copy
 import random
 
+import job_id_pair
 from policy import Policy, PolicyWithPacking
 
 class FIFOPolicy(Policy):
@@ -103,13 +104,15 @@ class FIFOPolicy(Policy):
                         queue.append(single_job_id)
                         queue.sort()
                 if len(queue) > 0:
-                    job_id_to_schedule = queue.pop(0)
+                    job_id_to_schedule = queue[0]
                     if (scale_factors[job_id_to_schedule] <=
                             available_workers[worker_type]):
                         worker_type = self._allocation[scheduled_job_id]
-                        self._allocation[job_id_to_schedule] = worker_type
-                        available_workers[worker_type] -= \
-                            scale_factors[job_id_to_schedule]
+                        if throughputs[job_id_to_schedule][worker_type] > 0.0:
+                            queue.pop(0)
+                            self._allocation[job_id_to_schedule] = worker_type
+                            available_workers[worker_type] -= \
+                                scale_factors[job_id_to_schedule]
                 del self._allocation[scheduled_job_id]
                 del self._scale_factors[scheduled_job_id]
             else:
@@ -151,12 +154,13 @@ class FIFOPolicy(Policy):
                         max_throughput = throughput
                         worker_type = x
                         worker_type_idx = i
-            self._allocation[job_id_to_schedule] = worker_type
-            available_workers[worker_type] -= scale_factors[job_id_to_schedule]
-            if available_workers[worker_type] == 0:
-                worker_type_idx =\
-                    original_available_worker_types_mapping[worker_type_idx]
-                available_worker_types.pop(worker_type_idx)
+            if throughputs[job_id_to_schedule][worker_type] > 0.0:
+                self._allocation[job_id_to_schedule] = worker_type
+                available_workers[worker_type] -= scale_factors[job_id_to_schedule]
+                if available_workers[worker_type] == 0:
+                    worker_type_idx =\
+                        original_available_worker_types_mapping[worker_type_idx]
+                    available_worker_types.pop(worker_type_idx)
 
         if self._mode == 'packing':
             self._pack(queue, throughputs, scale_factors)
