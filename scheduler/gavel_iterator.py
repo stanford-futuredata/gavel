@@ -12,7 +12,7 @@ LEASE_UPDATE_FRACTION = 0.75
 
 class GavelIterator:
     def __init__(self, data, job_id, worker_id, distributed,
-                 server_addr, server_port):
+                 server_addr, server_port, synthetic_data=False):
         self._prev_time = time.time()
         if not isinstance(data, Iterable):
             raise ValueError('Data is of uniterable type %s' % (type(data)))
@@ -29,6 +29,9 @@ class GavelIterator:
         self._done = False
         self._lease = Lease(0, 0)
         self._update_lease()
+        self._synthetic_data = synthetic_data
+        if self._synthetic_data:
+            self._initial_val = None
 
     def __iter__(self):
         self._iter_data = iter(self._data)
@@ -64,9 +67,18 @@ class GavelIterator:
 
         # Return a new data item if one exists.
         try:
+            if self._synthetic_data and self._initial_val is not None:
+                return self._initial_val
+            else:
+                val = next(self._iter_data)
+                if self._synthetic_data and self._initial_val is None:
+                    self._initial_val = val
             self._steps += 1
-            val = next(self._iter_data)
         except StopIteration as e:
+            print('[GavelIterator] %d' % (self._steps))
+            raise StopIteration
+
+        if self._synthetic_data and self._steps % len(self._data) == 0:
             print('[GavelIterator] %d' % (self._steps))
             raise StopIteration
 

@@ -351,7 +351,8 @@ class Recoder(object):
         train_dataloader = GavelIterator(train_dataloader, self._job_id,
                                          self._worker_id,
                                          self._distributed,
-                                         self._sched_addr, self._sched_port)
+                                         self._sched_addr, self._sched_port,
+                                         synthetic_data=True)
 
     if lr_milestones is not None:
       _last_epoch = -1 if self.current_epoch == 1 else (self.current_epoch - 2)
