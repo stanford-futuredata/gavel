@@ -68,7 +68,7 @@ class GavelIterator:
         # Return a new data item if one exists.
         try:
             if self._synthetic_data and self._initial_val is not None:
-                return self._initial_val
+                val = self._initial_val
             else:
                 val = next(self._iter_data)
                 if self._synthetic_data and self._initial_val is None:
