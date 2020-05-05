@@ -122,6 +122,7 @@ class CorpusDataset(torch.utils.data.Dataset):
     # by the batchify function. The chunks are along dimension 0, corresponding
     # to the seq_len dimension in the LSTM.
     def get_input(self, row_idx, col_idx):
+        row_idx = row_idx % len(self._data)
         seq_len = min(self._bptt, len(self._data) - 1 - row_idx)
         data = self._data[row_idx: row_idx+seq_len, col_idx]
         target = self._data[row_idx+1: row_idx+1+seq_len, col_idx].view(data.size())
@@ -160,7 +161,7 @@ if os.path.exists(checkpoint_path):
     print('Loading checkpoint from %s...' % (checkpoint_path))
     with open(checkpoint_path, 'rb') as f:
         state = torch.load(f)
-        model = state['model']
+        model = state['model'].to(device)
 else:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                            args.nlayers, args.dropout, args.tied).to(device)
@@ -176,7 +177,9 @@ if args.master_addr is not None:
                             rank=args.rank)
 
 if args.distributed:
-    model = torch.nn.parallel.DistributedDataParallel(model)
+    model = torch.nn.parallel.DistributedDataParallel(
+        model, device_ids=[args.local_rank],
+        output_device=args.local_rank)
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset, shuffle=False)
 else:
