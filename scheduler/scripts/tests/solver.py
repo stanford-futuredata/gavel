@@ -20,10 +20,7 @@ def generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
         job_template = rng.choice(JobTable)
     job_type = job_template.model
     run_time = 60 * (10 ** random.uniform(2, 4))
-    num_steps = \
-        run_time * oracle_throughputs['v100'][job_type]['null']
     assert(run_time > 0)
-    assert(num_steps > 0)
     if job_template.needs_data_dir:
         command = job_template.command % (run_dir, run_dir)
     else:
@@ -39,6 +36,9 @@ def generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
             scale_factor = 4
         elif 0.9 <= r:
             scale_factor = 8
+    num_steps = \
+        run_time * oracle_throughputs['v100'][(job_type, scale_factor)]['null']
+    assert(num_steps > 0)
 
     priority_weight = 1.0
     if generate_multi_priority_jobs:
@@ -165,7 +165,8 @@ def main(args):
         'k80': int(k80s),
     }
     worker_types = sorted(cluster_spec.keys())
-    oracle_throughputs = utils.read_all_throughputs_json(args.throughputs_file)
+    oracle_throughputs =\
+        utils.read_all_throughputs_json_v2(args.throughputs_file)
     jobs = []
     for i in range(args.num_jobs):
         job_template = JobTable[i % len(JobTable)]
@@ -227,7 +228,7 @@ if __name__=='__main__':
             description='')
     parser.add_argument('--num_jobs', type=int, default=10, help='Num jobs')
     parser.add_argument('--throughputs-file', type=str,
-                        default=('oracle_throughputs.json'),
+                        default=('oracle_throughputs_v2.json'),
                         help='Oracle throughputs file')
     parser.add_argument('--generate-multi-gpu-jobs', action='store_true',
                         default=False,

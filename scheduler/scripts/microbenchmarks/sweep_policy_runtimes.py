@@ -19,10 +19,7 @@ def _generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
     job_template = rng.choice(JobTable)
     job_type = job_template.model
     run_time = 60 * (10 ** random.uniform(2, 4))
-    num_steps = \
-        run_time * oracle_throughputs['v100'][job_type]['null']
     assert(run_time > 0)
-    assert(num_steps > 0)
     if job_template.needs_data_dir:
         command = job_template.command % (run_dir, run_dir)
     else:
@@ -37,6 +34,10 @@ def _generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
             scale_factor = 4
         elif 0.95 <= r:
             scale_factor = 8
+    
+    num_steps = \
+        run_time * oracle_throughputs['v100'][(job_type, scale_factor)]['null']
+    assert(num_steps > 0)
 
     priority_weight = 1.0
     if generate_multi_priority_jobs:
@@ -123,7 +124,8 @@ def main(args):
     all_cluster_specs = args.cluster_spec
     all_num_active_jobs = args.num_active_jobs
     all_policies = args.policies
-    oracle_throughputs = utils.read_all_throughputs_json(args.throughputs_file)
+    oracle_throughputs =\
+        utils.read_all_throughputs_json_v2(args.throughputs_file)
 
     print('Cluster spec,# Active Jobs,Policy,Trials,Runtime,Stddev')
     for cluster_spec in all_cluster_specs:
@@ -139,7 +141,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='')
     parser.add_argument('--throughputs-file', type=str,
-                        default='oracle_throughputs.json',
+                        default='oracle_throughputs_v2.json',
                         help='Oracle throughputs file')
     parser.add_argument('--generate-multi-gpu-jobs', action='store_true',
                         default=False,
