@@ -267,12 +267,16 @@ class Scheduler:
                   not self._throughputs_mask[job_id][worker_type]):
                 self._throughputs_mask[job_id][worker_type] = True
                 oracle_throughputs = self._oracle_throughputs[worker_type]
+                scale_factor = self._jobs[job_id[0]].scale_factor
                 job_types = []
                 for single_job_id in job_id.singletons():
-                    job_types.append(self._jobs[single_job_id].job_type)
-                # TODO: Support scale factors > 1.
+                    job_types.append((self._jobs[single_job_id].job_type,
+                                      scale_factor))
                 self._throughputs[job_id][worker_type] = \
-                    oracle_throughputs[(job_types[0], 1)][(job_types[1], 1)]
+                    oracle_throughputs[job_types[0]][job_types[1]]
+                self._throughputs[job_id][worker_type] = \
+                    [x / scale_factor for x in \
+                        self._throughputs[job_id][worker_type]]
         elif not self._simulate:
             # Adjust the job throughput using an exponential moving average
             # between the old value and the new measurement.
@@ -723,12 +727,14 @@ class Scheduler:
             if job_id.is_pair():
                 assert(single_job_id is not None)
                 index = job_id.as_tuple().index(single_job_id[0])
+                scale_factor = self._jobs[single_job_id].scale_factor
                 job_types = []
                 for x in job_id.singletons():
-                    job_types.append(self._jobs[x].job_type)
-                # TODO: Support scale_factors > 1.
+                    job_types.append((self._jobs[x].job_type, scale_factor))
                 colocated_throughputs = \
-                    oracle_throughputs[(job_types[0], 1)][(job_types[1], 1)]
+                    oracle_throughputs[job_types[0]][job_types[1]]
+                colocated_throughputs = \
+                    [x / scale_factor for x in colocated_throughputs]
                 single_job_throughput = colocated_throughputs[index]
                 num_steps = int(single_job_throughput *
                                 self._time_per_iteration)
@@ -761,12 +767,14 @@ class Scheduler:
         single_job_ids = job_id.singletons()
         if job_id.is_pair() and self._estimate_throughputs and self._simulate:
             oracle_throughputs = self._oracle_throughputs[worker_type]
+            scale_factor = self._scale_factors[job_id[0]]
             job_types = []
             for single_job_id in single_job_ids:
-                job_types.append(self._jobs[single_job_id].job_type)
-            # TODO: Support scale factors > 1.
+                job_types.append((self._jobs[single_job_id].job_type,
+                                  scale_factor))
             oracle_throughput =\
-                oracle_throughputs[(job_types[0], 1)][(job_types[1], 1)]
+                oracle_throughputs[job_types[0]][job_types[1]]
+            oracle_throughput = [x / scale_factor for x in oracle_throughput]
         for i, single_job_id in enumerate(single_job_ids):
             num_steps = self._get_num_steps(job_id, worker_type, single_job_id)
             all_num_steps.append(num_steps)
@@ -910,7 +918,8 @@ class Scheduler:
             command = job_template.command % (run_dir)
 
         scale_factor = 1
-        if generate_multi_gpu_jobs:  # Copies Philly distribution.
+        # Copies Philly distribution.
+        if generate_multi_gpu_jobs and job_template.distributed:
             r = self._job_generator.uniform(0, 1)
             if 0.8 <= r <= 0.85:
                 scale_factor = 2
@@ -1526,21 +1535,28 @@ class Scheduler:
                     # The single-job IDs for job pairs are stored in sorted
                     # order so make sure the co-located throughputs match this
                     # order.
-                    # TODO: Support scale factors > 1.
+                    scale_factor = job.scale_factor
+                    job_types = [(job.job_type, scale_factor),
+                                 (other_job.job_type, scale_factor)]
                     if job_id < other_job_id:
                         self._throughputs[merged_job_id][worker_type] = \
-                            oracle_throughputs[(job.job_type, 1)][(other_job.job_type, 1)]
+                            oracle_throughputs[job_types[0]][job_types[1]]
                     else:
                         self._throughputs[merged_job_id][worker_type] = \
-                            oracle_throughputs[(other_job.job_type, 1)][(job.job_type, 1)]
+                            oracle_throughputs[job_types[1]][job_types[0]]
+                    self._throughputs[merged_job_id][worker_type] = \
+                        [x / scale_factor for x in \
+                            self._throughputs[merged_job_id][worker_type]]
 
     def _set_initial_throughput(self, job_id, worker_type):
         assert(not job_id.is_pair())
         if self._oracle_throughputs is not None:
             job_type = self._jobs[job_id].job_type
-            # TODO: Support scale factors > 1.
+            scale_factor = self._jobs[job_id].scale_factor
+            key = (job_type, scale_factor)
             self._throughputs[job_id][worker_type] = \
-                self._oracle_throughputs[worker_type][(job_type, 1)]['null']
+                self._oracle_throughputs[worker_type][key]['null'] /\
+                    scale_factor
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
 
