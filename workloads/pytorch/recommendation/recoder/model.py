@@ -27,7 +27,6 @@ workloads_dir = os.path.dirname(pytorch_dir)
 gpusched_dir = os.path.dirname(workloads_dir)
 scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
 sys.path.append(scheduler_dir)
-print(scheduler_dir)
 from gavel_iterator import GavelIterator
 
 class Recoder(object):
@@ -375,6 +374,9 @@ class Recoder(object):
                 iters_per_epoch=iters_per_epoch,
                 eval_num_users=eval_num_users,
                 eval_batch_size=eval_batch_size)
+
+    if self._enable_gavel_iterator:
+        train_dataloader.complete()
 
   def _train(self, train_dataloader, val_dataloader,
              num_epochs, current_epoch, lr_scheduler,

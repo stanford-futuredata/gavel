@@ -102,7 +102,7 @@ try:
                 batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
                 num_epochs=args.num_epochs, negative_sampling=True,
                 lr_milestones=[60, 80],
-                num_data_workers=0,#min(4, mp.cpu_count()) if use_cuda else 0,
+                num_data_workers=0,
                 model_checkpoint_prefix=None,
                 checkpoint_freq=0, eval_num_recommendations=0,
                 metrics=metrics, eval_freq=0)

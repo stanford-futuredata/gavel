@@ -173,8 +173,7 @@ ntokens = len(corpus.dictionary)
 
 load_from_checkpoint = False
 if args.checkpoint_dir is not None:
-    if os.path.isdir(args.checkpoint_dir):
-        load_from_checkpoint = False
+    if not os.path.isdir(args.checkpoint_dir):
         os.mkdir(args.checkpoint_dir)
     else:
         checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')

@@ -345,6 +345,9 @@ for epoch in range(start_epoch, opt.n_epochs):
     lr_scheduler_D_A.step()
     lr_scheduler_D_B.step()
 
+if opt.enable_gavel_iterator:
+    dataloader.complete()
+
 state = {
     'G_AB': G_AB.state_dict(),
     'G_BA': G_BA.state_dict(),

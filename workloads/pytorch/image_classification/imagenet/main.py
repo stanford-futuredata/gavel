@@ -229,9 +229,13 @@ def main():
             break
         elif (args.num_minibatches is not None and
             total_minibatches >= args.num_minibatches):
+            if args.enable_gavel_iterator:
+                train_loader.complete()
             break
         elif(args.max_duration is not None and
              total_elapsed_time >= args.max_duration):
+            if args.enable_gavel_iterator:
+                train_loader.complete()
             break
 
         # evaluate on validation set

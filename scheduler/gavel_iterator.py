@@ -51,18 +51,16 @@ class GavelIterator:
 
         # Check if the lease has expired.
         if self._duration > self._lease.max_duration:
-            self._done = True
             print('Gavel lease expired: %f seconds '
                   '(max %f seconds)' % (self._duration,
                                         self._lease.max_duration))
-            print('[GavelIterator] %d' % (self._steps))
+            self.complete()
             raise StopIteration
         elif self._steps > self._lease.max_steps:
-            self._done = True
             print('Gavel lease expired: %d steps '
                   '(max %d steps)' % (self._steps,
                                       self._lease.max_steps))
-            print('[GavelIterator] %d' % (self._steps))
+            self.complete()
             raise StopIteration
 
         # Return a new data item if one exists.
@@ -75,11 +73,15 @@ class GavelIterator:
                     self._initial_val = val
             self._steps += 1
         except StopIteration as e:
-            print('[GavelIterator] %d' % (self._steps))
+            # TODO: Enforce contract that application calls complete before
+            # exiting.
+            print('\n[GavelIterator] %d' % (self._steps))
             raise StopIteration
 
         if self._synthetic_data and self._steps % len(self._data) == 0:
-            print('[GavelIterator] %d' % (self._steps))
+            # TODO: Enforce contract that application calls complete before
+            # exiting.
+            print('\n[GavelIterator] %d' % (self._steps))
             raise StopIteration
 
         self._steps_until_next_lease_update -= 1
@@ -95,7 +97,8 @@ class GavelIterator:
         return self._done
 
     def complete(self):
-        print('[GavelIterator] %d' % (self._steps))
+        self._done = True
+        print('\n[GavelIterator] %d' % (self._steps))
 
     def _update_lease(self):
         (updated_max_steps, updated_max_duration) = \

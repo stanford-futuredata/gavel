@@ -142,7 +142,7 @@ if args.checkpoint_dir is not None:
         try:
             checkpoint = torch.load(checkpoint_path)
             net.load_state_dict(checkpoint['net'])
-            best_acc = checkpoint['acc']
+            # best_acc = checkpoint['acc']
             start_epoch = checkpoint['epoch']
         except Exception as e:
             print('Error reading checkpoint: %s' % (e))
@@ -238,8 +238,12 @@ if args.num_epochs is None:
 for epoch in range(start_epoch, args.num_epochs):
     (cumulative_steps, cumulative_time, done, finished_epoch) =\
             train(epoch, cumulative_steps, cumulative_time)
-    if enable_gavel_iterator and trainloader.done:
-        break
+    if enable_gavel_iterator:
+        if trainloader.done:
+            break
+        elif done:
+            trainloader.complete()
+            break
     elif done:
         break
 print('Saving checkpoint at %s...' % (checkpoint_path))

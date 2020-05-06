@@ -250,8 +250,13 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                     epoch=epoch_i, loss=valid_loss,
                     ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu))
                 """
-        if opt.enable_gavel_iterator and training_data.done:
-            return
+        if opt.enable_gavel_iterator:
+            if training_data.done:
+                return
+            elif done:
+                # Early stop.
+                training_data.complete()
+                return
         elif done:
             return
 
