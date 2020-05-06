@@ -1,9 +1,11 @@
 class JobTemplate:
-    def __init__(self, model, command, num_steps_arg, needs_data_dir=True):
+    def __init__(self, model, command, num_steps_arg, needs_data_dir=True,
+                 distributed=False):
         self._model = model
         self._command = command
         self._num_steps_arg = num_steps_arg
         self._needs_data_dir = needs_data_dir
+        self._distributed=False
 
     @property
     def model(self):
@@ -20,3 +22,7 @@ class JobTemplate:
     @property
     def needs_data_dir(self):
         return self._needs_data_dir
+
+    @property
+    def distributed(self):
+        return self._distributed

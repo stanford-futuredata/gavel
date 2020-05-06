@@ -12,9 +12,11 @@ import utils
 def generate_interarrival_time(rng, lam):
     return -math.log(1.0 - rng.random()) * lam
 
-def get_total_steps(rng, durations, throughputs, job_type):
+def get_total_steps(rng, durations, throughputs, job_type, scale_factor):
     duration = rng.choice(durations) * 3600
-    return max(1, int(throughputs['v100'][job_type]['null'] * duration))
+    steps =\
+        int(throughputs['v100'][(job_type, scale_factor)]['null'] * duration)
+    return max(1, steps)
 
 def main(args):
     job_generator = random.Random()
@@ -26,7 +28,7 @@ def main(args):
     duration_generator = random.Random()
     duration_generator.seed(args.seed + 2)
 
-    throughputs = utils.read_all_throughputs_json(args.throughputs_file)
+    throughputs = utils.read_all_throughputs_json_v2(args.throughputs_file)
 
     durations = np.linspace(args.min_duration, args.max_duration,
                             args.num_durations)
@@ -39,11 +41,12 @@ def main(args):
             command = job_template.command
             num_steps_arg = job_template.num_steps_arg
             needs_data_dir = job_template.needs_data_dir
+            scale_factor = 1
             total_steps = get_total_steps(duration_generator,
                                           durations,
                                           throughputs,
-                                          job_type)
-            scale_factor = 1
+                                          job_type,
+                                          scale_factor)
             priority_weight = 1
             SLO = -1
             if prev_arrival_time is None:
@@ -72,7 +75,7 @@ if __name__=='__main__':
     parser.add_argument('--seed', type=int, default=0,
                         help='Random seed')
     parser.add_argument('--throughputs_file', type=str,
-                        default=('oracle_throughputs.json'),
+                        default=('oracle_throughputs_v2.json'),
                         help='Oracle throughputs file')
     parser.add_argument('-a', '--min_duration', type=float, default=1,
                         help='Minimum job duration in hours')
