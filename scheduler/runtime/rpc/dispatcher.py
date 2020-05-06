@@ -125,12 +125,11 @@ class Dispatcher:
                 'Could not kill process %d on GPU %d: %s' % (pid, gpu_id,
                                                              str(e)))
 
-
     def _kill_jobs(self, job_id=None):
         with self._lock:
             gpu_processes = utils.get_gpu_processes()
             if job_id is not None:
-                # Kill all jobs.
+                # Kill all jobs with the same GPU ID or job ID.
                 for gpu_id in self._job_assignments[job_id]:
                     if gpu_id not in gpu_processes:
                         continue
@@ -185,7 +184,6 @@ class Dispatcher:
             self._write_queue.put(error_message)
             execution_time = -1
             completed_steps = 0
-            output = ''
             self._kill_jobs(job_id=job.job_id)
         except subprocess.TimeoutExpired as e:
             error_message = 'Job %s (worker %d) timed out' % (str(job.job_id),
