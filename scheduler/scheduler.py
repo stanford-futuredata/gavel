@@ -23,7 +23,7 @@ import utils
 
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
-INFINITY = int(1e9)#float("inf")
+INFINITY = int(1e9)
 DEFAULT_THROUGHPUT = 1
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
