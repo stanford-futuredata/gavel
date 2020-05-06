@@ -11,7 +11,7 @@ from isolated import IsolatedPolicy
 class MaxMinFairnessMultiEntityPolicy(Policy):
 
     def __init__(self, solver):
-        self._name = 'MaxMinFairness'
+        self._name = 'MaxMinFairnessMultiEntity'
         self._max_min_fairness_perf_policy = \
             MaxMinFairnessMultiEntityPolicyWithPerf(solver)
 
@@ -38,7 +38,7 @@ class MaxMinFairnessMultiEntityPolicyWithPerf(Policy):
 
     def __init__(self, solver):
         Policy.__init__(self, solver)
-        self._name = 'MaxMinFairness_Perf'
+        self._name = 'MaxMinFairnessMultiEntity_Perf'
         self._isolated_policy = IsolatedPolicy()
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
