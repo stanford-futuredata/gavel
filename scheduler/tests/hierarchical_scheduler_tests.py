@@ -30,5 +30,5 @@ def test_two_level_single_pass_hierarchical():
 
 
 if __name__ == '__main__':
-	allocation = test_two_level_single_pass_hierarchical()
-	print(allocation)
+    allocation = test_two_level_single_pass_hierarchical()
+    print(allocation)
