@@ -11,13 +11,14 @@ from runtime.rpc import iterator_client
 LEASE_UPDATE_FRACTION = 0.75
 
 class GavelIterator:
-    def __init__(self, data, job_id, worker_id, distributed,
+    def __init__(self, data_loader, job_id, worker_id, distributed,
                  server_addr, server_port, synthetic_data=False):
         self._prev_time = time.time()
-        if not isinstance(data, Iterable):
-            raise ValueError('Data is of uniterable type %s' % (type(data)))
+        if not isinstance(data_loader, Iterable):
+            raise ValueError('Data is of uniterable '
+                             'type %s' % (type(data_loader)))
         else:
-            self._data = data
+            self._data_loader = data_loader
         self._rpc_client = iterator_client.IteratorRpcClient(job_id, worker_id,
                                                              server_addr,
                                                              server_port)
@@ -34,7 +35,7 @@ class GavelIterator:
             self._initial_val = None
 
     def __iter__(self):
-        self._iter_data = iter(self._data)
+        self._iterator = iter(self._data_loader)
         return self
 
     def __next__(self):
@@ -68,7 +69,7 @@ class GavelIterator:
             if self._synthetic_data and self._initial_val is not None:
                 val = self._initial_val
             else:
-                val = next(self._iter_data)
+                val = next(self._iterator)
                 if self._synthetic_data and self._initial_val is None:
                     self._initial_val = val
             self._steps += 1
@@ -78,7 +79,7 @@ class GavelIterator:
             print('\n[GavelIterator] %d' % (self._steps))
             raise StopIteration
 
-        if self._synthetic_data and self._steps % len(self._data) == 0:
+        if self._synthetic_data and self._steps % len(self._data_loader) == 0:
             # TODO: Enforce contract that application calls complete before
             # exiting.
             print('\n[GavelIterator] %d' % (self._steps))
@@ -90,7 +91,7 @@ class GavelIterator:
         return val
 
     def __len__(self):
-        return len(self._data)
+        return len(self._data_loader)
 
     @property
     def done(self):
