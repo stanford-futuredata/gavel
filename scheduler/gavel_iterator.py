@@ -94,6 +94,9 @@ class GavelIterator:
     def done(self):
         return self._done
 
+    def complete(self):
+        print('[GavelIterator] %d' % (self._steps))
+
     def _update_lease(self):
         (updated_max_steps, updated_max_duration) = \
             self._rpc_client.update_lease(self._steps,
