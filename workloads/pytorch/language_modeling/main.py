@@ -368,7 +368,7 @@ try:
             state = {'model': model.module}
         else:
             state = {'model': model}
-        if args.rank == 0:
+        if args.rank == 0 or args.rank is None:
             torch.save(state, f)
 except KeyboardInterrupt:
     print('-' * 89)
