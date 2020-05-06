@@ -11,7 +11,17 @@ class SchedulerRpcClient:
     """Scheduler client for sending RPC requests to a worker server."""
 
     def __init__(self, server_ip_addr, port):
+        self._addr = server_ip_addr
+        self._port = port
         self._server_loc = '%s:%d' % (server_ip_addr, port)
+
+    @property
+    def addr(self):
+        return self._addr
+
+    @property
+    def port(self):
+        return self._port
 
     def run(self, job_descriptions, worker_id):
         with grpc.insecure_channel(self._server_loc) as channel:
@@ -28,6 +38,10 @@ class SchedulerRpcClient:
             request.worker_id = worker_id
             response = stub.Run(request)
 
+    def reset(self):
+        with grpc.insecure_channel(self._server_loc) as channel:
+            stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
+            response = stub.Reset(common_pb2.Empty())
 
     def shutdown(self):
         with grpc.insecure_channel(self._server_loc) as channel:

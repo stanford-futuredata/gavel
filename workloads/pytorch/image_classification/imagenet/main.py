@@ -1,7 +1,9 @@
 import argparse
+import datetime
 import os
 import random
 import shutil
+import sys
 import time
 import warnings
 
@@ -16,6 +18,16 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
+
+# TODO: Figure out a cleaner way of including gavel_iterator.
+imagenet_dir = os.path.dirname(os.path.realpath(__file__))
+image_classification_dir = os.path.dirname(imagenet_dir)
+pytorch_dir = os.path.dirname(image_classification_dir)
+workloads_dir = os.path.dirname(pytorch_dir)
+gpusched_dir = os.path.dirname(workloads_dir)
+scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
+sys.path.append(scheduler_dir)
+from gavel_iterator import GavelIterator
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
@@ -75,6 +87,12 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
+parser.add_argument('--job_id', type=int, default=None, help='Job ID')
+parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
+parser.add_argument('--sched_addr', type=str, default=None,
+                    help='Scheduler server')
+parser.add_argument('--sched_port', type=int, default=None,
+                    help='Scheduler port')
 
 best_acc1 = 0
 total_minibatches = 0
@@ -83,6 +101,7 @@ total_elapsed_time = 0
 def main():
     global args, best_acc1, total_minibatches, total_elapsed_time
     args = parser.parse_args()
+    torch.cuda.set_device(args.local_rank)
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -102,7 +121,12 @@ def main():
         dist.init_process_group(backend=args.dist_backend,
                                 init_method=args.dist_url,
                                 world_size=args.world_size,
-                                rank=args.rank)
+                                rank=args.rank,
+                                timeout=datetime.timedelta(seconds=30))
+
+    args.enable_gavel_iterator = False
+    if args.job_id is not None:
+        args.enable_gavel_iterator = True
 
     # create model
     if args.pretrained:
@@ -112,10 +136,11 @@ def main():
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
 
-    torch.cuda.set_device(args.local_rank)
     model = model.cuda()
     if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model)
+        model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[args.local_rank],
+                output_device=args.local_rank)
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -164,7 +189,8 @@ def main():
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=True, sampler=train_sampler,
+        timeout=30)
 
     val_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(valdir, transforms.Compose([
@@ -180,6 +206,10 @@ def main():
         validate(val_loader, model, criterion)
         return
 
+    if args.enable_gavel_iterator:
+        train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
+                                     args.distributed,
+                                     args.sched_addr, args.sched_port)
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -195,11 +225,17 @@ def main():
         total_minibatches += num_minibatches
         total_elapsed_time += elapsed_time
 
-        if (args.num_minibatches is not None and
+        if args.enable_gavel_iterator and train_loader.done:
+            break
+        elif (args.num_minibatches is not None and
             total_minibatches >= args.num_minibatches):
+            if args.enable_gavel_iterator:
+                train_loader.complete()
             break
         elif(args.max_duration is not None and
              total_elapsed_time >= args.max_duration):
+            if args.enable_gavel_iterator:
+                train_loader.complete()
             break
 
         # evaluate on validation set
@@ -214,7 +250,6 @@ def main():
         # 'best_acc1': best_acc1,
         'optimizer' : optimizer.state_dict(),
     }, checkpoint_path)
-
 
 def train(train_loader, model, criterion, optimizer, epoch,
           total_minibatches, max_minibatches, total_elapsed_time,
@@ -232,6 +267,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
     start = time.time()
     end = time.time()
     finished_epoch = True
+    i = 0
     for i, (input, target) in enumerate(train_loader):
         if (total_minibatches is not None and
             i + total_minibatches >= max_minibatches):

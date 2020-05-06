@@ -13,6 +13,8 @@ from shared_optim import SharedRMSprop, SharedAdam
 #from gym.configuration import undo_logger_setup
 import time
 
+INFINITY = 1000000
+
 #undo_logger_setup()
 parser = argparse.ArgumentParser(description='A3C')
 parser.add_argument(
@@ -128,6 +130,22 @@ parser.add_argument('--local_rank',
         default=0,
         type=int,
         help='Local rank')
+parser.add_argument('--job_id',
+        type=int,
+        default=None,
+        help='Job ID')
+parser.add_argument('--worker_id',
+        type=int,
+        default=None,
+        help='Worker ID')
+parser.add_argument('--sched_addr',
+        type=str,
+        default=None,
+        help='Scheduler server')
+parser.add_argument('--sched_port',
+        type=int,
+        default=None,
+        help='Scheduler port')
 
 # Based on
 # https://github.com/pytorch/examples/tree/master/mnist_hogwild
@@ -168,6 +186,14 @@ if __name__ == '__main__':
     else:
         optimizer = None
 
+    args.distributed = False
+    args.enable_gavel_iterator = False
+    if args.job_id is not None:
+        args.enable_gavel_iterator = True
+
+    if args.max_steps is None:
+        args.max_steps = INFINITY
+
     processes = []
 
     time.sleep(0.1)
@@ -177,8 +203,10 @@ if __name__ == '__main__':
         p.start()
         processes.append(p)
         time.sleep(0.1)
-    for p in processes:
-        time.sleep(0.1)
-        p.join()
+    processes[0].join()
+    if len(processes) > 1:
+        for p in processes[1:]:
+            p.terminate()
+            p.join()
     print('Saving checkpoint at %s...' % (checkpoint_path))
     torch.save(shared_model.state_dict(), checkpoint_path)

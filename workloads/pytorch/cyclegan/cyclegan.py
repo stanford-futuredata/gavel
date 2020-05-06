@@ -22,6 +22,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
+# TODO: Figure out a cleaner way of including gavel_iterator.
+cyclegan_dir = os.path.dirname(os.path.realpath(__file__))
+pytorch_dir = os.path.dirname(cyclegan_dir)
+workloads_dir = os.path.dirname(pytorch_dir)
+gpusched_dir = os.path.dirname(workloads_dir)
+scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
+sys.path.append(scheduler_dir)
+from gavel_iterator import GavelIterator
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--checkpoint_dir", type=str, default="/lfs/1/keshav2/checkpoints/cyclegan", help="Checkpoint dir")
 parser.add_argument("--n_steps", type=int, default=None, help="number of steps of training")
@@ -48,6 +57,12 @@ parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
 parser.add_argument('--local_rank', default=0, type=int,
                     help='Local rank')
+parser.add_argument('--job_id', type=int, default=None, help='Job ID')
+parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
+parser.add_argument('--sched_addr', type=str, default=None,
+                    help='Scheduler server')
+parser.add_argument('--sched_port', type=int, default=None,
+                    help='Scheduler port')
 opt = parser.parse_args()
 print(opt)
 
@@ -57,6 +72,11 @@ elif opt.n_steps is None and opt.n_epochs is None:
   raise ValueError('One of n_steps and n_epochs must be set')
 
 torch.cuda.set_device(opt.local_rank)
+
+opt.enable_gavel_iterator = False
+if opt.job_id is not None:
+    opt.enable_gavel_iterator = True
+
 
 # Create sample and checkpoint directories
 os.makedirs("images/%s" % opt.dataset_name, exist_ok=True)
@@ -143,6 +163,10 @@ val_dataloader = DataLoader(
     num_workers=1,
 )
 
+if opt.enable_gavel_iterator:
+    dataloader = GavelIterator(dataloader, opt.job_id, opt.worker_id,
+                               False, opt.sched_addr, opt.sched_port)
+
 if opt.n_epochs is None:
     opt.n_epochs = opt.n_steps
 
@@ -186,7 +210,6 @@ elapsed_time = 0
 prev_time = time.time()
 for epoch in range(start_epoch, opt.n_epochs):
     for i, batch in enumerate(dataloader):
-
         if opt.n_steps is not None and steps >= opt.n_steps:
             done = True
             break
@@ -314,13 +337,16 @@ for epoch in range(start_epoch, opt.n_epochs):
             print('')
             sys.stdout.flush()
             print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), steps))
-    if done:
+    if done or (opt.enable_gavel_iterator and dataloader.done):
         break
 
     # Update learning rates
     lr_scheduler_G.step()
     lr_scheduler_D_A.step()
     lr_scheduler_D_B.step()
+
+if opt.enable_gavel_iterator:
+    dataloader.complete()
 
 state = {
     'G_AB': G_AB.state_dict(),

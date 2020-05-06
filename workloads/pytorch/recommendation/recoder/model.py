@@ -1,4 +1,5 @@
 import os
+import sys
 
 import glog as log
 
@@ -18,6 +19,15 @@ from recoder.losses import MSELoss, MultinomialNLLLoss
 
 from tqdm import tqdm
 
+# TODO: Figure out a cleaner way of including gavel_iterator.
+recoder_dir = os.path.dirname(os.path.realpath(__file__))
+recommendation_dir = os.path.dirname(recoder_dir)
+pytorch_dir = os.path.dirname(recommendation_dir)
+workloads_dir = os.path.dirname(pytorch_dir)
+gpusched_dir = os.path.dirname(workloads_dir)
+scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
+sys.path.append(scheduler_dir)
+from gavel_iterator import GavelIterator
 
 class Recoder(object):
   """
@@ -50,7 +60,9 @@ class Recoder(object):
                num_items=None, num_users=None,
                optimizer_type='sgd', loss='mse',
                loss_params=None, use_cuda=False,
-               user_based=True, item_based=True):
+               user_based=True, item_based=True,
+               job_id=None, worker_id=None,
+               sched_addr=None, sched_port=None):
 
     self.model = model
     self.num_items = num_items
@@ -75,6 +87,16 @@ class Recoder(object):
     self.__model_initialized = False
     self.__optimizer_state_dict = None
     self.__sparse_optimizer_state_dict = None
+
+    if job_id is not None:
+        self._enable_gavel_iterator = True
+        self._job_id = job_id
+        self._worker_id = worker_id
+        self._distributed = False
+        self._sched_addr = sched_addr
+        self._sched_port = sched_port
+    else:
+        self._enable_gavel_iterator = False
 
   def __init_model(self):
     if self.__model_initialized:
@@ -324,6 +346,13 @@ class Recoder(object):
     else:
       val_dataloader = None
 
+    if self._enable_gavel_iterator:
+        train_dataloader = GavelIterator(train_dataloader, self._job_id,
+                                         self._worker_id,
+                                         self._distributed,
+                                         self._sched_addr, self._sched_port,
+                                         synthetic_data=True)
+
     if lr_milestones is not None:
       _last_epoch = -1 if self.current_epoch == 1 else (self.current_epoch - 2)
       lr_scheduler = MultiStepLR(self.optimizer, milestones=lr_milestones,
@@ -345,6 +374,9 @@ class Recoder(object):
                 iters_per_epoch=iters_per_epoch,
                 eval_num_users=eval_num_users,
                 eval_batch_size=eval_batch_size)
+
+    if self._enable_gavel_iterator:
+        train_dataloader.complete()
 
   def _train(self, train_dataloader, val_dataloader,
              num_epochs, current_epoch, lr_scheduler,
@@ -435,6 +467,9 @@ class Recoder(object):
       if model_checkpoint_prefix and \
           ((checkpoint_freq > 0 and epoch % checkpoint_freq == 0) or epoch == num_epochs):
         self.save_state(model_checkpoint_prefix)
+
+      if self._enable_gavel_iterator and train_dataloader.done:
+          break
 
   def _validate(self, val_dataloader):
     self.model.eval()

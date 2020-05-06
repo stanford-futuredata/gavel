@@ -10,11 +10,14 @@ import time
 import os
 import torch
 
+import recoder
 from recoder.model import Recoder
 from recoder.data import RecommendationDataset
 from recoder.metrics import AveragePrecision, Recall, NDCG
 from recoder.nn import DynamicAutoencoder, MatrixFactorization
 from recoder.utils import dataframe_to_csr_matrix
+
+print(os.path.abspath(recoder.__file__))
 
 parser = argparse.ArgumentParser(description='Recommendation')
 parser.add_argument('-n', '--num_epochs', required=True, type=int,
@@ -32,6 +35,12 @@ parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
 parser.add_argument('--local_rank', default=0, type=int,
                     help='Local rank')
+parser.add_argument('--job_id', type=int, default=None, help='Job ID')
+parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
+parser.add_argument('--sched_addr', type=str, default=None,
+                    help='Scheduler server')
+parser.add_argument('--sched_port', type=int, default=None,
+                    help='Scheduler port')
 args = parser.parse_args()
 
 data_dir = args.data_dir
@@ -78,7 +87,9 @@ model = DynamicAutoencoder(hidden_layers=[200], activation_type='tanh',
 #                             dropout_prob=0.5, sparse=False)
 
 trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
-                  loss='logistic', user_based=False)
+                  loss='logistic', user_based=False, job_id=args.job_id,
+                  worker_id=args.worker_id, sched_addr=args.sched_addr,
+                  sched_port=args.sched_port)
 if os.path.exists(checkpoint_path):
     print('Loading checkpoint from %s...' % (checkpoint_path))
     trainer.init_from_model_file(checkpoint_path)
@@ -87,44 +98,16 @@ metrics = [Recall(k=20, normalize=True), Recall(k=50, normalize=True),
            NDCG(k=100)]
 
 try:
-  if args.throughput_estimation_interval is not None:
-      num_iterations = int(math.ceil(args.num_epochs / args.throughput_estimation_interval))
-      epochs_per_iteration = args.throughput_estimation_interval
-  else:
-      num_iterations = int(math.ceil(args.num_epochs / 10))
-      epochs_per_iteration = 10
-      # num_iterations = 1
-      # epochs_per_iteration = args.num_epochs
-  epochs = 0
-  total_elapsed_time = 0
-  for i in range(num_iterations):
-      start_time = time.time()
-      if args.num_epochs is not None:
-          epochs_per_iteration = min(epochs_per_iteration,
-                                     args.num_epochs - epochs)
-          if epochs_per_iteration <= 0:
-            break
-      print('Running for %d epochs' % (epochs_per_iteration))
-      # Reinstantiate trainer to eliminate internal state keeping track of
-      # completed epochs. Note that this will prevent the model from converging.
-      trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
-                        loss='logistic', user_based=False)
-      trainer.train(train_dataset=train_dataset, val_dataset=val_tr_dataset,
-                    batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
-                    num_epochs=epochs_per_iteration, negative_sampling=True,
-                    lr_milestones=[60, 80], num_data_workers=mp.cpu_count() if use_cuda else 0,
-                    model_checkpoint_prefix=None,
-                    checkpoint_freq=0, eval_num_recommendations=0,
-                    metrics=metrics, eval_freq=0)
-      epochs += epochs_per_iteration
-      if args.max_duration is not None:
-          iteration_time = time.time () - start_time
-          total_elapsed_time += iteration_time
-          if total_elapsed_time >= args.max_duration:
-              break
-      if args.throughput_estimation_interval is not None:
-            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), epochs))
-  current_state = {
+    trainer.train(train_dataset=train_dataset, val_dataset=val_tr_dataset,
+                batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
+                num_epochs=args.num_epochs, negative_sampling=True,
+                lr_milestones=[60, 80],
+                num_data_workers=0,
+                model_checkpoint_prefix=None,
+                checkpoint_freq=0, eval_num_recommendations=0,
+                metrics=metrics, eval_freq=0)
+
+    current_state = {
       'model_params': trainer.model.model_params(),
       'last_epoch': trainer.current_epoch,
       'model': trainer.model.state_dict(),
@@ -134,14 +117,14 @@ try:
       'users': trainer.users,
       'num_items': trainer.num_items,
       'num_users': trainer.num_users
-  }
+    }
 
-  if type(trainer.loss) is str:
-    current_state['loss'] = trainer.loss
-    current_state['loss_params'] = trainer.loss_params
+    if type(trainer.loss) is str:
+        current_state['loss'] = trainer.loss
+        current_state['loss_params'] = trainer.loss_params
 
-  print('Saving checkpoint at %s...' % (checkpoint_path))
-  torch.save(current_state, checkpoint_path)
+    print('Saving checkpoint at %s...' % (checkpoint_path))
+    torch.save(current_state, checkpoint_path)
 
 except (KeyboardInterrupt, SystemExit) as e:
   print(e)

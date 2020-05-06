@@ -13,10 +13,21 @@ import torchvision.transforms as transforms
 
 import os
 import argparse
+import sys
 import time
 
 from models import *
 from utils import progress_bar
+
+# TODO: Figure out a cleaner way of including gavel_iterator.
+imagenet_dir = os.path.dirname(os.path.realpath(__file__))
+image_classification_dir = os.path.dirname(imagenet_dir)
+pytorch_dir = os.path.dirname(image_classification_dir)
+workloads_dir = os.path.dirname(pytorch_dir)
+gpusched_dir = os.path.dirname(workloads_dir)
+scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
+sys.path.append(scheduler_dir)
+from gavel_iterator import GavelIterator
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--data_dir', required=True, type=str, help='Data directory')
@@ -47,6 +58,12 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
+parser.add_argument('--job_id', type=int, default=None, help='Job ID')
+parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
+parser.add_argument('--sched_addr', type=str, default=None,
+                    help='Scheduler server')
+parser.add_argument('--sched_port', type=int, default=None,
+                    help='Scheduler port')
 
 args = parser.parse_args()
 
@@ -76,7 +93,13 @@ if args.master_addr is not None:
                             init_method=args.dist_url,
                             world_size=args.world_size,
                             rank=args.rank)
-    net = torch.nn.parallel.DistributedDataParallel(net)
+    net = torch.nn.parallel.DistributedDataParallel(
+            net, device_ids=[args.local_rank],
+            output_device=args.local_rank)
+
+enable_gavel_iterator = False
+if args.job_id is not None:
+    enable_gavel_iterator = True
 
 # Data
 print('==> Preparing data..')
@@ -104,6 +127,10 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
+if enable_gavel_iterator:
+    trainloader = GavelIterator(trainloader, args.job_id, args.worker_id,
+                                distributed, args.sched_addr, args.sched_port)
+
 cumulative_steps = 0
 cumulative_time = 0
 if args.checkpoint_dir is not None:
@@ -115,7 +142,7 @@ if args.checkpoint_dir is not None:
         try:
             checkpoint = torch.load(checkpoint_path)
             net.load_state_dict(checkpoint['net'])
-            best_acc = checkpoint['acc']
+            # best_acc = checkpoint['acc']
             start_epoch = checkpoint['epoch']
         except Exception as e:
             print('Error reading checkpoint: %s' % (e))
@@ -211,7 +238,13 @@ if args.num_epochs is None:
 for epoch in range(start_epoch, args.num_epochs):
     (cumulative_steps, cumulative_time, done, finished_epoch) =\
             train(epoch, cumulative_steps, cumulative_time)
-    if done:
+    if enable_gavel_iterator:
+        if trainloader.done:
+            break
+        elif done:
+            trainloader.complete()
+            break
+    elif done:
         break
 print('Saving checkpoint at %s...' % (checkpoint_path))
 state = {

@@ -23,7 +23,7 @@ import utils
 
 SCHEDULER_PORT = 50060
 SLEEP_SECONDS = 2
-INFINITY = float("inf")
+INFINITY = int(1e9)
 DEFAULT_THROUGHPUT = 1
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
@@ -191,6 +191,10 @@ class Scheduler:
             # for each newly arrived job.
             self._num_profiling_data_points_per_job = \
                 int(num_reference_models * .6)
+        # The per-round maximum number of steps to run for distributed jobs.
+        self._max_steps = {}
+        # All per-round lease update requests for distributed jobs.
+        self._lease_update_requests = {}
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -204,6 +208,7 @@ class Scheduler:
         port = SCHEDULER_PORT
         callbacks = {
             'RegisterWorker': self._register_worker_callback,
+            'UpdateLease': self._update_lease_callback,
             'Done': self._done_callback,
         }
 
@@ -259,6 +264,9 @@ class Scheduler:
 
     def _update_throughput(self, job_id, worker_type, all_num_steps,
                            all_execution_times):
+        # Job might have already completed.
+        if job_id not in self._jobs:
+            return
         if self._simulate and self._estimate_throughputs:
             if not job_id.is_pair():
                 # Assume single job throughputs are already populated.
@@ -416,11 +424,21 @@ class Scheduler:
         with self._scheduler_lock:
             duration = self._per_job_latest_timestamps[job_id] - \
                 self._per_job_start_timestamps[job_id]
-            self._job_completion_times[job_id] = duration
             self._job_priority_weights[job_id] = \
                 self._jobs[job_id].priority_weight
             del self._jobs[job_id]
-            print("Job %d completed\n\tStart timestamp: %.2f\n\t"
+            if self._num_failures_per_job[job_id] >= MAX_FAILED_ATTEMPTS:
+                print("Job %d failed\n\tStart timestamp: %.2f\n\t"
+                      "End timestamp: %.2f\nDuration: %.2f %s\n"
+                      "Number of remaining active jobs: %d\n" % (
+                          job_id[0],
+                          self._per_job_start_timestamps[job_id],
+                          self._per_job_latest_timestamps[job_id],
+                          duration, "seconds", len(self._jobs))
+                      )
+                self._job_completion_times[job_id] = None
+            else:
+                print("Job %d completed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n"
                   "Number of remaining active jobs: %d\n" % (
                       job_id[0],
@@ -428,6 +446,7 @@ class Scheduler:
                       self._per_job_latest_timestamps[job_id],
                       duration, "seconds", len(self._jobs))
                   )
+                self._job_completion_times[job_id] = duration
             job_type = self._job_id_to_job_type[job_id]
             self._job_type_to_job_ids[job_type].remove(job_id)
             del self._steps_run_so_far[job_id]
@@ -673,6 +692,7 @@ class Scheduler:
                 num_workers_assigned += scale_factor
 
                 for single_job_id in job_id.singletons():
+                    """
                     num_steps = self._get_num_steps(job_id, worker_type,
                                                     single_job_id)
                     if not self._estimate_throughputs and num_steps <= 0:
@@ -683,6 +703,8 @@ class Scheduler:
                                                               job_id,
                                                               self._jobs[job_id].job_type,
                                                               worker_type))
+                    """
+                    num_steps = self._jobs[single_job_id].total_steps
                     self._per_job_latest_timestamps[single_job_id] = \
                         self.get_current_timestamp()
                     self._running_jobs.add(single_job_id)
@@ -1217,22 +1239,34 @@ class Scheduler:
                 for (job_id, worker_ids) in scheduled_jobs:
                     worker_type = \
                         self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                    job_descriptions = []
-                    for i, single_job_id in enumerate(job_id.singletons()):
-                        if job_id.is_pair():
-                            num_steps = \
-                                self._get_num_steps(job_id, worker_type,
-                                                    single_job_id)
-                        else:
-                            num_steps = \
-                                self._get_num_steps(job_id, worker_type)
-                        job_descriptions.append(
-                                (single_job_id,
-                                 self._jobs[single_job_id].command,
-                                 self._jobs[single_job_id].needs_data_dir,
-                                 self._jobs[single_job_id].num_steps_arg,
-                                 num_steps))
-                    for worker_id in worker_ids:
+                    scale_factor = len(worker_ids)
+                    for i, worker_id in enumerate(worker_ids):
+                        job_descriptions = []
+                        for j, single_job_id in enumerate(job_id.singletons()):
+                            num_steps = self._jobs[single_job_id].total_steps
+                            command = self._jobs[single_job_id].command
+                            # Add distributed args if necessary.
+                            if scale_factor > 1:
+                                master_addr = \
+                                    self._worker_connections[worker_ids[0]].addr
+                                master_port = \
+                                    self._worker_connections[worker_ids[0]].port
+                                command = ('%s --master_addr %s '
+                                           '--master_port %d '
+                                           '--world_size %d '
+                                           '--rank %d' % (command,
+                                                          master_addr,
+                                                          master_port + 1 + j,
+                                                          scale_factor, i))
+                            job_descriptions.append(
+                                    (single_job_id,
+                                     command,
+                                     self._jobs[single_job_id].needs_data_dir,
+                                     self._jobs[single_job_id].num_steps_arg,
+                                     num_steps))
+                        # Reset lease update metadata.
+                        self._lease_update_requests[job_id] = []
+                        self._max_steps[job_id] = None
                         self._worker_connections[worker_id].run(
                                 job_descriptions, worker_id)
                         self._remove_available_worker_id(worker_id)
@@ -1258,23 +1292,25 @@ class Scheduler:
             if len(self._job_completion_times) == 0:
                 return
             if job_ids is None:
-                job_ids = sorted([job_id for job_id in self._job_completion_times])
+                job_ids = sorted(list(self._job_completion_times.keys()))
             print('Job completion times:')
+            all_job_completion_times = []
             low_priority_job_completion_times = []
             high_priority_job_completion_times = []
             for job_id in job_ids:
+                completion_time = self._job_completion_times[job_id]
+                if completion_time is None:
+                    continue
+                else:
+                    all_job_completion_times.append(completion_time)
                 if self._job_priority_weights[job_id] == 1.0:
-                    print('Job %s: %.3f' % (job_id,
-                                            self._job_completion_times[job_id]))
-                    low_priority_job_completion_times.append(
-                        self._job_completion_times[job_id])
+                    print('Job %s: %.3f' % (job_id, completion_time))
+                    low_priority_job_completion_times.append(completion_time)
                 else:
                     print('Job %s (high priority): %.3f' % (job_id,
-                                                            self._job_completion_times[job_id]))
-                    high_priority_job_completion_times.append(
-                        self._job_completion_times[job_id])
-            average_job_completion_time = \
-                np.mean([self._job_completion_times[job_id] for job_id in job_ids])
+                                                            completion_time))
+                    high_priority_job_completion_times.append(completion_time)
+            average_job_completion_time = np.mean(all_job_completion_times)
             if verbose:
                 print('Average job completion time: '
                       '%.3f seconds' % (average_job_completion_time))
@@ -1940,6 +1976,49 @@ class Scheduler:
 
         return (per_worker_ids, self._time_per_iteration)
 
+    def _update_lease_callback(self, job_id, worker_id, steps, duration,
+                               max_steps, max_duration):
+        scale_factor = self._jobs[job_id].scale_factor
+        if steps == 0 or duration == 0:
+            return (INFINITY, self._time_per_iteration)
+        elif scale_factor == 1:
+            return (max_steps, max_duration)
+        else:
+            with self._scheduler_lock:
+                update_id = len(self._lease_update_requests[job_id])
+                self._lease_update_requests[job_id].append((steps, duration,
+                                                            max_steps,
+                                                            max_duration))
+                if update_id == 0:
+                    assert self._max_steps[job_id] is None
+
+            # The first worker to request a lease update computes the new
+            # lease for all workers.
+            if update_id == 0:
+                with self._scheduler_lock:
+                    remaining_time = \
+                        (self._time_per_iteration -
+                         duration % self._time_per_iteration)
+                    throughput = steps / duration
+                    remaining_steps = max(1, int(remaining_time * throughput))
+                    max_completed_steps = \
+                        max([request[0] for request in \
+                                self._lease_update_requests[job_id]])
+                    self._max_steps[job_id] = \
+                        max_completed_steps + remaining_steps
+                    return (self._max_steps[job_id], INFINITY)
+            else:
+                # Wait for the first update to complete.
+                while True:
+                    with self._scheduler_lock:
+                        max_steps = self._max_steps[job_id]
+                        if max_steps is not None:
+                            break
+                    # TODO: Sleep for less time?
+                    time.sleep(1)
+                assert max_steps is not None
+                return (max_steps, INFINITY)
+
     def _done_callback(self, job_id, worker_id, all_num_steps,
                        all_execution_times):
         """Handles completion of a scheduled job.
@@ -1955,12 +2034,13 @@ class Scheduler:
             all_num_steps: List of the number of steps each job ran for.
         """
 
+        # TODO: Aggregate updates before processing distributed jobs?
         to_remove = []
         with self._scheduler_lock:
-            worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             current_timestamp = self.get_current_timestamp()
+            worker_type = self._worker_id_to_worker_type_mapping[worker_id]
 
-            if np.min(all_execution_times) <= 0:
+            if np.min(all_execution_times) <= 0 or np.min(all_num_steps) == 0:
                 # Micro-task failed.
                 print(('%s]\t[Micro-task failed]\t'
                        'Job ID: %s') % (current_timestamp,

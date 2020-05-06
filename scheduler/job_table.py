@@ -113,27 +113,27 @@ JobTable = [
                 num_steps_arg='--steps'),
     JobTemplate(model='Recommendation (batch size 512)',
               command=('cd %s/gpusched/workloads/pytorch/'
-                       'recommendation/scripts/ml-20m && python3 train.py '
+                       'recommendation/ && python3 train.py '
                        '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 512'),
               num_steps_arg='-n'),
     JobTemplate(model='Recommendation (batch size 1024)',
               command=('cd %s/gpusched/workloads/pytorch/'
-                       'recommendation/scripts/ml-20m && python3 train.py '
+                       'recommendation/ && python3 train.py '
                        '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 1024'),
               num_steps_arg='-n'),
     JobTemplate(model='Recommendation (batch size 2048)',
               command=('cd %s/gpusched/workloads/pytorch/'
-                       'recommendation/scripts/ml-20m && python3 train.py '
+                       'recommendation/ && python3 train.py '
                        '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 2048'),
               num_steps_arg='-n'),
     JobTemplate(model='Recommendation (batch size 4096)',
               command=('cd %s/gpusched/workloads/pytorch/'
-                       'recommendation/scripts/ml-20m && python3 train.py '
+                       'recommendation/ && python3 train.py '
                        '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 4096'),
               num_steps_arg='-n'),
     JobTemplate(model='Recommendation (batch size 8192)',
               command=('cd %s/gpusched/workloads/pytorch/'
-                       'recommendation/scripts/ml-20m && python3 train.py '
+                       'recommendation/ && python3 train.py '
                        '--data_dir %s/data/ml-20m/pro_sg/ --batch_size 8192'),
               num_steps_arg='-n'),
     JobTemplate(model='CycleGAN',

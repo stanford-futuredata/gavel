@@ -6,6 +6,7 @@ import argparse
 import glob
 import math
 import os
+import sys
 import time
 
 import torch.distributed as dist
@@ -20,6 +21,16 @@ import transformer.Constants as Constants
 from dataset import TranslationDataset, paired_collate_fn
 from transformer.Models import Transformer
 from transformer.Optim import ScheduledOptim
+
+# TODO: Figure out a cleaner way of including gavel_iterator.
+translation_dir = os.path.dirname(os.path.realpath(__file__))
+pytorch_dir = os.path.dirname(translation_dir)
+workloads_dir = os.path.dirname(pytorch_dir)
+gpusched_dir = os.path.dirname(workloads_dir)
+scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
+sys.path.append(scheduler_dir)
+from gavel_iterator import GavelIterator
+
 
 def cal_performance(pred, gold, smoothing=False):
     ''' Apply label smoothing if needed '''
@@ -239,7 +250,14 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                     epoch=epoch_i, loss=valid_loss,
                     ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu))
                 """
-        if done:
+        if opt.enable_gavel_iterator:
+            if training_data.done:
+                return
+            elif done:
+                # Early stop.
+                training_data.complete()
+                return
+        elif done:
             return
 
 def main():
@@ -296,6 +314,12 @@ def main():
                         help='Steps between logging steps completed')
     parser.add_argument('--max_duration', type=int, default=None,
                         help='Maximum duration in seconds')
+    parser.add_argument('--job_id', type=int, default=None, help='Job ID')
+    parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
+    parser.add_argument('--sched_addr', type=str, default=None,
+                        help='Scheduler server')
+    parser.add_argument('--sched_port', type=int, default=None,
+                        help='Scheduler port')
 
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda
@@ -317,6 +341,10 @@ def main():
                                 init_method=opt.dist_url,
                                 world_size=opt.world_size,
                                 rank=opt.rank)
+
+    opt.enable_gavel_iterator = False
+    if opt.job_id is not None:
+        opt.enable_gavel_iterator = True
 
     #========= Loading Dataset =========#
     data = torch.load(opt.data)
@@ -351,8 +379,13 @@ def main():
         dropout=opt.dropout).to(device)
 
     if distributed:
-        transformer = DDP(transformer)
+        transformer = DDP(transformer, device_ids=[opt.local_rank],
+                          output_device=opt.local_rank)
 
+    if opt.enable_gavel_iterator:
+        training_data = GavelIterator(training_data, opt.job_id,
+                                      opt.worker_id, distributed,
+                                      opt.sched_addr, opt.sched_port)
 
     optimizer = ScheduledOptim(
         optim.Adam(

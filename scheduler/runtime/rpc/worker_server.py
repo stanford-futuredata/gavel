@@ -33,6 +33,11 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
         run_callback(jobs, request.worker_id)
         return common_pb2.Empty()
 
+    def Reset(self, request, context):
+        reset_callback = self._callbacks['Reset']
+        reset_callback()
+        return common_pb2.Empty()
+
     def Shutdown(self, request, context):
         # Handle any custom cleanup in the scheduler.
         shutdown_callback = self._callbacks['Shutdown']

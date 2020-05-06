@@ -2,47 +2,13 @@ import csv
 from datetime import datetime
 import json
 import os
+import re
 import socket
 import subprocess
 
 import job
 from policies import allox, fifo, finish_time_fairness, gandiva, isolated, \
     max_min_fairness, max_sum_throughput, min_total_duration
-
-
-def get_steps_from_job_output(outputs):
-    """Parses the job outputs and returns the number of steps executed."""
-    earliest_end_time = None
-    for output in outputs:
-        lines = output.split('\n')
-        for i in range(len(lines) - 1, -1, -1):
-            if '[THROUGHPUT_ESTIMATION]' in lines[i]:
-                _, time, _ = lines[i].split('\t')
-                if (earliest_end_time is None or
-                    float(time) < earliest_end_time):
-                    earliest_end_time = float(time)
-                break
-
-    num_steps = []
-    for output in outputs:
-        lines = output.split('\n')
-        start_time = None
-        for line in lines:
-            if '[THROUGHPUT_ESTIMATION]' in line:
-                _, time, steps = line.split('\t')
-                if start_time is None:
-                    start_time = float(time)
-                    start_steps = int(steps)
-                elif float(time) > earliest_end_time:
-                    break
-        if start_time is None:
-            return [0, 0]
-        elapsed_time = float(time) - start_time
-        if elapsed_time <= 0:
-            return [0, 0]
-        num_steps.append(int(steps) - start_steps)
-
-    return num_steps
 
 
 def get_ip_address():
@@ -55,6 +21,26 @@ def get_num_gpus():
     output = subprocess.run(command, stdout=subprocess.PIPE, check=True,
                             shell=True).stdout.decode('utf-8').strip()
     return len(output.split('\n'))
+
+def get_gpu_processes():
+    output = subprocess.check_output('nvidia-smi').decode('utf-8')
+    gpu_processes = {}
+    processes_flag = False
+    for line in output.split('\n'):
+        if 'Processes' in line:
+            processes_flag = True
+            continue
+        if processes_flag:
+            res = re.search('(\d+) *(\d+) *(\w+) *(\w+) *(\d+)MiB', line)
+            if res is not None:
+                gpu_id = int(res.group(1))
+                if gpu_id not in gpu_processes:
+                    gpu_processes[gpu_id] = []
+                pid = int(res.group(2))
+                process_name = res.group(4)
+                if process_name != 'nvidia-cuda-mps-server':
+                    gpu_processes[gpu_id].append(pid)
+    return gpu_processes
 
 def get_available_policies():
     return ['allox',
@@ -231,6 +217,44 @@ def get_latest_price_for_worker_type(worker_type, current_time,
         prices.append(azure_price)
 
     return min(prices)
+
+def parse_job_type_str(job_type):
+    if job_type is None:
+        return None
+    match = re.match('(.*) \(scale factor (\d+)\)', job_type)
+    if match is None:
+        return (job_type, 1)
+    model = match.group(1)
+    scale_factor = int(match.group(2))
+    return (model, scale_factor)
+
+def parse_job_type_tuple(job_type):
+    match = re.match('\(\'(.*)\', (\d+)\)', job_type)
+    if match is None:
+        return None
+    model = match.group(1)
+    scale_factor = int(match.group(2))
+    return (model, scale_factor)
+
+def read_all_throughputs_json_v2(file_name):
+    with open(file_name, 'r') as f:
+        raw_throughputs = json.load(f)
+    parsed_throughputs = {}
+    for worker_type in raw_throughputs:
+        parsed_throughputs[worker_type] = {}
+        for job_type in raw_throughputs[worker_type]:
+            key = parse_job_type_tuple(job_type)
+            assert(key is not None)
+            parsed_throughputs[worker_type][key] = {}
+            for other_job_type in raw_throughputs[worker_type][job_type]:
+                if other_job_type == 'null':
+                    other_key = other_job_type
+                else:
+                    other_key = parse_job_type_tuple(other_job_type)
+                    assert(other_key is not None)
+                parsed_throughputs[worker_type][key][other_key] =\
+                    raw_throughputs[worker_type][job_type][other_job_type]
+    return parsed_throughputs
 
 def read_all_throughputs_json(throughputs_file):
     with open(throughputs_file, 'r') as f:

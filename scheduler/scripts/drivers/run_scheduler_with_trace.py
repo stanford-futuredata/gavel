@@ -40,6 +40,7 @@ def main(args):
     print("Total time taken: %d seconds" % (datetime.datetime.now() - start_time).seconds)
     sched.get_average_jct()
     sched.get_cluster_utilization()
+    sched.shutdown()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
