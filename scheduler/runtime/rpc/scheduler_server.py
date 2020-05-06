@@ -77,18 +77,34 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
         self._write_queue = write_queue
 
     def UpdateLease(self, request, context):
-        self._write_queue.put('Received lease update request: '
-                              'job_id=%s, '
-                              'worker_id=%d, '
-                              'steps=%d, '
-                              'duration=%f, '
-                              'max_steps=%d,'
-                              'max_duration=%f' % (request.job_id,
-                                                   request.worker_id,
-                                                   request.steps,
-                                                   request.duration,
-                                                   request.max_steps,
-                                                   request.max_duration))
+        # TODO: Remove option to not have write queue
+        if self._write_queue is not None:
+            self._write_queue.put('Received lease update request: '
+                                  'job_id=%s, '
+                                  'worker_id=%d, '
+                                  'steps=%d, '
+                                  'duration=%f, '
+                                  'max_steps=%d,'
+                                  'max_duration=%f' % (request.job_id,
+                                                       request.worker_id,
+                                                       request.steps,
+                                                       request.duration,
+                                                       request.max_steps,
+                                                       request.max_duration))
+        else:
+            print('Received lease update request: '
+                  'job_id=%s, '
+                  'worker_id=%d, '
+                  'steps=%d, '
+                  'duration=%f, '
+                  'max_steps=%d,'
+                  'max_duration=%f' % (request.job_id,
+                                       request.worker_id,
+                                       request.steps,
+                                       request.duration,
+                                       request.max_steps,
+                                       request.max_duration))
+
         update_lease_callback = self._callbacks['UpdateLease']
         (max_steps, max_duration) = \
             update_lease_callback(job_id=JobIdPair(request.job_id, None),
@@ -97,12 +113,22 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
                                   duration=request.duration,
                                   max_steps=request.max_steps,
                                   max_duration=request.max_duration)
-        self._write_queue.put('Sending new lease to job %d (worker %d) '
-                              'with max_steps=%d, '
-                              'max_duration=%f' % (request.job_id,
-                                                   request.worker_id,
-                                                   max_steps,
-                                                   max_duration))
+        # TODO: Remove option to not have write queue
+        if self._write_queue is not None:
+            self._write_queue.put('Sending new lease to job %d (worker %d) '
+                                  'with max_steps=%d, '
+                                  'max_duration=%f' % (request.job_id,
+                                                       request.worker_id,
+                                                       max_steps,
+                                                       max_duration))
+        else:
+            print('Sending new lease to job %d (worker %d) '
+                  'with max_steps=%d, '
+                  'max_duration=%f' % (request.job_id,
+                                       request.worker_id,
+                                       max_steps,
+                                       max_duration))
+
         return i2s_pb2.UpdateLeaseResponse(max_steps=max_steps,
                                            max_duration=max_duration)
 
