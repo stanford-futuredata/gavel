@@ -171,15 +171,20 @@ test_dataset = CorpusDataset(corpus.test,
 
 ntokens = len(corpus.dictionary)
 
-if not os.path.isdir(args.checkpoint_dir):
-    os.mkdir(args.checkpoint_dir)
-checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
-if os.path.exists(checkpoint_path):
-    print('Loading checkpoint from %s...' % (checkpoint_path))
-    with open(checkpoint_path, 'rb') as f:
-        state = torch.load(f)
-        model = state['model'].to(device)
-else:
+load_from_checkpoint = False
+if args.checkpoint_dir is not None:
+    if os.path.isdir(args.checkpoint_dir):
+        load_from_checkpoint = False
+        os.mkdir(args.checkpoint_dir)
+    else:
+        checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+        if os.path.exists(checkpoint_path):
+            print('Loading checkpoint from %s...' % (checkpoint_path))
+            with open(checkpoint_path, 'rb') as f:
+                state = torch.load(f)
+                model = state['model'].to(device)
+            load_from_checkpoint = True
+if not load_from_checkpoint:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                            args.nlayers, args.dropout, args.tied).to(device)
 
@@ -210,8 +215,7 @@ train_loader = torch.utils.data.DataLoader(train_dataset,
                                            batch_size=args.batch_size,
                                            shuffle=False,
                                            sampler=train_sampler,
-                                           drop_last=True,
-                                           num_workers=min(2, mp.cpu_count()))
+                                           drop_last=True)
 val_loader = torch.utils.data.DataLoader(val_dataset,
                                          batch_size=eval_batch_size,
                                          shuffle=False,
@@ -349,7 +353,13 @@ try:
                                                         cumulative_time)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s'.format(epoch, (time.time() - epoch_start_time)))
-        if done or (args.enable_gavel_iterator and train_loader.done):
+        if args.enable_gavel_iterator:
+            if train_loader.done:
+                break
+            elif done:
+                train_loader.complete()
+                break
+        elif done:
           break
         print('-' * 89)
     with open(checkpoint_path, 'wb') as f:
