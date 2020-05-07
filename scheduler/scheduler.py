@@ -556,7 +556,7 @@ class Scheduler:
 
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
-    def _schedule_jobs_on_workers_helper(self):
+    def _schedule_jobs_on_workers_helper(self, worker_order):
         """Greedily selects the jobs to run in the next round by iterating
            through the job list in sorted priority order.
 
@@ -581,24 +581,25 @@ class Scheduler:
             else:
                 num_workers_left[worker_type] = num_workers
 
-        entries = []
-        for worker_type in self._worker_types:
+        sorted_job_queue = []
+        for worker_type in worker_order:
+            per_worker_type_entries = []
             for job_id in self._priorities[worker_type]:
-                entries.append((job_id, worker_type,
-                                self._priorities[worker_type][job_id],
-                                self._deficits[worker_type][job_id],
-                                self._allocation[job_id][worker_type]))
+                per_worker_type_entries.append(
+                        (job_id, worker_type,
+                         self._priorities[worker_type][job_id],
+                         self._deficits[worker_type][job_id],
+                         self._allocation[job_id][worker_type]))
+            if not self._enable_global_queue:
+                sorted_job_queue += sorted(per_worker_type_entries,
+                                           key=lambda x: (x[2], x[3], x[4]),
+                                           reverse=True)
+            else:
+                sorted_job_queue += per_worker_type_entries
 
         if self._enable_global_queue:
-            # Schedule jobs regardless of worker type.
-            sorted_job_queue = sorted(entries,
-                                      key=lambda x: (x[2], x[3], x[4]),
-                                      reverse=True)
-        else:
-            # Schedule jobs in the order of v100, p100, k80.
-            sorted_job_queue = sorted(entries,
-                                      key=lambda x: (x[1], x[2], x[3], x[4]),
-                                      reverse=True)
+            sorted_job_queue.sort(key=lambda x: (x[2], x[3], x[4]),
+                                  reverse=True)
 
         for job_id, worker_type, *_ in sorted_job_queue:
             if num_workers_left[worker_type] == 0:
@@ -659,7 +660,6 @@ class Scheduler:
         # in the upcoming round.
         self._update_priorities()
 
-        # TODO: Remove this?
         to_remove = []
         worker_types = ["v100", "p100", "k80"]
 
@@ -669,8 +669,12 @@ class Scheduler:
         for i in reversed(to_remove):
             worker_types.pop(i)
 
+        if ('Perf' not in self._policy.name and
+            'Packing' not in self._policy.name):
+            self._worker_type_shuffler.shuffle(worker_types)
+
         worker_assignments = []
-        scheduled_jobs = self._schedule_jobs_on_workers_helper()
+        scheduled_jobs = self._schedule_jobs_on_workers_helper(worker_types)
 
         for worker_type in worker_types:
             # Worker IDs organized into servers.
