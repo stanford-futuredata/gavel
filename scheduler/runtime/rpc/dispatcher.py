@@ -129,6 +129,14 @@ class Dispatcher:
         with self._lock:
             gpu_processes = utils.get_gpu_processes()
             if job_id is not None:
+                self._write_queue.put('Killing job %d...' % (job_id))
+            self._write_queue.put(
+                'Job assignments: %s' % (str(self._job_assignments)))
+            self._write_queue.put(
+                'GPU processes: %s' % (str(gpu_processes)))
+            if job_id is not None:
+                assert job_id in self._job_assignments
+
                 # Kill all jobs with the same GPU ID or job ID.
                 for gpu_id in self._job_assignments[job_id]:
                     if gpu_id not in gpu_processes:
@@ -254,14 +262,14 @@ class Dispatcher:
                                       (jobs, worker_id,))
 
     def reset(self):
-        self._write_queue.put('Resetting dispatcher')
+        self._write_queue.put('Resetting dispatcher...')
         self._kill_jobs()
-        self.shutdown(shut_down_mps=False)
         self._job_assignments = {}
         self._thread_pool = ThreadPool()
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
+        self._write_queue.put('Finished resetting dispatcher')
 
     def shutdown(self, shut_down_mps=True):
         self._thread_pool.terminate()

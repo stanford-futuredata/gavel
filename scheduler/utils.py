@@ -31,7 +31,7 @@ def get_gpu_processes():
             processes_flag = True
             continue
         if processes_flag:
-            res = re.search('(\d+) *(\d+) *(\w+) *(\w+) *(\d+)MiB', line)
+            res = re.search('(\d+) +(\d+) +(\w+) +(.+) +(\d+)MiB', line)
             if res is not None:
                 gpu_id = int(res.group(1))
                 if gpu_id not in gpu_processes:
@@ -327,7 +327,7 @@ def parse_trace(trace_file, run_dir=None):
             jobs.append(job.Job(job_id=None,
                                 job_type=job_type,
                                 command=command,
-                                needs_data_dir=bool(needs_data_dir),
+                                needs_data_dir=bool(int(needs_data_dir)),
                                 num_steps_arg=num_steps_arg,
                                 total_steps=int(total_steps),
                                 duration=None,
