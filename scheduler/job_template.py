@@ -5,7 +5,7 @@ class JobTemplate:
         self._command = command
         self._num_steps_arg = num_steps_arg
         self._needs_data_dir = needs_data_dir
-        self._distributed=False
+        self._distributed = distributed
 
     @property
     def model(self):

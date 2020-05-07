@@ -943,9 +943,9 @@ class Scheduler:
         # Copies Philly distribution.
         if generate_multi_gpu_jobs and job_template.distributed:
             r = self._job_generator.uniform(0, 1)
-            if 0.8 <= r <= 0.85:
+            if 0.7 <= r <= 0.8:
                 scale_factor = 2
-            elif 0.85 <= r <= 0.95:
+            elif 0.8 <= r <= 0.95:
                 scale_factor = 4
             elif 0.95 <= r:
                 scale_factor = 8
