@@ -6,7 +6,7 @@ import cvxpy as cp
 import numpy as np
 
 from policy import Policy
-from isolated import IsolatedPolicy
+from proportional import ProportionalPolicy
 
 class MaxMinFairnessMultiEntityPolicy(Policy):
 
@@ -39,7 +39,7 @@ class MaxMinFairnessMultiEntityPolicyWithPerf(Policy):
     def __init__(self, solver):
         Policy.__init__(self, solver)
         self._name = 'MaxMinFairnessMultiEntity_Perf'
-        self._isolated_policy = IsolatedPolicy()
+        self._proportional_policy = ProportionalPolicy()
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, job_to_entity_mapping,
@@ -73,9 +73,9 @@ class MaxMinFairnessMultiEntityPolicyWithPerf(Policy):
         priority_weights = [1. / unflattened_priority_weights[entity_id]
                             for entity_id in entity_ids]
 
-        isolated_throughputs = self._isolated_policy.get_throughputs(
-            throughputs, index, scale_factors, cluster_spec)
-        scaling_factors = 1.0 / isolated_throughputs.reshape((m, 1))
+        proportional_throughputs = self._proportional_policy.get_throughputs(
+            throughputs, index, cluster_spec)
+        scaling_factors = 1.0 / proportional_throughputs.reshape((m, 1))
 
         x = cp.Variable(throughputs.shape)
         # Multiply throughputs by scale_factors to ensure that scale_factor
