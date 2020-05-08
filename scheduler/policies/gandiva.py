@@ -38,7 +38,7 @@ class GandivaPolicy(PolicyWithPacking):
         x = np.zeros((len(job_ids), len(worker_types)))
         for i in job_combination_indices_to_schedule:
             x[i] = np.array([cluster_spec[worker_type] / m for worker_type in worker_types])
-        x = x / scale_factors_array
+            x[i] = x[i] / scale_factors_array[i]
         max_per_row_sum = np.sum(x, axis=1).max()
         x = x / max_per_row_sum
 
