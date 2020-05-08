@@ -556,22 +556,23 @@ class Scheduler:
 
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
-    def _schedule_jobs_on_workers_helper(self, worker_order):
+    def _schedule_jobs_on_workers_helper(self, worker_types):
         """Greedily selects the jobs to run in the next round by iterating
            through the job list in sorted priority order.
 
-           Assumes only single-GPU jobs.
+           Args:
+             worker_types: An ordered list of worker types.
 
            Returns:
-             A list of job IDs to schedule on the passed-in worker_type in
-             the upcoming round.
+             A list of job IDs and associated scale factors to schedule for the
+             upcoming round.
         """
 
         already_scheduled_jobs = set()
         scheduled_jobs = {}
 
         num_workers_left = {}
-        for worker_type in self._worker_types:
+        for worker_type in worker_types:
             scheduled_jobs[worker_type] = []
             num_workers = self._cluster_spec[worker_type]
             if self._estimate_throughputs:
@@ -582,7 +583,7 @@ class Scheduler:
                 num_workers_left[worker_type] = num_workers
 
         sorted_job_queue = []
-        for worker_type in worker_order:
+        for worker_type in worker_types:
             per_worker_type_entries = []
             for job_id in self._priorities[worker_type]:
                 per_worker_type_entries.append(
