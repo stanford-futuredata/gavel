@@ -282,9 +282,6 @@ class Scheduler:
                                       scale_factor))
                 self._throughputs[job_id][worker_type] = \
                     oracle_throughputs[job_types[0]][job_types[1]]
-                self._throughputs[job_id][worker_type] = \
-                    [x / scale_factor for x in \
-                        self._throughputs[job_id][worker_type]]
         elif not self._simulate:
             # Adjust the job throughput using an exponential moving average
             # between the old value and the new measurement.
@@ -755,8 +752,6 @@ class Scheduler:
                     job_types.append((self._jobs[x].job_type, scale_factor))
                 colocated_throughputs = \
                     oracle_throughputs[job_types[0]][job_types[1]]
-                colocated_throughputs = \
-                    [x / scale_factor for x in colocated_throughputs]
                 single_job_throughput = colocated_throughputs[index]
                 num_steps = int(single_job_throughput *
                                 self._time_per_iteration)
@@ -796,7 +791,6 @@ class Scheduler:
                                   scale_factor))
             oracle_throughput =\
                 oracle_throughputs[job_types[0]][job_types[1]]
-            oracle_throughput = [x / scale_factor for x in oracle_throughput]
         for i, single_job_id in enumerate(single_job_ids):
             num_steps = self._get_num_steps(job_id, worker_type, single_job_id)
             all_num_steps.append(num_steps)
@@ -1580,9 +1574,6 @@ class Scheduler:
                     else:
                         self._throughputs[merged_job_id][worker_type] = \
                             oracle_throughputs[job_types[1]][job_types[0]]
-                    self._throughputs[merged_job_id][worker_type] = \
-                        [x / scale_factor for x in \
-                            self._throughputs[merged_job_id][worker_type]]
 
     def _set_initial_throughput(self, job_id, worker_type):
         assert(not job_id.is_pair())
@@ -1591,8 +1582,7 @@ class Scheduler:
             scale_factor = self._jobs[job_id].scale_factor
             key = (job_type, scale_factor)
             self._throughputs[job_id][worker_type] = \
-                self._oracle_throughputs[worker_type][key]['null'] /\
-                    scale_factor
+                self._oracle_throughputs[worker_type][key]['null']
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
 
