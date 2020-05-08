@@ -112,41 +112,39 @@ class Dispatcher:
                 steps = int(line.split('[GavelIterator]')[-1])
         return steps
 
-    def _kill_job(self, pid, gpu_id):
+    def _kill_job(self, pid):
         self._write_queue.put(
-            'Killing process %d on GPU %d' % (pid, gpu_id))
+            'Killing process %d' % (pid))
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError as e:
             self._write_queue.put(
-                'Could not find process %d on GPU %d' % (pid, gpu_id))
+                'Could not find process %d' % (pid))
         except Exception as e:
             self._write_queue.put(
-                'Could not kill process %d on GPU %d: %s' % (pid, gpu_id,
-                                                             str(e)))
+                'Could not kill process %d: %s' % (pid, str(e)))
 
     def _kill_jobs(self, job_id=None):
         with self._lock:
             gpu_processes = utils.get_gpu_processes()
             if job_id is not None:
                 self._write_queue.put('Killing job %d...' % (job_id))
+            else:
+                self._write_queue.put('Killing all jobs!')
             self._write_queue.put(
                 'Job assignments: %s' % (str(self._job_assignments)))
             self._write_queue.put(
                 'GPU processes: %s' % (str(gpu_processes)))
             if job_id is not None:
-                assert job_id in self._job_assignments
-
-                # Kill all jobs with the same GPU ID or job ID.
-                for gpu_id in self._job_assignments[job_id]:
-                    if gpu_id not in gpu_processes:
-                        continue
-                    for pid in gpu_processes[gpu_id]:
-                        self._kill_job(pid, gpu_id)
+                pids = utils.get_pid_for_job(job_id)
+                for pid in pids:
+                    self._kill_job(pid)
             else:
-                for gpu_id in gpu_processes:
-                    for pid in gpu_processes[gpu_id]:
-                        self._kill_job(pid, gpu_id)
+                for job_id in self._job_assignments:
+                    pids = utils.get_pid_for_job(job_id)
+                    for pid in pids:
+                        self._kill_job(pid)
+            self._write_queue.put('Finished killing job(s)')
 
     def launch_job(self, job, command, worker_id):
         start_time = time.time()
