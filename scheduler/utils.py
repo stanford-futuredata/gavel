@@ -315,7 +315,7 @@ def get_policy(policy_name, solver, seed=None):
         raise ValueError('Unknown policy!')
     return policy
 
-def parse_trace(trace_file, run_dir=None):
+def parse_trace(trace_file):
     jobs = []
     arrival_times = []
     with open(trace_file, 'r') as f:

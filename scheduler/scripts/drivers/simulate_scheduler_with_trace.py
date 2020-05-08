@@ -14,7 +14,7 @@ import utils
 
 
 def main(args):
-    jobs, arrival_times = utils.parse_trace(args.trace_file, args.run_dir)
+    jobs, arrival_times = utils.parse_trace(args.trace_file)
     policy = utils.get_policy(args.policy, solver=args.solver, seed=args.seed)
 
     sched = scheduler.Scheduler(policy,
@@ -62,8 +62,6 @@ if __name__=='__main__':
                               '#v100s:#p100s:#k80s'))
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed')
-    parser.add_argument('--run_dir', type=str, default='/tmp',
-                        help='Run directory')
     parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI', 'SCS'],
                         default='ECOS', help='CVXPY solver')
     parser.add_argument('-d', '--debug', action='store_true', default=False,
