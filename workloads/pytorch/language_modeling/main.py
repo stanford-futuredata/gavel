@@ -88,6 +88,8 @@ parser.add_argument('--sched_port', type=int, default=None,
 
 args = parser.parse_args()
 
+torch.cuda.set_device(args.local_rank)
+
 if args.epochs is not None and args.steps is not None:
     raise ValueError('Only one of epochs and steps may be set')
 elif args.epochs is None and args.steps is None:
@@ -99,7 +101,6 @@ if torch.cuda.is_available():
     if not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
-torch.cuda.set_device(args.local_rank)
 device = torch.device("cuda" if args.cuda else "cpu")
 
 ###############################################################################
