@@ -28,9 +28,10 @@ class ProportionalPolicy(Policy):
         (_, worker_types) = index
         (m, n) = throughputs.shape
 
-        # Split cluster over users (m). By construction,
-        # \sum_i (x[i, j] * scale_factor[i]) = num_workers[j].
-        # Normalize to ensure \sum_j x[i, j] <= 1 for all i.
+        # Split cluster over users (m).
+        # x[i, j] proportional to num_workers[j].
+        # \sum_j x[i, j] <= 1 for all i.
+        # \sum_i x[i, j] <= 1 for all j.
         x = np.array([[cluster_spec[worker_type] / m for worker_type in worker_types]
                       for i in range(m)])
         max_per_row_sum = np.sum(x, axis=1).max()
