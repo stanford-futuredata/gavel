@@ -195,6 +195,8 @@ class Scheduler:
         self._max_steps = {}
         # All per-round lease update requests for distributed jobs.
         self._lease_update_requests = {}
+        # List of all RPC cliewbnts.
+        self._all_rpc_clients = []
         # Currently running jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
@@ -501,11 +503,17 @@ class Scheduler:
         with self._scheduler_lock:
             return len(self._jobs) == 0
 
+    def reset_workers(self):
+        """Sends a shutdown signal to every worker and ends the scheduler."""
+        with self._scheduler_lock:
+            for i, rpc_client in enumerate(self._all_rpc_clients):
+                rpc_client.reset()
+
     def shutdown(self):
         """Sends a shutdown signal to every worker and ends the scheduler."""
         with self._scheduler_lock:
-            for worker_id in self._worker_connections:
-                self._worker_connections[worker_id].shutdown()
+            for rpc_client in self._all_rpc_clients:
+                rpc_client.shutdown()
         # TODO: Any other cleanup?
 
     """
@@ -1289,6 +1297,7 @@ class Scheduler:
             while not self._available_worker_ids.full():
                 time.sleep(2)
                 continue
+            self.reset_workers()
 
     def schedule(self):
         """Schedules jobs on workers."""
@@ -1928,6 +1937,7 @@ class Scheduler:
         # Share a single RPC client for each GPU on the worker.
         if not self._simulate:
             rpc_client = scheduler_client.SchedulerRpcClient(ip_addr, port)
+            self._all_rpc_clients.append(rpc_client)
 
         with self._scheduler_lock:
             # Update relevant data structures if worker type was

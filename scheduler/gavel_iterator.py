@@ -51,13 +51,13 @@ class GavelIterator:
             self._update_lease()
 
         # Check if the lease has expired.
-        if self._duration > self._lease.max_duration:
+        if self._duration >= self._lease.max_duration:
             print('Gavel lease expired: %f seconds '
                   '(max %f seconds)' % (self._duration,
                                         self._lease.max_duration))
             self.complete()
             raise StopIteration
-        elif self._steps > self._lease.max_steps:
+        elif self._steps >= self._lease.max_steps:
             print('Gavel lease expired: %d steps '
                   '(max %d steps)' % (self._steps,
                                       self._lease.max_steps))
