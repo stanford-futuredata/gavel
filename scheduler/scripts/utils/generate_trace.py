@@ -27,6 +27,9 @@ def main(args):
 
     duration_generator = random.Random()
     duration_generator.seed(args.seed + 2)
+    
+    scale_factor_generator = random.Random()
+    scale_factor_generator.seed(args.seed + 3)
 
     throughputs = utils.read_all_throughputs_json_v2(args.throughputs_file)
 
@@ -42,6 +45,12 @@ def main(args):
             num_steps_arg = job_template.num_steps_arg
             needs_data_dir = job_template.needs_data_dir
             scale_factor = 1
+            if args.generate_multi_gpu_jobs and job_template.distributed:
+                r = scale_factor_generator.uniform(0, 1)
+                if 0.7 <= r <= 0.8:
+                    scale_factor = 2
+                elif 0.8 <= r:
+                    scale_factor = 4
             total_steps = get_total_steps(duration_generator,
                                           durations,
                                           throughputs,
@@ -83,6 +92,10 @@ if __name__=='__main__':
                         help='Maximum job duration in hours')
     parser.add_argument('-n', '--num_durations', type=int, default=4,
                         help='Number of possible job durations')
+    parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true',
+                        default=False,
+                        help=('If set, generates multi-GPU jobs according to '
+                              'a pre-defined distribution'))
     parser.add_argument('--output_file', type=str, required=True,
                         help='Output file name')
     args = parser.parse_args()

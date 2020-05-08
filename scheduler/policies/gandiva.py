@@ -38,7 +38,7 @@ class GandivaPolicy(PolicyWithPacking):
         x = np.zeros((len(job_ids), len(worker_types)))
         for i in job_combination_indices_to_schedule:
             x[i] = np.array([cluster_spec[worker_type] / m for worker_type in worker_types])
-        x = x / scale_factors_array
+            x[i] = x[i] / scale_factors_array[i]
         max_per_row_sum = np.sum(x, axis=1).max()
         x = x / max_per_row_sum
 
@@ -108,9 +108,16 @@ class GandivaPolicy(PolicyWithPacking):
                     to_be_assigned_combinations.append(single_job_id)
 
             # Randomly group jobs.
-            while len(to_be_assigned_combinations) > 1:
+            i = 0
+            n = len(to_be_assigned_combinations)
+            while len(to_be_assigned_combinations) > 1 and i < n:
+                i += 1
                 [job1_id, job2_id] = self._rng.sample(
                     to_be_assigned_combinations, 2)
+                # Make sure scale factors of jobs in job combination are the
+                # same.
+                if scale_factors[job1_id] != scale_factors[job2_id]:
+                    continue
                 to_be_assigned_combinations.remove(job1_id)
                 to_be_assigned_combinations.remove(job2_id)
                 job_combination = job_id_pair.JobIdPair(job1_id[0], job2_id[0])
@@ -118,8 +125,8 @@ class GandivaPolicy(PolicyWithPacking):
                                                         job2_id)
                 self._assigned_combinations[job2_id] = (job_combination,
                                                         job1_id)
-            if len(to_be_assigned_combinations) == 1:
-                job_id = to_be_assigned_combinations[0]
+            for i in range(len(to_be_assigned_combinations)):
+                job_id = to_be_assigned_combinations[i]
                 self._assigned_combinations[job_id] = (job_id, None)
 
             job_combinations_to_schedule = set()
