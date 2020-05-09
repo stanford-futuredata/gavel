@@ -939,7 +939,11 @@ class Scheduler:
             print('Running for fixed duration %d minutes' % (fixed_job_duration / 60.0))
             run_time = fixed_job_duration
         else:
-            run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
+            r = self._job_generator.uniform(0, 1)
+            if r <= 0.8:
+                run_time = 60 * (10 ** self._job_generator.uniform(1.5, 3))
+            else:
+                run_time = 60 * (10 ** self._job_generator.uniform(3, 4))
         assert(run_time > 0)
         if job_template.needs_data_dir:
             command = job_template.command % (run_dir, run_dir)
