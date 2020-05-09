@@ -2,6 +2,7 @@ import csv
 from datetime import datetime
 import json
 import os
+import pickle
 import re
 import socket
 import subprocess
@@ -10,6 +11,9 @@ import job
 from policies import allox, fifo, finish_time_fairness, gandiva, isolated, \
     max_min_fairness, max_sum_throughput, min_total_duration
 
+def load_philly_job_distribution():
+    with open('philly_job_distribution.pickle', 'rb') as f:
+        return pickle.load(f)
 
 def get_ip_address():
     hostname = socket.gethostname()
