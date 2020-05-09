@@ -934,8 +934,9 @@ class Scheduler:
                       generate_multi_priority_jobs=False,
                       run_dir='/tmp'):
         """Generates a new job for simulation."""
-        job_template = self._job_generator.choice(JobTable)
-        job_type = job_template.model
+
+        # Sample the job duration and scale factor from the Philly job
+        # distribution.
         if fixed_job_duration:
             print('Running for fixed duration '
                   '%d minutes' % (fixed_job_duration / 60.0))
@@ -945,29 +946,41 @@ class Scheduler:
         else:
             run_time, scale_factor = \
                 self._job_generator.choice(philly_job_distribution)
-        if not job_template.distributed or not generate_multi_gpu_jobs:
+        if not generate_multi_gpu_jobs:
             scale_factor = 1
         assert(run_time > 0)
         assert(scale_factor >= 1 and scale_factor <= 8)
 
+        # Sample the job type.
+        while True:
+            job_template = self._job_generator.choice(JobTable)
+            if (scale_factor == 1 or
+                (scale_factor > 1 and job_template.distributed)):
+                break
+        job_type = job_template.model
+
+        # Complete the job command with the run directory.
         if job_template.needs_data_dir:
             command = job_template.command % (run_dir, run_dir)
         else:
             command = job_template.command % (run_dir)
 
+        # Compute the number of steps the job will run for given its duration.
         key = (job_type, scale_factor)
-        assert key in self._oracle_throughputs['p100']
+        assert(key in self._oracle_throughputs['v100'])
         num_steps = \
             (run_time *
-             self._oracle_throughputs['p100'][key]['null'])
+             self._oracle_throughputs['v100'][key]['null'])
         assert(num_steps > 0)
 
+        # Optionally assign a priority to the job.
         priority_weight = 1.0
         if generate_multi_priority_jobs:
             r = self._job_generator.uniform(0, 1)
             if 0.0 <= r <= 0.2:
                 priority_weight = 5.0
 
+        # Optionally assign an SLO to the job.
         SLO = None
         if self._SLOs is not None:
             r = self._SLO_generator.uniform(0, 1)
