@@ -928,7 +928,8 @@ class Scheduler:
            to the specified rate parameter."""
         return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
-    def _generate_job(self, fixed_job_duration=None,
+    def _generate_job(self, philly_job_distribution,
+                      fixed_job_duration=None,
                       generate_multi_gpu_jobs=False,
                       generate_multi_priority_jobs=False,
                       run_dir='/tmp'):
@@ -936,29 +937,29 @@ class Scheduler:
         job_template = self._job_generator.choice(JobTable)
         job_type = job_template.model
         if fixed_job_duration:
-            print('Running for fixed duration %d minutes' % (fixed_job_duration / 60.0))
+            print('Running for fixed duration '
+                  '%d minutes' % (fixed_job_duration / 60.0))
             run_time = fixed_job_duration
+            # TODO: Select the scale factor from the distribution here?
+            scale_factor = 1
         else:
-            run_time = 60 * (10 ** self._job_generator.uniform(2, 4))
+            run_time, scale_factor = \
+                self._job_generator.choice(philly_job_distribution)
+        if not job_template.distributed or not generate_multi_gpu_jobs:
+            scale_factor = 1
         assert(run_time > 0)
+        assert(scale_factor >= 1 and scale_factor <= 8)
+
         if job_template.needs_data_dir:
             command = job_template.command % (run_dir, run_dir)
         else:
             command = job_template.command % (run_dir)
 
-        scale_factor = 1
-        # Copies Philly distribution.
-        if generate_multi_gpu_jobs and job_template.distributed:
-            r = self._job_generator.uniform(0, 1)
-            if 0.7 <= r <= 0.8:
-                scale_factor = 2
-            elif 0.8 <= r <= 0.95:
-                scale_factor = 4
-            elif 0.95 <= r:
-                scale_factor = 8
+        key = (job_type, scale_factor)
+        assert key in self._oracle_throughputs['p100']
         num_steps = \
             (run_time *
-             self._oracle_throughputs['v100'][(job_type, scale_factor)]['null'])
+             self._oracle_throughputs['p100'][key]['null'])
         assert(num_steps > 0)
 
         priority_weight = 1.0
@@ -1039,6 +1040,7 @@ class Scheduler:
             remaining_jobs = len(jobs)
             queued_jobs = []
         else:
+            philly_job_distribution = utils.load_philly_job_distribution()
             if self._oracle_throughputs is None:
                 raise ValueError('Scheduler must be initialized with a '
                                  'throughputs file.')
@@ -1188,6 +1190,7 @@ class Scheduler:
                         if num_jobs_generated >= num_total_jobs:
                             break
                     job = self._generate_job(
+                        philly_job_distribution,
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
@@ -2102,10 +2105,10 @@ class Scheduler:
                         self._job_cost_so_far[single_job_id] += \
                             (self._per_worker_type_prices[worker_type] *
                              execution_time / 3600.0)
-                    job_cost_so_far = \
-                        self._job_cost_so_far[single_job_id]
-                    print('Job %s cost so far: $%.2f' % (single_job_id,
-                                                         job_cost_so_far))
+                        job_cost_so_far = \
+                            self._job_cost_so_far[single_job_id]
+                        print('Job %s cost so far: $%.2f' % (single_job_id,
+                                                             job_cost_so_far))
                     # Job may be multi-GPU, and have already been removed from
                     # running_jobs by another worker.
                     if single_job_id in self._running_jobs:
