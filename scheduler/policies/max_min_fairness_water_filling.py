@@ -93,7 +93,6 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 worker_types_ordered[i]: [worker_types.index(worker_type)
                                           for worker_type in worker_types_ordered[:i+1]]
                 for i in range(len(worker_types_ordered))}
-            print(x.value, x_final)
             job_id_set = set()
             for worker_type in worker_types_ordered:
                 i = worker_types.index(worker_type)
@@ -101,24 +100,21 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     if num_resources_used[i] / cluster_spec[worker_type] < 0.999:
                         print("Resource %s underused (fraction used = %.2f)!" % (
                             worker_type, num_resources_used[i] / cluster_spec[worker_type]))
-                        for j, job_id in enumerate(job_ids):
-                            if np.sum(x_final[original_job_ids.index(job_id)][worker_type_indices[worker_type]]) >= 0.999:
-                                if job_id not in job_id_set:
-                                    print("Deleting job %s because of worker_type %s" % (job_id, worker_type))
-                                    job_id_set.add(job_id)
                     cluster_spec[worker_type] -= num_resources_used[i]
                     if cluster_spec[worker_type] < 1e-1:
                         cluster_spec[worker_type] = 0
+            # TODO: Other job_ids might be bottleneck jobs as well.
+            for i, job_id in enumerate(job_ids):
+                if x_final[original_job_ids.index(job_id)][original_worker_types.index("v100")] > 0.999:
+                    job_id_set.add(job_id)
             if len(job_id_set) == 0:
                 done = True
             for job_id in job_id_set:
                 del unflattened_throughputs[job_id]
-            print("Cluster spec:", cluster_spec)
-            print()
-            print()
             num_iterations += 1
             if len(unflattened_throughputs) == 0 or np.all([cluster_spec[worker_type] == 0 for worker_type in worker_types]):
                 done = True
+            print()
         print("Number of iterations: %d" % num_iterations)
 
         return super().unflatten(x_final.clip(min=0.0).clip(max=1.0), index)

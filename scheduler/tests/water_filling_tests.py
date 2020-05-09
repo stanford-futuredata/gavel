@@ -17,10 +17,8 @@ def test_two_level_single_pass_hierarchical():
         throughputs.sort(reverse=True)
         unflattened_throughputs[i] = {
             worker_types[i]: throughputs[i] for i in range(len(worker_types))}
-        print(unflattened_throughputs[i])
         scale_factors[i] = 2 ** random.choice(range(4))
         unflattened_priority_weights[i] = random.randint(1, 5)
-    print(num_jobs, scale_factors, unflattened_priority_weights)
     allocation = policy.get_allocation(unflattened_throughputs, scale_factors,
                                        unflattened_priority_weights,
                                        cluster_spec)
