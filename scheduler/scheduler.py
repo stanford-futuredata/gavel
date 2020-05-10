@@ -2241,7 +2241,7 @@ class Scheduler:
                     if self._per_worker_type_prices is not None:
                         self._job_cost_so_far[single_job_id] += \
                             (self._per_worker_type_prices[worker_type] *
-                             execution_time / 3600.0)
+                             execution_time / 3600.0 * scale_factor)
                         job_cost_so_far = \
                             self._job_cost_so_far[single_job_id]
                         print('Job %s cost so far: $%.2f' % (single_job_id,
