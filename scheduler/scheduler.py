@@ -2274,20 +2274,11 @@ class Scheduler:
                 max_execution_time = np.max(all_execution_times)
                 # Job may be multi-GPU, and have already been marked complete
                 # by another worker.
-                # Divide by scale_factor so that _job_time_so_far and
-                # _worker_time_so_far are incremented in total by
-                # max_execution_time (_worker_time_so_far is just
-                # _job_time_so_far summed over all possible job_ids).
                 if job_id in self._job_time_so_far:
-                    scale_factor = None
-                    for single_job_id in job_id.singletons():
-                        if single_job_id in self._jobs:
-                            scale_factor = self._jobs[single_job_id].scale_factor
-                    if scale_factor is not None:
-                        self._job_time_so_far[job_id][worker_type] += \
-                            (max_execution_time / scale_factor)
-                        self._worker_time_so_far[worker_type] += \
-                            (max_execution_time / scale_factor)
+                    self._job_time_so_far[job_id][worker_type] += \
+                        max_execution_time
+                    self._worker_time_so_far[worker_type] += \
+                        max_execution_time
                 self._cumulative_worker_time_so_far[worker_id] += \
                     max_execution_time
 
