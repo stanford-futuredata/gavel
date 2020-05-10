@@ -1,13 +1,14 @@
 from __future__ import print_function
 
 from multiprocessing.pool import ThreadPool
+import os
 import queue
+import re
 import signal
 import subprocess
 import sys
 import threading
 import time
-import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import utils
