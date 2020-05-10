@@ -114,7 +114,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 i = worker_types.index(worker_type)
                 if cluster_spec[worker_type] > 0:
                     cluster_spec[worker_type] -= num_resources_used[i]
-                    if cluster_spec[worker_type] < 1e-1:
+                    if cluster_spec[worker_type] < 1e-3:
                         cluster_spec[worker_type] = 0
 
             # Find bottleneck job_ids.
@@ -126,6 +126,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 # If maximum scaled effective throughput for this job is near
                 # this iteration's max-min objective, this job is a bottleneck.
                 if 0.99 <= max_c_for_i / c <= 1.01:
+                    print("Iteration %d:" % num_iterations, job_id, x_final)
                     job_id_set.add(job_id)
             if len(job_id_set) == 0:
                 done = True
