@@ -154,9 +154,9 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             np.multiply(original_throughputs * priority_weights.reshape((m, 1)),
                         scale_factors_array), x_final), axis=1)
 
-        print(scaled_effective_throughputs)
+        print("Scaled effective throughputs:", scaled_effective_throughputs)
         print("Final objective: %.3f" % np.min(scaled_effective_throughputs))
-        print(np.multiply(x_final, scale_factors_array).sum(axis=0),
+        print("Constraints:", np.multiply(x_final, scale_factors_array).sum(axis=0),
               x_final.sum(axis=1))
 
         return super().unflatten(x_final.clip(min=0.0).clip(max=1.0), index)
