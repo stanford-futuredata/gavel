@@ -105,7 +105,8 @@ class Worker:
     def _print_logs(self):
         while True:
             output = self._write_queue.get()
-            print('[%s] %s' % (str(datetime.datetime.now()), output))
+            print('[%s] %s' % (str(datetime.datetime.now()), output),
+                  flush=True)
 
     def join(self):
         self._server_thread.join()

@@ -209,6 +209,10 @@ class Scheduler:
         # Data structures for debugging.
         self._micro_tasks_per_job = {}
         self._all_jobs = []
+        # Queue for printing log information in a thread-safe way.
+        self._write_queue = queue.Queue()
+        # In-progress updates for distributed jobs.
+        self._in_progress_updates = {}
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -218,9 +222,13 @@ class Scheduler:
         }
 
         if not self._simulate:
+            self._logging_thread = threading.Thread(target=self._print_logs)
+            self._logging_thread.daemon = True
+            self._logging_thread.start()
+
             self.server_thread = threading.Thread(
                 target=scheduler_server.serve,
-                args=(port, callbacks))
+                args=(port, callbacks, self._write_queue))
             self.server_thread.daemon = True
             self.server_thread.start()
 
@@ -245,6 +253,12 @@ class Scheduler:
 
         self._SLO_generator = random.Random()
         self._SLO_generator.seed(seed+6)
+
+    def _print_logs(self):
+        while True:
+            output = self._write_queue.get()
+            print('[%s] %s' % (str(datetime.datetime.now()), output),
+                  flush=True)
 
     def start_scheduling_thread(self):
         self.scheduler_thread = threading.Thread(
@@ -1193,8 +1207,7 @@ class Scheduler:
                         all_execution_times.append(execution_time)
                         self._per_job_latest_timestamps[single_job_id] = \
                                 finish_time
-                    # TODO: decide whether to pass in all worker_ids to
-                    # _done_callback.
+                    self._in_progress_updates[job_id] = []
                     for worker_id in worker_ids:
                         self._done_callback(job_id, worker_id,
                                             all_num_steps,
@@ -1344,7 +1357,9 @@ class Scheduler:
                 for worker_id in self._worker_ids:
                     self._add_available_worker_id(worker_id)
                 scheduled_jobs = self._schedule_jobs_on_workers()
+                master_port_offsets = {}
                 for (job_id, worker_ids) in scheduled_jobs:
+                    master_addr = None
                     worker_type = \
                         self._worker_id_to_worker_type_mapping[worker_ids[0]]
                     scale_factor = len(worker_ids)
@@ -1357,6 +1372,9 @@ class Scheduler:
                             if scale_factor > 1:
                                 master_addr = \
                                     self._worker_connections[worker_ids[0]].addr
+                                if master_addr not in master_port_offsets:
+                                    master_port_offsets[master_addr] = 1
+                                offset = master_port_offsets[master_addr]
                                 master_port = \
                                     self._worker_connections[worker_ids[0]].port
                                 command = ('%s --master_addr %s '
@@ -1364,7 +1382,7 @@ class Scheduler:
                                            '--world_size %d '
                                            '--rank %d' % (command,
                                                           master_addr,
-                                                          master_port + 1 + j,
+                                                          master_port + j + offset,
                                                           scale_factor, i))
                             job_descriptions.append(
                                     (single_job_id,
@@ -1372,12 +1390,15 @@ class Scheduler:
                                      self._jobs[single_job_id].needs_data_dir,
                                      self._jobs[single_job_id].num_steps_arg,
                                      num_steps))
-                        # Reset lease update metadata.
+                        # Reset update metadata.
+                        self._in_progress_updates[job_id] = []
                         self._lease_update_requests[job_id] = []
                         self._max_steps[job_id] = None
                         self._worker_connections[worker_id].run(
                                 job_descriptions, worker_id)
                         self._remove_available_worker_id(worker_id)
+                    if master_addr is not None:
+                        master_port_offsets[master_addr] += len(job_id.singletons())
             while not self._available_worker_ids.full():
                 time.sleep(2)
                 continue
@@ -2162,13 +2183,37 @@ class Scheduler:
             all_num_steps: List of the number of steps each job ran for.
         """
 
-        # TODO: Aggregate updates before processing distributed jobs?
         to_remove = []
         with self._scheduler_lock:
             current_timestamp = self.get_current_timestamp()
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+            self._add_available_worker_id(worker_id)
 
-            if np.min(all_execution_times) <= 0 or np.min(all_num_steps) == 0:
+            scale_factor = self._jobs[job_id].scale_factor
+            self._in_progress_updates[job_id].append((worker_id,
+                                                      all_num_steps,
+                                                      all_execution_times))
+            if len(self._in_progress_updates[job_id]) < scale_factor:
+                return
+            else:
+                micro_task_succeeded = True
+                all_worker_ids = \
+                    [x[0] for x in self._in_progress_updates[job_id]]
+                all_worker_ids.sort()
+                all_num_steps = [0] * len(job_id.singletons())
+                all_execution_times = [0] * len(job_id.singletons())
+                for (_, all_num_steps_, all_execution_times_) in \
+                    self._in_progress_updates[job_id]:
+                    if (np.min(all_num_steps_) <= 0 or
+                        np.min(all_execution_times_) <= 0):
+                        micro_task_succeeded = False
+                        break
+                    for i in range(len(job_id.singletons())):
+                        all_num_steps[i] += all_num_steps_[i]
+                        all_execution_times[i] = max(all_execution_times[i],
+                                                     all_execution_times_[i])
+
+            if not micro_task_succeeded:
                 # Micro-task failed.
                 print(('%s]\t[Micro-task failed]\t'
                        'Job ID: %s') % (current_timestamp,
@@ -2185,10 +2230,10 @@ class Scheduler:
             else:
                 print(('%s]\t[Micro-task succeeded]\t'
                        'Job ID: %s\tWorker type: %s\t'
-                       'Worker ID: %d') % (current_timestamp,
+                       'Worker ID(s): %s') % (current_timestamp,
                                            job_id,
                                            worker_type,
-                                           worker_id))
+                                           str(all_worker_ids)))
                 self._num_failures_per_job[job_id] = 0
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
@@ -2252,5 +2297,3 @@ class Scheduler:
 
         for single_job_id in to_remove:
             self.remove_job(single_job_id[0])
-
-        self._add_available_worker_id(worker_id)
