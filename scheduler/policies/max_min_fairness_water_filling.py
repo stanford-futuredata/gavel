@@ -114,7 +114,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 per_job_max_c=per_job_max_c, index_to_check=0, computed_c=c)
             print(z)
             for i, job_id in enumerate(job_ids):
-                if z[i]:
+                if job_id not in per_job_max_c and (z is None or not z[i]):
                     print("Iteration %d:" % num_iterations, job_id)
                     per_job_max_c[job_id] = c
             print("At the end of iteration %d:" % num_iterations,
