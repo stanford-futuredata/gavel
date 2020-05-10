@@ -191,8 +191,8 @@ def train(model, training_data, validation_data, optimizer, device, opt):
         try:
             model.load_state_dict(checkpoint['model'])
             start_epoch = checkpoint['epoch']
-        except RuntimeError as e :
-            print('Could not load from checkpoint: %s' % (s))
+        except RuntimeError as e:
+            print('Could not load from checkpoint: %s' % (e))
     else:
         print('No checkpoint file found!')
 
