@@ -128,15 +128,10 @@ class Dispatcher:
 
     def _kill_jobs(self, job_id=None):
         with self._lock:
-            gpu_processes = utils.get_gpu_processes()
             if job_id is not None:
                 self._write_queue.put('Killing job %d...' % (job_id))
             else:
                 self._write_queue.put('Killing all jobs!')
-            self._write_queue.put(
-                'Job assignments: %s' % (str(self._job_assignments)))
-            self._write_queue.put(
-                'GPU processes: %s' % (str(gpu_processes)))
             if job_id is not None:
                 pids = utils.get_pid_for_job(job_id)
                 for pid in pids:
