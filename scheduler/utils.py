@@ -32,9 +32,12 @@ def get_pid_for_job(job_id):
     for line in processes.decode('utf-8').strip().split('\n'):
         if '--job_id %d' % (job_id) in line:
             match = re.match('(\d+)', line)
-            assert match is not None
-            pid = int(match.group(1))
-            pids.append(pid)
+            if match is not None:
+                pid = int(match.group(1))
+                pids.append(pid)
+            else:
+                print('WARNING: Could not find PID for '
+                      'job %d in line \"%s\"' % (line))
     return pids
 
 def get_gpu_processes():
