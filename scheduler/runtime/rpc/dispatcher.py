@@ -108,8 +108,9 @@ class Dispatcher:
     def _get_steps_from_output(self, output):
         steps = None
         for line in output.split('\n'):
-            if line.startswith('[GavelIterator]'):
-                steps = int(line.split('[GavelIterator]')[-1])
+            match = re.search('\[GavelIterator\] (\d+)', line)
+            if match is not None:
+                steps = int(match.group(1))
         return steps
 
     def _kill_job(self, pid):
