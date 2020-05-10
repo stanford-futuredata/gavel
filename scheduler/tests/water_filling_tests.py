@@ -30,5 +30,7 @@ def test_water_filling():
 
 
 if __name__ == '__main__':
-    for i in range(50):
+    seed = 0
+    random.seed(seed)
+    for i in range(5):
         test_water_filling()
