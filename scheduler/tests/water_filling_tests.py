@@ -7,8 +7,8 @@ def test_water_filling():
     policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(
         solver='ECOS')
     worker_types = ['v100', 'p100', 'k80']
-    cluster_spec = {worker_type: 1 for worker_type in worker_types}
-    num_jobs = 3
+    cluster_spec = {worker_type: 4 for worker_type in worker_types}
+    num_jobs = 5
     print("Total number of jobs: %d" % num_jobs)
     unflattened_throughputs = {}
     scale_factors = {}
@@ -19,10 +19,12 @@ def test_water_filling():
         throughputs.sort(reverse=True)
         unflattened_throughputs[i] = {
             worker_types[i]: throughputs[i] for i in range(len(worker_types))}
-        scale_factors[i] = 1
+        scale_factors[i] = 2 ** random.randint(0, 2)
         num_workers_requested += scale_factors[i]
         unflattened_priority_weights[i] = random.randint(1, 5)
-        print(i, unflattened_throughputs[i], unflattened_priority_weights[i])
+        print("Job %d: Throughputs: %s, Priority: %d, Scale factor: %d" % (
+            i, unflattened_throughputs[i], unflattened_priority_weights[i],
+            scale_factors[i]))
     print("Total number of workers requested: %d" % num_workers_requested)
     allocation = policy.get_allocation(unflattened_throughputs, scale_factors,
                                        unflattened_priority_weights,
@@ -33,5 +35,5 @@ def test_water_filling():
 if __name__ == '__main__':
     seed = 0
     random.seed(seed)
-    for i in range(5):
+    for i in range(20):
         test_water_filling()
