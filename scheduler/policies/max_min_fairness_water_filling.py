@@ -11,19 +11,20 @@ from proportional import ProportionalPolicy
 
 class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
-    def __init__(self, solver):
-        Policy.__init__(self, solver)
+    def __init__(self):
+        Policy.__init__(self, solver=None)
         self._name = 'MaxMinFairnessWaterFilling_Perf'
         self._proportional_policy = ProportionalPolicy()
 
     def _get_allocation_helper(self, throughputs, index, priority_weights,
                                scale_factors_array, m, n,
                                per_job_max_c,
-                               index_to_check=None, computed_c=None):
+                               computed_c=None):
         x = cp.Variable(throughputs.shape)
         c = cp.Variable()
         (job_ids, _) = index
-        M = 3
+        M = np.max(np.multiply(throughputs * priority_weights.reshape((m, 1)),
+                               scale_factors_array))
         epsilon = 1e-5
 
         # Multiply throughputs by scale_factors to ensure that scale_factor
@@ -34,11 +35,10 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             np.multiply(throughputs * priority_weights.reshape((m, 1)),
                         scale_factors_array), x), axis=1)
 
-        if index_to_check is None:
+        if computed_c is None:
             objective = cp.Maximize(c)
         else:
             z = cp.Variable(m, boolean=True)
-            assert computed_c is not None
             objective = cp.Maximize(cp.sum(z))
 
         # Make sure that the allocation can fit in the cluster.
@@ -47,26 +47,28 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             if job_id in per_job_max_c:
                 constraints.append(
                     scaled_effective_throughputs[i] == per_job_max_c[job_id])
-                if index_to_check is not None:
+                if computed_c is not None:
                     constraints.append(z[i] == 0)
             else:
-                if index_to_check is not None:
+                if computed_c is not None:
                     constraints.append(
                         scaled_effective_throughputs[i] >= computed_c)
                     constraints.append(
-                        (M * z[i]) >= (scaled_effective_throughputs[i] - (computed_c * 1.0001) + epsilon))
+                        (M * z[i]) >=
+                            (scaled_effective_throughputs[i] - (computed_c * 1.0001) + epsilon))
                     constraints.append(
-                        (M * (1 - z[i])) >= ((computed_c * 1.0001) - scaled_effective_throughputs[i]))
+                        (M * (1 - z[i])) >=
+                            ((computed_c * 1.0001) - scaled_effective_throughputs[i]))
                 else:
                     constraints.append(
                         scaled_effective_throughputs[i] == c)
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS' if index_to_check is None else self._solver)
+        result = cvxprob.solve(solver='ECOS' if computed_c is None else 'GLPK_MI')
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
-        if index_to_check is None:
+        if computed_c is None:
             return x, objective.value
         return x, z.value
 
@@ -111,8 +113,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             # Find bottleneck job_ids.
             _, z = self._get_allocation_helper(
                 throughputs, index, priority_weights, scale_factors_array, m, n,
-                per_job_max_c=per_job_max_c, index_to_check=0, computed_c=c)
-            print(z)
+                per_job_max_c=per_job_max_c, computed_c=c)
             for i, job_id in enumerate(job_ids):
                 if job_id not in per_job_max_c and (z is None or not z[i]):
                     print("Iteration %d:" % num_iterations, job_id)

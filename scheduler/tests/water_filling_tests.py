@@ -4,8 +4,7 @@ from policies import max_min_fairness_water_filling
 import random
 
 def test_water_filling():
-    policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(
-        solver='GLPK_MI')
+    policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf()
     worker_types = ['v100', 'p100', 'k80']
     cluster_spec = {worker_type: 4 for worker_type in worker_types}
     num_jobs = 5
