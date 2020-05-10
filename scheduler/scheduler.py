@@ -944,8 +944,18 @@ class Scheduler:
             # TODO: Select the scale factor from the distribution here?
             scale_factor = 1
         else:
-            run_time, scale_factor = \
-                self._job_generator.choice(philly_job_distribution)
+            scale_factor = 1
+            r = self._job_generator.uniform(0, 1)
+            if 0.7 <= r <= 0.8:
+                scale_factor = 2
+            elif 0.8 <= r <= 0.95:
+                scale_factor = 4
+            elif 0.95 <= r:
+                scale_factor = 8
+            if self._job_generator.random() >= 0.8:
+                run_time = 60 * (10 ** self._job_generator.uniform(3, 4))
+            else:
+                run_time = 60 * (10 ** self._job_generator.uniform(1.5, 3))
         if not generate_multi_gpu_jobs:
             scale_factor = 1
         assert(run_time > 0)
