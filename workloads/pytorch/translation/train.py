@@ -187,8 +187,8 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     checkpoint_path = os.path.join(opt.checkpoint_dir, 'model.chkpt')
     if os.path.exists(checkpoint_path):
         print('Loading checkpoint from %s...' % (checkpoint_path))
-        checkpoint = torch.load(checkpoint_path)
         try:
+            checkpoint = torch.load(checkpoint_path)
             model.load_state_dict(checkpoint['model'])
             start_epoch = checkpoint['epoch']
         except RuntimeError as e:
