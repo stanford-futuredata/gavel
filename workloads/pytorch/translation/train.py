@@ -234,7 +234,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             'epoch': epoch_i,
         }
 
-        if not args.distributed or args.rank == 0:
+        if not opt.distributed or opt.rank == 0:
             if opt.save_mode == 'all':
                 print('Saving checkpoint at %s...' % (checkpoint_path))
                 torch.save(checkpoint, checkpoint_path)
