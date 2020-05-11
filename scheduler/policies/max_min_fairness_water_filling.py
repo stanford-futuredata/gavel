@@ -73,7 +73,8 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         return x, z.value
 
     def get_allocation(self, original_unflattened_throughputs, scale_factors,
-                       unflattened_priority_weights, original_cluster_spec):
+                       unflattened_priority_weights, original_cluster_spec
+                       verbose=False):
         unflattened_throughputs = copy.deepcopy(original_unflattened_throughputs)        
         cluster_spec = copy.deepcopy(original_cluster_spec)
 
@@ -118,8 +119,9 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 if job_id not in per_job_max_c and (z is None or not z[i]):
                     print("Iteration %d:" % num_iterations, job_id)
                     per_job_max_c[job_id] = c
-            print("At the end of iteration %d:" % num_iterations,
-                x.value)
+            if verbose:
+                print("At the end of iteration %d:" % num_iterations,
+                    x.value)
             num_iterations += 1
             if len(unflattened_throughputs) == len(per_job_max_c):
                 done = True
