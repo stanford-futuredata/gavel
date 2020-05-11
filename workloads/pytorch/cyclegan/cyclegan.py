@@ -109,15 +109,22 @@ if cuda:
 
 
 checkpoint_path = os.path.join(opt.checkpoint_dir, "model.chkpt")
+load_from_checkpoint = False
 if os.path.exists(checkpoint_path):
-    print('Loading checkpoint from %s...' % (checkpoint_path))
-    checkpoint = torch.load(checkpoint_path)
-    G_AB.load_state_dict(checkpoint['G_AB'])
-    G_BA.load_state_dict(checkpoint['G_BA'])
-    D_A.load_state_dict(checkpoint['D_A'])
-    D_B.load_state_dict(checkpoint['D_B'])
-    start_epoch = checkpoint['epoch']
-else:
+    try:
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        checkpoint = torch.load(checkpoint_path)
+        G_AB.load_state_dict(checkpoint['G_AB'])
+        G_BA.load_state_dict(checkpoint['G_BA'])
+        D_A.load_state_dict(checkpoint['D_A'])
+        D_B.load_state_dict(checkpoint['D_B'])
+        start_epoch = checkpoint['epoch']
+        load_from_checkpoint = True
+    except Exception as e:
+        print('Could not load from checkpoint: %s' % (e))
+        load_from_checkpoint = False
+
+if not load_from_checkpoint:
     # Initialize weights
     G_AB.apply(weights_init_normal)
     G_BA.apply(weights_init_normal)

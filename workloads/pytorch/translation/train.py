@@ -191,7 +191,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             checkpoint = torch.load(checkpoint_path)
             model.load_state_dict(checkpoint['model'])
             start_epoch = checkpoint['epoch']
-        except RuntimeError as e:
+        except Exception as e:
             print('Could not load from checkpoint: %s' % (e))
     else:
         print('No checkpoint file found!')

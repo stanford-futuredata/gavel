@@ -91,8 +91,11 @@ trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
                   worker_id=args.worker_id, sched_addr=args.sched_addr,
                   sched_port=args.sched_port)
 if os.path.exists(checkpoint_path):
-    print('Loading checkpoint from %s...' % (checkpoint_path))
-    trainer.init_from_model_file(checkpoint_path)
+    try:
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        trainer.init_from_model_file(checkpoint_path)
+    except Exception as e:
+        print('Could not load from checkpoint: %s' % (e))
 
 metrics = [Recall(k=20, normalize=True), Recall(k=50, normalize=True),
            NDCG(k=100)]

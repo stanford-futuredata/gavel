@@ -179,11 +179,15 @@ if args.checkpoint_dir is not None:
     else:
         checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
         if os.path.exists(checkpoint_path):
-            print('Loading checkpoint from %s...' % (checkpoint_path))
-            with open(checkpoint_path, 'rb') as f:
-                state = torch.load(f)
-                model = state['model'].to(device)
-            load_from_checkpoint = True
+            try:
+                print('Loading checkpoint from %s...' % (checkpoint_path))
+                with open(checkpoint_path, 'rb') as f:
+                    state = torch.load(f)
+                    model = state['model'].to(device)
+                load_from_checkpoint = True
+            except RuntimeError as e:
+                print('Could not load from checkpoint: %s' % (e))
+                load_from_checkpoint = False
 if not load_from_checkpoint:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                            args.nlayers, args.dropout, args.tied).to(device)
