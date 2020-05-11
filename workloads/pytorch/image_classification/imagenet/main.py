@@ -246,13 +246,14 @@ def main():
 
         # remember best acc@1 and save checkpoint
         #best_acc1 = max(acc1, best_acc1)
-    save_checkpoint({
-        'epoch': epoch + 1,
-        'arch': args.arch,
-        'state_dict': model.state_dict(),
-        # 'best_acc1': best_acc1,
-        'optimizer' : optimizer.state_dict(),
-    }, checkpoint_path)
+    if not args.distributed or args.rank == 0:
+        save_checkpoint({
+            'epoch': epoch + 1,
+            'arch': args.arch,
+            'state_dict': model.state_dict(),
+            # 'best_acc1': best_acc1,
+            'optimizer' : optimizer.state_dict(),
+        }, checkpoint_path)
 
 def train(train_loader, model, criterion, optimizer, epoch,
           total_minibatches, max_minibatches, total_elapsed_time,

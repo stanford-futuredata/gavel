@@ -253,5 +253,5 @@ state = {
 }
 if not os.path.isdir(args.checkpoint_dir):
     os.mkdir(args.checkpoint_dir)
-torch.save(state, checkpoint_path)
-
+if not args.distributed or args.rank == 0:
+    torch.save(state, checkpoint_path)

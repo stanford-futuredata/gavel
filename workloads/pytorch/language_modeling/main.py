@@ -372,7 +372,7 @@ try:
             state = {'model': model.module}
         else:
             state = {'model': model}
-        if args.rank == 0 or args.rank is None:
+        if not args.distributed or args.rank == 0:
             torch.save(state, f)
 except KeyboardInterrupt:
     print('-' * 89)

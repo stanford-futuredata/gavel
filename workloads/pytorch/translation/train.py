@@ -234,14 +234,15 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             'epoch': epoch_i,
         }
 
-        if opt.save_mode == 'all':
-            print('Saving checkpoint at %s...' % (checkpoint_path))
-            torch.save(checkpoint, checkpoint_path)
-        elif opt.save_mode == 'best':
-            if valid_accu >= max(valid_accus):
+        if not args.distributed or args.rank == 0:
+            if opt.save_mode == 'all':
                 print('Saving checkpoint at %s...' % (checkpoint_path))
                 torch.save(checkpoint, checkpoint_path)
-                print('    - [Info] The checkpoint file has been updated.')
+            elif opt.save_mode == 'best':
+                if valid_accu >= max(valid_accus):
+                    print('Saving checkpoint at %s...' % (checkpoint_path))
+                    torch.save(checkpoint, checkpoint_path)
+                    print('    - [Info] The checkpoint file has been updated.')
 
         if log_train_file:#and log_valid_file:
             with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
