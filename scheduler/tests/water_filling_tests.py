@@ -2,13 +2,14 @@ import sys; sys.path.append("..")
 from policies import max_min_fairness_water_filling
 
 import random
+import time
 
 def test_water_filling():
     policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(
         solver='ECOS')
     worker_types = ['v100', 'p100', 'k80']
-    cluster_spec = {worker_type: 4 for worker_type in worker_types}
-    num_jobs = 5
+    cluster_spec = {worker_type: 64 for worker_type in worker_types}
+    num_jobs = 300
     print("Total number of jobs: %d" % num_jobs)
     unflattened_throughputs = {}
     scale_factors = {}
@@ -35,5 +36,7 @@ def test_water_filling():
 if __name__ == '__main__':
     seed = 0
     random.seed(seed)
-    for i in range(20):
+    start_time = time.time()
+    for i in range(5):
         test_water_filling()
+    print("Average time per problem: %.2f seconds" % ((time.time() - start_time) / 5))
