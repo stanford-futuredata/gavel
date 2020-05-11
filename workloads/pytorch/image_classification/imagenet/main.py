@@ -156,13 +156,13 @@ def main():
     if os.path.exists(checkpoint_path):
         try:    
             print("=> loading checkpoint '{}'".format(checkpoint_path))
-                checkpoint = torch.load(checkpoint_path)
-                args.start_epoch = checkpoint['epoch']
-                # best_acc1 = checkpoint['best_acc1']
-                model.load_state_dict(checkpoint['state_dict'])
-                optimizer.load_state_dict(checkpoint['optimizer'])
-                print("=> loaded checkpoint '{}' (epoch {})"
-                      .format(checkpoint_path, checkpoint['epoch']))
+            checkpoint = torch.load(checkpoint_path)
+            args.start_epoch = checkpoint['epoch']
+            # best_acc1 = checkpoint['best_acc1']
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            print("=> loaded checkpoint '{}' (epoch {})"
+                  .format(checkpoint_path, checkpoint['epoch']))
         except Exception as e:
             print('=> Could not load from checkpoint: %s' % (e))
     else:
