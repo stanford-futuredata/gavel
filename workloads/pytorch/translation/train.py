@@ -336,9 +336,9 @@ def main():
     elif opt.epoch is None and opt.step is None:
         raise ValueError('One of epoch and step must be set')
 
-    distributed = False
+    opt.distributed = False
     if opt.master_addr is not None:
-        distributed = True
+        opt.distributed = True
         os.environ['MASTER_ADDR'] = opt.master_addr
         os.environ['MASTER_PORT'] = str(opt.master_port)
         dist.init_process_group(backend=opt.dist_backend,
@@ -382,13 +382,13 @@ def main():
         n_head=opt.n_head,
         dropout=opt.dropout).to(device)
 
-    if distributed:
+    if opt.distributed:
         transformer = DDP(transformer, device_ids=[opt.local_rank],
                           output_device=opt.local_rank)
 
     if opt.enable_gavel_iterator:
         training_data = GavelIterator(training_data, opt.job_id,
-                                      opt.worker_id, distributed,
+                                      opt.worker_id, opt.distributed,
                                       opt.sched_addr, opt.sched_port)
 
     optimizer = ScheduledOptim(
