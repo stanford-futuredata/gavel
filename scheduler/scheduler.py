@@ -928,8 +928,7 @@ class Scheduler:
            to the specified rate parameter."""
         return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
-    def _generate_job(self, philly_job_distribution,
-                      fixed_job_duration=None,
+    def _generate_job(self, fixed_job_duration=None,
                       generate_multi_gpu_jobs=False,
                       generate_multi_priority_jobs=False,
                       run_dir='/tmp'):
@@ -1063,7 +1062,6 @@ class Scheduler:
             remaining_jobs = len(jobs)
             queued_jobs = []
         else:
-            philly_job_distribution = utils.load_philly_job_distribution()
             if self._oracle_throughputs is None:
                 raise ValueError('Scheduler must be initialized with a '
                                  'throughputs file.')
@@ -1213,7 +1211,6 @@ class Scheduler:
                         if num_jobs_generated >= num_total_jobs:
                             break
                     job = self._generate_job(
-                        philly_job_distribution,
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
