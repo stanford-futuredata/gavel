@@ -1,0 +1,3 @@
+ResNet-50 (batch size 178)	%s %s	--steps	1	44150	1	1.000000	-1.000000	0.000000
+Transformer (batch size 413)	%s %s	--steps	1	39608	1	1.000000	-1.000000	0.000000
+LM (batch size 611)	%s %s	--steps	1	174638	1	1.000000	-1.000000	0.000000
