@@ -1255,6 +1255,14 @@ class Scheduler:
                                 all_num_steps[job_id] = 0
                             all_num_steps[job_id] += int(num_steps)
                 for job_id in all_num_steps:
+                    allocation_str = ''
+                    for x in worker_types:
+                        allocation_str += \
+                            ' [%4s %f]' % (x, self._allocation[job_id][x])
+                    print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
+                           'Allocation: %s') % (self.get_current_timestamp(),
+                                                job_id,
+                                                allocation_str))
                     heapq.heappush(running_jobs, (-next_job_arrival_time, job_id,
                                                   (0,),
                                                   [all_num_steps[job_id]]))
