@@ -201,6 +201,11 @@ def train(model, training_data, validation_data, optimizer, device, opt):
         opt.epoch = opt.step
     cumulative_step = 0
     cumulative_time = 0
+
+    if opt.step is not None:
+        opt.epoch = math.ceil(float(opt.step) *
+                              opt.batch_size / len(training_data))
+
     for epoch_i in range(start_epoch, opt.epoch):
         print('[ Epoch', epoch_i, ']')
 

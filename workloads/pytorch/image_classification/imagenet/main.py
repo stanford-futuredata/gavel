@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import math
 import os
 import random
 import shutil
@@ -213,6 +214,11 @@ def main():
         train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
                                      args.distributed,
                                      args.sched_addr, args.sched_port)
+
+    if args.num_minibatches is not None:
+        args.epochs = math.ceil(float(args.num_minibatches) *
+                                args.batch_size / len(train_loader))
+
     epoch = args.start_epoch
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:

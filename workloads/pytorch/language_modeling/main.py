@@ -349,6 +349,9 @@ best_val_loss = None
 
 # At any point you can hit Ctrl + C to break out of training early.
 try:
+    if args.steps is not None:
+        args.epochs = math.ceil(args.steps *
+                                args.batch_size / len(train_loader))
     if args.epochs is None:
         args.epochs = args.steps
     for epoch in range(1, args.epochs+1):

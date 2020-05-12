@@ -13,6 +13,7 @@ import torchvision.transforms as transforms
 
 import os
 import argparse
+import math
 import sys
 import time
 
@@ -233,8 +234,10 @@ def test(epoch):
         torch.save(state, checkpoint_path)
         best_acc = acc
 
-if args.num_epochs is None:
-    args.num_epochs = args.num_steps
+if args.num_steps is not None:
+    args.num_epochs = math.ceil(float(args.num_steps) *
+                                args.batch_size / len(trainloader))
+
 for epoch in range(start_epoch, args.num_epochs):
     (cumulative_steps, cumulative_time, done, finished_epoch) =\
             train(epoch, cumulative_steps, cumulative_time)
