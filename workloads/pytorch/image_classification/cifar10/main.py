@@ -84,9 +84,9 @@ print('==> Building model..')
 net = ResNet18()
 net = net.cuda()
 
-distributed = False
+args.distributed = False
 if args.master_addr is not None:
-    distributed = True
+    args.distributed = True
     os.environ['MASTER_ADDR'] = args.master_addr
     os.environ['MASTER_PORT'] = str(args.master_port)
     dist.init_process_group(backend=args.dist_backend,
@@ -117,7 +117,7 @@ transform_test = transforms.Compose([
 
 trainset = torchvision.datasets.CIFAR10(root=args.data_dir, train=True, download=False, transform=transform_train)
 train_sampler = None
-if distributed:
+if args.distributed:
     train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=2,
                                           sampler=train_sampler)
@@ -129,7 +129,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 
 if enable_gavel_iterator:
     trainloader = GavelIterator(trainloader, args.job_id, args.worker_id,
-                                distributed, args.sched_addr, args.sched_port)
+                                args.distributed, args.sched_addr, args.sched_port)
 
 cumulative_steps = 0
 cumulative_time = 0

@@ -213,6 +213,7 @@ def main():
         train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
                                      args.distributed,
                                      args.sched_addr, args.sched_port)
+    epoch = args.start_epoch
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
