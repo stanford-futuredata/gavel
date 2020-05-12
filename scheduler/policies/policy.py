@@ -55,13 +55,12 @@ class Policy:
 
     def get_base_constraints(self, x, scale_factors_array):
         """Return base constraints."""
-        constraints = [
+        return [
             x >= 0,
             cp.sum(cp.multiply(
                 scale_factors_array, x), axis=0) <= self._num_workers,
             cp.sum(x, axis=1) <= 1,
         ]
-        return constraints
 
 
 class PolicyWithPacking(Policy):
