@@ -23,7 +23,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                           generate_multi_priority_jobs, simulate_steady_state,
                           log_dir, timeout, verbose, checkpoint_threshold,
                           profiling_percentage, num_reference_models,
-                          num_gpus_per_server):
+                          num_gpus_per_server, ideal):
     lam_str = 'lambda=%f.log' % (lam)
     checkpoint_file = None
     if checkpoint_threshold is not None:
@@ -67,9 +67,12 @@ def simulate_with_timeout(experiment_id, policy_name,
                                simulate_steady_state=simulate_steady_state,
                                checkpoint_file=checkpoint_file,
                                checkpoint_threshold=checkpoint_threshold,
-                               num_gpus_per_server=num_gpus_per_server)
+                               num_gpus_per_server=num_gpus_per_server,
+                               ideal=ideal)
                 average_jct = sched.get_average_jct(jobs_to_complete)
-                utilization = sched.get_cluster_utilization()
+                utilization = 1.0
+                if not ideal:
+                    utilization = sched.get_cluster_utilization()
             else:
                 try:
                     func_timeout(timeout, sched.simulate,
@@ -101,96 +104,6 @@ def simulate_with_timeout(experiment_id, policy_name,
               file=sys.stderr)
 
     return average_jct, utilization
-
-def run_automatic_sweep(experiment_id, policy_name,
-                        throughputs_file, cluster_spec, seed, interval,
-                        jobs_to_complete, fixed_job_duration, solver,
-                        generate_multi_gpu_jobs, generate_multi_priority_jobs,
-                        simulate_steady_state, log_dir,
-                        timeout, verbose, checkpoint_threshold,
-                        profiling_percentage, num_reference_models,
-                        num_gpus_per_server):
-    all_lams = []
-    average_jcts = []
-    utilizations = []
-
-    # Sweep all power of 2 lambdas until utilization == 1.0.
-    lam = 32768
-    while True:
-        all_lams.append(lam)
-        average_jct, utilization = \
-                simulate_with_timeout(experiment_id, policy_name,
-                                      throughputs_file, cluster_spec,
-                                      lam, seed, interval, jobs_to_complete,
-                                      fixed_job_duration, solver,
-                                      generate_multi_gpu_jobs,
-                                      generate_multi_priority_jobs,
-                                      simulate_steady_state, log_dir, timeout,
-                                      verbose, checkpoint_threshold,
-                                      profiling_percentage,
-                                      num_reference_models,
-                                      num_gpus_per_server)
-
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if utilization < args.utilization_threshold:
-            lam /= 2
-        else:
-            break
-
-    # Find the knee of the throughput vs latency plot.
-    lams = np.linspace(lam * 2, lam, num=10)[1:]
-    for lam in lams:
-        all_lams.append(lam)
-        average_jct, utilization = \
-                simulate_with_timeout(experiment_id, policy_name,
-                                     throughputs_file, cluster_spec,
-                                     lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration, solver,
-                                     generate_multi_gpu_jobs,
-                                     generate_multi_priority_jobs,
-                                     simulate_steady_state, log_dir,
-                                     timeout, verbose, checkpoint_threshold,
-                                     profiling_percentage, num_reference_models,
-                                     num_gpus_per_server)
-
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if utilization >= args.utilization_threshold:
-            knee = lam
-            break
-
-    # Extend the throughput vs latency plot until the latency under
-    # high load is an order of magnitude larger than the latency
-    # under low load.
-    i = 1
-    while True:
-        lam = knee * (1.0 - i * .05)
-        all_lams.append(lam)
-        average_jct, utilization = \
-                simulate_with_timeout(experiment_id, policy_name,
-                                      throughputs_file, cluster_spec,
-                                      lam, seed, interval, jobs_to_complete,
-                                      fixed_job_duration, solver,
-                                      generate_multi_gpu_jobs,
-                                      generate_multi_priority_jobs,
-                                      simulate_steady_state, log_dir,
-                                      timeout, verbose,
-                                      checkpoint_threshold,
-                                      profiling_percentage,
-                                      num_reference_models)
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if np.max(average_jcts) / np.min(average_jcts) >= 10:
-            break
-
-    print('knee at lamda=', knee, file=sys.stderr)
-    print('final lambda=', lam, file=sys.stderr)
-    for lam, average_jct, utilization in \
-            zip(all_lams, average_jcts, utilizations):
-        print('Lambda=%f,Average JCT=%f,'
-              'Utilization=%f' % (lam, average_jct, utilization),
-              file=sys.stderr)
 
 def main(args):
     if args.window_start >= args.window_end:
@@ -353,7 +266,8 @@ def main(args):
                                                       args.checkpoint_threshold,
                                                       profiling_percentage,
                                                       num_reference_models,
-                                                      num_gpus_per_server))
+                                                      num_gpus_per_server,
+                                                      args.ideal))
                                 experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
@@ -442,6 +356,8 @@ if __name__=='__main__':
                         default=[16, 26],
                         help=('Number of reference models to use when '
                               'estimating throughputs'))
+    parser.add_argument('--ideal', action='store_true', default=False,
+                        help='Run allocations 100%% ideally')
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
                              default=None,
                              help=('Lower bound for throughput interval to '
