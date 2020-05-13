@@ -1887,10 +1887,11 @@ class Scheduler:
 
         NOTE: Used when scheduling is performed in rounds.
         """
-
-        if self._need_to_update_allocation and \
-            (((self.get_current_timestamp() - self._last_reset_time) >
-                self._minimum_time_between_allocation_resets) or (self._last_reset_time == 0)):
+        time_since_last_reset = self.get_current_timestamp() - self._last_reset_time
+        reset_interval_elapsed = time_since_last_reset >= \
+            self._minimum_time_between_allocation_resets
+        if self._need_to_update_allocation and (
+            reset_interval_elapsed or self._last_reset_time == 0):
             self._reset_time_run_so_far()
             if self._estimate_throughputs:
                 for worker_type in self._jobs_to_profile:
