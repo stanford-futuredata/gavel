@@ -1560,7 +1560,7 @@ class Scheduler:
             job_id: self.get_current_timestamp() - self._per_job_start_timestamps[job_id]
             for job_id in self._jobs
         }
-        if self._policy.name == "AlloX":
+        if self._policy.name == "AlloX_Perf":
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors,
                 times_since_start, num_steps_remaining,
@@ -1914,7 +1914,7 @@ class Scheduler:
         for worker_type in self._worker_types:
             fractions[worker_type] = {}
             for job_id in self._job_time_so_far:
-                if self._worker_time_so_far[worker_type] == 0.0:
+                if self._worker_time_so_far[worker_type] == 0.0 or worker_type not in self._job_time_so_far[job_id]:
                     fraction = 0.0
                 else:
                     fraction = self._job_time_so_far[job_id][worker_type] / \

@@ -10,7 +10,7 @@ from policy import Policy, PolicyWithPacking
 
 class AlloXPolicy(Policy):
     def __init__(self, alpha=1.0):
-        self._name = 'AlloX'
+        self._name = 'AlloX_Perf'
         self._alpha = alpha
         self._prev_allocation = {}
 
