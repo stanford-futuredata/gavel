@@ -41,6 +41,26 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         returned_priority_weights[job_id] = entity_weight * (
                             float(priority_weights[job_id]) / total_job_priority_in_entity)
             return returned_priority_weights
+        elif self._priority_reweighting_policy == 'fairness+fifo':
+            if entity_to_job_mapping is None:
+                raise ValueError("entity_to_job_mapping cannot be None when "
+                                 "priority_reweighting_policy is fairness+fifo!")
+            returned_priority_weights = {}
+            for entity_id in entity_to_job_mapping:
+                entity_weight = priority_weights[entity_id]
+                total_job_priority_in_entity = 0.0
+                entity_to_job_mapping[entity_id].sort()
+                done = False
+                for job_id in entity_to_job_mapping[entity_id]:
+                    if job_id in per_job_effective_throughputs:
+                        returned_priority_weights[job_id] = 0.0
+                    elif not done:
+                        returned_priority_weights[job_id] = priority_weights[entity_id]
+                        done = True
+                    else:
+                        returned_priority_weights[job_id] = 0.0
+            print(returned_priority_weights)
+            return returned_priority_weights
         else:
             raise ValueError("Unknown priority reweighting policy!")
 
@@ -68,7 +88,8 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         if computed_c is None:
             objective_terms = [
                 scaled_effective_throughputs[job_id] for job_id in job_ids
-                if job_id not in per_job_effective_throughputs]
+                if (job_id not in per_job_effective_throughputs and
+                    priority_weights[job_ids.index(job_id)] > 0.0)]
             if len(objective_terms) == 1:
                 objective = cp.Maximize(objective_terms[0])
             else:
@@ -149,15 +170,23 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 print("Objective value: %.3f" % c)
 
             # Find bottleneck job_ids.
-            _, z = self._get_allocation_helper(
-                throughputs, index, priority_weights, scale_factors_array, m, n,
-                per_job_effective_throughputs=per_job_effective_throughputs,
-                computed_c=c)
+            try:
+                _, z = self._get_allocation_helper(
+                    throughputs, index, priority_weights, scale_factors_array, m, n,
+                    per_job_effective_throughputs=per_job_effective_throughputs,
+                    computed_c=c)
+            except:
+                print('WARNING: Problem to find z is infeasible!')
+                z = np.zeros(m)
+            old_len_effective_throughputs = len(per_job_effective_throughputs)
             for i, job_id in enumerate(job_ids):
-                if job_id not in per_job_effective_throughputs and (z is None or not z[i]):
+                if job_id not in per_job_effective_throughputs and (z is None or not z[i]) \
+                    and priority_weights[i] > 0.0:
                     print("Iteration %d:" % num_iterations, job_id)
                     per_job_effective_throughputs[job_id] = c / (
                         priority_weights[job_ids.index(job_id)] * scale_factors_array[job_id])
+            if old_len_effective_throughputs == len(per_job_effective_throughputs):
+                done = True
             if verbose:
                 print("At the end of iteration %d:" % num_iterations,
                     x.value)
