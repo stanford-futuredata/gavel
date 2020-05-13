@@ -21,5 +21,11 @@ class IteratorRpcClient:
                                              max_duration=max_duration)
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = i2s_pb2_grpc.IteratorToSchedulerStub(channel)
-            response = stub.UpdateLease(request)
-            return (response.max_steps, response.max_duration)
+            attempts = 0
+            while attempts < MAX_ATTEMPTS:
+                try:
+                    response = stub.UpdateLease(request, timeout=TIMEOUT)
+                    return (response.max_steps, response.max_duration)
+                except grpc.RpcError as e:
+                    attempts += 1
+            return (0, 0)
