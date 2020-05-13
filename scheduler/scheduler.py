@@ -595,7 +595,7 @@ class Scheduler:
             per_worker_type_entries = []
             for job_id in self._priorities[worker_type]:
                 allocation = 0.0
-                if job_id in self._allocation:
+                if self._allocation is not None and job_id in self._allocation:
                     allocation = self._allocation[job_id][worker_type]
                 per_worker_type_entries.append(
                         (job_id, worker_type,
@@ -699,7 +699,7 @@ class Scheduler:
             num_workers_assigned = 0
 
             for (job_id, scale_factor) in scheduled_jobs[worker_type]:
-                if job_id not in self._allocation:
+                if self._allocation is None or job_id not in self._allocation:
                     continue
 
                 # Assign workers to jobs. Assign workers in a strided fashion to
@@ -1914,15 +1914,18 @@ class Scheduler:
         for worker_type in self._worker_types:
             fractions[worker_type] = {}
             for job_id in self._job_time_so_far:
-                fraction = self._job_time_so_far[job_id][worker_type] / \
-                         self._worker_time_so_far[worker_type]
+                if self._worker_time_so_far[worker_type] == 0.0:
+                    fraction = 0.0
+                else:
+                    fraction = self._job_time_so_far[job_id][worker_type] / \
+                             self._worker_time_so_far[worker_type]
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 # Don't use inf so 2*new_priority > new_priority.
                 #
                 # Scale the default value by the allocation so that newly
                 # added jobs run according to their respective allocations.
-                if job_id not in self._allocation:
+                if self._allocation is None or job_id not in self._allocation:
                     self._priorities[worker_type][job_id] = 0.0
                 else:
                     new_priority = self._allocation[job_id][worker_type] * 1e9
