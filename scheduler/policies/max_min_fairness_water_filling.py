@@ -16,6 +16,9 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         self._name = 'MaxMinFairnessWaterFilling_Perf'
         self._proportional_policy = ProportionalPolicy()
 
+    def recompute_priority_weights(self):
+        pass
+
     def _get_allocation_helper(self, throughputs, index, priority_weights,
                                scale_factors_array, m, n,
                                per_job_max_c,
@@ -73,7 +76,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         return x, z.value
 
     def get_allocation(self, original_unflattened_throughputs, scale_factors,
-                       unflattened_priority_weights, original_cluster_spec
+                       unflattened_priority_weights, original_cluster_spec,
                        verbose=False):
         unflattened_throughputs = copy.deepcopy(original_unflattened_throughputs)        
         cluster_spec = copy.deepcopy(original_cluster_spec)
@@ -123,6 +126,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 print("At the end of iteration %d:" % num_iterations,
                     x.value)
             num_iterations += 1
+            self.recompute_priority_weights()
             if len(unflattened_throughputs) == len(per_job_max_c):
                 done = True
         print("Number of iterations: %d" % num_iterations)
