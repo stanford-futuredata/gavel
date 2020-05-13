@@ -86,7 +86,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                     'simulate_steady_state': simulate_steady_state,
                                     'checkpoint_file': checkpoint_file,
                                     'checkpoint_threshold': checkpoint_threshold,
-                                    'num_gpus_per_server': num_gpus_per_server
+                                    'num_gpus_per_server': num_gpus_per_server,
+                                    'ideal': ideal
                                  })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -108,17 +109,9 @@ def simulate_with_timeout(experiment_id, policy_name,
 def main(args):
     if args.window_start >= args.window_end:
         raise ValueError('Window start must be < than window end.')
-    if ((args.throughput_lower_bound is None and
-         args.throughput_upper_bound is not None) or
-        (args.throughput_lower_bound is not None and
-         args.throughput_upper_bound is None)):
-        raise ValueError('If throughput range is not None, both '
-                         'bounds must be specified.')
-    elif (args.throughput_lower_bound is not None and
-          args.throughput_upper_bound is not None):
-        automatic_sweep = False
-    else:
-        automatic_sweep = True
+    if (args.throughput_lower_bound is None or
+        args.throughput_upper_bound is None):
+        raise ValueError('Throughput range must be specified.')
 
     cutoff_throughputs = {}
     if args.cutoff_throughputs_file is not None:
@@ -198,7 +191,26 @@ def main(args):
                     else:
                         raw_logs_num_reference_models_subdir = \
                             raw_logs_policy_subdir
-                    if automatic_sweep:
+                    throughputs = \
+                        list(np.linspace(args.throughput_lower_bound,
+                                         args.throughput_upper_bound,
+                                         num=args.num_data_points))
+                    if throughputs[0] == 0.0:
+                        throughputs = throughputs[1:]
+                    for throughput in throughputs:
+                        if (cluster_spec_str in cutoff_throughputs and
+                            policy_name in cutoff_throughputs[cluster_spec_str]):
+                            cutoff_throughput = \
+                                cutoff_throughputs[cluster_spec_str][policy_name]
+                            if throughput >= cutoff_throughput:
+                                print('Throughput of %f is too high '
+                                      'for policy %s with cluster '
+                                      'spec %s.' % (throughput,
+                                                    policy_name,
+                                                    cluster_spec_str))
+                                continue
+
+                        lam = 3600.0 / throughput
                         for seed in args.seeds:
                             seed_str = 'seed=%d' % (seed)
                             raw_logs_seed_subdir = os.path.join(
@@ -209,7 +221,7 @@ def main(args):
                             all_args_list.append((experiment_id, policy_name,
                                                   throughputs_file,
                                                   cluster_spec,
-                                                  seed, args.interval,
+                                                  lam, seed, args.interval,
                                                   jobs_to_complete,
                                                   args.fixed_job_duration,
                                                   args.solver,
@@ -217,74 +229,25 @@ def main(args):
                                                   args.generate_multi_priority_jobs,
                                                   args.simulate_steady_state,
                                                   raw_logs_seed_subdir,
-                                                  args.timeout, args.verbose,
+                                                  args.timeout,
+                                                  args.verbose,
                                                   args.checkpoint_threshold,
                                                   profiling_percentage,
-                                                  num_reference_models))
+                                                  num_reference_models,
+                                                  num_gpus_per_server,
+                                                  args.ideal))
                             experiment_id += 1
-                    else:
-                        throughputs = \
-                            list(np.linspace(args.throughput_lower_bound,
-                                             args.throughput_upper_bound,
-                                             num=args.num_data_points))
-                        if throughputs[0] == 0.0:
-                            throughputs = throughputs[1:]
-                        for throughput in throughputs:
-                            if (cluster_spec_str in cutoff_throughputs and
-                                policy_name in cutoff_throughputs[cluster_spec_str]):
-                                cutoff_throughput = \
-                                    cutoff_throughputs[cluster_spec_str][policy_name]
-                                if throughput >= cutoff_throughput:
-                                    print('Throughput of %f is too high '
-                                          'for policy %s with cluster '
-                                          'spec %s.' % (throughput,
-                                                        policy_name,
-                                                        cluster_spec_str))
-                                    continue
-
-                            lam = 3600.0 / throughput
-                            for seed in args.seeds:
-                                seed_str = 'seed=%d' % (seed)
-                                raw_logs_seed_subdir = os.path.join(
-                                        raw_logs_num_reference_models_subdir,
-                                        seed_str)
-                                if not os.path.isdir(raw_logs_seed_subdir):
-                                    os.mkdir(raw_logs_seed_subdir)
-                                all_args_list.append((experiment_id, policy_name,
-                                                      throughputs_file,
-                                                      cluster_spec,
-                                                      lam, seed, args.interval,
-                                                      jobs_to_complete,
-                                                      args.fixed_job_duration,
-                                                      args.solver,
-                                                      args.generate_multi_gpu_jobs,
-                                                      args.generate_multi_priority_jobs,
-                                                      args.simulate_steady_state,
-                                                      raw_logs_seed_subdir,
-                                                      args.timeout,
-                                                      args.verbose,
-                                                      args.checkpoint_threshold,
-                                                      profiling_percentage,
-                                                      num_reference_models,
-                                                      num_gpus_per_server,
-                                                      args.ideal))
-                                experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
         print('[%s] Running %d total experiment(s)...' % (current_time,
                                                           len(all_args_list)))
         with multiprocessing.Pool(args.processes) as p:
-            if automatic_sweep:
-                results = [p.apply_async(run_automatic_sweep, args_list)
-                           for args_list in all_args_list]
-                results = [result.get() for result in results]
-            else:
-                # Sort args in order of decreasing lambda to prioritize
-                # short-running jobs.
-                all_args_list.sort(key=lambda x: x[4], reverse=True)
-                results = [p.apply_async(simulate_with_timeout, args_list)
-                           for args_list in all_args_list]
-                results = [result.get() for result in results]
+            # Sort args in order of decreasing lambda to prioritize
+            # short-running jobs.
+            all_args_list.sort(key=lambda x: x[4], reverse=True)
+            results = [p.apply_async(simulate_with_timeout, args_list)
+                       for args_list in all_args_list]
+            results = [result.get() for result in results]
     else:
         raise ValueError('No work to be done!')
 
