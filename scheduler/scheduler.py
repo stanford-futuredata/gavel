@@ -928,8 +928,7 @@ class Scheduler:
            to the specified rate parameter."""
         return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
-    def _generate_job(self, philly_job_distribution,
-                      fixed_job_duration=None,
+    def _generate_job(self, fixed_job_duration=None,
                       generate_multi_gpu_jobs=False,
                       generate_multi_priority_jobs=False,
                       run_dir='/tmp'):
@@ -944,8 +943,18 @@ class Scheduler:
             # TODO: Select the scale factor from the distribution here?
             scale_factor = 1
         else:
-            run_time, scale_factor = \
-                self._job_generator.choice(philly_job_distribution)
+            scale_factor = 1
+            r = self._job_generator.uniform(0, 1)
+            if 0.7 <= r <= 0.8:
+                scale_factor = 2
+            elif 0.8 <= r <= 0.95:
+                scale_factor = 4
+            elif 0.95 <= r:
+                scale_factor = 8
+            if self._job_generator.random() >= 0.8:
+                run_time = 60 * (10 ** self._job_generator.uniform(3, 4))
+            else:
+                run_time = 60 * (10 ** self._job_generator.uniform(1.5, 3))
         if not generate_multi_gpu_jobs:
             scale_factor = 1
         assert(run_time > 0)
@@ -1053,7 +1062,6 @@ class Scheduler:
             remaining_jobs = len(jobs)
             queued_jobs = []
         else:
-            philly_job_distribution = utils.load_philly_job_distribution()
             if self._oracle_throughputs is None:
                 raise ValueError('Scheduler must be initialized with a '
                                  'throughputs file.')
@@ -1203,7 +1211,6 @@ class Scheduler:
                         if num_jobs_generated >= num_total_jobs:
                             break
                     job = self._generate_job(
-                        philly_job_distribution,
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
