@@ -41,8 +41,9 @@ class IsolatedPolicy(Policy):
         x = np.array([[cluster_spec[worker_type] / m for worker_type in worker_types]
                       for i in range(m)])
         x = x / scale_factors_array
-        max_per_row_sum = np.sum(x, axis=1).max()
-        x = x / max_per_row_sum
+        per_row_sum = np.sum(x, axis=1)
+        per_row_sum = np.maximum(per_row_sum, np.ones(per_row_sum.shape))
+        x = x / per_row_sum[:, None]
 
         return x
 
