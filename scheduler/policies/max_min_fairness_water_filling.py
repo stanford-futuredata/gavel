@@ -18,25 +18,28 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         self._priority_reweighting_policy = priority_reweighting_policy
 
     def compute_priority_weights(self, priority_weights, entity_to_job_mapping,
-                                 per_job_effective_throughputs=None):
+                                 per_job_effective_throughputs):
         if self._priority_reweighting_policy is None:
             # Do nothing if reweighting policy is None.
             return priority_weights
         elif self._priority_reweighting_policy == 'multilevel_fairness':
+            if entity_to_job_mapping is None:
+                raise ValueError("entity_to_job_mapping cannot be None when "
+                                 "priority_reweighting_policy is multilevel_fairness!")
             returned_priority_weights = {}
-            for entity in entity_to_job_mapping:
-                entity_weight = priority_weights[entity]
+            for entity_id in entity_to_job_mapping:
+                entity_weight = priority_weights[entity_id]
                 total_job_priority_in_entity = 0.0
-                for job_id in entity_to_job_mapping:
+                for job_id in entity_to_job_mapping[entity_id]:
                     if job_id in per_job_effective_throughputs:
                         continue
-                    total_job_priority_in_entity += priority_weights[job_id]
-                for job_id in entity_to_job_mapping:
+                    total_job_priority_in_entity += float(priority_weights[job_id])
+                for job_id in entity_to_job_mapping[entity_id]:
                     if job_id in per_job_effective_throughputs:
                         returned_priority_weights[job_id] = 0.0
                     else:
                         returned_priority_weights[job_id] = entity_weight * (
-                            priority_weights[job_id] / total_job_priority_in_entity)
+                            float(priority_weights[job_id]) / total_job_priority_in_entity)
             return returned_priority_weights
         else:
             raise ValueError("Unknown priority reweighting policy!")
@@ -63,9 +66,13 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         effective_throughputs = cp.sum(cp.multiply(throughputs, x), axis=1)
 
         if computed_c is None:
-            objective = cp.Maximize(cp.minimum(
-                *[scaled_effective_throughputs[job_id] for job_id in job_ids
-                if job_id not in per_job_effective_throughputs]))
+            objective_terms = [
+                scaled_effective_throughputs[job_id] for job_id in job_ids
+                if job_id not in per_job_effective_throughputs]
+            if len(objective_terms) == 1:
+                objective = cp.Maximize(objective_terms[0])
+            else:
+                objective = cp.Maximize(cp.minimum(*objective_terms))
         else:
             z = cp.Variable(m, boolean=True)
             objective = cp.Maximize(cp.sum(z))
@@ -124,9 +131,10 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
             priority_weights = self.compute_priority_weights(
                 unflattened_priority_weights,
-                entity_to_job_mapping)
+                entity_to_job_mapping,
+                per_job_effective_throughputs)
             priority_weights = np.array(
-                [1. / priority_weights[job_id]
+                [1. / priority_weights[job_id] if priority_weights[job_id] > 0 else 0.0
                  for job_id in job_ids])
 
             proportional_throughputs = self._proportional_policy.get_throughputs(
