@@ -25,7 +25,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                           generate_multi_gpu_jobs, enable_global_queue,
                           num_total_jobs, solver,
                           log_dir, timeout, verbose,
-                          num_gpus_per_server):
+                          num_gpus_per_server,
+                          ideal):
     # Add some random delay to prevent outputs from overlapping.
     # TODO: Replace this with postprocessing in the log parsing script.
     time.sleep(random.uniform(0, 5))
@@ -62,7 +63,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                fixed_job_duration=fixed_job_duration,
                                generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                                num_total_jobs=num_total_jobs,
-                               num_gpus_per_server=num_gpus_per_server)
+                               num_gpus_per_server=num_gpus_per_server,
+                               ideal=ideal)
                 average_jct = sched.get_average_jct()
                 utilization = sched.get_cluster_utilization()
                 makespan = sched.get_current_timestamp()
@@ -76,7 +78,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                     'fixed_job_duration': fixed_job_duration,
                                     'generate_multi_gpu_jobs': generate_multi_gpu_jobs,
                                     'num_total_jobs': num_total_jobs,
-                                    'num_gpus_per_server': num_gpus_per_server
+                                    'num_gpus_per_server': num_gpus_per_server,
+                                    'ideal': ideal
                                  })
                     average_jct = sched.get_average_jct()
                     utilization = sched.get_cluster_utilization()
@@ -180,7 +183,8 @@ def main(args):
                                           args.solver,
                                           raw_logs_seed_subdir,
                                           args.timeout, args.verbose,
-                                          num_gpus_per_server))
+                                          num_gpus_per_server,
+                                          args.ideal))
                     experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
@@ -250,6 +254,8 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, schedules jobs regardless of '
                               'worker type'))
+    parser.add_argument('--ideal', action='store_true', default=False,
+                        help='Run allocations 100%% ideally')
     fixed_range.add_argument('-a', '--num-total-jobs-lower-bound', type=int,
                              default=None,
                              help='Lower bound for num_total_jobs to sweep')

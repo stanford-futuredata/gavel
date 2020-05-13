@@ -23,7 +23,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                           generate_multi_priority_jobs, simulate_steady_state,
                           log_dir, timeout, verbose, checkpoint_threshold,
                           profiling_percentage, num_reference_models,
-                          num_gpus_per_server):
+                          num_gpus_per_server, ideal):
     lam_str = 'lambda=%f.log' % (lam)
     checkpoint_file = None
     if checkpoint_threshold is not None:
@@ -67,9 +67,12 @@ def simulate_with_timeout(experiment_id, policy_name,
                                simulate_steady_state=simulate_steady_state,
                                checkpoint_file=checkpoint_file,
                                checkpoint_threshold=checkpoint_threshold,
-                               num_gpus_per_server=num_gpus_per_server)
+                               num_gpus_per_server=num_gpus_per_server,
+                               ideal=ideal)
                 average_jct = sched.get_average_jct(jobs_to_complete)
-                utilization = sched.get_cluster_utilization()
+                utilization = 1.0
+                if not ideal:
+                    utilization = sched.get_cluster_utilization()
             else:
                 try:
                     func_timeout(timeout, sched.simulate,
@@ -83,7 +86,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                                     'simulate_steady_state': simulate_steady_state,
                                     'checkpoint_file': checkpoint_file,
                                     'checkpoint_threshold': checkpoint_threshold,
-                                    'num_gpus_per_server': num_gpus_per_server
+                                    'num_gpus_per_server': num_gpus_per_server,
+                                    'ideal': ideal
                                  })
                     average_jct = sched.get_average_jct(jobs_to_complete)
                     utilization = sched.get_cluster_utilization()
@@ -102,110 +106,12 @@ def simulate_with_timeout(experiment_id, policy_name,
 
     return average_jct, utilization
 
-def run_automatic_sweep(experiment_id, policy_name,
-                        throughputs_file, cluster_spec, seed, interval,
-                        jobs_to_complete, fixed_job_duration, solver,
-                        generate_multi_gpu_jobs, generate_multi_priority_jobs,
-                        simulate_steady_state, log_dir,
-                        timeout, verbose, checkpoint_threshold,
-                        profiling_percentage, num_reference_models,
-                        num_gpus_per_server):
-    all_lams = []
-    average_jcts = []
-    utilizations = []
-
-    # Sweep all power of 2 lambdas until utilization == 1.0.
-    lam = 32768
-    while True:
-        all_lams.append(lam)
-        average_jct, utilization = \
-                simulate_with_timeout(experiment_id, policy_name,
-                                      throughputs_file, cluster_spec,
-                                      lam, seed, interval, jobs_to_complete,
-                                      fixed_job_duration, solver,
-                                      generate_multi_gpu_jobs,
-                                      generate_multi_priority_jobs,
-                                      simulate_steady_state, log_dir, timeout,
-                                      verbose, checkpoint_threshold,
-                                      profiling_percentage,
-                                      num_reference_models,
-                                      num_gpus_per_server)
-
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if utilization < args.utilization_threshold:
-            lam /= 2
-        else:
-            break
-
-    # Find the knee of the throughput vs latency plot.
-    lams = np.linspace(lam * 2, lam, num=10)[1:]
-    for lam in lams:
-        all_lams.append(lam)
-        average_jct, utilization = \
-                simulate_with_timeout(experiment_id, policy_name,
-                                     throughputs_file, cluster_spec,
-                                     lam, seed, interval, jobs_to_complete,
-                                     fixed_job_duration, solver,
-                                     generate_multi_gpu_jobs,
-                                     generate_multi_priority_jobs,
-                                     simulate_steady_state, log_dir,
-                                     timeout, verbose, checkpoint_threshold,
-                                     profiling_percentage, num_reference_models,
-                                     num_gpus_per_server)
-
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if utilization >= args.utilization_threshold:
-            knee = lam
-            break
-
-    # Extend the throughput vs latency plot until the latency under
-    # high load is an order of magnitude larger than the latency
-    # under low load.
-    i = 1
-    while True:
-        lam = knee * (1.0 - i * .05)
-        all_lams.append(lam)
-        average_jct, utilization = \
-                simulate_with_timeout(experiment_id, policy_name,
-                                      throughputs_file, cluster_spec,
-                                      lam, seed, interval, jobs_to_complete,
-                                      fixed_job_duration, solver,
-                                      generate_multi_gpu_jobs,
-                                      generate_multi_priority_jobs,
-                                      simulate_steady_state, log_dir,
-                                      timeout, verbose,
-                                      checkpoint_threshold,
-                                      profiling_percentage,
-                                      num_reference_models)
-        average_jcts.append(average_jct)
-        utilizations.append(utilization)
-        if np.max(average_jcts) / np.min(average_jcts) >= 10:
-            break
-
-    print('knee at lamda=', knee, file=sys.stderr)
-    print('final lambda=', lam, file=sys.stderr)
-    for lam, average_jct, utilization in \
-            zip(all_lams, average_jcts, utilizations):
-        print('Lambda=%f,Average JCT=%f,'
-              'Utilization=%f' % (lam, average_jct, utilization),
-              file=sys.stderr)
-
 def main(args):
     if args.window_start >= args.window_end:
         raise ValueError('Window start must be < than window end.')
-    if ((args.throughput_lower_bound is None and
-         args.throughput_upper_bound is not None) or
-        (args.throughput_lower_bound is not None and
-         args.throughput_upper_bound is None)):
-        raise ValueError('If throughput range is not None, both '
-                         'bounds must be specified.')
-    elif (args.throughput_lower_bound is not None and
-          args.throughput_upper_bound is not None):
-        automatic_sweep = False
-    else:
-        automatic_sweep = True
+    if (args.throughput_lower_bound is None or
+        args.throughput_upper_bound is None):
+        raise ValueError('Throughput range must be specified.')
 
     cutoff_throughputs = {}
     if args.cutoff_throughputs_file is not None:
@@ -285,7 +191,26 @@ def main(args):
                     else:
                         raw_logs_num_reference_models_subdir = \
                             raw_logs_policy_subdir
-                    if automatic_sweep:
+                    throughputs = \
+                        list(np.linspace(args.throughput_lower_bound,
+                                         args.throughput_upper_bound,
+                                         num=args.num_data_points))
+                    if throughputs[0] == 0.0:
+                        throughputs = throughputs[1:]
+                    for throughput in throughputs:
+                        if (cluster_spec_str in cutoff_throughputs and
+                            policy_name in cutoff_throughputs[cluster_spec_str]):
+                            cutoff_throughput = \
+                                cutoff_throughputs[cluster_spec_str][policy_name]
+                            if throughput >= cutoff_throughput:
+                                print('Throughput of %f is too high '
+                                      'for policy %s with cluster '
+                                      'spec %s.' % (throughput,
+                                                    policy_name,
+                                                    cluster_spec_str))
+                                continue
+
+                        lam = 3600.0 / throughput
                         for seed in args.seeds:
                             seed_str = 'seed=%d' % (seed)
                             raw_logs_seed_subdir = os.path.join(
@@ -296,7 +221,7 @@ def main(args):
                             all_args_list.append((experiment_id, policy_name,
                                                   throughputs_file,
                                                   cluster_spec,
-                                                  seed, args.interval,
+                                                  lam, seed, args.interval,
                                                   jobs_to_complete,
                                                   args.fixed_job_duration,
                                                   args.solver,
@@ -304,73 +229,25 @@ def main(args):
                                                   args.generate_multi_priority_jobs,
                                                   args.simulate_steady_state,
                                                   raw_logs_seed_subdir,
-                                                  args.timeout, args.verbose,
+                                                  args.timeout,
+                                                  args.verbose,
                                                   args.checkpoint_threshold,
                                                   profiling_percentage,
-                                                  num_reference_models))
+                                                  num_reference_models,
+                                                  num_gpus_per_server,
+                                                  args.ideal))
                             experiment_id += 1
-                    else:
-                        throughputs = \
-                            list(np.linspace(args.throughput_lower_bound,
-                                             args.throughput_upper_bound,
-                                             num=args.num_data_points))
-                        if throughputs[0] == 0.0:
-                            throughputs = throughputs[1:]
-                        for throughput in throughputs:
-                            if (cluster_spec_str in cutoff_throughputs and
-                                policy_name in cutoff_throughputs[cluster_spec_str]):
-                                cutoff_throughput = \
-                                    cutoff_throughputs[cluster_spec_str][policy_name]
-                                if throughput >= cutoff_throughput:
-                                    print('Throughput of %f is too high '
-                                          'for policy %s with cluster '
-                                          'spec %s.' % (throughput,
-                                                        policy_name,
-                                                        cluster_spec_str))
-                                    continue
-
-                            lam = 3600.0 / throughput
-                            for seed in args.seeds:
-                                seed_str = 'seed=%d' % (seed)
-                                raw_logs_seed_subdir = os.path.join(
-                                        raw_logs_num_reference_models_subdir,
-                                        seed_str)
-                                if not os.path.isdir(raw_logs_seed_subdir):
-                                    os.mkdir(raw_logs_seed_subdir)
-                                all_args_list.append((experiment_id, policy_name,
-                                                      throughputs_file,
-                                                      cluster_spec,
-                                                      lam, seed, args.interval,
-                                                      jobs_to_complete,
-                                                      args.fixed_job_duration,
-                                                      args.solver,
-                                                      args.generate_multi_gpu_jobs,
-                                                      args.generate_multi_priority_jobs,
-                                                      args.simulate_steady_state,
-                                                      raw_logs_seed_subdir,
-                                                      args.timeout,
-                                                      args.verbose,
-                                                      args.checkpoint_threshold,
-                                                      profiling_percentage,
-                                                      num_reference_models,
-                                                      num_gpus_per_server))
-                                experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
         print('[%s] Running %d total experiment(s)...' % (current_time,
                                                           len(all_args_list)))
         with multiprocessing.Pool(args.processes) as p:
-            if automatic_sweep:
-                results = [p.apply_async(run_automatic_sweep, args_list)
-                           for args_list in all_args_list]
-                results = [result.get() for result in results]
-            else:
-                # Sort args in order of decreasing lambda to prioritize
-                # short-running jobs.
-                all_args_list.sort(key=lambda x: x[4], reverse=True)
-                results = [p.apply_async(simulate_with_timeout, args_list)
-                           for args_list in all_args_list]
-                results = [result.get() for result in results]
+            # Sort args in order of decreasing lambda to prioritize
+            # short-running jobs.
+            all_args_list.sort(key=lambda x: x[4], reverse=True)
+            results = [p.apply_async(simulate_with_timeout, args_list)
+                       for args_list in all_args_list]
+            results = [result.get() for result in results]
     else:
         raise ValueError('No work to be done!')
 
@@ -442,6 +319,8 @@ if __name__=='__main__':
                         default=[16, 26],
                         help=('Number of reference models to use when '
                               'estimating throughputs'))
+    parser.add_argument('--ideal', action='store_true', default=False,
+                        help='Run allocations 100%% ideally')
     fixed_range.add_argument('-a', '--throughput-lower-bound', type=float,
                              default=None,
                              help=('Lower bound for throughput interval to '

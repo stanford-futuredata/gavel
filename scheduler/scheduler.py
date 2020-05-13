@@ -1021,7 +1021,8 @@ class Scheduler:
                  simulate_steady_state=False, debug=False,
                  checkpoint_threshold=None,
                  checkpoint_file=None,
-                 num_gpus_per_server=None):
+                 num_gpus_per_server=None,
+                 ideal=False):
         """Simulates the scheduler execution.
 
            Simulation can be performed using a trace or with continuously
@@ -1230,17 +1231,54 @@ class Scheduler:
 
             # Schedule jobs until there are no available workers or no jobs
             # with non-zero allocations on available workers.
-            scheduled_jobs = self._schedule_jobs_on_workers()
-            for (job_id, worker_ids) in scheduled_jobs:
-                worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                for worker_id in worker_ids:
-                    self._remove_available_worker_id(worker_id)
-                all_num_steps, max_finish_time = \
-                        self._get_job_steps_and_finish_times(job_id,
-                                                             worker_type)
-                heapq.heappush(running_jobs, (-max_finish_time, job_id,
-                                              worker_ids,
-                                              all_num_steps))
+            if ideal:
+                time_to_next_event = next_job_arrival_time - self._current_timestamp
+                all_num_steps = {}
+                self._update_priorities()
+                if self._allocation is None:
+                    continue
+                for job_id in self._allocation:
+                    for worker_type in self._allocation[job_id]:
+                        time_spent_on_worker_type = self._allocation[job_id][worker_type] * \
+                            time_to_next_event
+                        if job_id.is_pair():
+                            for i, single_job_id in enumerate(job_id.singletons()):
+                                num_steps = time_spent_on_worker_type * \
+                                    self._throughputs[job_id][worker_type][i]
+                                if single_job_id not in all_num_steps:
+                                    all_num_steps[single_job_id] = 0
+                                all_num_steps[single_job_id] += int(num_steps)
+                        else:
+                            num_steps = time_spent_on_worker_type * \
+                                self._throughputs[job_id][worker_type]
+                            if job_id not in all_num_steps:
+                                all_num_steps[job_id] = 0
+                            all_num_steps[job_id] += int(num_steps)
+                for job_id in all_num_steps:
+                    allocation_str = ''
+                    for x in worker_types:
+                        allocation_str += \
+                            ' [%4s %f]' % (x, self._allocation[job_id][x])
+                    print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
+                           'Allocation: %s') % (self.get_current_timestamp(),
+                                                job_id,
+                                                allocation_str))
+                    heapq.heappush(running_jobs, (-next_job_arrival_time, job_id,
+                                                  (0,),
+                                                  [all_num_steps[job_id]]))
+                    self._running_jobs.add(job_id)
+            else:
+                scheduled_jobs = self._schedule_jobs_on_workers()
+                for (job_id, worker_ids) in scheduled_jobs:
+                    worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
+                    for worker_id in worker_ids:
+                        self._remove_available_worker_id(worker_id)
+                    all_num_steps, max_finish_time = \
+                            self._get_job_steps_and_finish_times(job_id,
+                                                                 worker_type)
+                    heapq.heappush(running_jobs, (-max_finish_time, job_id,
+                                                  worker_ids,
+                                                  all_num_steps))
 
             if checkpoint_threshold is not None and last_added_job_id is not None \
                 and last_added_job_id[0] >= checkpoint_threshold \
