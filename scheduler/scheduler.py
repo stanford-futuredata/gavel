@@ -41,7 +41,8 @@ class Scheduler:
                  available_clouds=[],
                  assign_SLOs=False,
                  enable_global_queue=False,
-                 expected_num_workers=None):
+                 expected_num_workers=None,
+                 minimum_time_between_allocation_resets=1920):
 
 
         # Print config information.
@@ -67,6 +68,8 @@ class Scheduler:
         self._enable_global_queue = enable_global_queue
 
         self._expected_num_workers = expected_num_workers
+        self._minimum_time_between_allocation_resets = \
+            minimum_time_between_allocation_resets
 
         if self._simulate:
             self._start_timestamp = 0
@@ -591,11 +594,14 @@ class Scheduler:
         for worker_type in worker_types:
             per_worker_type_entries = []
             for job_id in self._priorities[worker_type]:
+                allocation = 0.0
+                if job_id in self._allocation:
+                    allocation = self._allocation[job_id][worker_type]
                 per_worker_type_entries.append(
                         (job_id, worker_type,
                          self._priorities[worker_type][job_id],
                          self._deficits[worker_type][job_id],
-                         self._allocation[job_id][worker_type]))
+                         allocation))
             if not self._enable_global_queue:
                 sorted_job_queue += sorted(per_worker_type_entries,
                                            key=lambda x: (x[2], x[3], x[4]),
@@ -693,6 +699,8 @@ class Scheduler:
             num_workers_assigned = 0
 
             for (job_id, scale_factor) in scheduled_jobs[worker_type]:
+                if job_id not in self._allocation:
+                    continue
 
                 # Assign workers to jobs. Assign workers in a strided fashion to
                 # minimize the number of servers used.
@@ -710,18 +718,6 @@ class Scheduler:
                 num_workers_assigned += scale_factor
 
                 for single_job_id in job_id.singletons():
-                    """
-                    num_steps = self._get_num_steps(job_id, worker_type,
-                                                    single_job_id)
-                    if not self._estimate_throughputs and num_steps <= 0:
-                        raise ValueError('Num steps should be greater '
-                                         'than 0, is %d (Job ID: %s, '
-                                         'job_type=%s, '
-                                         'worker_type=%s)' % (num_steps,
-                                                              job_id,
-                                                              self._jobs[job_id].job_type,
-                                                              worker_type))
-                    """
                     num_steps = self._jobs[single_job_id].total_steps
                     self._per_job_latest_timestamps[single_job_id] = \
                         self.get_current_timestamp()
@@ -1249,11 +1245,12 @@ class Scheduler:
                                     all_num_steps[single_job_id] = 0
                                 all_num_steps[single_job_id] += int(num_steps)
                         else:
-                            num_steps = time_spent_on_worker_type * \
-                                self._throughputs[job_id][worker_type]
-                            if job_id not in all_num_steps:
-                                all_num_steps[job_id] = 0
-                            all_num_steps[job_id] += int(num_steps)
+                            if job_id in self._throughputs:
+                                num_steps = time_spent_on_worker_type * \
+                                    self._throughputs[job_id][worker_type]
+                                if job_id not in all_num_steps:
+                                    all_num_steps[job_id] = 0
+                                all_num_steps[job_id] += int(num_steps)
                 for job_id in all_num_steps:
                     allocation_str = ''
                     for x in worker_types:
@@ -1891,7 +1888,12 @@ class Scheduler:
         NOTE: Used when scheduling is performed in rounds.
         """
 
-        if self._need_to_update_allocation:
+        print("In self._update_priorities()...")
+        print(self._need_to_update_allocation, self.get_current_timestamp(),
+            self._last_reset_time, self._minimum_time_between_allocation_resets)
+        if self._need_to_update_allocation and \
+            (((self.get_current_timestamp() - self._last_reset_time) >
+                self._minimum_time_between_allocation_resets) or (self._last_reset_time == 0)):
             self._reset_time_run_so_far()
             if self._estimate_throughputs:
                 for worker_type in self._jobs_to_profile:
@@ -1907,6 +1909,7 @@ class Scheduler:
                             del self._profiled_jobs[worker_type][job_id]
             self._allocation = self._get_allocation()
             self._need_to_update_allocation = False
+        print(self._allocation, self._priorities)
 
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
@@ -1922,19 +1925,22 @@ class Scheduler:
                 #
                 # Scale the default value by the allocation so that newly
                 # added jobs run according to their respective allocations.
-                new_priority = self._allocation[job_id][worker_type] * 1e9
-                if self._allocation[job_id][worker_type] == 0.0:
-                    assert(new_priority == 0)
-                elif ((job_id.is_pair() and
-                       (self._throughputs[job_id][worker_type][0] == 0 or
-                        self._throughputs[job_id][worker_type][1] == 0)) or
-                      (not job_id.is_pair() and
-                       self._throughputs[job_id][worker_type] == 0)):
-                    new_priority = 0
-                elif fractions[worker_type][job_id] > 0.0:
-                    new_priority = self._allocation[job_id][worker_type] /\
-                            fractions[worker_type][job_id]
-                self._priorities[worker_type][job_id] = new_priority
+                if job_id not in self._allocation:
+                    self._priorities[worker_type][job_id] = 0.0
+                else:
+                    new_priority = self._allocation[job_id][worker_type] * 1e9
+                    if self._allocation[job_id][worker_type] == 0.0:
+                        assert(new_priority == 0)
+                    elif ((job_id.is_pair() and
+                           (self._throughputs[job_id][worker_type][0] == 0 or
+                            self._throughputs[job_id][worker_type][1] == 0)) or
+                          (not job_id.is_pair() and
+                           self._throughputs[job_id][worker_type] == 0)):
+                        new_priority = 0
+                    elif fractions[worker_type][job_id] > 0.0:
+                        new_priority = self._allocation[job_id][worker_type] /\
+                                fractions[worker_type][job_id]
+                    self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):
         """Adds a worker_id to the list of available workers."""
