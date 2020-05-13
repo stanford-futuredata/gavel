@@ -5,7 +5,8 @@ import random
 import time
 
 def test_water_filling():
-    policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf()
+    policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(
+        priority_reweighting_policy=None)
     worker_types = ['v100', 'p100', 'k80']
     cluster_spec = {worker_type: 64 for worker_type in worker_types}
     num_jobs = 300
