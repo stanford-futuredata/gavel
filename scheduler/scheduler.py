@@ -1888,9 +1888,6 @@ class Scheduler:
         NOTE: Used when scheduling is performed in rounds.
         """
 
-        print("In self._update_priorities()...")
-        print(self._need_to_update_allocation, self.get_current_timestamp(),
-            self._last_reset_time, self._minimum_time_between_allocation_resets)
         if self._need_to_update_allocation and \
             (((self.get_current_timestamp() - self._last_reset_time) >
                 self._minimum_time_between_allocation_resets) or (self._last_reset_time == 0)):
@@ -1909,7 +1906,6 @@ class Scheduler:
                             del self._profiled_jobs[worker_type][job_id]
             self._allocation = self._get_allocation()
             self._need_to_update_allocation = False
-        print(self._allocation, self._priorities)
 
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
