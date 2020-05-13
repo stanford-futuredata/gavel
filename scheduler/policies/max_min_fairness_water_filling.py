@@ -32,10 +32,11 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         continue
                     total_job_priority_in_entity += priority_weights[job_id]
                 for job_id in entity_to_job_mapping:
-                    # TODO: Take into account whether job_id is in
-                    # per_job_effective_throughputs.
-                    returned_priority_weights[job_id] = entity_weight * (
-                        priority_weights[job_id] / total_job_priority_in_entity)
+                    if job_id in per_job_effective_throughputs:
+                        returned_priority_weights[job_id] = 0.0
+                    else:
+                        returned_priority_weights[job_id] = entity_weight * (
+                            priority_weights[job_id] / total_job_priority_in_entity)
             return returned_priority_weights
         else:
             raise ValueError("Unknown priority reweighting policy!")
@@ -62,7 +63,9 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         effective_throughputs = cp.sum(cp.multiply(throughputs, x), axis=1)
 
         if computed_c is None:
-            objective = cp.Maximize(c)
+            objective = cp.Maximize(cp.minimum(
+                *[scaled_effective_throughputs[job_id] for job_id in job_ids
+                if job_id not in per_job_effective_throughputs]))
         else:
             z = cp.Variable(m, boolean=True)
             objective = cp.Maximize(cp.sum(z))
@@ -85,9 +88,6 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     constraints.append(
                         (M * (1 - z[i])) >=
                             ((computed_c * 1.0001) - scaled_effective_throughputs[i]))
-                else:
-                    constraints.append(
-                        scaled_effective_throughputs[i] == c)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='ECOS' if computed_c is None else 'GLPK_MI')
 
