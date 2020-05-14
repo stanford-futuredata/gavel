@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import utils
 
-BUFFER_TIME = 180
+BUFFER_TIME = 90
 CUDA_MPS_PIPE_DIRECTORY = '/tmp/nvidia-mps'
 CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
 
