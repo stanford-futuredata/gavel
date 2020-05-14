@@ -51,14 +51,20 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 total_job_priority_in_entity = 0.0
                 entity_to_job_mapping[entity_id].sort()
                 done = False
+                total_priority_in_entity = 0.0
                 for job_id in entity_to_job_mapping[entity_id]:
                     if job_id in per_job_effective_throughputs:
-                        returned_priority_weights[job_id] = 0.0
+                        returned_priority_weights[job_id] = 1.0
                     elif not done:
-                        returned_priority_weights[job_id] = priority_weights[entity_id]
+                        returned_priority_weights[job_id] = 1.0
                         done = True
                     else:
                         returned_priority_weights[job_id] = 0.0
+                    total_priority_in_entity += returned_priority_weights[job_id]
+                for job_id in entity_to_job_mapping[entity_id]:
+                    returned_priority_weights[job_id] *= (
+                        entity_weight / total_priority_in_entity)
+            print(returned_priority_weights)
             return returned_priority_weights
         else:
             raise ValueError("Unknown priority reweighting policy!")
