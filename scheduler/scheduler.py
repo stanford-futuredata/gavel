@@ -1208,9 +1208,27 @@ class Scheduler:
                         self._per_job_latest_timestamps[single_job_id] = \
                                 finish_time
                     self._in_progress_updates[job_id] = []
-                    for worker_id in worker_ids:
+                    scale_factor =\
+                        self._jobs[job_id.singletons()[0]].scale_factor
+                    total_steps = [0] * len(job_id.singletons())
+                    for i, worker_id in enumerate(worker_ids):
+                        if i == len(worker_ids) - 1:
+                            # For the last worker, assign all remaining
+                            # steps to account for any rounding error.
+                            all_num_steps_ = []
+                            for j in range(len(all_num_steps)):
+                                remaining_steps = \
+                                    all_num_steps[j] - total_steps[j]
+                                all_num_steps_.append(remaining_steps)
+                        else:
+                            # Each worker gets an equal fraction of the total
+                            # number of steps.
+                            all_num_steps_ = \
+                                [x // scale_factor for x in all_num_steps]
+                        for j in range(len(all_num_steps_)):
+                            total_steps[j] += all_num_steps_[j]
                         self._done_callback(job_id, worker_id,
-                                            all_num_steps,
+                                            all_num_steps_,
                                             all_execution_times)
                     for single_job_id in job_id.singletons():
                         if single_job_id not in self._jobs:
