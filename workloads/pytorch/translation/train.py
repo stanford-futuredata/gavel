@@ -188,7 +188,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     if os.path.exists(checkpoint_path):
         print('Loading checkpoint from %s...' % (checkpoint_path))
         try:
-            checkpoint = torch.load(checkpoint_path)
+            checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(opt.local_rank))
             model.load_state_dict(checkpoint['model'])
             start_epoch = checkpoint['epoch']
         except Exception as e:

@@ -157,7 +157,8 @@ def main():
     if os.path.exists(checkpoint_path):
         try:    
             print("=> loading checkpoint '{}'".format(checkpoint_path))
-            checkpoint = torch.load(checkpoint_path)
+            checkpoint = torch.load(checkpoint_path,
+                                    map_location='cuda:{}'.format(args.local_rank))
             args.start_epoch = checkpoint['epoch']
             # best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])

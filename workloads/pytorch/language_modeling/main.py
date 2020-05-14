@@ -182,7 +182,7 @@ if args.checkpoint_dir is not None:
             try:
                 print('Loading checkpoint from %s...' % (checkpoint_path))
                 with open(checkpoint_path, 'rb') as f:
-                    state = torch.load(f)
+                    state = torch.load(f, map_location='cuda:{}'.format(args.local_rank))
                     model = state['model'].to(device)
                 load_from_checkpoint = True
             except RuntimeError as e:

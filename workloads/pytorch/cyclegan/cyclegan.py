@@ -113,7 +113,7 @@ load_from_checkpoint = False
 if os.path.exists(checkpoint_path):
     try:
         print('Loading checkpoint from %s...' % (checkpoint_path))
-        checkpoint = torch.load(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(opt.local_rank))
         G_AB.load_state_dict(checkpoint['G_AB'])
         G_BA.load_state_dict(checkpoint['G_BA'])
         D_A.load_state_dict(checkpoint['D_A'])

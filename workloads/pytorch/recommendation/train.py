@@ -93,7 +93,7 @@ trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
 if os.path.exists(checkpoint_path):
     try:
         print('Loading checkpoint from %s...' % (checkpoint_path))
-        trainer.init_from_model_file(checkpoint_path)
+        trainer.init_from_model_file(checkpoint_path, args.local_rank)
     except Exception as e:
         print('Could not load from checkpoint: %s' % (e))
 

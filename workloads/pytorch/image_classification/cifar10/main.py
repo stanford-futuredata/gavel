@@ -141,7 +141,8 @@ if args.checkpoint_dir is not None:
         print('==> Resuming from checkpoint at %s...' % (checkpoint_path))
         assert os.path.isdir(args.checkpoint_dir), 'Error: no checkpoint directory found!'
         try:
-            checkpoint = torch.load(checkpoint_path)
+            checkpoint = torch.load(checkpoint_path,
+                                    map_location='cuda:{}'.format(args.local_rank))
             net.load_state_dict(checkpoint['net'])
             # best_acc = checkpoint['acc']
             start_epoch = checkpoint['epoch']
