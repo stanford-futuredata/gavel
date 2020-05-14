@@ -5,7 +5,7 @@ import random
 import time
 
 import numpy as np
-np.set_printoptions(precision=3)
+np.set_printoptions(precision=3, suppress=True)
 
 def test_water_filling():
     policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(

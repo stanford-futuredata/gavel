@@ -107,14 +107,17 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     constraints.append(z[i] == 0)
             else:
                 if computed_c is not None:
-                    constraints.append(
-                        scaled_effective_throughputs[i] >= computed_c)
-                    constraints.append(
-                        (M * z[i]) >=
-                            (scaled_effective_throughputs[i] - (computed_c * 1.0001) + epsilon))
-                    constraints.append(
-                        (M * (1 - z[i])) >=
-                            ((computed_c * 1.0001) - scaled_effective_throughputs[i]))
+                    if priority_weights[i] > 0.0:
+                        constraints.append(
+                            scaled_effective_throughputs[i] >= computed_c)
+                        constraints.append(
+                            (M * z[i]) >=
+                                (scaled_effective_throughputs[i] - (computed_c * 1.0001) + epsilon))
+                        constraints.append(
+                            (M * (1 - z[i])) >=
+                                ((computed_c * 1.0001) - scaled_effective_throughputs[i]))
+                    else:
+                        constraints.append(z[i] == 0)
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='ECOS' if computed_c is None else 'GLPK_MI')
 
@@ -169,14 +172,10 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 print("Objective value: %.3f" % c)
 
             # Find bottleneck job_ids.
-            try:
-                _, z = self._get_allocation_helper(
-                    throughputs, index, priority_weights, scale_factors_array, m, n,
-                    per_job_effective_throughputs=per_job_effective_throughputs,
-                    computed_c=c)
-            except:
-                print('WARNING: Problem to find z is infeasible!')
-                z = np.zeros(m)
+            _, z = self._get_allocation_helper(
+                throughputs, index, priority_weights, scale_factors_array, m, n,
+                per_job_effective_throughputs=per_job_effective_throughputs,
+                computed_c=c)
             old_len_effective_throughputs = len(per_job_effective_throughputs)
             for i, job_id in enumerate(job_ids):
                 if job_id not in per_job_effective_throughputs and (z is None or not z[i]) \
