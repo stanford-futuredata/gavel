@@ -4,10 +4,13 @@ from policies import max_min_fairness_water_filling
 import random
 import time
 
+import numpy as np
+np.set_printoptions(precision=3)
+
 def test_water_filling():
     policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(
         priority_reweighting_policy=None)
-    worker_types = ['v100', 'p100', 'k80']
+    worker_types = ['k80', 'p100', 'v100']
     cluster_spec = {worker_type: 64 for worker_type in worker_types}
     num_jobs = 300
     print("Total number of jobs: %d" % num_jobs)
@@ -17,7 +20,7 @@ def test_water_filling():
     num_workers_requested = 0
     for i in range(num_jobs):
         throughputs = [random.random() for i in range(len(worker_types))]
-        throughputs.sort(reverse=True)
+        throughputs.sort()
         unflattened_throughputs[i] = {
             worker_types[i]: throughputs[i] for i in range(len(worker_types))}
         scale_factors[i] = 2 ** random.randint(0, 2)
