@@ -173,7 +173,7 @@ if __name__ == '__main__':
     if os.path.exists(checkpoint_path):
         try:
             print('Loading checkpoint from %s...' % (checkpoint_path))
-            saved_state = torch.load(checkpoint_path, map_location='cuda:{}'.format(opts.local_rank))
+            saved_state = torch.load(checkpoint_path, map_location='cuda:{}'.format(args.local_rank))
             shared_model.load_state_dict(saved_state)
         except Exception as e:
             print('Could not load from checkpoint: %s' % (e))
