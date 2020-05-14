@@ -2146,8 +2146,9 @@ class Scheduler:
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
         scale_factor = self._jobs[job_id].scale_factor
+        remaining_steps = self._get_remaining_steps(job_id)
         if steps == 0 or duration == 0:
-            return (INFINITY, self._time_per_iteration)
+            return (remaining_steps, self._time_per_iteration)
         elif scale_factor == 1:
             return (max_steps, max_duration)
         else:
@@ -2167,12 +2168,9 @@ class Scheduler:
                         (self._time_per_iteration -
                          duration % self._time_per_iteration)
                     throughput = steps / duration
-                    remaining_steps = max(1, int(remaining_time * throughput))
-                    max_completed_steps = \
-                        max([request[0] for request in \
-                                self._lease_update_requests[job_id]])
                     self._max_steps[job_id] = \
-                        max_completed_steps + remaining_steps
+                        min(remaining_steps,
+                            steps + int(remaining_time * throughput))
                     return (self._max_steps[job_id], INFINITY)
             else:
                 # Wait for the first update to complete.
@@ -2207,7 +2205,7 @@ class Scheduler:
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             self._add_available_worker_id(worker_id)
 
-            scale_factor = self._jobs[job_id].scale_factor
+            scale_factor = self._jobs[job_id.singletons()[0]].scale_factor
             self._in_progress_updates[job_id].append((worker_id,
                                                       all_num_steps,
                                                       all_execution_times))
