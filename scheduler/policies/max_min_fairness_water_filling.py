@@ -59,7 +59,6 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         done = True
                     else:
                         returned_priority_weights[job_id] = 0.0
-            print(returned_priority_weights)
             return returned_priority_weights
         else:
             raise ValueError("Unknown priority reweighting policy!")
@@ -210,8 +209,10 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         scaled_effective_throughputs = np.sum(np.multiply(
             np.multiply(original_throughputs * priority_weights.reshape((m, 1)),
                         scale_factors_array), x.value), axis=1)
+        effective_throughputs = np.sum(np.multiply(
+            original_throughputs, x.value), axis=1)
 
-        print("Scaled effective throughputs:", scaled_effective_throughputs)
+        print("Effective throughputs:", effective_throughputs)
         print("Final objective: %.3f" % np.min(scaled_effective_throughputs))
         print("Constraints:",
             np.multiply(x.value, scale_factors_array).sum(axis=0),
