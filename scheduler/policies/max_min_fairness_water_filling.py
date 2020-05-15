@@ -66,7 +66,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
     def _get_allocation_helper(self, throughputs, index, priority_weights,
                                scale_factors_array, m, n,
-                               per_job_effective_throughputs):
+                               per_job_effective_throughputs, best_c_so_far):
         x = cp.Variable(throughputs.shape)
         c = cp.Variable()
         (job_ids, _) = index
@@ -84,7 +84,8 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         effective_throughputs = cp.sum(cp.multiply(throughputs, x), axis=1)
 
         objective_terms = [
-            scaled_effective_throughputs[job_id] for job_id in job_ids
+            scaled_effective_throughputs[job_id] - best_c_so_far
+            for job_id in job_ids
             if (job_id not in per_job_effective_throughputs and
                 priority_weights[job_ids.index(job_id)] > 0.0)]
         if len(objective_terms) == 1:
@@ -105,7 +106,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
-        return x, objective.value
+        return x, objective.value + best_c_so_far
 
     def _get_bottleneck_jobs(self, throughputs, index, priority_weights,
                              scale_factors_array, m, n,
@@ -169,6 +170,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         (original_job_ids, original_worker_types) = original_index
         per_job_effective_throughputs = {}
         num_iterations = 0
+        c = 0
         while not done:
             throughputs, index = super().flatten(unflattened_throughputs,
                                                  cluster_spec)
@@ -199,7 +201,8 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
             x, c = self._get_allocation_helper(
                 throughputs, index, priority_weights, scale_factors_array,
-                m, n, per_job_effective_throughputs=per_job_effective_throughputs)
+                m, n, per_job_effective_throughputs=per_job_effective_throughputs,
+                best_c_so_far=c)
             if num_iterations == 0:
                 print("Objective value: %.3f" % c)
 
