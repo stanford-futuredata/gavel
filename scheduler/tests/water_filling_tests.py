@@ -40,6 +40,6 @@ if __name__ == '__main__':
     seed = 0
     random.seed(seed)
     start_time = time.time()
-    for i in range(5):
+    for i in range(3):
         test_water_filling()
     print("Average time per problem: %.2f seconds" % ((time.time() - start_time) / 5))
