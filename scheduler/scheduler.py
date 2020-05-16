@@ -319,26 +319,31 @@ class Scheduler:
                    '%s -> %s') % (job_id, worker_type, str(old_throughput),
                                   new_throughput_str))
 
-    def _read_throughputs_for_job_type(self, job_type):
-        self._job_type_throughputs[job_type] = {}
-        other_job_types = list(self._job_type_throughputs.keys())
+    def _read_throughputs_for_job_type(self, job_type_key):
+        """Reads oracle throughputs for passed in job type.
+
+           Args:
+             job_type_key: A tuple of (model, scale_factor).
+        """
+        self._job_type_throughputs[job_type_key] = {}
+        other_job_type_keys = list(self._job_type_throughputs.keys())
         for worker_type in self._worker_types:
             oracle_throughputs = self._oracle_throughputs[worker_type]
-            self._job_type_throughputs[job_type][worker_type] = {}
-            # TODO: Support scale factors > 1.
-            self._job_type_throughputs[job_type][worker_type][None] = \
-                oracle_throughputs[(job_type, 1)]['null']
+            self._job_type_throughputs[job_type_key][worker_type] = {}
+            self._job_type_throughputs[job_type_key][worker_type][None] = \
+                oracle_throughputs[job_type_key]['null']
             if self._job_packing:
-                for other_job_type in other_job_types:
-                    # TODO: Support scale factors > 1.
+                for other_job_type_key in other_job_type_keys:
+                    # Don't store throughputs for jobs with different scale
+                    # factors.
+                    if other_job_type_key[1] != job_type_key[1]:
+                        continue
                     colocated_throughputs = \
-                        oracle_throughputs[(job_type, 1)][(other_job_type, 1)]
-                    self._job_type_throughputs[job_type][worker_type][other_job_type] = \
+                        oracle_throughputs[job_type_key][other_job_type_key]
+                    self._job_type_throughputs[job_type_key][worker_type][other_job_type_key] = \
                         colocated_throughputs[0]
-                    self._job_type_throughputs[other_job_type][worker_type][job_type] = \
+                    self._job_type_throughputs[other_job_type_key][worker_type][job_type_key] = \
                         colocated_throughputs[1]
-
-
 
     """
     ======================================================================
@@ -375,15 +380,17 @@ class Scheduler:
             self._job_cost_so_far[job_id] = 0.0
             self._throughputs[job_id] = {}
             job_type = self._jobs[job_id].job_type
-            self._job_id_to_job_type[job_id] = job_type
-            if job_type not in self._job_type_throughputs:
-                self._job_type_to_job_ids[job_type] = set()
+            scale_factor = job.scale_factor
+            job_type_key = (job_type, scale_factor)
+            self._job_id_to_job_type[job_id] = job_type_key
+            if job_type_key not in self._job_type_throughputs:
+                self._job_type_to_job_ids[job_type_key] = set()
                 if self._estimate_throughputs:
                     # TODO: Support throughput estimation.
                     pass
                 else:
-                    self._read_throughputs_for_job_type(job_type)
-            self._job_type_to_job_ids[job_type].add(job_id)
+                    self._read_throughputs_for_job_type(job_type_key)
+            self._job_type_to_job_ids[job_type_key].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
             if self._SLOs is not None:
@@ -436,6 +443,9 @@ class Scheduler:
                 self._per_job_start_timestamps[job_id]
             self._job_priority_weights[job_id] = \
                 self._jobs[job_id].priority_weight
+            job_type = self._jobs[job_id].job_type
+            scale_factor = self._jobs[job_id].scale_factor
+            job_type_key = (job_type, scale_factor)
             del self._jobs[job_id]
             if self._num_failures_per_job[job_id] >= MAX_FAILED_ATTEMPTS:
                 print("Job %d failed\n\tStart timestamp: %.2f\n\t"
@@ -457,8 +467,8 @@ class Scheduler:
                       duration, "seconds", len(self._jobs))
                   )
                 self._job_completion_times[job_id] = duration
-            job_type = self._job_id_to_job_type[job_id]
-            self._job_type_to_job_ids[job_type].remove(job_id)
+            job_type_key = self._job_id_to_job_type[job_id]
+            self._job_type_to_job_ids[job_type_key].remove(job_id)
             del self._steps_run_so_far[job_id]
             del self._total_steps_run[job_id]
             del self._job_time_so_far[job_id]
@@ -476,12 +486,13 @@ class Scheduler:
                     del self._job_time_so_far[other_job_id]
                     if self._estimate_throughputs:
                         del self._throughputs_mask[other_job_id]
-                if len(self._job_type_to_job_ids[job_type]) == 0:
-                    del self._job_type_to_job_ids[job_type]
-                    del self._job_type_throughputs[job_type]
-                    for other_job_type in self._job_type_throughputs:
-                        for worker_type in self._job_type_throughputs[other_job_type]:
-                            del self._job_type_throughputs[other_job_type][worker_type][job_type]
+                if len(self._job_type_to_job_ids[job_type_key]) == 0:
+                    del self._job_type_to_job_ids[job_type_key]
+                    del self._job_type_throughputs[job_type_key]
+                    for other_job_type_key in self._job_type_throughputs:
+                        for worker_type in self._job_type_throughputs[other_job_type_key]:
+                            if job_type_key in self._job_type_throughputs[other_job_type_key][worker_type]:
+                                del self._job_type_throughputs[other_job_type_key][worker_type][job_type_key]
             if self._estimate_throughputs:
                 for worker_type in self._profiled_jobs:
                     if job_id in self._jobs_to_profile[worker_type]:
@@ -1113,11 +1124,13 @@ class Scheduler:
             self._current_timestamp = arrival_times[0]
         elif simulate_steady_state:
             for worker_type in worker_types:
-                for i in range(cluster_spec[worker_type]):
+                num_remaining_workers = cluster_spec[worker_type]
+                while num_remaining_workers > 0:
                     job = self._generate_job(
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
+                    num_remaining_workers -= job.scale_factor
                     num_jobs_generated += 1
                     self._all_jobs.append((0, job))
                     job_id = self.add_job(job, timestamp=0)
@@ -1616,6 +1629,8 @@ class Scheduler:
         for other_job_id in self._jobs:
             if other_job_id != job_id:
                 other_job = self._jobs[other_job_id]
+                if job.scale_factor != other_job.scale_factor:
+                    continue
                 merged_job_id = \
                         job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:

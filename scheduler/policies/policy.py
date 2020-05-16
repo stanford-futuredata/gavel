@@ -178,31 +178,31 @@ class PolicyWithPacking(Policy):
 
         return constraints
 
-    def convert_job_type_allocation(self, allocation, job_id_to_job_type):
+    def convert_job_type_allocation(self, allocation, job_id_to_job_type_key):
         """Converts a job-job_type allocation to a job-job allocation."""
         job_ids = sorted(allocation.keys())
         worker_types = sorted(allocation[job_ids[0]].keys())
-        job_types = \
-            sorted(set([job_id_to_job_type[job_id] for job_id in job_ids]))
+        job_type_keys = \
+            sorted(set([job_id_to_job_type_key[job_id] for job_id in job_ids]))
 
         # Initialize job_type-job_type allocation.
         job_type_allocation = {}
         for worker_type in worker_types:
             job_type_allocation[worker_type] = {}
-            for job_type in job_types:
-                job_type_allocation[worker_type][job_type] = {}
+            for job_type_key in job_type_keys:
+                job_type_allocation[worker_type][job_type_key] = {}
                 job_type_allocation_ = \
-                    job_type_allocation[worker_type][job_type]
-                for other_job_type in [None] + job_types:
-                    job_type_allocation_[other_job_type] = 0.0
+                    job_type_allocation[worker_type][job_type_key]
+                for other_job_type_key in [None] + job_type_keys:
+                    job_type_allocation_[other_job_type_key] = 0.0
 
         # Populate job_type-job_type allocation.
         for worker_type in worker_types:
             for job_id in allocation:
-                job_type = job_id_to_job_type[job_id]
-                for other_job_type in allocation[job_id][worker_type]:
-                    job_type_allocation[worker_type][job_type][other_job_type] += \
-                        allocation[job_id][worker_type][other_job_type]
+                job_type_key = job_id_to_job_type_key[job_id]
+                for other_job_type_key in allocation[job_id][worker_type]:
+                    job_type_allocation[worker_type][job_type_key][other_job_type_key] += \
+                        allocation[job_id][worker_type][other_job_type_key]
 
         # Compute job-job allocations using the following formula:
         # x_{i,j} = x_{i, job_type(j)} * x_{j, job_type(i)} /
@@ -210,27 +210,27 @@ class PolicyWithPacking(Policy):
         converted_allocation = {}
         for i, job_id in enumerate(job_ids):
             converted_allocation[job_id] = {}
-            job_type = job_id_to_job_type[job_id]
+            job_type_key = job_id_to_job_type_key[job_id]
             # Set the isolated allocations.
             for worker_type in worker_types:
                 converted_allocation[job_id][worker_type] = \
                     allocation[job_id][worker_type][None]
             # Set the packed allocations.
             for other_job_id in job_ids[i+1:]:
-                other_job_type = job_id_to_job_type[other_job_id]
+                other_job_type_key = job_id_to_job_type_key[other_job_id]
                 merged_job_id = \
                     job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 converted_allocation[merged_job_id] = {}
                 for worker_type in worker_types:
                     current_job_type_allocation = \
-                        job_type_allocation[worker_type][job_type][other_job_type]
+                        job_type_allocation[worker_type][job_type_key][other_job_type_key]
                     if current_job_type_allocation > 0.0:
-                        if job_type == other_job_type:
+                        if job_type_key == other_job_type_key:
                             current_job_type_allocation -= \
-                                allocation[job_id][worker_type][job_type]
+                                allocation[job_id][worker_type][job_type_key]
                         converted_allocation[merged_job_id][worker_type] = \
-                            (allocation[job_id][worker_type][other_job_type] *\
-                             allocation[other_job_id][worker_type][job_type] /\
+                            (allocation[job_id][worker_type][other_job_type_key] *\
+                             allocation[other_job_id][worker_type][job_type_key] /\
                              current_job_type_allocation)
                     else:
                         converted_allocation[merged_job_id][worker_type] = 0.0
