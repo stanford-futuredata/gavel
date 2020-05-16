@@ -11,24 +11,26 @@ from proportional import ProportionalPolicy
 
 class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
-    def __init__(self, priority_reweighting_policy):
+    def __init__(self, priority_reweighting_policies):
         Policy.__init__(self, solver=None)
         self._name = 'MaxMinFairnessWaterFilling_Perf'
         self._proportional_policy = ProportionalPolicy()
         self._previous_priority_weights = None
-        self._priority_reweighting_policy = priority_reweighting_policy
+        self._priority_reweighting_policies = priority_reweighting_policies
 
     def compute_priority_weights(self, priority_weights, entity_to_job_mapping,
                                  final_effective_throughputs):
-        if self._priority_reweighting_policy is None:
+        if self._priority_reweighting_policies is None:
             # Do nothing if reweighting policy is None.
             return priority_weights
-        elif self._priority_reweighting_policy == 'multilevel_fairness':
-            if entity_to_job_mapping is None:
-                raise ValueError("entity_to_job_mapping cannot be None when "
-                                 "priority_reweighting_policy is multilevel_fairness!")
-            returned_priority_weights = {}
-            for entity_id in entity_to_job_mapping:
+        returned_priority_weights = {}
+        if entity_to_job_mapping is None:
+            raise ValueError("entity_to_job_mapping cannot be None when "
+                             "priority_reweighting_policies is not None!")
+        for entity_id in entity_to_job_mapping:
+            priority_reweighting_policy = self._priority_reweighting_policies[
+                entity_id]
+            if priority_reweighting_policy == 'fairness':
                 # The sum of final priority weights for all jobs in an entity
                 # should be equal to the priority weight of that entity. The
                 # final priority weight of a job should be proportional to the
@@ -47,13 +49,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         returned_priority_weights[job_id] = \
                             entity_weight * (float(priority_weights[job_id]) /
                                              total_job_priority_in_entity)
-            return returned_priority_weights
-        elif self._priority_reweighting_policy == 'fairness+fifo':
-            if entity_to_job_mapping is None:
-                raise ValueError("entity_to_job_mapping cannot be None when "
-                                 "priority_reweighting_policy is fairness+fifo!")
-            returned_priority_weights = {}
-            for entity_id in entity_to_job_mapping:
+            elif priority_reweighting_policy == 'fifo':
                 # Active jobs are given the corresponding entity's weight.
                 # Jobs become active in FIFO order within an entity.
                 entity_weight = priority_weights[entity_id]
@@ -68,9 +64,9 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         done = True
                     else:
                         returned_priority_weights[job_id] = 0.0
-            return returned_priority_weights
-        else:
-            raise ValueError("Unknown priority reweighting policy!")
+            else:
+                raise ValueError("Unknown priority reweighting policy!")
+        return returned_priority_weights
 
 
     def _get_allocation(self, throughputs, index, priority_weights,
