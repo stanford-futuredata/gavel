@@ -39,8 +39,9 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     if job_id in per_job_effective_throughputs:
                         returned_priority_weights[job_id] = 0.0
                     else:
-                        returned_priority_weights[job_id] = entity_weight * (
-                            float(priority_weights[job_id]) / total_job_priority_in_entity)
+                        returned_priority_weights[job_id] = \
+                            entity_weight * (float(priority_weights[job_id]) /
+                                             total_job_priority_in_entity)
             return returned_priority_weights
         elif self._priority_reweighting_policy == 'fairness+fifo':
             if entity_to_job_mapping is None:
@@ -65,9 +66,9 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             raise ValueError("Unknown priority reweighting policy!")
 
 
-    def _get_allocation_helper(self, throughputs, index, priority_weights,
-                               scale_factors_array, m, n,
-                               per_job_effective_throughputs, best_c_so_far):
+    def _get_allocation(self, throughputs, index, priority_weights,
+                        scale_factors_array, m, n,
+                        per_job_effective_throughputs, best_c_so_far):
         x = cp.Variable(throughputs.shape)
         c = cp.Variable()
         (job_ids, _) = index
@@ -111,8 +112,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         result = cvxprob.solve(solver='ECOS')
 
         if cvxprob.status != "optimal":
-            print('WARNING: Allocation returned by policy not optimal!')
-            return x, None, effective_throughput_balance
+            raise Exception("WARNING: Non-optimal allocation in _get_allocation()!")
 
         return x, objective.value, effective_throughput_balance
 
@@ -163,7 +163,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         result = cvxprob.solve(solver='GLPK_MI')
 
         if cvxprob.status != "optimal":
-            print('WARNING: Allocation returned by policy not optimal!')
+            raise Exception("WARNING: Non-optimal allocation in _get_bottleneck_jobs()!")
 
         return x, z.value
 
@@ -209,14 +209,10 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             priority_weights = np.multiply(priority_weights.reshape((m, 1)),
                                            1.0 / proportional_throughputs.reshape((m, 1)))
 
-            x_returned, c_returned, effective_throughput_balance = self._get_allocation_helper(
+            x_returned, c_returned, effective_throughput_balance = self._get_allocation(
                 throughputs, index, priority_weights, scale_factors_array,
                 m, n, per_job_effective_throughputs=per_job_effective_throughputs,
                 best_c_so_far=c)
-            if c_returned is None:
-                done = True
-                break
-            x = x_returned
             self._previous_priority_weights = previous_priority_weights
             if num_iterations == 0:
                 print("Objective value: %.3f" % c_returned)
@@ -233,6 +229,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     print("Iteration %d:" % num_iterations, job_id)
                     per_job_effective_throughputs[job_id] = (c_returned + effective_throughput_balance[i]) / (
                         priority_weights[i][0] * scale_factors[job_id])
+            x = x_returned
             c += c_returned
             if old_len_effective_throughputs == len(per_job_effective_throughputs):
                 done = True
