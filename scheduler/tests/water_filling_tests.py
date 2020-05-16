@@ -9,7 +9,7 @@ np.set_printoptions(precision=3, suppress=True)
 
 def test_water_filling():
     policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(
-        priority_reweighting_policy=None)
+        priority_reweighting_policies=None)
     worker_types = ['k80', 'p100', 'v100']
     cluster_spec = {worker_type: 64 for worker_type in worker_types}
     num_jobs = 300
@@ -26,7 +26,7 @@ def test_water_filling():
         scale_factors[i] = 2 ** random.randint(0, 2)
         num_workers_requested += scale_factors[i]
         unflattened_priority_weights[i] = random.randint(1, 5)
-        print("Job %d: Throughputs: %s, Priority: %d, Scale factor: %d" % (
+        print("Job %d: Throughputs=%s, Priority=%d, Scale factor=%d" % (
             i, unflattened_throughputs[i], unflattened_priority_weights[i],
             scale_factors[i]))
     print("Total number of workers requested: %d" % num_workers_requested)
