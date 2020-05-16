@@ -29,6 +29,11 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                                  "priority_reweighting_policy is multilevel_fairness!")
             returned_priority_weights = {}
             for entity_id in entity_to_job_mapping:
+                # The sum of final priority weights for all jobs in an entity
+                # should be equal to the priority weight of that entity. The
+                # final priority weight of a job should be proportional to the
+                # passed-in weight. A job does not contribute its priority once
+                # saturated.
                 entity_weight = priority_weights[entity_id]
                 total_job_priority_in_entity = 0.0
                 for job_id in entity_to_job_mapping[entity_id]:
@@ -49,6 +54,8 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                                  "priority_reweighting_policy is fairness+fifo!")
             returned_priority_weights = {}
             for entity_id in entity_to_job_mapping:
+                # Active jobs are given the corresponding entity's weight.
+                # Jobs become active in FIFO order within an entity.
                 entity_weight = priority_weights[entity_id]
                 total_job_priority_in_entity = 0.0
                 entity_to_job_mapping[entity_id].sort()
@@ -70,7 +77,6 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         scale_factors_array, m, n,
                         per_job_effective_throughputs, best_c_so_far):
         x = cp.Variable(throughputs.shape)
-        c = cp.Variable()
         (job_ids, _) = index
         M = np.max(np.multiply(throughputs * priority_weights.reshape((m, 1)),
                                scale_factors_array))
@@ -85,8 +91,10 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         scale_factors_array), x), axis=1)
         effective_throughputs = cp.sum(cp.multiply(throughputs, x), axis=1)
 
+        # Solve max-min optimization problem over all jobs with priority
+        # weight > 0.
         objective_terms = []
-        effective_throughput_balance = np.zeros(m)
+        c_terms_balance = np.zeros(m)
         for i, job_id in enumerate(job_ids):
             if job_id not in per_job_effective_throughputs:
                 if priority_weights[job_ids.index(job_id)] > 0.0:
@@ -94,7 +102,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     if self._previous_priority_weights is not None and \
                         self._previous_priority_weights[job_id] > 0:
                         objective_term -= best_c_so_far
-                        effective_throughput_balance[i] = best_c_so_far
+                        c_terms_balance[i] = best_c_so_far
                     objective_terms.append(objective_term)
         if len(objective_terms) == 1:
             objective = cp.Maximize(objective_terms[0])
@@ -103,10 +111,13 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
         # Make sure that the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, scale_factors_array)
+
+        # Add constraint for already saturated jobs.
         for i, job_id in enumerate(job_ids):
             if job_id in per_job_effective_throughputs:
                 constraints.append(
-                    effective_throughputs[i] == per_job_effective_throughputs[job_id])
+                    effective_throughputs[i] ==
+                    per_job_effective_throughputs[job_id])
 
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver='ECOS')
@@ -114,14 +125,13 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         if cvxprob.status != "optimal":
             raise Exception("WARNING: Non-optimal allocation in _get_allocation()!")
 
-        return x, objective.value, effective_throughput_balance
+        return x, objective.value, objective.value + c_terms_balance
 
     def _get_bottleneck_jobs(self, throughputs, index, priority_weights,
                              scale_factors_array, m, n,
                              per_job_effective_throughputs,
-                             computed_c, effective_throughput_balance):
+                             c_terms):
         x = cp.Variable(throughputs.shape)
-        c = cp.Variable()
         (job_ids, _) = index
         M = np.max(np.multiply(throughputs * priority_weights.reshape((m, 1)),
                                scale_factors_array))
@@ -148,15 +158,14 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 constraints.append(z[i] == 0)
             else:
                 if priority_weights[i] > 0.0:
-                    computed_c_for_i = computed_c + effective_throughput_balance[i]
                     constraints.append(
-                        scaled_effective_throughputs[i] >= computed_c_for_i)
+                        scaled_effective_throughputs[i] >= c_terms[i])
                     constraints.append(
                         (M * z[i]) >=
-                            (scaled_effective_throughputs[i] - (computed_c_for_i * 1.0001) + epsilon))
+                            (scaled_effective_throughputs[i] - (c_terms[i] * 1.0001) + epsilon))
                     constraints.append(
                          (M * (1 - z[i])) >=
-                            ((computed_c_for_i * 1.0001) - scaled_effective_throughputs[i]))
+                            ((c_terms[i] * 1.0001) - scaled_effective_throughputs[i]))
                 else:
                     constraints.append(z[i] == 0)
         cvxprob = cp.Problem(objective, constraints)
@@ -209,7 +218,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             priority_weights = np.multiply(priority_weights.reshape((m, 1)),
                                            1.0 / proportional_throughputs.reshape((m, 1)))
 
-            x_returned, c_returned, effective_throughput_balance = self._get_allocation(
+            x_returned, c_returned, c_terms = self._get_allocation(
                 throughputs, index, priority_weights, scale_factors_array,
                 m, n, per_job_effective_throughputs=per_job_effective_throughputs,
                 best_c_so_far=c)
@@ -221,13 +230,13 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             _, z = self._get_bottleneck_jobs(
                 throughputs, index, priority_weights, scale_factors_array, m, n,
                 per_job_effective_throughputs=per_job_effective_throughputs,
-                computed_c=c_returned, effective_throughput_balance=effective_throughput_balance)
+                c_terms=c_terms)
             old_len_effective_throughputs = len(per_job_effective_throughputs)
             for i, job_id in enumerate(job_ids):
                 if job_id not in per_job_effective_throughputs and (z is None or not z[i]) \
                     and priority_weights[i] > 0.0:
                     print("Iteration %d:" % num_iterations, job_id)
-                    per_job_effective_throughputs[job_id] = (c_returned + effective_throughput_balance[i]) / (
+                    per_job_effective_throughputs[job_id] = c_terms[i] / (
                         priority_weights[i][0] * scale_factors[job_id])
             x = x_returned
             c += c_returned
