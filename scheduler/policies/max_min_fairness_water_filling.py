@@ -179,32 +179,26 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
         return x, z.value
 
-    def get_allocation(self, original_unflattened_throughputs, scale_factors,
-                       unflattened_priority_weights, original_cluster_spec,
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       unflattened_priority_weights, cluster_spec,
                        entity_to_job_mapping=None, verbose=False):
-        unflattened_throughputs = copy.deepcopy(original_unflattened_throughputs)        
-        cluster_spec = copy.deepcopy(original_cluster_spec)
-
         done = False
-        original_throughputs, original_index = super().flatten(original_unflattened_throughputs,
-                                                               cluster_spec)
-        (original_job_ids, original_worker_types) = original_index
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        (job_ids, worker_types) = index
+        (m, n) = throughputs.shape
+        # Row i of scale_factors_array is the scale_factor of job i
+        # repeated len(worker_types) times.
+        scale_factors_array = self.scale_factors_array(
+             scale_factors, job_ids, m, n)
+        proportional_throughputs = self._proportional_policy.get_throughputs(
+            throughputs, index, cluster_spec)
+
         final_effective_throughputs = {}
-        scaled_effective_throughputs_so_far = np.zeros(len(original_job_ids))
+        scaled_effective_throughputs_so_far = np.zeros(len(job_ids))
         num_iterations = 0
         c = 0
         while not done:
-            throughputs, index = super().flatten(unflattened_throughputs,
-                                                 cluster_spec)
-            if throughputs is None: return None
-            (m, n) = throughputs.shape
-            (job_ids, worker_types) = index
-
-            # Row i of scale_factors_array is the scale_factor of job i
-            # repeated len(worker_types) times.
-            scale_factors_array = self.scale_factors_array(
-                 scale_factors, job_ids, m, n)
-
             priority_weights = self.compute_priority_weights(
                 unflattened_priority_weights,
                 entity_to_job_mapping,
@@ -217,8 +211,6 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 [1. / priority_weights[job_id] if priority_weights[job_id] > 0 else 0.0
                  for job_id in job_ids])
 
-            proportional_throughputs = self._proportional_policy.get_throughputs(
-                throughputs, index, cluster_spec)
             priority_weights = np.multiply(priority_weights.reshape((m, 1)),
                                            1.0 / proportional_throughputs.reshape((m, 1)))
 
@@ -258,23 +250,17 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     scaled_effective_throughputs_so_far)
         print("Number of iterations: %d" % num_iterations)
 
-        (m, n) = len(original_job_ids), len(original_worker_types)
-        scale_factors_array = self.scale_factors_array(
-            scale_factors, original_job_ids, m, n)
-
         priority_weights = np.array(
             [1. / unflattened_priority_weights[job_id]
-             for job_id in original_job_ids])
+             for job_id in job_ids])
 
-        proportional_throughputs = self._proportional_policy.get_throughputs(
-            original_throughputs, original_index, original_cluster_spec)
         priority_weights = np.multiply(priority_weights.reshape((m, 1)),
                                        1.0 / proportional_throughputs.reshape((m, 1)))
         scaled_effective_throughputs = np.sum(np.multiply(
-            np.multiply(original_throughputs * priority_weights.reshape((m, 1)),
+            np.multiply(throughputs * priority_weights.reshape((m, 1)),
                         scale_factors_array), x.value), axis=1)
         effective_throughputs = np.sum(np.multiply(
-            original_throughputs, x.value), axis=1)
+            throughputs, x.value), axis=1)
 
         print("Effective throughputs:", effective_throughputs)
         print("Final objective: %.3f" % np.min(scaled_effective_throughputs))
