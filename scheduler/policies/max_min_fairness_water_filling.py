@@ -125,7 +125,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
     def _get_bottleneck_jobs(self, throughputs, index, priority_weights,
                              scale_factors_array, m, n,
                              final_effective_throughputs,
-                             scaled_effective_throughputs_so_far):
+                             scaled_effective_throughputs_so_far, slack=1.0001):
         x = cp.Variable(throughputs.shape)
         (job_ids, _) = index
         M = np.max(np.multiply(throughputs * priority_weights.reshape((m, 1)),
@@ -159,11 +159,11 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     constraints.append(
                         (M * z[i]) >=
                             (scaled_effective_throughputs[i] -
-                             (scaled_effective_throughputs_so_far[i] * 1.0001) +
+                             (scaled_effective_throughputs_so_far[i] * slack) +
                              epsilon))
                     constraints.append(
                          (M * (1 - z[i])) >=
-                            ((scaled_effective_throughputs_so_far[i] * 1.0001) -
+                            ((scaled_effective_throughputs_so_far[i] * slack) -
                              scaled_effective_throughputs[i]))
                 else:
                     constraints.append(z[i] == 0)
@@ -221,10 +221,16 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 print("Objective value: %.3f" % c)
 
             # Find bottleneck job_ids.
-            _, z = self._get_bottleneck_jobs(
-                throughputs, index, priority_weights, scale_factors_array, m, n,
-                final_effective_throughputs,
-                scaled_effective_throughputs_so_far)
+            try:
+                _, z = self._get_bottleneck_jobs(
+                    throughputs, index, priority_weights, scale_factors_array, m, n,
+                    final_effective_throughputs,
+                    scaled_effective_throughputs_so_far)
+            except:
+                _, z = self._get_bottleneck_jobs(
+                    throughputs, index, priority_weights, scale_factors_array, m, n,
+                    final_effective_throughputs,
+                    scaled_effective_throughputs_so_far, slack=1.0)
             old_len_effective_throughputs = len(final_effective_throughputs)
             for i, job_id in enumerate(job_ids):
                 if job_id not in final_effective_throughputs and (z is None or not z[i]) \
