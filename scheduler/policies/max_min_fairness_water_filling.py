@@ -9,6 +9,52 @@ from policy import Policy, PolicyWithPacking
 from proportional import ProportionalPolicy
 
 
+class MaxMinFairnessWaterFillingPolicy(Policy):
+
+    def __init__(self, priority_reweighting_policies):
+        self._name = 'MaxMinFairnessWaterFilling'
+        self._max_min_fairness_perf_policy = \
+            MaxMinFairnessWaterFillingPolicyWithPerf(priority_reweighting_policies)
+
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       unflattened_priority_weights, cluster_spec,
+                       entity_to_job_mapping=None, verbose=False,
+                       return_effective_throughputs=False):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if throughputs is None: return None
+        (job_ids, worker_types) = index
+        m, n = len(job_ids), len(worker_types)
+
+        new_unflattened_throughputs = {}
+        for job_id in unflattened_throughputs:
+            new_unflattened_throughputs[job_id] = {}
+            for worker_type in unflattened_throughputs[job_id]:
+                 new_unflattened_throughputs[job_id][worker_type] = \
+                     unflattened_throughputs[job_id]['v100']
+
+        unflattened_x = \
+            self._max_min_fairness_perf_policy.get_allocation(
+                new_unflattened_throughputs, scale_factors, unflattened_priority_weights,
+                cluster_spec, entity_to_job_mapping=entity_to_job_mapping,
+                verbose=verbose,
+                return_effective_throughputs=False)
+        x = np.zeros((len(job_ids), len(worker_types)))
+        for i, job_id in enumerate(job_ids):
+            for j, worker_type in enumerate(worker_types):
+                x[i, j] = unflattened_x[job_id][worker_type]
+        if return_effective_throughputs:
+            effective_throughputs = np.sum(np.multiply(
+                throughputs, x), axis=1)
+            proportional_throughputs = \
+                self._max_min_fairness_perf_policy._proportional_policy.get_throughputs(
+                    throughputs, index, cluster_spec)
+            normalized_effective_throughputs = np.multiply(
+                effective_throughputs,
+                1.0 / proportional_throughputs.reshape(m))
+            return normalized_effective_throughputs
+        return x
+
 class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
     def __init__(self, priority_reweighting_policies):
