@@ -61,6 +61,6 @@ if __name__ == '__main__':
     random.seed(seed)
     start_time = time.time()
     priority_reweighting_policy = 'fifo'
-    for i in range(3):
+    for i in range(5):
         test_water_filling_multilevel()
     print("Average time per problem: %.2f seconds" % ((time.time() - start_time) / 5))
