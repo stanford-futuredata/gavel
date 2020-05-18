@@ -484,7 +484,7 @@ class Scheduler:
             job_type_key = self._job_id_to_job_type[job_id]
             self._job_type_to_job_ids[job_type_key].remove(job_id)
             del self._steps_run_so_far[job_id]
-            del self._total_steps_run[job_id]
+            #del self._total_steps_run[job_id]
             del self._job_time_so_far[job_id]
             del self._throughputs[job_id]
             del self._job_id_to_job_type[job_id]
@@ -1475,6 +1475,12 @@ class Scheduler:
             return average_job_completion_time
 
 
+    def get_completed_steps(self):
+        print('Completed steps:')
+        for job_id in sorted(self._total_steps_run.keys()):
+            completed_steps = self._total_steps_run[job_id]
+            print('Job %s: %d steps' % (job_id, completed_steps))
+
     def get_cluster_utilization(self):
         """Computes the utilization of the cluster."""
         with self._scheduler_lock:
@@ -2145,8 +2151,11 @@ class Scheduler:
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
+        # Round the remaining steps to the nearest multiple of scale_factor.
         scale_factor = self._jobs[job_id].scale_factor
         remaining_steps = self._get_remaining_steps(job_id)
+        remaining_steps = int(math.ceil(remaining_steps / scale_factor))
+
         if steps == 0 or duration == 0:
             return (remaining_steps, self._time_per_iteration)
         elif scale_factor == 1:
