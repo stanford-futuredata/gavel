@@ -65,15 +65,7 @@ def main(args):
                                 generate_interarrival_time(
                                     interarrival_time_generator, args.lam))
             prev_arrival_time = arrival_time
-            f.write('%s\t%s\t%s\t%d\t%d\t%d\t%d\t%f\t%d\n' % (job_type,
-                                                              command,
-                                                              num_steps_arg,
-                                                              needs_data_dir,
-                                                              total_steps,
-                                                              scale_factor,
-                                                              priority_weight,
-                                                              SLO,
-                                                              arrival_time))
+            f.write('%s\t%d\n' % (str(job), arrival_time))
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Generate synthetic trace')

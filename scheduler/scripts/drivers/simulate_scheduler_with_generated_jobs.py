@@ -20,7 +20,7 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              checkpoint_threshold, checkpoint_file,
              profiling_percentage, per_instance_type_prices_dir,
              available_clouds, assign_SLOs, enable_global_queue,
-             num_gpus_per_server):
+             num_gpus_per_server, output_trace_file_name):
     policy = utils.get_policy(policy_name, solver=solver, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -58,7 +58,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                    debug=debug,
                    checkpoint_threshold=checkpoint_threshold,
                    checkpoint_file=checkpoint_file,
-                   num_gpus_per_server=num_gpus_per_server)
+                   num_gpus_per_server=num_gpus_per_server,
+                   output_trace_file_name=output_trace_file_name)
     average_jct = sched.get_average_jct(jobs_to_complete)
     utilization = sched.get_cluster_utilization()
     total_cost = sched.get_total_cost()
@@ -108,7 +109,8 @@ def main(args):
                  args.available_clouds,
                  args.assign_SLOs,
                  args.enable_global_queue,
-                 num_gpus_per_server)
+                 num_gpus_per_server,
+                 args.output_trace_file_name)
 
     else:
         with open('/dev/null', 'w') as f:
@@ -197,6 +199,8 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, schedules jobs regardless of '
                               'worker type'))
+    parser.add_argument('--output_trace_file_name', type=str, default=None,
+                        help='File to output generated trace to')
 
     args = parser.parse_args()
     main(args)
