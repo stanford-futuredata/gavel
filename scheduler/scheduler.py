@@ -1115,6 +1115,7 @@ class Scheduler:
         current_round_start_time = 0
         current_round_end_time = None
         num_completed_jobs = 0
+        window_start_time = None
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
@@ -1150,7 +1151,9 @@ class Scheduler:
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
-                    if output_trace_file is not None:
+                    if ((jobs_to_complete is None or
+                         window_start_time is not None) and
+                        output_trace_file is not None):
                         output_trace_file.write('%s\t%f\n' % (str(job), 0))
                     num_remaining_workers -= job.scale_factor
                     num_jobs_generated += 1
@@ -1250,6 +1253,9 @@ class Scheduler:
                     (arrival_time, job) = queued_jobs[0]
                     if arrival_time <= self._current_timestamp:
                         job_id = self.add_job(job, timestamp=arrival_time)
+                        if (jobs_to_complete is not None and
+                            job_id == min(jobs_to_complete)):
+                            window_start_time = self._current_timestamp
                         last_added_job_id = job_id
                         queued_jobs.pop(0)
                     else:
@@ -1263,12 +1269,35 @@ class Scheduler:
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
-                    if output_trace_file is not None:
-                        output_trace_file.write(
-                            '%s\t%f\n' % (str(job), self._current_timestamp))
                     num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
+                    if (jobs_to_complete is not None and
+                        job_id == min(jobs_to_complete)):
+                        window_start_time = next_job_arrival_time
+                        if output_trace_file is not None:
+                            print('%d running jobs '
+                                  'at window start' % (len(self._jobs) - 1))
+                            # Dump already running jobs.
+                            for running_job_id in sorted(self._jobs.keys()):
+                                remaining_steps = \
+                                    self._get_remaining_steps(running_job_id)
+                                total_steps = \
+                                    self._jobs[running_job_id].total_steps
+                                self._jobs[running_job_id]._total_steps = \
+                                    remaining_steps
+                                output_trace_file.write(
+                                    '%s\t0\n' % (str(self._jobs[running_job_id])))
+                                self._jobs[running_job_id]._total_steps = \
+                                    total_steps
+                    if ((jobs_to_complete is None or
+                         window_start_time is not None) and
+                        output_trace_file is not None):
+                        output_arrival_time = next_job_arrival_time
+                        if window_start_time is not None:
+                            output_arrival_time -= window_start_time
+                        output_trace_file.write('%s\t%f\n' % (str(job),
+                                                 output_arrival_time))
                     last_added_job_id = job_id
 
                     last_job_arrival_time = next_job_arrival_time
@@ -1346,9 +1375,17 @@ class Scheduler:
                                       running_jobs)
                 checkpoint_complete = True
 
+        if window_start_time is not None:
+            print('Window start time: %f' % (window_start_time))
+            window_duration = self._current_timestamp - window_start_time
+            print('Window duration: '
+                  '%.3f seconds (%.2f hours)' % (window_duration,
+                                                 window_duration / 3600.0))
         if output_trace_file is not None:
             output_trace_file.close()
-        print('Total duration: %.3f seconds' % (self._current_timestamp))
+        print('Total duration: %.3f seconds '
+              '(%.2f hours)' % (self._current_timestamp,
+                                self._current_timestamp / 3600.0))
 
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.

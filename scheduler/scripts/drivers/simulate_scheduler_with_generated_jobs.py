@@ -130,7 +130,8 @@ def main(args):
                          args.available_clouds,
                          args.assign_SLOs,
                          args.enable_global_queue,
-                         num_gpus_per_server)
+                         num_gpus_per_server,
+                         args.output_trace_file_name)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(

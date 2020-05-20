@@ -66,8 +66,16 @@ def main(args):
                                 generate_interarrival_time(
                                     interarrival_time_generator, args.lam))
             prev_arrival_time = arrival_time
-            job = Job(None, job_type, command, num_steps_arg, needs_data_dir,
-                      total_steps, scale_factor, priority_weight)
+            job = Job(job_id=None,
+                      job_type=job_type,
+                      command=command,
+                      num_steps_arg=num_steps_arg,
+                      total_steps=total_steps,
+                      duration=None,
+                      scale_factor=scale_factor,
+                      priority_weight=priority_weight,
+                      SLO=SLO,
+                      needs_data_dir=needs_data_dir)
             f.write('%s\t%d\n' % (str(job), arrival_time))
 
 if __name__=='__main__':
