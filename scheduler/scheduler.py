@@ -1029,7 +1029,8 @@ class Scheduler:
                  checkpoint_threshold=None,
                  checkpoint_file=None,
                  num_gpus_per_server=None,
-                 ideal=False):
+                 ideal=False,
+                 output_trace_file_name=None):
         """Simulates the scheduler execution.
 
            Simulation can be performed using a trace or with continuously
@@ -1084,6 +1085,11 @@ class Scheduler:
             raise ValueError('Checkpointing only intended to be used '
                              'when generating trace on-the-fly.')
 
+        if not from_trace and output_trace_file_name is not None:
+            output_trace_file = open(output_trace_file_name, 'w')
+        else:
+            output_trace_file = None
+
         running_jobs = []
         num_jobs_generated = 0
         completed_jobs = set()
@@ -1130,6 +1136,8 @@ class Scheduler:
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
+                    if output_trace_file is not None:
+                        output_trace_file.write('%s\t%f\n' % (str(job), 0))
                     num_remaining_workers -= job.scale_factor
                     num_jobs_generated += 1
                     self._all_jobs.append((0, job))
@@ -1224,6 +1232,9 @@ class Scheduler:
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
+                    if output_trace_file is not None:
+                        output_trace_file.write(
+                            '%s\t%f\n' % (str(job), self._current_timestamp))
                     num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
@@ -1252,6 +1263,8 @@ class Scheduler:
                             time_to_next_event
                         if job_id.is_pair():
                             for i, single_job_id in enumerate(job_id.singletons()):
+                                if job_id not in self._throughputs:
+                                    continue
                                 num_steps = time_spent_on_worker_type * \
                                     self._throughputs[job_id][worker_type][i]
                                 if single_job_id not in all_num_steps:
@@ -1304,6 +1317,8 @@ class Scheduler:
                                       running_jobs)
                 checkpoint_complete = True
 
+        if output_trace_file is not None:
+            output_trace_file.close()
         print('Total duration: %.3f seconds' % (self._current_timestamp))
 
     def _schedule_with_rounds(self):
