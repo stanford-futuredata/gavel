@@ -6,6 +6,7 @@ import math
 import numpy as np
 import random
 
+from job import Job
 from job_table import JobTable
 import utils
 
@@ -65,6 +66,8 @@ def main(args):
                                 generate_interarrival_time(
                                     interarrival_time_generator, args.lam))
             prev_arrival_time = arrival_time
+            job = Job(None, job_type, command, num_steps_arg, needs_data_dir,
+                      total_steps, scale_factor, priority_weight)
             f.write('%s\t%d\n' % (str(job), arrival_time))
 
 if __name__=='__main__':
