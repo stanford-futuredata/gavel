@@ -16,6 +16,17 @@ class Job:
         else:
             self._SLO = SLO
 
+    def __str__(self):
+        SLO = -1 if self._SLO is None else self._SLO
+        return ('%s\t%s\t%s\t%d\t%d\t%d\t%d\t%f' % (self._job_type,
+                                                    self._command,
+                                                    self._num_steps_arg,
+                                                    self._needs_data_dir,
+                                                    self._total_steps,
+                                                    self._scale_factor,
+                                                    self._priority_weight,
+                                                    SLO))
+
     @staticmethod
     def from_proto(job_proto):
         duration = None
