@@ -1263,6 +1263,8 @@ class Scheduler:
                             time_to_next_event
                         if job_id.is_pair():
                             for i, single_job_id in enumerate(job_id.singletons()):
+                                if job_id not in self._throughputs:
+                                    continue
                                 num_steps = time_spent_on_worker_type * \
                                     self._throughputs[job_id][worker_type][i]
                                 if single_job_id not in all_num_steps:
