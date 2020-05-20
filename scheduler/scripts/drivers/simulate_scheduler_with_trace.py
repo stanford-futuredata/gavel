@@ -1,4 +1,4 @@
-imaort os, sys
+import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 
 import argparse
@@ -85,8 +85,8 @@ if __name__=='__main__':
                               'co-located job pairs'))
     parser.add_argument('--time_per_iteration', type=int, default=1920,
                         help='Time per iteration in seconds')
-    parser.add_argument('-s', '--window-start', type=int, default=0,
+    parser.add_argument('-s', '--window-start', type=int, default=None,
                         help='measurement window start (job id)')
-    parser.add_argument('-e', '--window-end', type=int, default=5000,
+    parser.add_argument('-e', '--window-end', type=int, default=None,
                         help='Measurement window end (job ID)')
     main(parser.parse_args())

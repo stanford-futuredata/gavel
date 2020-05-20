@@ -213,6 +213,8 @@ class Scheduler:
         self._write_queue = queue.Queue()
         # In-progress updates for distributed jobs.
         self._in_progress_updates = {}
+        # Set of completed job IDs.
+        self._completed_jobs = set()
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -526,10 +528,10 @@ class Scheduler:
                 n += self._cluster_spec[worker_type]
             return n
 
-    def is_done(self):
+    def is_done(self, jobs_to_complete=None):
         """Returns whether the scheduler is done with all its assigned work."""
         with self._scheduler_lock:
-            return len(self._jobs) == 0
+            return jobs_to_complete.issubset(self._completed_jobs)
 
     def reset_workers(self):
         """Sends a shutdown signal to every worker and ends the scheduler."""
@@ -855,7 +857,7 @@ class Scheduler:
         return all_num_steps, max_finish_time
 
 
-    def _save_checkpoint(self, checkpoint_file, completed_jobs,
+    def _save_checkpoint(self, checkpoint_file,
                          last_job_arrival_time,
                          next_job_arrival_time,
                          current_round_start_time,
@@ -863,7 +865,7 @@ class Scheduler:
                          running_jobs):
         with open(checkpoint_file, 'wb') as f:
             import pickle
-            pickle.dump(completed_jobs, f)
+            pickle.dump(self._completed_jobs, f)
             pickle.dump(last_job_arrival_time, f)
             pickle.dump(next_job_arrival_time, f)
             pickle.dump(current_round_start_time, f)
@@ -901,7 +903,7 @@ class Scheduler:
     def _load_checkpoint(self, checkpoint_file):
         with open(checkpoint_file, 'rb') as f:
             import pickle
-            completed_jobs = pickle.load(f)
+            self._completed_jobs = pickle.load(f)
             last_job_arrival_time = pickle.load(f)
             next_job_arrival_time = pickle.load(f)
             current_round_start_time = pickle.load(f)
@@ -936,8 +938,7 @@ class Scheduler:
             self._current_timestamp = pickle.load(f)
             self._job_id_counter = pickle.load(f)
 
-            return (completed_jobs,
-                    last_job_arrival_time,
+            return (last_job_arrival_time,
                     next_job_arrival_time,
                     current_round_start_time,
                     current_round_end_time,
@@ -1106,7 +1107,6 @@ class Scheduler:
 
         running_jobs = []
         num_jobs_generated = 0
-        completed_jobs = set()
         last_job_arrival_time = None
         next_job_arrival_time = 0
         if arrival_times is not None and len(arrival_times) > 0:
@@ -1114,7 +1114,6 @@ class Scheduler:
         no_dispatched_or_running_jobs = False
         current_round_start_time = 0
         current_round_end_time = None
-        num_completed_jobs = 0
         window_start_time = None
 
         # Set up the cluster according to the provided spec.
@@ -1128,8 +1127,7 @@ class Scheduler:
                                                num_gpus=num_gpus)
 
         if checkpoint_file is not None and checkpoint_threshold is None:
-            (completed_jobs,
-             last_job_arrival_time,
+            (last_job_arrival_time,
              next_job_arrival_time,
              current_round_start_time,
              current_round_end_time,
@@ -1164,8 +1162,10 @@ class Scheduler:
             if debug:
                 input('Press Enter to continue...')
             if jobs_to_complete is not None:
-                print("Number of completed jobs: %d" % len(jobs_to_complete.intersection(completed_jobs)))
-                if jobs_to_complete.issubset(completed_jobs):
+                num_completed_jobs = \
+                    len(jobs_to_complete.intersection(self._completed_jobs))
+                print('Number of completed jobs: %d' % (num_completed_jobs))
+                if self.is_done(jobs_to_complete):
                     break
             elif (num_total_jobs is not None and
                     remaining_jobs <= 0):
@@ -1235,7 +1235,7 @@ class Scheduler:
                                             all_execution_times)
                     for single_job_id in job_id.singletons():
                         if single_job_id not in self._jobs:
-                            completed_jobs.add(single_job_id)
+                            self._completed_jobs.add(single_job_id)
                             if from_trace or num_total_jobs is not None:
                                 remaining_jobs -= 1
                     heapq.heappop(running_jobs)
@@ -1367,7 +1367,6 @@ class Scheduler:
                 # Create checkpoint.
                 assert(checkpoint_file is not None)
                 self._save_checkpoint(checkpoint_file,
-                                      completed_jobs,
                                       last_job_arrival_time,
                                       next_job_arrival_time,
                                       current_round_start_time,
@@ -1478,6 +1477,8 @@ class Scheduler:
                 return
             if job_ids is None:
                 job_ids = sorted(list(self._job_completion_times.keys()))
+            else:
+                job_ids = sorted(job_ids)
             print('Job completion times:')
             all_job_completion_times = []
             low_priority_job_completion_times = []
@@ -1497,18 +1498,23 @@ class Scheduler:
                     high_priority_job_completion_times.append(completion_time)
             average_job_completion_time = np.mean(all_job_completion_times)
             if verbose:
-                print('Average job completion time: '
-                      '%.3f seconds' % (average_job_completion_time))
+                print('Average job completion time: %.3f seconds '
+                      '(%.2f hours)' % (average_job_completion_time,
+                                        average_job_completion_time / 3600.0))
                 if len(low_priority_job_completion_times) > 0:
                     average_low_pri_jct = \
                         np.mean(low_priority_job_completion_times)
                     print('Average job completion time (low priority): '
-                          '%.3f seconds' % (average_low_pri_jct))
+                          '%.3f seconds '
+                          '(%.2f hours)' % (average_low_pri_jct,
+                                            average_low_pri_jct / 3600.0))
                 if len(high_priority_job_completion_times) > 0:
                     average_high_pri_jct = \
                         np.mean(high_priority_job_completion_times)
                     print('Average job completion time (high priority): '
-                          '%.3f seconds' % (average_high_pri_jct))
+                          '%.3f seconds '
+                          '(%.2f hours)' % (average_high_pri_jct,
+                                            average_high_pri_jct / 3600.0))
             return average_job_completion_time
 
 
