@@ -2304,8 +2304,9 @@ class Scheduler:
                         max_execution_time
                     self._worker_time_so_far[worker_type] += \
                         max_execution_time
-                self._cumulative_worker_time_so_far[worker_id] += \
-                    max_execution_time
+                for worker_id in all_worker_ids:
+                    self._cumulative_worker_time_so_far[worker_id] += \
+                        max_execution_time
 
         self._update_throughput(job_id, worker_type,
                                 all_num_steps,
