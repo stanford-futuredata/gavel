@@ -203,7 +203,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         if self._lp.status != "optimal":
             raise Exception("WARNING: Non-optimal allocation in _get_allocation()!")
 
-        return x, self._lp_objective.value, mask
+        return x.value, self._lp_objective.value, mask
 
     def _get_bottleneck_jobs(self, throughputs, index, priority_weights,
                              proportional_throughputs,
@@ -287,7 +287,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         if self._milp.status != "optimal":
             raise Exception("WARNING: Non-optimal allocation in _get_bottleneck_jobs()!")
 
-        return x, z.value
+        return z.value
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec,
@@ -308,7 +308,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         final_normalized_effective_throughputs = {}
         normalized_effective_throughputs_so_far = np.zeros(len(job_ids))
         num_iterations = 0
-        c = 0
+        c, x, mask = 0, None, None
         while not done:
             priority_weights = self.compute_priority_weights(
                 unflattened_priority_weights,
@@ -322,12 +322,17 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                 [1. / priority_weights[job_id] if priority_weights[job_id] > 0 else 0.0
                  for job_id in job_ids])
 
-            x, c, mask = self._get_allocation(
-                throughputs, index, priority_weights, proportional_throughputs,
-                scale_factors_array,
-                m, n, final_normalized_effective_throughputs,
-                normalized_effective_throughputs_so_far)
-            normalized_effective_throughputs_so_far += np.multiply(mask, c)
+            old_x, old_c, old_mask = np.copy(x), c, np.copy(mask)
+            try:
+                x, c, mask = self._get_allocation(
+                    throughputs, index, priority_weights, proportional_throughputs,
+                    scale_factors_array,
+                    m, n, final_normalized_effective_throughputs,
+                    normalized_effective_throughputs_so_far)
+                normalized_effective_throughputs_so_far += np.multiply(mask, c)
+            except:
+                x, c, mask = old_x, old_c, old_mask
+                done = True
 
             self._previous_priority_weights = previous_priority_weights
             if num_iterations == 0:
@@ -335,7 +340,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
             # Find bottleneck job_ids.
             try:
-                _, z = self._get_bottleneck_jobs(
+                z = self._get_bottleneck_jobs(
                     throughputs, index, priority_weights,
                     proportional_throughputs,
                     scale_factors_array, m, n,
@@ -353,8 +358,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             if old_len_effective_throughputs == len(final_normalized_effective_throughputs):
                 done = True
             if verbose:
-                print("At the end of iteration %d:" % num_iterations,
-                    x.value)
+                print("At the end of iteration %d:" % num_iterations, x)
             num_iterations += 1
             if len(unflattened_throughputs) == len(final_normalized_effective_throughputs):
                 done = True
@@ -369,19 +373,19 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         priority_weights = np.multiply(priority_weights.reshape((m, 1)),
                                        1.0 / proportional_throughputs.reshape((m, 1)))
         effective_throughputs = np.sum(np.multiply(
-            throughputs, x.value), axis=1)
+            throughputs, x), axis=1)
         normalized_effective_throughputs = np.multiply(
             effective_throughputs,
             1.0 / proportional_throughputs.reshape(m))
 
         print("Normalized effective throughputs:", normalized_effective_throughputs)
         print("Constraints:",
-            np.multiply(x.value, scale_factors_array).sum(axis=0),
-            x.value.sum(axis=1))
+            np.multiply(x, scale_factors_array).sum(axis=0),
+            x.sum(axis=1))
 
         if return_effective_throughputs:
             return normalized_effective_throughputs
-        return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
+        return super().unflatten(x.clip(min=0.0).clip(max=1.0), index)
 
 class MaxMinFairnessWaterFillingPolicyWithPacking(PolicyWithPacking):
 
