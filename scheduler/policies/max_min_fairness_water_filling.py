@@ -11,7 +11,7 @@ from proportional import ProportionalPolicy
 
 class MaxMinFairnessWaterFillingPolicy(Policy):
 
-    def __init__(self, priority_reweighting_policies):
+    def __init__(self, priority_reweighting_policies=None):
         self._name = 'MaxMinFairnessWaterFilling'
         self._max_min_fairness_perf_policy = \
             MaxMinFairnessWaterFillingPolicyWithPerf(priority_reweighting_policies)
@@ -57,19 +57,21 @@ class MaxMinFairnessWaterFillingPolicy(Policy):
 
 class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
-    def __init__(self, priority_reweighting_policies):
+    def __init__(self, priority_reweighting_policies=None):
         Policy.__init__(self, solver=None)
         self._name = 'MaxMinFairnessWaterFilling_Perf'
         self._proportional_policy = ProportionalPolicy()
         self._previous_priority_weights = None
         self._priority_reweighting_policies = priority_reweighting_policies
+        self._prev_x = None
+        self._prev_z = None
 
     def compute_priority_weights(self, priority_weights, entity_to_job_mapping,
-                                 final_normalized_effective_throughputs):
+                                 final_normalized_effective_throughputs, job_ids):
+        returned_priority_weights = {}
         if self._priority_reweighting_policies is None:
             # Do nothing if reweighting policy is None.
             return priority_weights
-        returned_priority_weights = {}
         if entity_to_job_mapping is None:
             raise ValueError("entity_to_job_mapping cannot be None when "
                              "priority_reweighting_policies is not None!")
@@ -121,6 +123,8 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         final_normalized_effective_throughputs,
                         normalized_effective_throughputs_so_far):
         x = cp.Variable(throughputs.shape)
+        if self._prev_x is not None:
+            x.value = self._prev_x
         (job_ids, _) = index
 
         # Multiply throughputs by scale_factors to ensure that scale_factor
@@ -165,6 +169,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
         if cvxprob.status != "optimal":
             raise Exception("WARNING: Non-optimal allocation in _get_allocation()!")
+        self._prev_x = x.value
 
         return x, objective.value, mask
 
@@ -174,6 +179,10 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                              final_normalized_effective_throughputs,
                              normalized_effective_throughputs_so_far, slack=1.0001):
         x = cp.Variable(throughputs.shape)
+        x.value = self._prev_x
+        z = cp.Variable(m, boolean=True)
+        if self._prev_z is not None:
+            z.value = self._prev_z
         (job_ids, _) = index
         M = np.max(np.multiply(throughputs * (1.0 / proportional_throughputs).reshape((m, 1)),
                                scale_factors_array))
@@ -188,7 +197,6 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             effective_throughputs,
             1.0 / proportional_throughputs.reshape(m))
 
-        z = cp.Variable(m, boolean=True)
         objective = cp.Maximize(cp.sum(z))
 
         # Make sure that the allocation can fit in the cluster.
@@ -220,6 +228,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
         if cvxprob.status != "optimal":
             raise Exception("WARNING: Non-optimal allocation in _get_bottleneck_jobs()!")
+        self._prev_z = z.value
 
         return x, z.value
 
@@ -247,7 +256,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
             priority_weights = self.compute_priority_weights(
                 unflattened_priority_weights,
                 entity_to_job_mapping,
-                final_normalized_effective_throughputs)
+                final_normalized_effective_throughputs, job_ids)
             previous_priority_weights = copy.copy(priority_weights)
             if verbose:
                 print("Using the following as priority weights:", np.array(
@@ -321,3 +330,12 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         if return_effective_throughputs:
             return normalized_effective_throughputs
         return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
+
+class MaxMinFairnessWaterFillingPolicyWithPacking(PolicyWithPacking):
+
+    def __init__(self, priority_reweighting_policies=None):
+        PolicyWithPacking.__init__(self, solver=None)
+        self._name = 'MaxMinFairnessWaterFilling_Packed'
+        self._proportional_policy = ProportionalPolicy()
+        self._previous_priority_weights = None
+        self._priority_reweighting_policies = priority_reweighting_policies
