@@ -179,7 +179,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                              final_normalized_effective_throughputs,
                              normalized_effective_throughputs_so_far, slack=1.0001):
         x = cp.Variable(throughputs.shape)
-        x.value = self._prev_x
+        # x.value = self._prev_x
         z = cp.Variable(m, boolean=True)
         if self._prev_z is not None:
             z.value = self._prev_z
