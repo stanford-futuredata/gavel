@@ -63,8 +63,8 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         self._proportional_policy = ProportionalPolicy()
         self._previous_priority_weights = None
         self._priority_reweighting_policies = priority_reweighting_policies
-        self._prev_x = None
-        self._prev_z = None
+        self._lp = None
+        self._milp = None
 
     def compute_priority_weights(self, priority_weights, entity_to_job_mapping,
                                  final_normalized_effective_throughputs, job_ids):
@@ -122,15 +122,35 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                         scale_factors_array, m, n,
                         final_normalized_effective_throughputs,
                         normalized_effective_throughputs_so_far):
-        x = cp.Variable(throughputs.shape)
-        if self._prev_x is not None:
-            x.value = self._prev_x
+        M = np.max(np.multiply(throughputs * (1.0 / proportional_throughputs).reshape((m, 1)),
+                               scale_factors_array))
+
+        if self._lp is None:
+            self._lp_variables_and_parameters = {}
+            self._lp_variables_and_parameters['x'] = cp.Variable(throughputs.shape)
+            self._lp_variables_and_parameters[
+                'normalized_effective_throughputs_so_far_parameter'] = cp.Parameter(m)
+            self._lp_variables_and_parameters[
+                'normalized_effective_throughputs_lower_bounds_parameter'] = cp.Parameter(m)
+            self._lp_variables_and_parameters[
+                'multiplicative_terms_parameter'] = cp.Parameter(m)
+            self._lp_variables_and_parameters[
+                'additive_terms_parameter'] = cp.Parameter(m)
+
+        x = self._lp_variables_and_parameters['x']
+        normalized_effective_throughputs_so_far_parameter = \
+            self._lp_variables_and_parameters[
+                'normalized_effective_throughputs_so_far_parameter']
+        normalized_effective_throughputs_lower_bounds_parameter = \
+            self._lp_variables_and_parameters[
+                'normalized_effective_throughputs_lower_bounds_parameter']
+        multiplicative_terms_parameter = \
+            self._lp_variables_and_parameters['multiplicative_terms_parameter']
+        additive_terms_parameter = \
+            self._lp_variables_and_parameters['additive_terms_parameter']
+
         (job_ids, _) = index
 
-        # Multiply throughputs by scale_factors to ensure that scale_factor
-        # is taken into account while allocating times to different jobs.
-        # A job run on 1 GPU should receive `scale_factor` more time than
-        # a job run on `scale_factor` GPUs if throughputs are equal.
         effective_throughputs = cp.sum(cp.multiply(throughputs, x), axis=1)
         normalized_effective_throughputs = cp.multiply(
             effective_throughputs,
@@ -138,97 +158,134 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
         # Solve max-min optimization problem over all jobs with priority
         # weight > 0.
-        objective_terms = []
+        normalized_effective_throughputs_so_far_parameter.value = \
+            normalized_effective_throughputs_so_far
+        objective_terms = normalized_effective_throughputs - \
+            normalized_effective_throughputs_so_far_parameter
+        multiplicative_terms = np.zeros(m)
         mask = np.zeros(m)
+        additive_terms = np.zeros(m)
         for i, job_id in enumerate(job_ids):
             if job_id not in final_normalized_effective_throughputs:
                 if priority_weights[i] > 0.0:
-                    objective_term = normalized_effective_throughputs[i]
-                    multiplicative_term = priority_weights[i] * scale_factors_array[i, 0]
-                    mask[i] = 1.0 / multiplicative_term
-                    objective_term -= normalized_effective_throughputs_so_far[i]
-                    objective_term *= multiplicative_term
-                    objective_terms.append(objective_term)
-        if len(objective_terms) == 1:
-            objective = cp.Maximize(objective_terms[0])
-        else:
-            objective = cp.Maximize(cp.minimum(*objective_terms))
+                    multiplicative_terms[i] = priority_weights[i] * scale_factors_array[i, 0]
+                    mask[i] = 1.0 / multiplicative_terms[i]
+                else:
+                    additive_terms[i] = M
+            else:
+                additive_terms[i] = M
+        multiplicative_terms_parameter.value = multiplicative_terms
+        additive_terms_parameter.value = additive_terms
 
-        # Make sure that the allocation can fit in the cluster.
-        constraints = self.get_base_constraints(x, scale_factors_array)
-
-        # Add constraint for already saturated jobs.
+        normalized_effective_throughputs_lower_bounds = np.zeros(m)
         for i, job_id in enumerate(job_ids):
             if job_id in final_normalized_effective_throughputs:
-                constraints.append(
-                    normalized_effective_throughputs[i] >=
-                    final_normalized_effective_throughputs[job_id])
+                normalized_effective_throughputs_lower_bounds[i] = \
+                    final_normalized_effective_throughputs[job_id]
+            else:
+                normalized_effective_throughputs_lower_bounds[i] = \
+                    normalized_effective_throughputs_so_far[i]
+        normalized_effective_throughputs_lower_bounds_parameter.value = \
+            normalized_effective_throughputs_lower_bounds
 
-        cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='ECOS')
+        if self._lp is None:
+            self._lp_objective = cp.Maximize(cp.min(
+                cp.multiply(objective_terms, multiplicative_terms_parameter) +
+                additive_terms_parameter))
+            # Specify constraints.
+            constraints = self.get_base_constraints(x, scale_factors_array)
+            constraints.append(normalized_effective_throughputs >=
+                normalized_effective_throughputs_lower_bounds_parameter)
 
-        if cvxprob.status != "optimal":
+            self._lp = cp.Problem(self._lp_objective, constraints)
+
+        result = self._lp.solve(solver='ECOS', warm_start=True)
+        if self._lp.status != "optimal":
             raise Exception("WARNING: Non-optimal allocation in _get_allocation()!")
-        self._prev_x = x.value
 
-        return x, objective.value, mask
+        return x, self._lp_objective.value, mask
 
     def _get_bottleneck_jobs(self, throughputs, index, priority_weights,
                              proportional_throughputs,
                              scale_factors_array, m, n,
                              final_normalized_effective_throughputs,
                              normalized_effective_throughputs_so_far, slack=1.0001):
-        x = cp.Variable(throughputs.shape)
-        # x.value = self._prev_x
-        z = cp.Variable(m, boolean=True)
-        if self._prev_z is not None:
-            z.value = self._prev_z
-        (job_ids, _) = index
         M = np.max(np.multiply(throughputs * (1.0 / proportional_throughputs).reshape((m, 1)),
                                scale_factors_array))
         epsilon = 1e-5
 
-        # Multiply throughputs by scale_factors to ensure that scale_factor
-        # is taken into account while allocating times to different jobs.
-        # A job run on 1 GPU should receive `scale_factor` more time than
-        # a job run on `scale_factor` GPUs if throughputs are equal.
+        if self._milp is None:
+            self._milp_variables_and_parameters = {}
+            self._milp_variables_and_parameters['x'] = cp.Variable(throughputs.shape)
+            self._milp_variables_and_parameters['z'] = cp.Variable(m, boolean=True)
+            self._milp_variables_and_parameters[
+                'normalized_effective_throughputs_so_far_parameter'] = cp.Parameter(m)
+            self._milp_variables_and_parameters[
+                'normalized_effective_throughputs_lower_bounds_parameter'] = cp.Parameter(m)
+            self._milp_variables_and_parameters['mask_parameter'] = cp.Parameter(m)
+
+        x = self._milp_variables_and_parameters['x']
+        z = self._milp_variables_and_parameters['z']
+        normalized_effective_throughputs_so_far_parameter = \
+            self._milp_variables_and_parameters[
+                'normalized_effective_throughputs_so_far_parameter']
+        normalized_effective_throughputs_lower_bounds_parameter = \
+            self._milp_variables_and_parameters[
+                'normalized_effective_throughputs_lower_bounds_parameter']
+        mask_parameter = self._milp_variables_and_parameters['mask_parameter']
+
+        (job_ids, _) = index
+
         effective_throughputs = cp.sum(cp.multiply(throughputs, x), axis=1)
         normalized_effective_throughputs = cp.multiply(
             effective_throughputs,
             1.0 / proportional_throughputs.reshape(m))
 
-        objective = cp.Maximize(cp.sum(z))
+        normalized_effective_throughputs_so_far_parameter.value = \
+            normalized_effective_throughputs_so_far
 
-        # Make sure that the allocation can fit in the cluster.
-        constraints = self.get_base_constraints(x, scale_factors_array)
+        normalized_effective_throughputs_lower_bounds = np.zeros(m)
         for i, job_id in enumerate(job_ids):
             if job_id in final_normalized_effective_throughputs:
-                constraints.append(
-                    normalized_effective_throughputs[i] ==
-                    final_normalized_effective_throughputs[job_id])
-                constraints.append(z[i] == 0)
+                normalized_effective_throughputs_lower_bounds[i] = \
+                    final_normalized_effective_throughputs[job_id]
             else:
-                if priority_weights[i] > 0.0:
-                    constraints.append(
-                        normalized_effective_throughputs[i] >=
-                        normalized_effective_throughputs_so_far[i])
-                    constraints.append(
-                        (M * z[i]) >=
-                            (normalized_effective_throughputs[i] -
-                             (normalized_effective_throughputs_so_far[i] * slack) +
-                             epsilon))
-                    constraints.append(
-                         (M * (1 - z[i])) >=
-                            ((normalized_effective_throughputs_so_far[i] * slack) -
-                             normalized_effective_throughputs[i]))
-                else:
-                    constraints.append(z[i] == 0)
-        cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver='GLPK_MI')
+                normalized_effective_throughputs_lower_bounds[i] = \
+                    normalized_effective_throughputs_so_far[i]
+        normalized_effective_throughputs_lower_bounds_parameter.value = \
+            normalized_effective_throughputs_lower_bounds
 
-        if cvxprob.status != "optimal":
+        mask = np.zeros(m)
+        for i, job_id in enumerate(job_ids):
+            if job_id in final_normalized_effective_throughputs:
+                mask[i] = 1.0
+            else:
+                if priority_weights[i] == 0.0:
+                    mask[i] = 1.0
+        mask_parameter.value = mask
+
+        if self._milp is None:
+            objective = cp.Maximize(cp.sum(z))
+            # Specify constraints.
+            constraints = self.get_base_constraints(x, scale_factors_array)
+            constraints.append(
+                (M * z) >=
+                    (normalized_effective_throughputs -
+                     (normalized_effective_throughputs_so_far_parameter * slack) +
+                     epsilon))
+            constraints.append(
+                 (M * (1 - z)) >=
+                    ((normalized_effective_throughputs_so_far_parameter * slack) -
+                     normalized_effective_throughputs))
+            constraints.append(normalized_effective_throughputs >=
+                normalized_effective_throughputs_lower_bounds_parameter)
+            constraints.append(cp.multiply(mask_parameter, z) == 0)
+
+            self._milp = cp.Problem(objective, constraints)
+
+        result = self._milp.solve(solver='GLPK_MI', warm_start=True)
+        if self._milp.status != "optimal":
             raise Exception("WARNING: Non-optimal allocation in _get_bottleneck_jobs()!")
-        self._prev_z = z.value
 
         return x, z.value
 
@@ -285,12 +342,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
                     final_normalized_effective_throughputs,
                     normalized_effective_throughputs_so_far)
             except Exception as e:
-                _, z = self._get_bottleneck_jobs(
-                    throughputs, index, priority_weights,
-                    proportional_throughputs,
-                    scale_factors_array, m, n,
-                    final_normalized_effective_throughputs,
-                    normalized_effective_throughputs_so_far, slack=1.0)
+                z = np.zeros(m)
             old_len_effective_throughputs = len(final_normalized_effective_throughputs)
             for i, job_id in enumerate(job_ids):
                 if job_id not in final_normalized_effective_throughputs and (z is None or not z[i]) \
