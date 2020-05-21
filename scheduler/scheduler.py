@@ -455,6 +455,7 @@ class Scheduler:
 
         job_id = job_id_pair.JobIdPair(job_id, None)
         with self._scheduler_lock:
+            self._completed_jobs.add(job_id)
             duration = self._per_job_latest_timestamps[job_id] - \
                 self._per_job_start_timestamps[job_id]
             self._job_priority_weights[job_id] = \
@@ -1235,7 +1236,6 @@ class Scheduler:
                                             all_execution_times)
                     for single_job_id in job_id.singletons():
                         if single_job_id not in self._jobs:
-                            self._completed_jobs.add(single_job_id)
                             if from_trace or num_total_jobs is not None:
                                 remaining_jobs -= 1
                     heapq.heappop(running_jobs)
@@ -1518,9 +1518,13 @@ class Scheduler:
             return average_job_completion_time
 
 
-    def get_completed_steps(self):
+    def get_completed_steps(self, job_ids=None):
         print('Completed steps:')
-        for job_id in sorted(self._total_steps_run.keys()):
+        if job_ids is None:
+            job_ids = sorted(list(self._total_steps_run.keys()))
+        else:
+            job_ids = sorted(job_ids)
+        for job_id in job_ids:
             completed_steps = self._total_steps_run[job_id]
             print('Job %s: %d steps' % (job_id, completed_steps))
 

@@ -51,11 +51,11 @@ def main(args):
         time.sleep(sleep_seconds)
 
     # Print summary information.
-    elapsed_time = (datetime.datetime.now() - start_time).seconds
-    print("Total time taken: %d seconds" % (elapsed_time))
-    sched.get_average_jct()
+    sched.get_average_jct(jobs_to_complete)
+    sched.get_completed_steps(jobs_to_complete)
     sched.get_cluster_utilization()
-    sched.get_completed_steps()
+    elapsed_time = (datetime.datetime.now() - start_time).seconds
+    print('Total time taken: %d seconds' % (elapsed_time))
     sched.shutdown()
 
 if __name__=='__main__':

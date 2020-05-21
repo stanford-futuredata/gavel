@@ -134,6 +134,8 @@ class Dispatcher:
                 self._write_queue.put('Killing all jobs!')
             if job_id is not None:
                 pids = utils.get_pid_for_job(job_id)
+                self._write_queue.put('PIDs for job %d: %s' % (job_id,
+                                                               str(pids)))
                 for pid in pids:
                     self._kill_job(pid)
             else:
@@ -267,7 +269,7 @@ class Dispatcher:
         self._write_queue.put('Finished resetting dispatcher')
 
     def shutdown(self, shut_down_mps=True):
+        self._kill_jobs()
         self._thread_pool.terminate()
-        self._thread_pool.join()
         if self._use_mps and shut_down_mps and not self._mps_initially_enabled:
             self._shutdown_mps()
