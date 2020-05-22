@@ -316,11 +316,11 @@ def get_policy(policy_name, solver, seed=None):
         policy = \
             max_min_fairness.MaxMinFairnessPolicyWithPacking(solver=solver)
     elif policy_name == 'max_min_fairness_water_filling':
-        policy = max_min_fairness_water_filling.MaxMinFairnessPolicyWaterFilling()
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicy()
     elif policy_name == 'max_min_fairness_water_filling_perf':
-        policy = max_min_fairness_water_filling.MaxMinFairnessPolicyWaterFillingWithPerf()
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf()
     elif policy_name == 'max_min_fairness_water_filling_packed':
-        policy = max_min_fairness_water_filling.MaxMinFairnessPolicyWaterFillingWithPacking()
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPacking()
     elif policy_name == 'max_sum_throughput_perf':
         policy = max_sum_throughput.ThroughputSumWithPerf(solver=solver)
     elif policy_name == 'max_sum_throughput_normalized_by_cost_perf':
