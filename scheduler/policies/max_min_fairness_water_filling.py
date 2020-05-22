@@ -296,8 +296,11 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
         done = False
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
+        if throughputs is None: return None
+
         (job_ids, worker_types) = index
         (m, n) = throughputs.shape
+
         # Row i of scale_factors_array is the scale_factor of job i
         # repeated len(worker_types) times.
         scale_factors_array = self.scale_factors_array(
