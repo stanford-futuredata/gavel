@@ -53,7 +53,7 @@ class MaxMinFairnessWaterFillingPolicy(Policy):
                 effective_throughputs,
                 1.0 / proportional_throughputs.reshape(m))
             return normalized_effective_throughputs
-        return x
+        return unflattened_x
 
 class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
@@ -385,6 +385,10 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy):
 
         if return_effective_throughputs:
             return normalized_effective_throughputs
+
+        self._lp = None
+        self._milp = None
+
         return super().unflatten(x.clip(min=0.0).clip(max=1.0), index)
 
 class MaxMinFairnessWaterFillingPolicyWithPacking(PolicyWithPacking):
