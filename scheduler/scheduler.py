@@ -1609,7 +1609,7 @@ class Scheduler:
             unflattened_allocation = self._policy.get_allocation(
                 self._throughputs, scale_factors, num_steps_remaining,
                 self._cluster_spec)
-        elif self._policy.name.startswith('ThroughputNormalizedByCostSum'):
+        elif self._policy.name.startswith("ThroughputNormalizedByCostSum"):
             if 'SLO' in self._policy.name:
                 SLOs = {}
                 if self._SLOs is not None:
