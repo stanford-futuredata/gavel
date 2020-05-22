@@ -49,18 +49,20 @@ def test_water_filling_multilevel():
             i, unflattened_throughputs[i], unflattened_priority_weights[i],
             scale_factors[i], entity_id.replace('entity', '')))
     print("Total number of workers requested: %d" % num_workers_requested)
+    start_time = time.time()
     allocation = policy.get_allocation(unflattened_throughputs, scale_factors,
                                        unflattened_priority_weights,
                                        cluster_spec,
                                        entity_to_job_mapping=entity_to_job_mapping)
     print()
+    return time.time() - start_time
 
 
 if __name__ == '__main__':
     seed = 0
     random.seed(seed)
-    start_time = time.time()
     priority_reweighting_policy = 'fifo'
+    times = []
     for i in range(5):
-        test_water_filling_multilevel()
-    print("Average time per problem: %.2f seconds" % ((time.time() - start_time) / 5))
+        times.append(test_water_filling_multilevel())
+    print("Average time per problem: %.2f seconds" % np.mean(np.array(times)))
