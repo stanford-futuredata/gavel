@@ -30,16 +30,18 @@ def test_water_filling():
             i, unflattened_throughputs[i], unflattened_priority_weights[i],
             scale_factors[i]))
     print("Total number of workers requested: %d" % num_workers_requested)
+    start_time = time.time()
     allocation = policy.get_allocation(unflattened_throughputs, scale_factors,
                                        unflattened_priority_weights,
                                        cluster_spec)
     print()
+    return time.time() - start_time
 
 
 if __name__ == '__main__':
     seed = 0
     random.seed(seed)
-    start_time = time.time()
+    times = []
     for i in range(5):
-        test_water_filling()
-    print("Average time per problem: %.2f seconds" % ((time.time() - start_time) / 5))
+        times.append(test_water_filling())
+    print("Average time per problem: %.2f seconds" % np.mean(np.array(times)))

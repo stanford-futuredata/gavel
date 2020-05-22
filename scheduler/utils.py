@@ -10,7 +10,8 @@ import subprocess
 
 import job
 from policies import allox, fifo, finish_time_fairness, gandiva, isolated, \
-    max_min_fairness, max_sum_throughput, min_total_duration
+    max_min_fairness, max_min_fairness_water_filling, max_sum_throughput, \
+    min_total_duration
 
 def load_philly_job_distribution():
     with open('philly_job_distribution.pickle', 'rb') as f:
@@ -70,6 +71,9 @@ def get_available_policies():
             'max_min_fairness',
             'max_min_fairness_perf',
             'max_min_fairness_packed',
+            'max_min_fairness_water_filling',
+            'max_min_fairness_water_filling_perf',
+            'max_min_fairness_water_filling_packed',
             'max_sum_throughput_perf',
             'max_sum_throughput_normalized_by_cost_perf',
             'max_sum_throughput_normalized_by_cost_perf_SLOs',
@@ -311,6 +315,12 @@ def get_policy(policy_name, solver, seed=None):
     elif policy_name == 'max_min_fairness_packed':
         policy = \
             max_min_fairness.MaxMinFairnessPolicyWithPacking(solver=solver)
+    elif policy_name == 'max_min_fairness_water_filling':
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicy()
+    elif policy_name == 'max_min_fairness_water_filling_perf':
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf()
+    elif policy_name == 'max_min_fairness_water_filling_packed':
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPacking()
     elif policy_name == 'max_sum_throughput_perf':
         policy = max_sum_throughput.ThroughputSumWithPerf(solver=solver)
     elif policy_name == 'max_sum_throughput_normalized_by_cost_perf':
