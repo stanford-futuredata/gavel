@@ -30,6 +30,7 @@ EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 DEFAULT_MATRIX_COMPLETION_K = 10
 DEFAULT_MATRIX_COMPLETION_MU = 1e-2
+TIME_PER_PROFILING_MEASUREMENT = 150
 
 class Scheduler:
 
@@ -385,11 +386,7 @@ class Scheduler:
             self._job_id_to_job_type[job_id] = job_type_key
             if job_type_key not in self._job_type_throughputs:
                 self._job_type_to_job_ids[job_type_key] = set()
-                if self._estimate_throughputs:
-                    # TODO: Support throughput estimation.
-                    pass
-                else:
-                    self._read_throughputs_for_job_type(job_type_key)
+                self._read_throughputs_for_job_type(job_type_key)
             self._job_type_to_job_ids[job_type_key].add(job_id)
             self._num_failures_per_job[job_id] = 0
             self._total_steps_run[job_id] = 0
@@ -409,10 +406,9 @@ class Scheduler:
                 # arrived job to co-locate with.
                 if self._estimate_throughputs:
                     self._jobs_to_profile[worker_type][job_id] = \
-                        self._throughput_estimation_generator.choice(
-                                self._reference_job_types,
-                                len(self._reference_job_types),
-                                replace=False).tolist()
+                        copy.deepcopy(self._reference_job_types)
+                    self._throughput_estimation_generator.shuffle(
+                        self._jobs_to_profile[worker_type][job_id])
                 self._job_time_so_far[job_id][worker_type] = \
                         (self._time_per_iteration / 2.0)
             self._per_job_start_timestamps[job_id] = current_timestamp
@@ -536,14 +532,21 @@ class Scheduler:
     ======================================================================
     """
 
-    def _profile_with_reference_jobs(self, worker_type, num_workers,
-                                     num_profiling_jobs_per_machine=8):
-        num_workers_left = num_workers
-        num_profiling_machines = int(self._cluster_spec[worker_type] *
-                                     self._profiling_percentage)
-        num_profiling_jobs_per_machine = 8
+    def _get_max_num_profiling_workers(self, worker_type):
+        num_remaining_profiling_jobs = 0
+        for job_id in self._jobs_to_profile[worker_type]:
+            num_remaining_profiling_jobs += \
+                len(self._jobs_to_profile[worker_type][job_id])
+        num_profiling_jobs_per_worker = \
+            self._time_per_iteration // TIME_PER_PROFILING_MEASUREMENT
+        return math.ceil(num_remaining_profiling_jobs /\
+                         num_profiling_jobs_per_worker)
+
+    def _profile_with_reference_jobs(self, worker_type, num_profiling_workers):
+        num_profiling_jobs_per_worker = \
+            self._time_per_iteration // TIME_PER_PROFILING_MEASUREMENT
         available_profiling_slots = \
-            num_profiling_machines * num_profiling_jobs_per_machine
+            num_profiling_workers * num_profiling_jobs_per_worker
         used_profiling_slots = 0
         oracle_throughputs = self._oracle_throughputs[worker_type]
 
@@ -569,10 +572,6 @@ class Scheduler:
                     self._num_profiling_data_points_per_job):
                     del self._jobs_to_profile[worker_type][job_id]
                     break
-        num_workers_left -= int(math.ceil(used_profiling_slots / \
-                                          num_profiling_jobs_per_machine))
-        return num_workers_left
-
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_types):
@@ -591,15 +590,17 @@ class Scheduler:
         scheduled_jobs = {}
 
         num_workers_left = {}
+        num_estimation_workers = {}
         for worker_type in worker_types:
             scheduled_jobs[worker_type] = []
             num_workers = self._cluster_spec[worker_type]
+            num_workers_left[worker_type] = num_workers
             if self._estimate_throughputs:
-                num_workers_left[worker_type] = \
-                    self._profile_with_reference_jobs(worker_type,
-                                                      num_workers)
-            else:
-                num_workers_left[worker_type] = num_workers
+                num_estimation_workers[worker_type] = \
+                    min(math.ceil(self._profiling_percentage * num_workers),
+                        self._get_max_num_profiling_workers(worker_type))
+                num_workers_left[worker_type] -= \
+                    num_estimation_workers[worker_type]
 
         sorted_job_queue = []
         for worker_type in worker_types:
@@ -666,6 +667,13 @@ class Scheduler:
             for single_job_id in job_id.singletons():
                 already_scheduled_jobs.add(single_job_id)
             scheduled_jobs[worker_type].append((job_id, scale_factor))
+
+        if self._estimate_throughputs:
+            for worker_type in self._worker_types:
+                num_estimation_workers[worker_type] += \
+                    num_workers_left[worker_type]
+                self._profile_with_reference_jobs(
+                        worker_type, num_workers_left[worker_type])
 
         return scheduled_jobs
 
@@ -804,7 +812,7 @@ class Scheduler:
         single_job_ids = job_id.singletons()
         if job_id.is_pair() and self._estimate_throughputs and self._simulate:
             oracle_throughputs = self._oracle_throughputs[worker_type]
-            scale_factor = self._scale_factors[job_id[0]]
+            scale_factor = self._jobs[job_id.singletons()[0]].scale_factor
             job_types = []
             for single_job_id in single_job_ids:
                 job_types.append((self._jobs[single_job_id].job_type,
@@ -1695,9 +1703,11 @@ class Scheduler:
         for key in self._oracle_throughputs[all_worker_types[0]].keys():
             if key[1] == 1:
                 all_job_types.append(key)
-        self._reference_job_types = \
+        reference_job_types_idx = \
             self._throughput_estimation_generator.choice(
-                    all_job_types, num_reference_models, replace=False)
+                    len(all_job_types), num_reference_models, replace=False)
+        self._reference_job_types = \
+            [all_job_types[x] for x in reference_job_types_idx]
         for worker_type in self._oracle_throughputs:
             oracle_throughputs = self._oracle_throughputs[worker_type]
             self._reference_throughputs[worker_type] = \
