@@ -282,7 +282,7 @@ def read_all_throughputs_json(throughputs_file):
         throughputs = json.load(f)
     return throughputs
 
-def get_policy(policy_name, solver, seed=None):
+def get_policy(policy_name, solver=None, seed=None):
     if policy_name.startswith('allox'):
         if policy_name == 'allox':
             alpha = 1.0
