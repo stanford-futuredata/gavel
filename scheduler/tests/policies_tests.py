@@ -191,38 +191,38 @@ class TestPolicies(unittest.TestCase):
         policy = max_min_fairness.MaxMinFairnessPolicyWithPacking(
             solver='ECOS')
         unflattened_job_type_throughputs = {
-            'A': {
+            ('A', 1): {
                 'v100': {
                     None: 2.0,
-                    'A': 0.0,
-                    'B': 1.0,
+                    ('A', 1): 0.0,
+                    ('B', 1): 1.0,
                 },
                 'p100': {
                     None: 1.0,
-                    'A': 0.0,
-                    'B': 0.5,
+                    ('A', 1): 0.0,
+                    ('B', 1): 0.5,
                 },
                 'k80': {
                     None: 0.5,
-                    'A': 0.0,
-                    'B': 0.25,
+                    ('A', 1): 0.0,
+                    ('B', 1): 0.25,
                 },
             },
-            'B': {
+            ('B', 1): {
                 'v100': {
                     None: 10.0,
-                    'A': 5.0,
-                    'B': 0.0,
+                    ('A', 1): 5.0,
+                    ('B', 1): 0.0,
                 },
                 'p100': {
                     None: 5.0,
-                    'A': 2.5,
-                    'B': 0.0,
+                    ('A', 1): 2.5,
+                    ('B', 1): 0.0,
                 },
                 'k80': {
                     None: 2.5,
-                    'A': 1.25,
-                    'B': 0.0
+                    ('A', 1): 1.25,
+                    ('B', 1): 0.0
                 },
             },
         }
@@ -233,8 +233,8 @@ class TestPolicies(unittest.TestCase):
         unflattened_priority_weights = {JobIdPair(0, None): 1,
                                         JobIdPair(1, None): 1}
         job_id_to_job_type = {
-            JobIdPair(0, None): 'A',
-            JobIdPair(1, None): 'B',
+            JobIdPair(0, None): ('A', 1),
+            JobIdPair(1, None): ('B', 1),
         }
         cluster_spec = {
             'v100': 1,
