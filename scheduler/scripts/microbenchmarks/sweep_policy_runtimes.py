@@ -89,7 +89,8 @@ def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
         for worker_type in cluster_spec:
             throughputs[job_id][worker_type] = \
                 oracle_throughputs[worker_type][job_type_key]['null']
-        if 'pack' in policy_name:
+    if 'pack' in policy_name:
+        for i in range(num_active_jobs): 
             for j in range(num_active_jobs):
                 if i < j and jobs[i].scale_factor == jobs[j].scale_factor:
                     other_job_type_key = \
