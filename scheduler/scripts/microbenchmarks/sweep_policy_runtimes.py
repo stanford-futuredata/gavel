@@ -63,20 +63,15 @@ def _generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
 
     return job
 
-def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
-                    oracle_throughputs, generate_multi_gpu_jobs,
-                    generate_multi_priority_jobs, num_trials, solver):
-    cluster_spec = {}
-    v100s, p100s, k80s = cluster_spec_str.split(':')
-    cluster_spec = {
-        'v100': int(v100s),
-        'p100': int(p100s),
-        'k80': int(k80s),
-    }
-
-    # TODO: support sweeping seeds?
+def generate_input(num_active_jobs,
+                   cluster_spec,
+                   policy_name,
+                   oracle_throughputs,
+                   generate_multi_gpu_jobs,
+                   generate_multi_priority_jobs,
+                   seed):
     rng = random.Random()
-    rng.seed(0)
+    rng.seed(seed)
     throughputs = {}
     jobs = {}
     for i in range(num_active_jobs):
@@ -102,9 +97,27 @@ def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
     scale_factors = {
         JobIdPair(i, None): jobs[i].scale_factor for i in range(num_active_jobs)
     }
+    return throughputs, jobs, scale_factors
+
+def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
+                    oracle_throughputs, generate_multi_gpu_jobs,
+                    generate_multi_priority_jobs, num_trials, solver):
+    cluster_spec = {}
+    v100s, p100s, k80s = cluster_spec_str.split(':')
+    cluster_spec = {
+        'v100': int(v100s),
+        'p100': int(p100s),
+        'k80': int(k80s),
+    }
+
     results_str = '%s,%d' % (policy_name, num_active_jobs)
     results = []
     for trial in range(num_trials):
+        throughputs, jobs, scale_factors = generate_input(
+            num_active_jobs, cluster_spec,
+            policy_name, oracle_throughputs,
+            generate_multi_gpu_jobs,
+            generate_multi_priority_jobs, seed=trial)
         policy = utils.get_policy(policy_name, solver=solver)
         start_time = time.time()
         with open('/dev/null', 'w') as f:
