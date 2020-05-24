@@ -53,7 +53,8 @@ def test_water_filling_multilevel():
     allocation = policy.get_allocation(unflattened_throughputs, scale_factors,
                                        unflattened_priority_weights,
                                        cluster_spec,
-                                       entity_to_job_mapping=entity_to_job_mapping)
+                                       entity_to_job_mapping=entity_to_job_mapping,
+                                       verbose=True)
     print()
     return time.time() - start_time
 

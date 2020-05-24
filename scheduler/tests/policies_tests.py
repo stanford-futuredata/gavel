@@ -1,7 +1,7 @@
 import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
 from policies import allox, finish_time_fairness, gandiva, isolated, \
-    max_min_fairness, max_sum_throughput
+    max_min_fairness, max_min_fairness_water_filling, max_sum_throughput
 
 import itertools
 import numpy as np
@@ -187,42 +187,65 @@ class TestPolicies(unittest.TestCase):
                               unflattened_priority_weights,
                               cluster_spec)
 
+    def test_max_min_fairness_water_filling_with_packing(self):
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPacking()
+        unflattened_throughputs = {
+            JobIdPair(0, None): {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            JobIdPair(1, None): {'v100': 3.0, 'p100': 2.0, 'k80': 1.0},
+            JobIdPair(0, 1): {'v100': (2.0, 3.0), 'p100': (1.0, 2.0),
+                              'k80': (0.5, 1.0)},
+        }
+        scale_factors = {
+            JobIdPair(0, None): 1,
+            JobIdPair(1, None): 1
+        }
+        unflattened_priority_weights = {JobIdPair(0, None): 1,
+                                        JobIdPair(1, None): 1}
+        cluster_spec = {
+            'v100': 1,
+            'p100': 1,
+            'k80': 1
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              unflattened_priority_weights,
+                              cluster_spec)
+
     def test_max_min_fairness_with_packing_using_job_type_throughputs(self):
         policy = max_min_fairness.MaxMinFairnessPolicyWithPacking(
             solver='ECOS')
         unflattened_job_type_throughputs = {
-            'A': {
+            ('A', 1): {
                 'v100': {
                     None: 2.0,
-                    'A': 0.0,
-                    'B': 1.0,
+                    ('A', 1): 0.0,
+                    ('B', 1): 1.0,
                 },
                 'p100': {
                     None: 1.0,
-                    'A': 0.0,
-                    'B': 0.5,
+                    ('A', 1): 0.0,
+                    ('B', 1): 0.5,
                 },
                 'k80': {
                     None: 0.5,
-                    'A': 0.0,
-                    'B': 0.25,
+                    ('A', 1): 0.0,
+                    ('B', 1): 0.25,
                 },
             },
-            'B': {
+            ('B', 1): {
                 'v100': {
                     None: 10.0,
-                    'A': 5.0,
-                    'B': 0.0,
+                    ('A', 1): 5.0,
+                    ('B', 1): 0.0,
                 },
                 'p100': {
                     None: 5.0,
-                    'A': 2.5,
-                    'B': 0.0,
+                    ('A', 1): 2.5,
+                    ('B', 1): 0.0,
                 },
                 'k80': {
                     None: 2.5,
-                    'A': 1.25,
-                    'B': 0.0
+                    ('A', 1): 1.25,
+                    ('B', 1): 0.0
                 },
             },
         }
@@ -233,8 +256,8 @@ class TestPolicies(unittest.TestCase):
         unflattened_priority_weights = {JobIdPair(0, None): 1,
                                         JobIdPair(1, None): 1}
         job_id_to_job_type = {
-            JobIdPair(0, None): 'A',
-            JobIdPair(1, None): 'B',
+            JobIdPair(0, None): ('A', 1),
+            JobIdPair(1, None): ('B', 1),
         }
         cluster_spec = {
             'v100': 1,
