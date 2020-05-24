@@ -36,7 +36,7 @@ def main(args):
 
     # Submit jobs to the scheduler.
     start_time = datetime.datetime.now()
-    while not job_queue.empty():
+    while not job_queue.empty() and not sched.is_done(jobs_to_complete):
         job, arrival_time = job_queue.get()
         current_time = datetime.datetime.now()
         elapsed_seconds = (current_time - start_time).seconds

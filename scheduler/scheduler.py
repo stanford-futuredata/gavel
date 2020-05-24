@@ -26,7 +26,7 @@ SLEEP_SECONDS = 2
 INFINITY = int(1e9)
 DEFAULT_THROUGHPUT = 1
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
-EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
+EMA_ALPHA = .5 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 DEFAULT_MATRIX_COMPLETION_K = 10
 DEFAULT_MATRIX_COMPLETION_MU = 1e-2
@@ -532,7 +532,10 @@ class Scheduler:
     def is_done(self, jobs_to_complete=None):
         """Returns whether the scheduler is done with all its assigned work."""
         with self._scheduler_lock:
-            return jobs_to_complete.issubset(self._completed_jobs)
+            if jobs_to_complete is None:
+                return len(self._jobs) == 0
+            else:
+                return jobs_to_complete.issubset(self._completed_jobs)
 
     def reset_workers(self):
         """Sends a shutdown signal to every worker and ends the scheduler."""
