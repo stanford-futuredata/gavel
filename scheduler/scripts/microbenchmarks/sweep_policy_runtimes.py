@@ -117,7 +117,7 @@ def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
             num_active_jobs, cluster_spec,
             policy_name, oracle_throughputs,
             generate_multi_gpu_jobs,
-            generate_multi_priority_jobs, seed=trial)
+            generate_multi_priority_jobs, seed=trial+2)
         policy = utils.get_policy(policy_name, solver=solver)
         start_time = time.time()
         with open('/dev/null', 'w') as f:
