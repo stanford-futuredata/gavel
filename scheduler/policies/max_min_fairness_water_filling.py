@@ -257,16 +257,20 @@ class WaterFillingAlgorithm:
                  for job_id in job_ids])
 
             old_x, old_c, old_mask = np.copy(x), c, np.copy(mask)
-            x, c, mask = self._get_allocation(
-                job_ids, priority_weights, proportional_throughputs,
-                scale_factors_array,
-                m, n, final_normalized_effective_throughputs,
-                normalized_effective_throughputs_so_far)
-            if x is None:
+            try:
+                x, c, mask = self._get_allocation(
+                    job_ids, priority_weights, proportional_throughputs,
+                    scale_factors_array,
+                    m, n, final_normalized_effective_throughputs,
+                    normalized_effective_throughputs_so_far)
+                if x is None:
+                    x, c, mask = old_x, old_c, old_mask
+                    done = True
+                else:
+                    normalized_effective_throughputs_so_far += np.multiply(mask, c)
+            except:
                 x, c, mask = old_x, old_c, old_mask
                 done = True
-            else:
-                normalized_effective_throughputs_so_far += np.multiply(mask, c)
 
             self._previous_priority_weights = previous_priority_weights
             if verbose:
