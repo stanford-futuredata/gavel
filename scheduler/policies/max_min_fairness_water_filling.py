@@ -426,7 +426,7 @@ class MaxMinFairnessWaterFillingPolicyWithPacking(PolicyWithPacking, WaterFillin
     def __init__(self, priority_reweighting_policies=None):
         WaterFillingAlgorithm.__init__(self, priority_reweighting_policies)
         PolicyWithPacking.__init__(self, solver=None)
-        self._name = 'MaxMinFairnessWaterFilling_Packed'
+        self._name = 'MaxMinFairnessWaterFilling_Packing'
         self._proportional_policy = ProportionalPolicy()
 
     def _get_constraints(self, x, scale_factors_array):
