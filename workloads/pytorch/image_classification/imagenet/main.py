@@ -1,11 +1,10 @@
 import argparse
-import datetime
 import os
 import random
 import shutil
-import sys
 import time
 import warnings
+import copy
 
 import torch
 import torch.nn as nn
@@ -18,16 +17,26 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
+from torch.autograd import Variable
 
-# TODO: Figure out a cleaner way of including gavel_iterator.
-imagenet_dir = os.path.dirname(os.path.realpath(__file__))
-image_classification_dir = os.path.dirname(imagenet_dir)
-pytorch_dir = os.path.dirname(image_classification_dir)
-workloads_dir = os.path.dirname(pytorch_dir)
-gpusched_dir = os.path.dirname(workloads_dir)
-scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
-sys.path.append(scheduler_dir)
-from gavel_iterator import GavelIterator
+###
+import torch_xla
+import torch_xla.core.xla_model as xm
+assert os.environ['COLAB_TPU_ADDR'], 'Make sure to select TPU from Edit > Notebook settings > Hardware accelerator'
+
+class SyntheticDataset(torch.utils.data.dataset.Dataset):
+    def __init__(self, input_size, length, num_classes=1000):
+        self.tensor = Variable(torch.rand(*input_size)).type(torch.FloatTensor)
+        self.target = torch.Tensor(1).random_(0, num_classes)[0].type(torch.LongTensor)
+        print(self.target)
+        self.length = length
+    def __getitem__(self, index):
+        return self.tensor, self.target
+    def __len__(self):
+        return self.length
+
+
+###
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
@@ -56,7 +65,7 @@ parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)')
+                   metavar='W', help='weight decay (default: 1e-4)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--checkpoint_dir',
@@ -85,23 +94,18 @@ parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
 parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
-parser.add_argument('--max_duration', type=int, default=None,
-                    help='Maximum duration in seconds')
-parser.add_argument('--job_id', type=int, default=None, help='Job ID')
-parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
-parser.add_argument('--sched_addr', type=str, default=None,
-                    help='Scheduler server')
-parser.add_argument('--sched_port', type=int, default=None,
-                    help='Scheduler port')
+parser.add_argument('--timeout', type=int, default=None,
+                    help='Timeout (in seconds)')
+parser.add_argument('--synth', dest='synthetic_data', action='store_true', default=False,
+                    help='synthetic data flag')
 
 best_acc1 = 0
 total_minibatches = 0
-total_elapsed_time = 0
+cumulative_seconds = 0
 
 def main():
-    global args, best_acc1, total_minibatches, total_elapsed_time
+    global args, best_acc1, total_minibatches, cumulative_seconds
     args = parser.parse_args()
-    torch.cuda.set_device(args.local_rank)
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -121,12 +125,7 @@ def main():
         dist.init_process_group(backend=args.dist_backend,
                                 init_method=args.dist_url,
                                 world_size=args.world_size,
-                                rank=args.rank,
-                                timeout=datetime.timedelta(seconds=30))
-
-    args.enable_gavel_iterator = False
-    if args.job_id is not None:
-        args.enable_gavel_iterator = True
+                                rank=args.rank)
 
     # create model
     if args.pretrained:
@@ -136,14 +135,18 @@ def main():
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
 
-    model = model.cuda()
+###
+#    torch.cuda.set_device(args.local_rank)
+#    model = model.cuda()
+#    dev = xm.xla_device()
+#    model = model.to(dev)
     if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[args.local_rank],
-                output_device=args.local_rank)
-
+        model = torch.nn.parallel.DistributedDataParallel(model)
+    
     # define loss function (criterion) and optimizer
+#    criterion = nn.CrossEntropyLoss().cuda()
     criterion = nn.CrossEntropyLoss().cuda()
+###
 
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
@@ -157,7 +160,7 @@ def main():
             print("=> loading checkpoint '{}'".format(checkpoint_path))
             checkpoint = torch.load(checkpoint_path)
             args.start_epoch = checkpoint['epoch']
-            # best_acc1 = checkpoint['best_acc1']
+            best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
@@ -173,117 +176,132 @@ def main():
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ]))
+    if args.synthetic_data:
+        train_dataset = SyntheticDataset((3, 299, 299),1281167)
+        train_sampler = None
+        train_loader = torch.utils.data.DataLoader(
+                                             train_dataset, 
+                                             batch_size=args.batch_size,       
+                                             shuffle=(train_sampler is None),
+                                             num_workers=args.workers, 
+                                             pin_memory=True, sampler=train_sampler)
+    else:
+        train_dataset = datasets.ImageFolder(
+            traindir,
+            transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ]))
 
+###
+#    x = np.random.randn(number_of_samples, sample_height, sample_width, 3).astype(np.float32)
+#    y = np.eye(num_classes)[np.random.randint(num_classes, size=number_of_samples)].astype(np.float32)
+###
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
     else:
         train_sampler = None
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler,
-        timeout=30)
+###
+    if args.synthetic_data:
+        train_loader = torch.utils.data.DataLoader(
+                                             train_dataset,
+                                             batch_size=args.batch_size,
+                                             shuffle=(train_sampler is None),
+                                             num_workers=args.workers,
+                                             pin_memory=True, sampler=train_sampler)
+        val_loader = copy.deepcopy(train_loader)
+    else: 
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+            num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(valdir, transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
+###
 
     if args.evaluate:
         validate(val_loader, model, criterion)
         return
 
-    if args.enable_gavel_iterator:
-        train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
-                                     args.distributed,
-                                     args.sched_addr, args.sched_port)
+    epoch = 0
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
         adjust_learning_rate(optimizer, epoch)
 
         # train for one epoch
-        num_minibatches, elapsed_time, finished_epoch = \
+        num_minibatches, cumulative_seconds, finished_epoch = \
             train(train_loader, model, criterion, optimizer,
                   epoch, total_minibatches,
                   max_minibatches=args.num_minibatches,
-                  total_elapsed_time=total_elapsed_time,
-                  max_duration=args.max_duration)
+                  cumulative_seconds=cumulative_seconds,
+                  timeout=args.timeout)
         total_minibatches += num_minibatches
-        total_elapsed_time += elapsed_time
 
-        if args.enable_gavel_iterator and train_loader.done:
-            break
-        elif (args.num_minibatches is not None and
+        if (args.num_minibatches is not None and
             total_minibatches >= args.num_minibatches):
-            if args.enable_gavel_iterator:
-                train_loader.complete()
             break
-        elif(args.max_duration is not None and
-             total_elapsed_time >= args.max_duration):
-            if args.enable_gavel_iterator:
-                train_loader.complete()
-            break
+        elif args.timeout is not None and cumulative_seconds >= args.timeout:
+          break
 
         # evaluate on validation set
-        # acc1 = validate(val_loader, model, criterion)
+        acc1 = validate(val_loader, model, criterion)
 
         # remember best acc@1 and save checkpoint
-        #best_acc1 = max(acc1, best_acc1)
+        best_acc1 = max(acc1, best_acc1)
     save_checkpoint({
         'epoch': epoch + 1,
         'arch': args.arch,
         'state_dict': model.state_dict(),
-        # 'best_acc1': best_acc1,
+        'best_acc1': best_acc1,
         'optimizer' : optimizer.state_dict(),
     }, checkpoint_path)
 
+
 def train(train_loader, model, criterion, optimizer, epoch,
-          total_minibatches, max_minibatches, total_elapsed_time,
-          max_duration):
+          total_minibatches, max_minibatches, cumulative_seconds,
+          timeout):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
-    elapsed_time = 0
 
     # switch to train mode
     model.train()
 
-    start = time.time()
     end = time.time()
     finished_epoch = True
-    i = 0
+    start_time = time.time()
     for i, (input, target) in enumerate(train_loader):
         if (total_minibatches is not None and
             i + total_minibatches >= max_minibatches):
             finished_epoch = False
             break
-        elif (max_duration is not None and
-              total_elapsed_time + elapsed_time >= max_duration):
-            finished_epoch = False
-            break
-
+        elif (timeout is not None and cumulative_seconds >= timeout):
+          break
+        cumulative_seconds += time.time() - start_time
+        start_time = time.time()
         # measure data loading time
         data_time.update(time.time() - end)
 
-        input = input.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True)
 
+###
+        #input = input.cuda(non_blocking=True)
+        #target = target.cuda(non_blocking=True)
+        input = input.to(dev)
+        target = target.to(dev)
+###
         # compute output
         output = model(input)
         loss = criterion(output, target)
@@ -302,8 +320,6 @@ def train(train_loader, model, criterion, optimizer, epoch,
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-        elapsed_time += (end - start)
-        start = time.time()
 
         if i % args.print_freq == 0:
             print('Epoch: [{0}][{1}/{2}]\t'
@@ -317,8 +333,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
         if (args.throughput_estimation_interval is not None and
             i % args.throughput_estimation_interval == 0):
-            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(), i))
-    return i, elapsed_time, finished_epoch
+            print('[THROUGHPUT_ESTIMATION]\t%s\t%d' % (time.time(),
+                                                       total_minibatches+i+1))
+    return i, cumulative_seconds, finished_epoch
 
 def validate(val_loader, model, criterion):
     batch_time = AverageMeter()
@@ -332,9 +349,12 @@ def validate(val_loader, model, criterion):
     with torch.no_grad():
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
-            input = input.cuda(non_blocking=True)
-            target = target.cuda(non_blocking=True)
-
+###
+            #input = input.cuda(non_blocking=True)
+            #target = target.cuda(non_blocking=True)
+            input = input.to(dev)
+            target = target.to(dev)
+###
             # compute output
             output = model(input)
             loss = criterion(output, target)
