@@ -23,6 +23,7 @@ from torch.autograd import Variable
 import torch_xla
 import torch_xla.core.xla_model as xm
 assert os.environ['COLAB_TPU_ADDR'], 'Make sure to select TPU from Edit > Notebook settings > Hardware accelerator'
+dev = xm.xla_device()
 
 class SyntheticDataset(torch.utils.data.dataset.Dataset):
     def __init__(self, input_size, length, num_classes=1000):
