@@ -86,6 +86,7 @@ def generate_input(num_active_jobs,
                 oracle_throughputs[worker_type][job_type_key]['null']
     if 'pack' in policy_name:
         for i in range(num_active_jobs): 
+            job_type_key = (jobs[i].job_type, jobs[i].scale_factor)
             for j in range(num_active_jobs):
                 if i < j and jobs[i].scale_factor == jobs[j].scale_factor:
                     other_job_type_key = \
