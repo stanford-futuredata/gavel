@@ -205,7 +205,7 @@ job_table = [
 
 
 job_table = [
-    Job(model='ResNet-50 (batch size 128)',
+    Job(model='ResNet-50 (batch size 64)',
         command=('cd %s/gpusched/workloads/pytorch/'
                  'image_classification/imagenet && python '
                  'main.py -j 4 -a resnet50 --synth -b 59 %s/data/imagenet/pytorch '
