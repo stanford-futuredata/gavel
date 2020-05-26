@@ -23,7 +23,6 @@ from torch.autograd import Variable
 import torch_xla
 import torch_xla.core.xla_model as xm
 assert os.environ['COLAB_TPU_ADDR'], 'Make sure to select TPU from Edit > Notebook settings > Hardware accelerator'
-dev = xm.xla_device()
 
 class SyntheticDataset(torch.utils.data.dataset.Dataset):
     def __init__(self, input_size, length, num_classes=1000):
@@ -139,8 +138,8 @@ def main():
 ###
 #    torch.cuda.set_device(args.local_rank)
 #    model = model.cuda()
-#    dev = xm.xla_device()
-#    model = model.to(dev)
+     dev = xm.xla_device()
+     model = model.to(dev)
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model)
     
