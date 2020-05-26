@@ -138,8 +138,8 @@ def main():
 ###
 #    torch.cuda.set_device(args.local_rank)
 #    model = model.cuda()
-     dev = xm.xla_device()
-     model = model.to(dev)
+    dev = xm.xla_device()
+    model = model.to(dev)
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model)
     
