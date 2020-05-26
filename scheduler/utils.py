@@ -282,7 +282,8 @@ def read_all_throughputs_json(throughputs_file):
         throughputs = json.load(f)
     return throughputs
 
-def get_policy(policy_name, solver=None, seed=None):
+def get_policy(policy_name, solver=None, seed=None,
+               priority_reweighting_policies=None):
     if policy_name.startswith('allox'):
         if policy_name == 'allox':
             alpha = 1.0
@@ -316,11 +317,14 @@ def get_policy(policy_name, solver=None, seed=None):
         policy = \
             max_min_fairness.MaxMinFairnessPolicyWithPacking(solver=solver)
     elif policy_name == 'max_min_fairness_water_filling':
-        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicy()
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicy(
+            priority_reweighting_policies=priority_reweighting_policies)
     elif policy_name == 'max_min_fairness_water_filling_perf':
-        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf()
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(
+            priority_reweighting_policies=priority_reweighting_policies)
     elif policy_name == 'max_min_fairness_water_filling_packed':
-        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPacking()
+        policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPacking(
+            priority_reweighting_policies=priority_reweighting_policies)
     elif policy_name == 'max_sum_throughput_perf':
         policy = max_sum_throughput.ThroughputSumWithPerf(solver=solver)
     elif policy_name == 'max_sum_throughput_normalized_by_cost_perf':

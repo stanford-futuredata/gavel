@@ -17,7 +17,7 @@ class WaterFillingAlgorithm:
         self._lp = None
         self._milp = None
 
-    def _compute_priority_weights(self, priority_weights, entity_to_job_mapping,
+    def _compute_priority_weights(self, entity_weights, priority_weights, entity_to_job_mapping,
                                   final_normalized_effective_throughputs, job_ids):
         returned_priority_weights = {}
         if self._priority_reweighting_policies is None:
@@ -35,7 +35,7 @@ class WaterFillingAlgorithm:
                 # final priority weight of a job should be proportional to the
                 # passed-in weight. A job does not contribute its priority once
                 # saturated.
-                entity_weight = priority_weights[entity_id]
+                entity_weight = entity_weights[entity_id]
                 total_job_priority_in_entity = 0.0
                 for job_id in entity_to_job_mapping[entity_id]:
                     if job_id in final_normalized_effective_throughputs:
@@ -51,7 +51,7 @@ class WaterFillingAlgorithm:
             elif priority_reweighting_policy == 'fifo':
                 # Active jobs are given the corresponding entity's weight.
                 # Jobs become active in FIFO order within an entity.
-                entity_weight = priority_weights[entity_id]
+                entity_weight = entity_weights[entity_id]
                 total_job_priority_in_entity = 0.0
                 entity_to_job_mapping[entity_id].sort()
                 done = False
@@ -235,6 +235,7 @@ class WaterFillingAlgorithm:
     def _run_get_allocation_iterations(self, job_ids, m, n,
                                        proportional_throughputs,
                                        scale_factors_array,
+                                       entity_weights,
                                        unflattened_priority_weights, cluster_spec,
                                        entity_to_job_mapping, verbose):
         done = False
@@ -245,6 +246,7 @@ class WaterFillingAlgorithm:
         c, x, mask = 0, None, None
         while not done:
             priority_weights = self._compute_priority_weights(
+                entity_weights,
                 unflattened_priority_weights,
                 entity_to_job_mapping,
                 final_normalized_effective_throughputs, job_ids)
@@ -315,6 +317,7 @@ class MaxMinFairnessWaterFillingPolicy(Policy, WaterFillingAlgorithm):
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec,
+                       entity_weights=None,
                        entity_to_job_mapping=None, verbose=False,
                        return_effective_throughputs=False):
         throughputs, index = super().flatten(unflattened_throughputs,
@@ -332,8 +335,11 @@ class MaxMinFairnessWaterFillingPolicy(Policy, WaterFillingAlgorithm):
 
         unflattened_x = \
             self._max_min_fairness_perf_policy.get_allocation(
-                new_unflattened_throughputs, scale_factors, unflattened_priority_weights,
-                cluster_spec, entity_to_job_mapping=entity_to_job_mapping,
+                new_unflattened_throughputs, scale_factors,
+                unflattened_priority_weights,
+                cluster_spec,
+                entity_weights=entity_weights,
+                entity_to_job_mapping=entity_to_job_mapping,
                 verbose=verbose,
                 return_effective_throughputs=False)
         x = np.zeros((len(job_ids), len(worker_types)))
@@ -365,6 +371,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy, WaterFillingAlgorithm):
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec,
+                       entity_weights=None,
                        entity_to_job_mapping=None, verbose=False,
                        return_effective_throughputs=False):
         throughputs, index = super().flatten(unflattened_throughputs,
@@ -390,6 +397,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy, WaterFillingAlgorithm):
         x = self._run_get_allocation_iterations(
             job_ids, m, n, proportional_throughputs,
             scale_factors_array,
+            entity_weights,
             unflattened_priority_weights, cluster_spec,
             entity_to_job_mapping=entity_to_job_mapping, verbose=verbose)
 
@@ -457,6 +465,7 @@ class MaxMinFairnessWaterFillingPolicyWithPacking(PolicyWithPacking, WaterFillin
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
                        unflattened_priority_weights, cluster_spec,
+                       entity_weights=None,
                        entity_to_job_mapping=None, verbose=False,
                        return_effective_throughputs=False):
         all_throughputs, index = \
@@ -491,6 +500,7 @@ class MaxMinFairnessWaterFillingPolicyWithPacking(PolicyWithPacking, WaterFillin
         x = self._run_get_allocation_iterations(
             single_job_ids, m, n, proportional_throughputs,
             scale_factors_array,
+            entity_weights,
             unflattened_priority_weights, cluster_spec,
             entity_to_job_mapping=entity_to_job_mapping, verbose=verbose)
 
