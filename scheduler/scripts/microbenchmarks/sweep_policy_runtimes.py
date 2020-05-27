@@ -100,16 +100,15 @@ def generate_input(num_active_jobs,
     }
     return throughputs, jobs, scale_factors
 
-def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
+def measure_runtime(num_active_jobs, policy_name,
                     oracle_throughputs, generate_multi_gpu_jobs,
                     generate_multi_priority_jobs, num_trials, solver):
-    cluster_spec = {}
-    v100s, p100s, k80s = cluster_spec_str.split(':')
     cluster_spec = {
-        'v100': int(v100s),
-        'p100': int(p100s),
-        'k80': int(k80s),
+        'v100': num_active_jobs // 4,
+        'p100': num_active_jobs // 4,
+        'k80': num_active_jobs // 4,
     }
+    print(cluster_spec)
 
     results_str = '%s,%d' % (policy_name, num_active_jobs)
     results = []
@@ -119,7 +118,20 @@ def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
             policy_name, oracle_throughputs,
             generate_multi_gpu_jobs,
             generate_multi_priority_jobs, seed=trial+2)
-        policy = utils.get_policy(policy_name, solver=solver)
+        if "water_filling" in policy_name:
+            num_entities = 5
+            priority_reweighting_policies = {}
+            entity_to_job_mapping = {}
+            entity_weights = {}
+            for i in range(num_entities):
+                entity_id = 'entity%d' % i
+                priority_reweighting_policies[entity_id] = 'fairness'
+                entity_to_job_mapping[entity_id] = []
+                entity_weights[entity_id] = random.randint(1, 3)
+            policy = utils.get_policy(policy_name, solver=solver,
+                priority_reweighting_policies=priority_reweighting_policies)
+        else:
+            policy = utils.get_policy(policy_name, solver=solver)
         start_time = time.time()
         with open('/dev/null', 'w') as f:
             with contextlib.redirect_stdout(f):
@@ -127,9 +139,19 @@ def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
                     priority_weights = {
                         JobIdPair(i, None): jobs[i].priority_weight for i in range(num_active_jobs)
                     }
-                    policy.get_allocation(
-                        throughputs, scale_factors, priority_weights,
-                        cluster_spec)
+                    if "WaterFilling" in policy.name:
+                        for i in range(num_active_jobs):
+                            entity_id = 'entity%d' % random.randint(0, num_entities-1)
+                            entity_to_job_mapping[entity_id].append(JobIdPair(i, None))
+                        policy.get_allocation(
+                            throughputs, scale_factors, priority_weights,
+                            cluster_spec,
+                            entity_weights=entity_weights,
+                            entity_to_job_mapping=entity_to_job_mapping)
+                    else:
+                        policy.get_allocation(
+                            throughputs, scale_factors, priority_weights,
+                            cluster_spec)
                 elif policy.name.startswith('MinTotalDuration'):
                     num_steps_remaining = {
                         JobIdPair(i, None): jobs[i].num_steps for i in range(num_active_jobs)
@@ -149,7 +171,6 @@ def measure_runtime(cluster_spec_str, num_active_jobs, policy_name,
     return results_str
 
 def main(args):
-    cluster_spec = args.cluster_spec
     all_num_active_jobs = args.num_active_jobs
     all_policies = args.policies
     oracle_throughputs =\
@@ -170,7 +191,7 @@ def main(args):
 
     for policy in all_policies:
         for num_active_jobs in all_num_active_jobs:
-            results = measure_runtime(cluster_spec, num_active_jobs,
+            results = measure_runtime(num_active_jobs,
                                       policy, oracle_throughputs,
                                       args.generate_multi_gpu_jobs,
                                       args.generate_multi_priority_jobs,
@@ -195,9 +216,6 @@ if __name__ == '__main__':
     parser.add_argument('--generate-multi-priority-jobs', action='store_true',
                         default=False,
                         help=('If set, generates some jobs with higher priority'))
-    parser.add_argument('-c', '--cluster-spec', type=str, default='36:36:36',
-                        help=('Cluster specification in the form of '
-                              '#v100s:#p100s:#k80s'))
     parser.add_argument('-n', '--num_active_jobs', type=int, nargs='+',
                         default=[2**i for i in range(4, 10)],
                         help='List of number of active jobs to sweep')

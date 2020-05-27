@@ -12,14 +12,15 @@ def test_water_filling_multilevel():
     priority_reweighting_policies = {}
     unflattened_priority_weights = {}
     entity_to_job_mapping = {}
+    entity_weights = {}
     for i in range(num_entities):
         entity_id = 'entity%d' % i
         priority_reweighting_policies[entity_id] = [
             'fifo', 'fairness'][random.randint(0, 1)]
         entity_to_job_mapping[entity_id] = []
-        unflattened_priority_weights[entity_id] = random.randint(1, 5)
+        entity_weights[entity_id] = random.randint(1, 5)
         print("Entity %d: Priority=%d, Policy=%s" % (
-            i, unflattened_priority_weights[entity_id],
+            i, entity_weights[entity_id],
             priority_reweighting_policies[entity_id]))
 
     policy = max_min_fairness_water_filling.MaxMinFairnessWaterFillingPolicyWithPerf(
@@ -53,6 +54,7 @@ def test_water_filling_multilevel():
     allocation = policy.get_allocation(unflattened_throughputs, scale_factors,
                                        unflattened_priority_weights,
                                        cluster_spec,
+                                       entity_weights=entity_weights,
                                        entity_to_job_mapping=entity_to_job_mapping,
                                        verbose=True)
     print()
