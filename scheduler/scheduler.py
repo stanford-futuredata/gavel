@@ -42,7 +42,8 @@ class Scheduler:
                  assign_SLOs=False,
                  enable_global_queue=False,
                  expected_num_workers=None,
-                 minimum_time_between_allocation_resets=1920):
+                 minimum_time_between_allocation_resets=1920,
+                 max_rounds=None):
 
 
         # Print config information.
@@ -215,6 +216,10 @@ class Scheduler:
         self._in_progress_updates = {}
         # Set of completed job IDs.
         self._completed_jobs = set()
+        # Maximum number of rounds.
+        self._max_rounds = max_rounds
+        # Number of completed rounds.
+        self._num_completed_rounds = 0
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -263,11 +268,11 @@ class Scheduler:
                   flush=True)
 
     def start_scheduling_thread(self):
-        self.scheduler_thread = threading.Thread(
+        self._scheduler_thread = threading.Thread(
             target=self.schedule,
             args=())
-        self.scheduler_thread.daemon = True
-        self.scheduler_thread.start()
+        self._scheduler_thread.daemon = True
+        self._scheduler_thread.start()
 
 
     def _update_per_worker_type_prices(self):
@@ -532,6 +537,9 @@ class Scheduler:
     def is_done(self, jobs_to_complete=None):
         """Returns whether the scheduler is done with all its assigned work."""
         with self._scheduler_lock:
+            if (self._max_rounds is not None and
+                self._num_completed_rounds >= self._max_rounds):
+                return True
             if jobs_to_complete is None:
                 return len(self._jobs) == 0
             else:
@@ -1460,6 +1468,9 @@ class Scheduler:
                 time.sleep(2)
                 continue
             self.reset_workers()
+            self._num_completed_rounds += 1
+            if self.is_done():
+                break
 
     def schedule(self):
         """Schedules jobs on workers."""
