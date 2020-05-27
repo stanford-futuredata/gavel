@@ -275,17 +275,15 @@ class Scheduler:
     def _update_throughput(self, job_id, worker_type, all_num_steps,
                            all_execution_times):
         # Job might have already completed.
-        if job_id not in self._jobs:
+        if not job_id.is_pair() and not job_id in self._jobs:
             return
         if self._simulate and self._estimate_throughputs:
             if not job_id.is_pair():
                 # Assume single job throughputs are already populated.
                 return
-            elif (job_id.is_pair() and
-                  not self._throughputs_mask[job_id][worker_type]):
-                self._throughputs_mask[job_id][worker_type] = True
+            else:
                 oracle_throughputs = self._oracle_throughputs[worker_type]
-                scale_factor = self._jobs[job_id[0]].scale_factor
+                scale_factor = self._jobs[job_id.singletons()[0]].scale_factor
                 job_types = []
                 for single_job_id in job_id.singletons():
                     job_types.append((self._jobs[single_job_id].job_type,
