@@ -269,7 +269,9 @@ class Dispatcher:
         self._write_queue.put('Finished resetting dispatcher')
 
     def shutdown(self, shut_down_mps=True):
+        self._write_queue.put('Shutting down dispatcher...')
         self._kill_jobs()
         self._thread_pool.terminate()
         if self._use_mps and shut_down_mps and not self._mps_initially_enabled:
             self._shutdown_mps()
+        self._write_queue.put('Finished shutting down dispatcher')
