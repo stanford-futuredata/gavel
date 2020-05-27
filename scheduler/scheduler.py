@@ -1576,6 +1576,7 @@ class Scheduler:
         """Populate metadata for job combinations involving passed-in job_id."""
 
         job = self._jobs[job_id]
+        job_type_key = (job.job_type, job.scale_factor)
         if self._estimate_throughputs:
             assert(job.scale_factor == 1)
             reference_throughputs = self._reference_throughputs[worker_type]
@@ -1584,6 +1585,8 @@ class Scheduler:
                 other_job = self._jobs[other_job_id]
                 if job.scale_factor != other_job.scale_factor:
                     continue
+                other_job_type_key = (other_job.job_type, other_job.scale_factor)
+                job_type_keys = [job_type_key, other_job_type_key]
                 merged_job_id = \
                         job_id_pair.JobIdPair(job_id[0], other_job_id[0])
                 if merged_job_id not in self._throughputs:
@@ -1595,12 +1598,19 @@ class Scheduler:
                     reference_job_types = \
                         [self._reference_job_map[job_id],
                          self._reference_job_map[other_job_id]]
+                    isolated_throughputs = \
+                        [self._oracle_throughputs[worker_type][job_type_key]['null'],
+                         self._oracle_throughputs[worker_type][other_job_type_key]['null']]
                     if job_id < other_job_id:
                         self._throughputs[merged_job_id][worker_type] = \
-                            reference_throughputs[reference_job_types[0]][reference_job_types[1]]
+                            np.multiply(
+                                reference_throughputs[reference_job_types[0]][reference_job_types[1]],
+                                isolated_throughputs)
                     else:
                         self._throughputs[merged_job_id][worker_type] = \
-                            reference_throughputs[reference_job_types[1]][reference_job_types[0]]
+                            np.multiply(
+                                reference_throughputs[reference_job_types[1]][reference_job_types[0]],
+                                isolated_throughputs[::-1])
                 elif (self._oracle_throughputs is None or
                     job.scale_factor != other_job.scale_factor):
                     self._throughputs[merged_job_id][worker_type] = [0.0, 0.0]
@@ -1610,14 +1620,12 @@ class Scheduler:
                     # order so make sure the co-located throughputs match this
                     # order.
                     scale_factor = job.scale_factor
-                    job_types = [(job.job_type, scale_factor),
-                                 (other_job.job_type, scale_factor)]
                     if job_id < other_job_id:
                         self._throughputs[merged_job_id][worker_type] = \
-                            oracle_throughputs[job_types[0]][job_types[1]]
+                            oracle_throughputs[job_type_keys[0]][job_type_keys[1]]
                     else:
                         self._throughputs[merged_job_id][worker_type] = \
-                            oracle_throughputs[job_types[1]][job_types[0]]
+                            oracle_throughputs[job_type_keys[1]][job_type_keys[0]]
 
     def _set_initial_throughput(self, job_id, worker_type):
         assert(not job_id.is_pair())
