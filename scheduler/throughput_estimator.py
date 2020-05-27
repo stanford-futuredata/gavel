@@ -14,7 +14,8 @@ def cosine_distance(a, b):
 
 class ThroughputEstimator:
     def __init__(self, oracle_throughputs, worker_types, job_types,
-                 num_reference_job_types, profiling_percentage, seed=0):
+                 num_reference_job_types, profiling_percentage, seed=0,
+                 verbose=False):
         self._rng = random.Random()
         self._rng.seed(seed)
         self._oracle_throughputs = oracle_throughputs
@@ -25,6 +26,7 @@ class ThroughputEstimator:
         self._profiling_percentage = profiling_percentage
         self._get_normalized_throughputs()
         self._get_reference_throughputs(num_reference_job_types)
+        self._verbose = verbose
 
     def _get_normalized_throughputs(self):
         m = self._m
@@ -119,19 +121,22 @@ class ThroughputEstimator:
                         np.where(mask, throughputs_matrix,
                                  np.clip(estimated_throughputs, 0, 1))[0]
                 except np.linalg.LinAlgError as e:
-                    print('WARNING: could not estimate throughputs!',
-                          file=sys.stderr)
-                    print(e, file=sys.stderr)
+                    if self._verbose:
+                        print('WARNING: could not estimate throughputs!',
+                              file=sys.stderr)
+                        print(e, file=sys.stderr)
                     return self._rng.choice(self._reference_job_types)
         else:
-            print('WARNING: Did not run matrix completion as mask is complete',
-                  file=sys.stderr)
+            if self._verbose:
+                print('WARNING: Did not run matrix completion as '
+                      'mask is complete', file=sys.stderr)
 
         # Measure the distance from the new row to every other row and find
         # the row with the smallest distance.
         distances = []
         if np.linalg.norm(throughputs_matrix[-1]) == 0:
-            print('WARNING: Norm of predicted throughputs is 0!')
+            if self._verbose:
+                print('WARNING: Norm of predicted throughputs is 0!')
             return self._rng.choice(self._reference_job_types)
         for i, reference_job_type in enumerate(self._reference_job_types):
             distance = cosine_distance(throughputs_matrix[i],
