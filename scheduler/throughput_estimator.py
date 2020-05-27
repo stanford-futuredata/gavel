@@ -77,18 +77,14 @@ class ThroughputEstimator:
                         self._normalized_throughputs[true_job_type_idx][offset]
         return profiled_jobs
 
-    def _match_job_to_reference_job(self, profiled_jobs):
+    def match_job_to_reference_job(self, true_job_type):
         """Uses matrix completion to match a job to a reference job type.
 
         Uses a subset of measured data points to match an unseen job to
         a reference job type measured offline.
-
-        Args:
-          reference_job_types: A list of reference job types.
-          reference_throughputs: A matrix of pre-measured throughputs.
-          profiled_jobs: A dictionary of online measurements indexed by worker
-                         type and then reference job type.
         """
+        profiled_jobs = self._profile_jobs(true_job_type)
+
         # Initialize the throughputs matrix using the pre-measured
         # reference throughputs.
         throughputs_matrix = np.zeros((self._reference_throughputs.shape[0] + 1,
@@ -126,7 +122,7 @@ class ThroughputEstimator:
                     print('WARNING: could not estimate throughputs!',
                           file=sys.stderr)
                     print(e, file=sys.stderr)
-                    return None
+                    return self._rng.choice(self._reference_job_types)
         else:
             print('WARNING: Did not run matrix completion as mask is complete',
                   file=sys.stderr)
@@ -136,7 +132,7 @@ class ThroughputEstimator:
         distances = []
         if np.linalg.norm(throughputs_matrix[-1]) == 0:
             print('WARNING: Norm of predicted throughputs is 0!')
-            return None
+            return self._rng.choice(self._reference_job_types)
         for i, reference_job_type in enumerate(self._reference_job_types):
             distance = cosine_distance(throughputs_matrix[i],
                                        throughputs_matrix[-1])
@@ -146,32 +142,18 @@ class ThroughputEstimator:
 
         return predicted_job_type
 
-    def _unflatten(self, predicted_throughputs):
+    def get_reference_throughputs(self):
         m = self._m
-        n = self._n
-        unflattened_throughputs = {}
+        n = len(self._reference_job_types)
+        reference_throughputs = {}
         for i, worker_type in enumerate(self._worker_types):
-            unflattened_throughputs[worker_type] = {}
-            for j, job_type in enumerate(self._job_types):
-                unflattened_throughputs[worker_type][job_type] = \
-                    predicted_throughputs[i*n+j]
-        return unflattened_throughputs
-
-    def estimate_throughputs(self, true_job_type):
-        m = self._m
-        n = self._n
-        true_isolated_throughputs = np.zeros((m * n))
-        for i, worker_type in enumerate(self._worker_types):
-            true_isolated_throughputs[i*n:(i+1)*n] = \
-                self._oracle_throughputs[worker_type][true_job_type]['null']
-        predicted_job_type = None
-        if self._profiling_percentage > 0.0:
-            profiled_jobs = self._profile_jobs(true_job_type)
-            predicted_job_type = self._match_job_to_reference_job(profiled_jobs)
-        if predicted_job_type is None:
-            predicted_job_type = self._rng.choice(self._reference_job_types)
-        predicted_job_type_idx = self._job_types.index(predicted_job_type)
-        predicted_throughputs = \
-            np.multiply(true_isolated_throughputs,
-                        self._normalized_throughputs[predicted_job_type_idx])
-        return self._unflatten(predicted_throughputs)
+            reference_throughputs[worker_type] = {}
+            for j, reference_job_type in enumerate(self._reference_job_types):
+                reference_throughputs[worker_type][reference_job_type] = {}
+                for k, other_reference_job_type in enumerate(self._reference_job_types):
+                    offset = i * n + k
+                    inverse_offset = i * n + j
+                    reference_throughputs[worker_type][reference_job_type][other_reference_job_type] = \
+                        [self._reference_throughputs[j, offset],
+                         self._reference_throughputs[k, inverse_offset]]
+        return reference_throughputs
