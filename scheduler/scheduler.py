@@ -540,10 +540,10 @@ class Scheduler:
             if (self._max_rounds is not None and
                 self._num_completed_rounds >= self._max_rounds):
                 return True
-            if jobs_to_complete is None:
-                return len(self._jobs) == 0
-            else:
+            elif jobs_to_complete is not None:
                 return jobs_to_complete.issubset(self._completed_jobs)
+            else:
+                return False
 
     def reset_workers(self):
         """Sends a shutdown signal to every worker and ends the scheduler."""
@@ -1539,8 +1539,9 @@ class Scheduler:
         else:
             job_ids = sorted(job_ids)
         for job_id in job_ids:
-            completed_steps = self._total_steps_run[job_id]
-            print('Job %s: %d steps' % (job_id, completed_steps))
+            if job_id in self._total_steps_run:
+                completed_steps = self._total_steps_run[job_id]
+                print('Job %s: %d steps' % (job_id, completed_steps))
 
     def get_cluster_utilization(self):
         """Computes the utilization of the cluster."""

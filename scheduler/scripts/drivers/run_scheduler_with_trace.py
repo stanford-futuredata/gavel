@@ -23,7 +23,7 @@ def main(args):
         for i in range(args.window_start, args.window_end):
             jobs_to_complete.add(JobIdPair(i, None))
     else:
-        jobs_to_complete = set(range(len(jobs)))
+        jobs_to_complete = None
     job_queue = queue.Queue()
     for (job, arrival_time) in zip(jobs, arrival_times):
         job_queue.put((job, arrival_time))
@@ -37,34 +37,38 @@ def main(args):
                                 expected_num_workers=args.expected_num_workers,
                                 max_rounds=args.max_rounds)
 
-    # Submit jobs to the scheduler.
-    start_time = datetime.datetime.now()
-    while not job_queue.empty() and not sched.is_done(jobs_to_complete):
-        job, arrival_time = job_queue.get()
-        while True:
-            current_time = datetime.datetime.now()
-            elapsed_seconds = (current_time - start_time).seconds
-            remaining_time = arrival_time - elapsed_seconds
-            if remaining_time <= 0:
-                job_id = sched.add_job(job)
-                break
-            elif sched.is_done(jobs_to_complete):
-                break
-            else:
-                time.sleep(SLEEP_TIME)
+    try:
+        # Submit jobs to the scheduler.
+        start_time = datetime.datetime.now()
+        while not job_queue.empty() and not sched.is_done(jobs_to_complete):
+            job, arrival_time = job_queue.get()
+            while True:
+                current_time = datetime.datetime.now()
+                elapsed_seconds = (current_time - start_time).seconds
+                remaining_time = arrival_time - elapsed_seconds
+                if remaining_time <= 0:
+                    job_id = sched.add_job(job)
+                    break
+                elif sched.is_done(jobs_to_complete):
+                    break
+                else:
+                    time.sleep(SLEEP_TIME)
 
-    # Wait for scheduler to complete.
-    sleep_seconds = 30
-    while not sched.is_done(jobs_to_complete):
-        time.sleep(sleep_seconds)
+        # Wait for scheduler to complete.
+        sleep_seconds = 30
+        while not sched.is_done(jobs_to_complete):
+            time.sleep(sleep_seconds)
 
-    # Print summary information.
-    sched.get_average_jct(jobs_to_complete)
-    sched.get_completed_steps(jobs_to_complete)
-    sched.get_cluster_utilization()
-    elapsed_time = (datetime.datetime.now() - start_time).seconds
-    print('Total time taken: %d seconds' % (elapsed_time))
-    sched.shutdown()
+        # Print summary information.
+        sched.get_average_jct(jobs_to_complete)
+        sched.get_completed_steps(jobs_to_complete)
+        sched.get_cluster_utilization()
+        elapsed_time = (datetime.datetime.now() - start_time).seconds
+        print('Total time taken: %d seconds' % (elapsed_time))
+    except KeyboardInterrupt as e:
+        pass
+    finally:
+        sched.shutdown()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
