@@ -18,7 +18,7 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              generate_multi_priority_jobs,
              simulate_steady_state, solver, debug,
              checkpoint_threshold, checkpoint_file,
-             profiling_percentage, per_instance_type_prices_dir,
+             estimated_throughputs_file, per_instance_type_prices_dir,
              available_clouds, assign_SLOs, enable_global_queue,
              num_gpus_per_server, output_trace_file_name):
     policy = utils.get_policy(policy_name, solver=solver, seed=seed)
@@ -28,7 +28,7 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                     seed=seed,
                     time_per_iteration=interval,
                     simulate=True,
-                    profiling_percentage=profiling_percentage,
+                    estimated_throughputs_file=estimated_throughputs_file,
                     per_instance_type_prices_dir=per_instance_type_prices_dir,
                     available_clouds=available_clouds,
                     assign_SLOs=assign_SLOs,
@@ -104,7 +104,7 @@ def main(args):
                  args.solver,
                  args.debug, args.checkpoint_threshold,
                  args.checkpoint_file,
-                 args.profiling_percentage,
+                 args.estimated_throughputs_file,
                  args.per_instance_type_prices_dir,
                  args.available_clouds,
                  args.assign_SLOs,
@@ -125,7 +125,7 @@ def main(args):
                          args.solver, args.debug,
                          args.checkpoint_threshold,
                          args.checkpoint_file,
-                         args.profiling_percentage,
+                         args.estimated_throughputs_file,
                          args.per_instance_type_prices_dir,
                          args.available_clouds,
                          args.assign_SLOs,
@@ -171,6 +171,8 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, adds as many jobs as there are workers '
                               'before beginning the simulation.'))
+    parser.add_argument('--estimated_throughputs_file', type=str,
+                        default=None, help='Estimated throughputs file')
     parser.add_argument('--solver', type=str, choices=['ECOS', 'GUROBI', 'SCS'],
                         default='ECOS', help='CVXPY solver')
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
@@ -181,12 +183,6 @@ if __name__=='__main__':
                         help='Create checkpoint when this job ID comes in')
     parser.add_argument('--checkpoint_file', default=None,
                         help='Load checkpoint located at passed in checkpoint_file')
-    parser.add_argument('--profiling_percentage', type=float, default=0.0,
-                        help=('Percentage of machines dedicated to profiling '
-                              'co-located job pairs'))
-    parser.add_argument('--num_reference_models', type=int, default=16,
-                        help=('Number of reference models to use when '
-                              'estimating throughputs'))
     parser.add_argument('--per_instance_type_prices_dir', type=str,
                         default=None,
                         help='Per-instance-type prices directory')
