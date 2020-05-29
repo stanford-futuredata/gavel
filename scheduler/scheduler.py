@@ -162,7 +162,7 @@ class Scheduler:
              (profiling_percentage < 1 or num_reference_models < len(JobTable)))
         if self._estimate_throughputs:
             self._throughput_estimator = \
-                self._initialize_throughput_estimator(seed,
+                self._initialize_throughput_estimator(seed+4,
                                                       num_reference_models,
                                                       profiling_percentage)
             self._reference_throughputs = \
@@ -225,9 +225,6 @@ class Scheduler:
         self._interarrival_time_generator = random.Random()
         self._interarrival_time_generator.seed(seed+3)
 
-        self._throughput_estimation_generator = np.random.RandomState()
-        self._throughput_estimation_generator.seed(seed+4)
-
         self._worker_type_shuffler = random.Random()
         self._worker_type_shuffler.seed(seed+5)
 
@@ -246,7 +243,7 @@ class Scheduler:
                                    worker_types, job_types,
                                    num_reference_models,
                                    profiling_percentage,
-                                   seed+7)
+                                   seed)
 
     def start_scheduling_thread(self):
         self.scheduler_thread = threading.Thread(
@@ -536,7 +533,6 @@ class Scheduler:
         scheduled_jobs = {}
 
         num_workers_left = {}
-        num_estimation_workers = {}
         for worker_type in worker_types:
             scheduled_jobs[worker_type] = []
             num_workers = self._cluster_spec[worker_type]
@@ -1632,42 +1628,6 @@ class Scheduler:
                 self._oracle_throughputs[worker_type][key]['null']
         else:
             self._throughputs[job_id][worker_type] = DEFAULT_THROUGHPUT
-
-    def _initialize_reference_throughputs(self, num_reference_models):
-        self._reference_throughputs = {}
-        all_worker_types = sorted(self._oracle_throughputs.keys())
-        all_job_types = []
-        for key in self._oracle_throughputs[all_worker_types[0]].keys():
-            if key[1] == 1:
-                all_job_types.append(key)
-        reference_job_types_idx = \
-            self._throughput_estimation_generator.choice(
-                    len(all_job_types), num_reference_models, replace=False)
-        self._reference_job_types = \
-            [all_job_types[x] for x in reference_job_types_idx]
-        for worker_type in self._oracle_throughputs:
-            oracle_throughputs = self._oracle_throughputs[worker_type]
-            self._reference_throughputs[worker_type] = \
-                np.zeros((num_reference_models, num_reference_models),
-                         dtype=np.float32)
-            for i, job_type_0 in enumerate(self._reference_job_types):
-                for j, job_type_1 in enumerate(self._reference_job_types):
-                    if j < i:
-                        continue
-                    isolated_throughputs = []
-                    for job_type in [job_type_0, job_type_1]:
-                        isolated_throughputs.append(
-                            oracle_throughputs[job_type]['null'])
-                    colocated_throughputs = \
-                        np.divide(oracle_throughputs[job_type_0][job_type_1],
-                                  isolated_throughputs)
-                    self._reference_throughputs[worker_type][i][j] = \
-                            colocated_throughputs[0]
-                    self._reference_throughputs[worker_type][j][i] = \
-                            colocated_throughputs[1]
-            for i in range(num_reference_models):
-                if np.linalg.norm(self._reference_throughputs[worker_type][i]) == 0:
-                    self._reference_throughputs[worker_type][i] += 0.0001
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _reset_time_run_so_far(self):
