@@ -12,6 +12,7 @@ import os
 import sys
 
 from job_id_pair import JobIdPair
+from job_table import JobTable
 import scheduler
 import utils
 
@@ -120,6 +121,9 @@ def main(args):
     throughputs_file = args.throughputs_file
     policy_names = args.policies
     profiling_percentages = args.profiling_percentages
+    all_num_reference_models = args.num_reference_models
+    estimate_throughputs = (min(profiling_percentages) < 1.0 or
+                            min(all_num_reference_models) < len(JobTable)) 
     job_range = (args.window_start, args.window_end)
     experiment_id = 0
 
@@ -166,7 +170,7 @@ def main(args):
                 os.mkdir(raw_logs_policy_subdir)
 
             for profiling_percentage in profiling_percentages:
-                if max(profiling_percentages) > 0.0:
+                if estimate_throughputs:
                     profiling_percentage_str = \
                         'profiling_percentage=%f' % (profiling_percentage)
                     raw_logs_profiling_subdir = \
@@ -177,10 +181,7 @@ def main(args):
                 else:
                     raw_logs_profiling_subdir = raw_logs_policy_subdir
                 for i, num_reference_models in enumerate(args.num_reference_models):
-                    if i > 0 and profiling_percentage == 0.0:
-                        break
-                    if (len(profiling_percentages) > 1 or
-                        profiling_percentages[0] > 0.0):
+                    if estimate_throughputs:
                         num_reference_models_str = \
                             'num_reference_models=%d' % (num_reference_models)
                         raw_logs_num_reference_models_subdir = \
@@ -312,11 +313,11 @@ if __name__=='__main__':
                               'disabled. Checkpoint is created after this '
                               'job ID is added.'))
     parser.add_argument('--profiling_percentages', type=float, nargs='+',
-                        default=[0.0],
+                        default=[1.0],
                         help=('Percentages of machines dedicated to profiling '
                               'co-located job pairs'))
     parser.add_argument('--num_reference_models', type=int, nargs='+',
-                        default=[16, 26],
+                        default=[len(JobTable)],
                         help=('Number of reference models to use when '
                               'estimating throughputs'))
     parser.add_argument('--ideal', action='store_true', default=False,

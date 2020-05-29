@@ -21,7 +21,6 @@ def main(args):
                                 throughputs_file=args.throughputs_file,
                                 simulate=True,
                                 seed=args.seed,
-                                profiling_percentage=args.profiling_percentage,
                                 time_per_iteration=args.time_per_iteration)
 
     num_gpus = args.cluster_spec.split(':')
@@ -71,9 +70,6 @@ if __name__=='__main__':
     parser.add_argument('--checkpoint_file', default=None,
                         help=('Load checkpoint located at passed in'
                               'checkpoint_file'))
-    parser.add_argument('--profiling_percentage', type=float, default=0.0,
-                        help=('Percentage of machines dedicated to profiling '
-                              'co-located job pairs'))
     parser.add_argument('--time_per_iteration', type=int, default=1920,
                         help='Time per iteration in seconds')
     main(parser.parse_args())

@@ -37,8 +37,8 @@ class Scheduler:
 
     # TODO: Make assign_SLOs a configurable parameter from scripts.
     def __init__(self, policy, simulate=False, throughputs_file=None,
-                 seed=0, time_per_iteration=1920, profiling_percentage=0.0,
-                 num_reference_models=16,
+                 seed=0, time_per_iteration=1920, profiling_percentage=1.0,
+                 num_reference_models=len(JobTable),
                  per_instance_type_prices_dir=None,
                  available_clouds=[],
                  assign_SLOs=False,
@@ -162,7 +162,7 @@ class Scheduler:
         # Flag to indicate whether throughputs should be estimated online.
         self._estimate_throughputs = \
             (self._job_packing and
-             (profiling_percentage > 0 or num_reference_models < len(JobTable)))
+             (profiling_percentage < 1 or num_reference_models < len(JobTable)))
         if self._estimate_throughputs:
             self._throughput_estimator = \
                 self._initialize_throughput_estimator(seed,

@@ -8,6 +8,7 @@ import sys
 
 import job
 from job_id_pair import JobIdPair
+from job_table import JobTable
 import policies
 import scheduler
 import utils
@@ -181,10 +182,11 @@ if __name__=='__main__':
                         help='Create checkpoint when this job ID comes in')
     parser.add_argument('--checkpoint_file', default=None,
                         help='Load checkpoint located at passed in checkpoint_file')
-    parser.add_argument('--profiling_percentage', type=float, default=0.0,
-                        help=('Percentage of machines dedicated to profiling '
-                              'co-located job pairs'))
-    parser.add_argument('--num_reference_models', type=int, default=16,
+    parser.add_argument('--profiling_percentage', type=float, default=1.0,
+                        help=('Percentage of co-located throughput values '
+                              'measured for each job')
+    parser.add_argument('--num_reference_models', type=int,
+                        default=len(JobTable),
                         help=('Number of reference models to use when '
                               'estimating throughputs'))
     parser.add_argument('--per_instance_type_prices_dir', type=str,
