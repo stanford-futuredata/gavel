@@ -29,9 +29,6 @@ DEFAULT_THROUGHPUT = 1
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
 EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
-DEFAULT_MATRIX_COMPLETION_K = 10
-DEFAULT_MATRIX_COMPLETION_MU = 1e-2
-TIME_PER_PROFILING_MEASUREMENT = 150
 
 class Scheduler:
 
