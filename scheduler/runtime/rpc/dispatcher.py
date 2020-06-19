@@ -1,18 +1,19 @@
 from __future__ import print_function
 
 from multiprocessing.pool import ThreadPool
+import os
 import queue
+import re
 import signal
 import subprocess
 import sys
 import threading
 import time
-import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import utils
 
-BUFFER_TIME = 180
+BUFFER_TIME = 90
 CUDA_MPS_PIPE_DIRECTORY = '/tmp/nvidia-mps'
 CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
 
@@ -108,8 +109,9 @@ class Dispatcher:
     def _get_steps_from_output(self, output):
         steps = None
         for line in output.split('\n'):
-            if line.startswith('[GavelIterator]'):
-                steps = int(line.split('[GavelIterator]')[-1])
+            match = re.search('\[GavelIterator\] (\d+)', line)
+            if match is not None:
+                steps = int(match.group(1))
         return steps
 
     def _kill_job(self, pid):
@@ -126,17 +128,14 @@ class Dispatcher:
 
     def _kill_jobs(self, job_id=None):
         with self._lock:
-            gpu_processes = utils.get_gpu_processes()
             if job_id is not None:
                 self._write_queue.put('Killing job %d...' % (job_id))
             else:
                 self._write_queue.put('Killing all jobs!')
-            self._write_queue.put(
-                'Job assignments: %s' % (str(self._job_assignments)))
-            self._write_queue.put(
-                'GPU processes: %s' % (str(gpu_processes)))
             if job_id is not None:
                 pids = utils.get_pid_for_job(job_id)
+                self._write_queue.put('PIDs for job %d: %s' % (job_id,
+                                                               str(pids)))
                 for pid in pids:
                     self._kill_job(pid)
             else:
@@ -270,7 +269,9 @@ class Dispatcher:
         self._write_queue.put('Finished resetting dispatcher')
 
     def shutdown(self, shut_down_mps=True):
+        self._write_queue.put('Shutting down dispatcher...')
+        self._kill_jobs()
         self._thread_pool.terminate()
-        self._thread_pool.join()
         if self._use_mps and shut_down_mps and not self._mps_initially_enabled:
             self._shutdown_mps()
+        self._write_queue.put('Finished shutting down dispatcher')

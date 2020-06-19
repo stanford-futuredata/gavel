@@ -171,9 +171,12 @@ if __name__ == '__main__':
         os.mkdir(args.checkpoint_dir)
     checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
     if os.path.exists(checkpoint_path):
-        print('Loading checkpoint from %s...' % (checkpoint_path))
-        saved_state = torch.load(checkpoint_path)
-        shared_model.load_state_dict(saved_state)
+        try:
+            print('Loading checkpoint from %s...' % (checkpoint_path))
+            saved_state = torch.load(checkpoint_path, map_location='cuda:{}'.format(args.local_rank))
+            shared_model.load_state_dict(saved_state)
+        except Exception as e:
+            print('Could not load from checkpoint: %s' % (e))
     shared_model.share_memory()
 
     if args.shared_optimizer:

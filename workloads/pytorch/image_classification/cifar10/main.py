@@ -13,6 +13,7 @@ import torchvision.transforms as transforms
 
 import os
 import argparse
+import math
 import sys
 import time
 
@@ -84,9 +85,9 @@ print('==> Building model..')
 net = ResNet18()
 net = net.cuda()
 
-distributed = False
+args.distributed = False
 if args.master_addr is not None:
-    distributed = True
+    args.distributed = True
     os.environ['MASTER_ADDR'] = args.master_addr
     os.environ['MASTER_PORT'] = str(args.master_port)
     dist.init_process_group(backend=args.dist_backend,
@@ -117,7 +118,7 @@ transform_test = transforms.Compose([
 
 trainset = torchvision.datasets.CIFAR10(root=args.data_dir, train=True, download=False, transform=transform_train)
 train_sampler = None
-if distributed:
+if args.distributed:
     train_sampler = torch.utils.data.distributed.DistributedSampler(trainset)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=2,
                                           sampler=train_sampler)
@@ -129,7 +130,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 
 if enable_gavel_iterator:
     trainloader = GavelIterator(trainloader, args.job_id, args.worker_id,
-                                distributed, args.sched_addr, args.sched_port)
+                                args.distributed, args.sched_addr, args.sched_port)
 
 cumulative_steps = 0
 cumulative_time = 0
@@ -140,7 +141,8 @@ if args.checkpoint_dir is not None:
         print('==> Resuming from checkpoint at %s...' % (checkpoint_path))
         assert os.path.isdir(args.checkpoint_dir), 'Error: no checkpoint directory found!'
         try:
-            checkpoint = torch.load(checkpoint_path)
+            checkpoint = torch.load(checkpoint_path,
+                                    map_location='cuda:{}'.format(args.local_rank))
             net.load_state_dict(checkpoint['net'])
             # best_acc = checkpoint['acc']
             start_epoch = checkpoint['epoch']
@@ -233,8 +235,10 @@ def test(epoch):
         torch.save(state, checkpoint_path)
         best_acc = acc
 
-if args.num_epochs is None:
-    args.num_epochs = args.num_steps
+if args.num_steps is not None:
+    args.num_epochs = math.ceil(float(args.num_steps) *
+                                args.batch_size / len(trainloader))
+
 for epoch in range(start_epoch, args.num_epochs):
     (cumulative_steps, cumulative_time, done, finished_epoch) =\
             train(epoch, cumulative_steps, cumulative_time)
@@ -253,5 +257,5 @@ state = {
 }
 if not os.path.isdir(args.checkpoint_dir):
     os.mkdir(args.checkpoint_dir)
-torch.save(state, checkpoint_path)
-
+if not args.distributed or args.rank == 0:
+    torch.save(state, checkpoint_path)

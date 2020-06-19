@@ -207,7 +207,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='')
     parser.add_argument('--throughputs-file', type=str,
-                        default='oracle_throughputs_v2.json',
+                        default='simulation_throughputs.json',
                         help='Oracle throughputs file')
     parser.add_argument('--generate-multi-gpu-jobs', action='store_true',
                         default=False,

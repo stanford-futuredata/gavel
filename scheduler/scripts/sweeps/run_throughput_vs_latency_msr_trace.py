@@ -291,7 +291,7 @@ if __name__=='__main__':
     parser.add_argument('-i', '--interval', type=int, default=1920,
                         help='Interval length (in seconds)')
     parser.add_argument('--throughputs-file', type=str,
-                        default='oracle_throughputs_v2.json',
+                        default='simulation_throughputs.json',
                         help='Oracle throughputs file')
     parser.add_argument('--run_dir', type=str, default='/tmp',
                         help='Run directory')

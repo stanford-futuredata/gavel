@@ -94,7 +94,6 @@ class Worker:
 
     def _signal_handler(self, sig, frame):
         self._dispatcher.shutdown()
-        sys.exit(0)
 
     def _reset_callback(self):
         self._dispatcher.reset()
@@ -105,7 +104,8 @@ class Worker:
     def _print_logs(self):
         while True:
             output = self._write_queue.get()
-            print('[%s] %s' % (str(datetime.datetime.now()), output))
+            print('[%s] %s' % (str(datetime.datetime.now()), output),
+                  flush=True)
 
     def join(self):
         self._server_thread.join()

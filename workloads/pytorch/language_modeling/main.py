@@ -179,11 +179,15 @@ if args.checkpoint_dir is not None:
     else:
         checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
         if os.path.exists(checkpoint_path):
-            print('Loading checkpoint from %s...' % (checkpoint_path))
-            with open(checkpoint_path, 'rb') as f:
-                state = torch.load(f)
-                model = state['model'].to(device)
-            load_from_checkpoint = True
+            try:
+                print('Loading checkpoint from %s...' % (checkpoint_path))
+                with open(checkpoint_path, 'rb') as f:
+                    state = torch.load(f, map_location='cuda:{}'.format(args.local_rank))
+                    model = state['model'].to(device)
+                load_from_checkpoint = True
+            except RuntimeError as e:
+                print('Could not load from checkpoint: %s' % (e))
+                load_from_checkpoint = False
 if not load_from_checkpoint:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                            args.nlayers, args.dropout, args.tied).to(device)
@@ -345,6 +349,9 @@ best_val_loss = None
 
 # At any point you can hit Ctrl + C to break out of training early.
 try:
+    if args.steps is not None:
+        args.epochs = math.ceil(args.steps *
+                                args.batch_size / len(train_loader))
     if args.epochs is None:
         args.epochs = args.steps
     for epoch in range(1, args.epochs+1):
@@ -368,7 +375,7 @@ try:
             state = {'model': model.module}
         else:
             state = {'model': model}
-        if args.rank == 0 or args.rank is None:
+        if not args.distributed or args.rank == 0:
             torch.save(state, f)
 except KeyboardInterrupt:
     print('-' * 89)

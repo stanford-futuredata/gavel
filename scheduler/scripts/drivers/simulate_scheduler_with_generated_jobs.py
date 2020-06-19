@@ -130,7 +130,8 @@ def main(args):
                          args.available_clouds,
                          args.assign_SLOs,
                          args.enable_global_queue,
-                         num_gpus_per_server)
+                         num_gpus_per_server,
+                         args.output_trace_file_name)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
@@ -157,7 +158,7 @@ if __name__=='__main__':
                         help=('If set, fixes the duration of all jobs to the '
                               'specified value (in seconds)'))
     parser.add_argument('--throughputs_file', type=str,
-                        default=('oracle_throughputs_v2.json'),
+                        default=('simulation_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('-m', '--generate-multi-gpu-jobs', action='store_true',
                         default=False,

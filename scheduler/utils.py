@@ -1,6 +1,5 @@
 import csv
 from datetime import datetime
-import getpass
 import json
 import os
 import pickle
@@ -29,15 +28,17 @@ def get_num_gpus():
     return len(output.split('\n'))
 
 def get_pid_for_job(job_id):
-    username = getpass.getuser()
     processes = subprocess.check_output('ps -aux', shell=True)
     pids = []
     for line in processes.decode('utf-8').strip().split('\n'):
         if '--job_id %d' % (job_id) in line:
-            match = re.match('%s +(\d+)' % (username), line)
-            assert match is not None
-            pid = int(match.group(1))
-            pids.append(pid)
+            match = re.search(' +(\d+)', line)
+            if match is not None:
+                pid = int(match.group(1))
+                pids.append(pid)
+            else:
+                print('WARNING: Could not find PID for '
+                      'job %d in line \"%s\"' % (job_id, line))
     return pids
 
 def get_gpu_processes():

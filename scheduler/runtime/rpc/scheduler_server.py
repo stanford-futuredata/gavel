@@ -34,12 +34,14 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
                                          num_gpus=request.num_gpus,
                                          ip_addr=request.ip_addr,
                                          port=request.port)
+            self._write_queue.put('Successfully registered %s worker '
+                                  'with id(s) %s' % (request.worker_type,
+                                                     str(worker_ids)))
             return w2s_pb2.RegisterWorkerResponse(success=True,
                                                   worker_ids=worker_ids,
                                                   round_duration=round_duration)
         except Exception as e:
-            # TODO: catch a more specific exception?
-            print(e)
+            self._write_queue.put('Could not register worker: %s' % (e))
             return w2s_pb2.RegisterWorkerResponse(successful=False,
                                                   error_message=e)
 
@@ -50,15 +52,9 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
 
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
-        # TODO: Remove option to not pass write_queue.
-        if self._write_queue is not None:
-            self._write_queue.put(
-                'Received completion notification '
-                'from worker %d...' % (request.worker_id))
-        else:
-            print('Received completion notification '
-                  'from worker %d...' % (request.worker_id))
-
+        self._write_queue.put(
+            'Received completion notification '
+            'from worker %d...' % (request.worker_id))
         try:
             if len(request.job_id) > 1:
                 job_id = JobIdPair(request.job_id[0], request.job_id[1])
@@ -67,7 +63,8 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
             done_callback(job_id, request.worker_id,
                           request.num_steps, request.execution_time)
         except Exception as e:
-            print(e)
+            self._write_queue.put('Could not process completion '
+                                  'notification: %s' % (e))
 
         return common_pb2.Empty()
 
@@ -77,33 +74,18 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
         self._write_queue = write_queue
 
     def UpdateLease(self, request, context):
-        # TODO: Remove option to not have write queue
-        if self._write_queue is not None:
-            self._write_queue.put('Received lease update request: '
-                                  'job_id=%s, '
-                                  'worker_id=%d, '
-                                  'steps=%d, '
-                                  'duration=%f, '
-                                  'max_steps=%d,'
-                                  'max_duration=%f' % (request.job_id,
-                                                       request.worker_id,
-                                                       request.steps,
-                                                       request.duration,
-                                                       request.max_steps,
-                                                       request.max_duration))
-        else:
-            print('Received lease update request: '
-                  'job_id=%s, '
-                  'worker_id=%d, '
-                  'steps=%d, '
-                  'duration=%f, '
-                  'max_steps=%d,'
-                  'max_duration=%f' % (request.job_id,
-                                       request.worker_id,
-                                       request.steps,
-                                       request.duration,
-                                       request.max_steps,
-                                       request.max_duration))
+        self._write_queue.put('Received lease update request: '
+                              'job_id=%s, '
+                              'worker_id=%d, '
+                              'steps=%d, '
+                              'duration=%f, '
+                              'max_steps=%d,'
+                              'max_duration=%f' % (request.job_id,
+                                                   request.worker_id,
+                                                   request.steps,
+                                                   request.duration,
+                                                   request.max_steps,
+                                                   request.max_duration))
 
         update_lease_callback = self._callbacks['UpdateLease']
         (max_steps, max_duration) = \
@@ -113,26 +95,17 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
                                   duration=request.duration,
                                   max_steps=request.max_steps,
                                   max_duration=request.max_duration)
-        # TODO: Remove option to not have write queue
-        if self._write_queue is not None:
-            self._write_queue.put('Sending new lease to job %d (worker %d) '
-                                  'with max_steps=%d, '
-                                  'max_duration=%f' % (request.job_id,
-                                                       request.worker_id,
-                                                       max_steps,
-                                                       max_duration))
-        else:
-            print('Sending new lease to job %d (worker %d) '
-                  'with max_steps=%d, '
-                  'max_duration=%f' % (request.job_id,
-                                       request.worker_id,
-                                       max_steps,
-                                       max_duration))
+        self._write_queue.put('Sending new lease to job %d (worker %d) '
+                              'with max_steps=%d, '
+                              'max_duration=%f' % (request.job_id,
+                                                   request.worker_id,
+                                                   max_steps,
+                                                   max_duration))
 
         return i2s_pb2.UpdateLeaseResponse(max_steps=max_steps,
                                            max_duration=max_duration)
 
-def serve(port, callbacks, write_queue=None):
+def serve(port, callbacks, write_queue):
     server = grpc.server(futures.ThreadPoolExecutor())
     w2s_pb2_grpc.add_WorkerToSchedulerServicer_to_server(
             SchedulerRpcServer(callbacks, write_queue), server)
@@ -140,9 +113,7 @@ def serve(port, callbacks, write_queue=None):
             SchedulerIteratorRpcServer(callbacks, write_queue), server)
     ip_address = socket.gethostbyname(socket.gethostname())
     server.add_insecure_port('%s:%d' % (ip_address, port))
-    # TODO: Remove option to not pass write_queue.
-    if write_queue is not None:
-        write_queue.put('Starting server at %s:%s' % (ip_address, port))
+    write_queue.put('Starting server at %s:%s' % (ip_address, port))
     server.start()
     try:
         while True:

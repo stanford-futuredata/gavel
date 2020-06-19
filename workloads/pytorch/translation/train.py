@@ -187,9 +187,12 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     checkpoint_path = os.path.join(opt.checkpoint_dir, 'model.chkpt')
     if os.path.exists(checkpoint_path):
         print('Loading checkpoint from %s...' % (checkpoint_path))
-        checkpoint = torch.load(checkpoint_path)
-        model.load_state_dict(checkpoint['model'])
-        start_epoch = checkpoint['epoch']
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(opt.local_rank))
+            model.load_state_dict(checkpoint['model'])
+            start_epoch = checkpoint['epoch']
+        except Exception as e:
+            print('Could not load from checkpoint: %s' % (e))
     else:
         print('No checkpoint file found!')
 
@@ -198,6 +201,11 @@ def train(model, training_data, validation_data, optimizer, device, opt):
         opt.epoch = opt.step
     cumulative_step = 0
     cumulative_time = 0
+
+    if opt.step is not None:
+        opt.epoch = math.ceil(float(opt.step) *
+                              opt.batch_size / len(training_data))
+
     for epoch_i in range(start_epoch, opt.epoch):
         print('[ Epoch', epoch_i, ']')
 
@@ -231,14 +239,15 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             'epoch': epoch_i,
         }
 
-        if opt.save_mode == 'all':
-            print('Saving checkpoint at %s...' % (checkpoint_path))
-            torch.save(checkpoint, checkpoint_path)
-        elif opt.save_mode == 'best':
-            if valid_accu >= max(valid_accus):
+        if not opt.distributed or opt.rank == 0:
+            if opt.save_mode == 'all':
                 print('Saving checkpoint at %s...' % (checkpoint_path))
                 torch.save(checkpoint, checkpoint_path)
-                print('    - [Info] The checkpoint file has been updated.')
+            elif opt.save_mode == 'best':
+                if valid_accu >= max(valid_accus):
+                    print('Saving checkpoint at %s...' % (checkpoint_path))
+                    torch.save(checkpoint, checkpoint_path)
+                    print('    - [Info] The checkpoint file has been updated.')
 
         if log_train_file:#and log_valid_file:
             with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
@@ -332,9 +341,9 @@ def main():
     elif opt.epoch is None and opt.step is None:
         raise ValueError('One of epoch and step must be set')
 
-    distributed = False
+    opt.distributed = False
     if opt.master_addr is not None:
-        distributed = True
+        opt.distributed = True
         os.environ['MASTER_ADDR'] = opt.master_addr
         os.environ['MASTER_PORT'] = str(opt.master_port)
         dist.init_process_group(backend=opt.dist_backend,
@@ -378,13 +387,13 @@ def main():
         n_head=opt.n_head,
         dropout=opt.dropout).to(device)
 
-    if distributed:
+    if opt.distributed:
         transformer = DDP(transformer, device_ids=[opt.local_rank],
                           output_device=opt.local_rank)
 
     if opt.enable_gavel_iterator:
         training_data = GavelIterator(training_data, opt.job_id,
-                                      opt.worker_id, distributed,
+                                      opt.worker_id, opt.distributed,
                                       opt.sched_addr, opt.sched_port)
 
     optimizer = ScheduledOptim(

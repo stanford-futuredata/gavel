@@ -26,7 +26,7 @@ SLEEP_SECONDS = 2
 INFINITY = int(1e9)
 DEFAULT_THROUGHPUT = 1
 DEFAULT_NUM_STEPS = 100     # Default number of steps in each iteration.
-EMA_ALPHA = .25 # Alpha parameter for exponential moving average.
+EMA_ALPHA = .5 # Alpha parameter for exponential moving average.
 MAX_FAILED_ATTEMPTS = 5
 DEFAULT_MATRIX_COMPLETION_K = 10
 DEFAULT_MATRIX_COMPLETION_MU = 1e-2
@@ -42,7 +42,8 @@ class Scheduler:
                  assign_SLOs=False,
                  enable_global_queue=False,
                  expected_num_workers=None,
-                 minimum_time_between_allocation_resets=1920):
+                 minimum_time_between_allocation_resets=1920,
+                 max_rounds=None):
 
 
         # Print config information.
@@ -209,6 +210,16 @@ class Scheduler:
         # Data structures for debugging.
         self._micro_tasks_per_job = {}
         self._all_jobs = []
+        # Queue for printing log information in a thread-safe way.
+        self._write_queue = queue.Queue()
+        # In-progress updates for distributed jobs.
+        self._in_progress_updates = {}
+        # Set of completed job IDs.
+        self._completed_jobs = set()
+        # Maximum number of rounds.
+        self._max_rounds = max_rounds
+        # Number of completed rounds.
+        self._num_completed_rounds = 0
 
         port = SCHEDULER_PORT
         callbacks = {
@@ -218,9 +229,13 @@ class Scheduler:
         }
 
         if not self._simulate:
+            self._logging_thread = threading.Thread(target=self._print_logs)
+            self._logging_thread.daemon = True
+            self._logging_thread.start()
+
             self.server_thread = threading.Thread(
                 target=scheduler_server.serve,
-                args=(port, callbacks))
+                args=(port, callbacks, self._write_queue))
             self.server_thread.daemon = True
             self.server_thread.start()
 
@@ -246,12 +261,18 @@ class Scheduler:
         self._SLO_generator = random.Random()
         self._SLO_generator.seed(seed+6)
 
+    def _print_logs(self):
+        while True:
+            output = self._write_queue.get()
+            print('[%s] %s' % (str(datetime.datetime.now()), output),
+                  flush=True)
+
     def start_scheduling_thread(self):
-        self.scheduler_thread = threading.Thread(
+        self._scheduler_thread = threading.Thread(
             target=self.schedule,
             args=())
-        self.scheduler_thread.daemon = True
-        self.scheduler_thread.start()
+        self._scheduler_thread.daemon = True
+        self._scheduler_thread.start()
 
 
     def _update_per_worker_type_prices(self):
@@ -439,6 +460,7 @@ class Scheduler:
 
         job_id = job_id_pair.JobIdPair(job_id, None)
         with self._scheduler_lock:
+            self._completed_jobs.add(job_id)
             duration = self._per_job_latest_timestamps[job_id] - \
                 self._per_job_start_timestamps[job_id]
             self._job_priority_weights[job_id] = \
@@ -470,7 +492,7 @@ class Scheduler:
             job_type_key = self._job_id_to_job_type[job_id]
             self._job_type_to_job_ids[job_type_key].remove(job_id)
             del self._steps_run_so_far[job_id]
-            del self._total_steps_run[job_id]
+            #del self._total_steps_run[job_id]
             del self._job_time_so_far[job_id]
             del self._throughputs[job_id]
             del self._job_id_to_job_type[job_id]
@@ -512,10 +534,16 @@ class Scheduler:
                 n += self._cluster_spec[worker_type]
             return n
 
-    def is_done(self):
+    def is_done(self, jobs_to_complete=None):
         """Returns whether the scheduler is done with all its assigned work."""
         with self._scheduler_lock:
-            return len(self._jobs) == 0
+            if (self._max_rounds is not None and
+                self._num_completed_rounds >= self._max_rounds):
+                return True
+            elif jobs_to_complete is not None:
+                return jobs_to_complete.issubset(self._completed_jobs)
+            else:
+                return False
 
     def reset_workers(self):
         """Sends a shutdown signal to every worker and ends the scheduler."""
@@ -841,7 +869,7 @@ class Scheduler:
         return all_num_steps, max_finish_time
 
 
-    def _save_checkpoint(self, checkpoint_file, completed_jobs,
+    def _save_checkpoint(self, checkpoint_file,
                          last_job_arrival_time,
                          next_job_arrival_time,
                          current_round_start_time,
@@ -849,7 +877,7 @@ class Scheduler:
                          running_jobs):
         with open(checkpoint_file, 'wb') as f:
             import pickle
-            pickle.dump(completed_jobs, f)
+            pickle.dump(self._completed_jobs, f)
             pickle.dump(last_job_arrival_time, f)
             pickle.dump(next_job_arrival_time, f)
             pickle.dump(current_round_start_time, f)
@@ -887,7 +915,7 @@ class Scheduler:
     def _load_checkpoint(self, checkpoint_file):
         with open(checkpoint_file, 'rb') as f:
             import pickle
-            completed_jobs = pickle.load(f)
+            self._completed_jobs = pickle.load(f)
             last_job_arrival_time = pickle.load(f)
             next_job_arrival_time = pickle.load(f)
             current_round_start_time = pickle.load(f)
@@ -922,8 +950,7 @@ class Scheduler:
             self._current_timestamp = pickle.load(f)
             self._job_id_counter = pickle.load(f)
 
-            return (completed_jobs,
-                    last_job_arrival_time,
+            return (last_job_arrival_time,
                     next_job_arrival_time,
                     current_round_start_time,
                     current_round_end_time,
@@ -1092,7 +1119,6 @@ class Scheduler:
 
         running_jobs = []
         num_jobs_generated = 0
-        completed_jobs = set()
         last_job_arrival_time = None
         next_job_arrival_time = 0
         if arrival_times is not None and len(arrival_times) > 0:
@@ -1100,7 +1126,7 @@ class Scheduler:
         no_dispatched_or_running_jobs = False
         current_round_start_time = 0
         current_round_end_time = None
-        num_completed_jobs = 0
+        window_start_time = None
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
@@ -1113,8 +1139,7 @@ class Scheduler:
                                                num_gpus=num_gpus)
 
         if checkpoint_file is not None and checkpoint_threshold is None:
-            (completed_jobs,
-             last_job_arrival_time,
+            (last_job_arrival_time,
              next_job_arrival_time,
              current_round_start_time,
              current_round_end_time,
@@ -1136,7 +1161,9 @@ class Scheduler:
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
-                    if output_trace_file is not None:
+                    if ((jobs_to_complete is None or
+                         window_start_time is not None) and
+                        output_trace_file is not None):
                         output_trace_file.write('%s\t%f\n' % (str(job), 0))
                     num_remaining_workers -= job.scale_factor
                     num_jobs_generated += 1
@@ -1147,8 +1174,10 @@ class Scheduler:
             if debug:
                 input('Press Enter to continue...')
             if jobs_to_complete is not None:
-                print("Number of completed jobs: %d" % len(jobs_to_complete.intersection(completed_jobs)))
-                if jobs_to_complete.issubset(completed_jobs):
+                num_completed_jobs = \
+                    len(jobs_to_complete.intersection(self._completed_jobs))
+                print('Number of completed jobs: %d' % (num_completed_jobs))
+                if self.is_done(jobs_to_complete):
                     break
             elif (num_total_jobs is not None and
                     remaining_jobs <= 0):
@@ -1193,15 +1222,31 @@ class Scheduler:
                         all_execution_times.append(execution_time)
                         self._per_job_latest_timestamps[single_job_id] = \
                                 finish_time
-                    # TODO: decide whether to pass in all worker_ids to
-                    # _done_callback.
-                    for worker_id in worker_ids:
+                    self._in_progress_updates[job_id] = []
+                    scale_factor =\
+                        self._jobs[job_id.singletons()[0]].scale_factor
+                    total_steps = [0] * len(job_id.singletons())
+                    for i, worker_id in enumerate(worker_ids):
+                        if i == len(worker_ids) - 1:
+                            # For the last worker, assign all remaining
+                            # steps to account for any rounding error.
+                            all_num_steps_ = []
+                            for j in range(len(all_num_steps)):
+                                remaining_steps = \
+                                    all_num_steps[j] - total_steps[j]
+                                all_num_steps_.append(remaining_steps)
+                        else:
+                            # Each worker gets an equal fraction of the total
+                            # number of steps.
+                            all_num_steps_ = \
+                                [x // scale_factor for x in all_num_steps]
+                        for j in range(len(all_num_steps_)):
+                            total_steps[j] += all_num_steps_[j]
                         self._done_callback(job_id, worker_id,
-                                            all_num_steps,
+                                            all_num_steps_,
                                             all_execution_times)
                     for single_job_id in job_id.singletons():
                         if single_job_id not in self._jobs:
-                            completed_jobs.add(single_job_id)
                             if from_trace or num_total_jobs is not None:
                                 remaining_jobs -= 1
                     heapq.heappop(running_jobs)
@@ -1219,6 +1264,9 @@ class Scheduler:
                     (arrival_time, job) = queued_jobs[0]
                     if arrival_time <= self._current_timestamp:
                         job_id = self.add_job(job, timestamp=arrival_time)
+                        if (jobs_to_complete is not None and
+                            job_id == min(jobs_to_complete)):
+                            window_start_time = self._current_timestamp
                         last_added_job_id = job_id
                         queued_jobs.pop(0)
                     else:
@@ -1232,12 +1280,35 @@ class Scheduler:
                         fixed_job_duration=fixed_job_duration,
                         generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                         generate_multi_priority_jobs=generate_multi_priority_jobs)
-                    if output_trace_file is not None:
-                        output_trace_file.write(
-                            '%s\t%f\n' % (str(job), self._current_timestamp))
                     num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)
+                    if (jobs_to_complete is not None and
+                        job_id == min(jobs_to_complete)):
+                        window_start_time = next_job_arrival_time
+                        if output_trace_file is not None:
+                            print('%d running jobs '
+                                  'at window start' % (len(self._jobs) - 1))
+                            # Dump already running jobs.
+                            for running_job_id in sorted(self._jobs.keys()):
+                                remaining_steps = \
+                                    self._get_remaining_steps(running_job_id)
+                                total_steps = \
+                                    self._jobs[running_job_id].total_steps
+                                self._jobs[running_job_id]._total_steps = \
+                                    remaining_steps
+                                output_trace_file.write(
+                                    '%s\t0\n' % (str(self._jobs[running_job_id])))
+                                self._jobs[running_job_id]._total_steps = \
+                                    total_steps
+                    if ((jobs_to_complete is None or
+                         window_start_time is not None) and
+                        output_trace_file is not None):
+                        output_arrival_time = next_job_arrival_time
+                        if window_start_time is not None:
+                            output_arrival_time -= window_start_time
+                        output_trace_file.write('%s\t%f\n' % (str(job),
+                                                 output_arrival_time))
                     last_added_job_id = job_id
 
                     last_job_arrival_time = next_job_arrival_time
@@ -1309,7 +1380,6 @@ class Scheduler:
                 # Create checkpoint.
                 assert(checkpoint_file is not None)
                 self._save_checkpoint(checkpoint_file,
-                                      completed_jobs,
                                       last_job_arrival_time,
                                       next_job_arrival_time,
                                       current_round_start_time,
@@ -1317,9 +1387,17 @@ class Scheduler:
                                       running_jobs)
                 checkpoint_complete = True
 
+        if window_start_time is not None:
+            print('Window start time: %f' % (window_start_time))
+            window_duration = self._current_timestamp - window_start_time
+            print('Window duration: '
+                  '%.3f seconds (%.2f hours)' % (window_duration,
+                                                 window_duration / 3600.0))
         if output_trace_file is not None:
             output_trace_file.close()
-        print('Total duration: %.3f seconds' % (self._current_timestamp))
+        print('Total duration: %.3f seconds '
+              '(%.2f hours)' % (self._current_timestamp,
+                                self._current_timestamp / 3600.0))
 
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.
@@ -1346,7 +1424,9 @@ class Scheduler:
                 for worker_id in self._worker_ids:
                     self._add_available_worker_id(worker_id)
                 scheduled_jobs = self._schedule_jobs_on_workers()
+                master_port_offsets = {}
                 for (job_id, worker_ids) in scheduled_jobs:
+                    master_addr = None
                     worker_type = \
                         self._worker_id_to_worker_type_mapping[worker_ids[0]]
                     scale_factor = len(worker_ids)
@@ -1359,6 +1439,9 @@ class Scheduler:
                             if scale_factor > 1:
                                 master_addr = \
                                     self._worker_connections[worker_ids[0]].addr
+                                if master_addr not in master_port_offsets:
+                                    master_port_offsets[master_addr] = 1
+                                offset = master_port_offsets[master_addr]
                                 master_port = \
                                     self._worker_connections[worker_ids[0]].port
                                 command = ('%s --master_addr %s '
@@ -1366,7 +1449,7 @@ class Scheduler:
                                            '--world_size %d '
                                            '--rank %d' % (command,
                                                           master_addr,
-                                                          master_port + 1 + j,
+                                                          master_port + j + offset,
                                                           scale_factor, i))
                             job_descriptions.append(
                                     (single_job_id,
@@ -1374,16 +1457,22 @@ class Scheduler:
                                      self._jobs[single_job_id].needs_data_dir,
                                      self._jobs[single_job_id].num_steps_arg,
                                      num_steps))
-                        # Reset lease update metadata.
+                        # Reset update metadata.
+                        self._in_progress_updates[job_id] = []
                         self._lease_update_requests[job_id] = []
                         self._max_steps[job_id] = None
                         self._worker_connections[worker_id].run(
                                 job_descriptions, worker_id)
                         self._remove_available_worker_id(worker_id)
+                    if master_addr is not None:
+                        master_port_offsets[master_addr] += len(job_id.singletons())
             while not self._available_worker_ids.full():
                 time.sleep(2)
                 continue
             self.reset_workers()
+            self._num_completed_rounds += 1
+            if self.is_done():
+                break
 
     def schedule(self):
         """Schedules jobs on workers."""
@@ -1404,6 +1493,8 @@ class Scheduler:
                 return
             if job_ids is None:
                 job_ids = sorted(list(self._job_completion_times.keys()))
+            else:
+                job_ids = sorted(job_ids)
             print('Job completion times:')
             all_job_completion_times = []
             low_priority_job_completion_times = []
@@ -1423,20 +1514,36 @@ class Scheduler:
                     high_priority_job_completion_times.append(completion_time)
             average_job_completion_time = np.mean(all_job_completion_times)
             if verbose:
-                print('Average job completion time: '
-                      '%.3f seconds' % (average_job_completion_time))
+                print('Average job completion time: %.3f seconds '
+                      '(%.2f hours)' % (average_job_completion_time,
+                                        average_job_completion_time / 3600.0))
                 if len(low_priority_job_completion_times) > 0:
                     average_low_pri_jct = \
                         np.mean(low_priority_job_completion_times)
                     print('Average job completion time (low priority): '
-                          '%.3f seconds' % (average_low_pri_jct))
+                          '%.3f seconds '
+                          '(%.2f hours)' % (average_low_pri_jct,
+                                            average_low_pri_jct / 3600.0))
                 if len(high_priority_job_completion_times) > 0:
                     average_high_pri_jct = \
                         np.mean(high_priority_job_completion_times)
                     print('Average job completion time (high priority): '
-                          '%.3f seconds' % (average_high_pri_jct))
+                          '%.3f seconds '
+                          '(%.2f hours)' % (average_high_pri_jct,
+                                            average_high_pri_jct / 3600.0))
             return average_job_completion_time
 
+
+    def get_completed_steps(self, job_ids=None):
+        print('Completed steps:')
+        if job_ids is None:
+            job_ids = sorted(list(self._total_steps_run.keys()))
+        else:
+            job_ids = sorted(job_ids)
+        for job_id in job_ids:
+            if job_id in self._total_steps_run:
+                completed_steps = self._total_steps_run[job_id]
+                print('Job %s: %d steps' % (job_id, completed_steps))
 
     def get_cluster_utilization(self):
         """Computes the utilization of the cluster."""
@@ -2108,9 +2215,13 @@ class Scheduler:
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
+        # Round the remaining steps to the nearest multiple of scale_factor.
         scale_factor = self._jobs[job_id].scale_factor
+        remaining_steps = self._get_remaining_steps(job_id)
+        remaining_steps = int(math.ceil(remaining_steps / scale_factor))
+
         if steps == 0 or duration == 0:
-            return (INFINITY, self._time_per_iteration)
+            return (remaining_steps, self._time_per_iteration)
         elif scale_factor == 1:
             return (max_steps, max_duration)
         else:
@@ -2130,12 +2241,9 @@ class Scheduler:
                         (self._time_per_iteration -
                          duration % self._time_per_iteration)
                     throughput = steps / duration
-                    remaining_steps = max(1, int(remaining_time * throughput))
-                    max_completed_steps = \
-                        max([request[0] for request in \
-                                self._lease_update_requests[job_id]])
                     self._max_steps[job_id] = \
-                        max_completed_steps + remaining_steps
+                        min(remaining_steps,
+                            steps + int(remaining_time * throughput))
                     return (self._max_steps[job_id], INFINITY)
             else:
                 # Wait for the first update to complete.
@@ -2164,13 +2272,37 @@ class Scheduler:
             all_num_steps: List of the number of steps each job ran for.
         """
 
-        # TODO: Aggregate updates before processing distributed jobs?
         to_remove = []
         with self._scheduler_lock:
             current_timestamp = self.get_current_timestamp()
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
+            self._add_available_worker_id(worker_id)
 
-            if np.min(all_execution_times) <= 0 or np.min(all_num_steps) == 0:
+            scale_factor = self._jobs[job_id.singletons()[0]].scale_factor
+            self._in_progress_updates[job_id].append((worker_id,
+                                                      all_num_steps,
+                                                      all_execution_times))
+            if len(self._in_progress_updates[job_id]) < scale_factor:
+                return
+            else:
+                micro_task_succeeded = True
+                all_worker_ids = \
+                    [x[0] for x in self._in_progress_updates[job_id]]
+                all_worker_ids.sort()
+                all_num_steps = [0] * len(job_id.singletons())
+                all_execution_times = [0] * len(job_id.singletons())
+                for (_, all_num_steps_, all_execution_times_) in \
+                    self._in_progress_updates[job_id]:
+                    if (np.min(all_num_steps_) <= 0 or
+                        np.min(all_execution_times_) <= 0):
+                        micro_task_succeeded = False
+                        break
+                    for i in range(len(job_id.singletons())):
+                        all_num_steps[i] += all_num_steps_[i]
+                        all_execution_times[i] = max(all_execution_times[i],
+                                                     all_execution_times_[i])
+
+            if not micro_task_succeeded:
                 # Micro-task failed.
                 print(('%s]\t[Micro-task failed]\t'
                        'Job ID: %s') % (current_timestamp,
@@ -2187,10 +2319,10 @@ class Scheduler:
             else:
                 print(('%s]\t[Micro-task succeeded]\t'
                        'Job ID: %s\tWorker type: %s\t'
-                       'Worker ID: %d') % (current_timestamp,
+                       'Worker ID(s): %s') % (current_timestamp,
                                            job_id,
                                            worker_type,
-                                           worker_id))
+                                           str(all_worker_ids)))
                 self._num_failures_per_job[job_id] = 0
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
@@ -2198,7 +2330,7 @@ class Scheduler:
                     if self._per_worker_type_prices is not None:
                         self._job_cost_so_far[single_job_id] += \
                             (self._per_worker_type_prices[worker_type] *
-                             execution_time / 3600.0)
+                             execution_time / 3600.0 * scale_factor)
                         job_cost_so_far = \
                             self._job_cost_so_far[single_job_id]
                         print('Job %s cost so far: $%.2f' % (single_job_id,
@@ -2231,22 +2363,14 @@ class Scheduler:
                 max_execution_time = np.max(all_execution_times)
                 # Job may be multi-GPU, and have already been marked complete
                 # by another worker.
-                # Divide by scale_factor so that _job_time_so_far and
-                # _worker_time_so_far are incremented in total by
-                # max_execution_time (_worker_time_so_far is just
-                # _job_time_so_far summed over all possible job_ids).
                 if job_id in self._job_time_so_far:
-                    scale_factor = None
-                    for single_job_id in job_id.singletons():
-                        if single_job_id in self._jobs:
-                            scale_factor = self._jobs[single_job_id].scale_factor
-                    if scale_factor is not None:
-                        self._job_time_so_far[job_id][worker_type] += \
-                            (max_execution_time / scale_factor)
-                        self._worker_time_so_far[worker_type] += \
-                            (max_execution_time / scale_factor)
-                self._cumulative_worker_time_so_far[worker_id] += \
-                    max_execution_time
+                    self._job_time_so_far[job_id][worker_type] += \
+                        max_execution_time
+                    self._worker_time_so_far[worker_type] += \
+                        max_execution_time
+                for worker_id in all_worker_ids:
+                    self._cumulative_worker_time_so_far[worker_id] += \
+                        max_execution_time
 
         self._update_throughput(job_id, worker_type,
                                 all_num_steps,
@@ -2254,5 +2378,3 @@ class Scheduler:
 
         for single_job_id in to_remove:
             self.remove_job(single_job_id[0])
-
-        self._add_available_worker_id(worker_id)
