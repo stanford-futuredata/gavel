@@ -258,6 +258,17 @@ def parse_job_type_tuple(job_type):
     scale_factor = int(match.group(2))
     return (model, scale_factor)
 
+def stringify_throughputs(throughputs):
+    stringified_throughputs = {}
+    for worker_type in throughputs:
+        stringified_throughputs[worker_type] = {}
+        for key in throughputs[worker_type]:
+            stringified_throughputs[worker_type][str(key)] = {}
+            for other_key in throughputs[worker_type][key]:
+                stringified_throughputs[worker_type][str(key)][str(other_key)] = \
+                    throughputs[worker_type][key][other_key]
+    return stringified_throughputs
+
 def read_all_throughputs_json_v2(file_name):
     with open(file_name, 'r') as f:
         raw_throughputs = json.load(f)
