@@ -184,7 +184,7 @@ if __name__=='__main__':
                         help='Load checkpoint located at passed in checkpoint_file')
     parser.add_argument('--profiling_percentage', type=float, default=1.0,
                         help=('Percentage of co-located throughput values '
-                              'measured for each job')
+                              'measured for each job'))
     parser.add_argument('--num_reference_models', type=int,
                         default=len(JobTable),
                         help=('Number of reference models to use when '
