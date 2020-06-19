@@ -87,7 +87,7 @@ if __name__=='__main__':
     parser.add_argument('--seed', type=int, default=0,
                         help='Random seed')
     parser.add_argument('--throughputs_file', type=str,
-                        default=('oracle_throughputs_v2.json'),
+                        default=('simulation_throughputs.json'),
                         help='Oracle throughputs file')
     parser.add_argument('-a', '--min_duration', type=float, default=1,
                         help='Minimum job duration in hours')
