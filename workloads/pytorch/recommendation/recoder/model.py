@@ -185,7 +185,7 @@ class Recoder(object):
       self.sparse_optimizer.load_state_dict(self.__sparse_optimizer_state_dict)
       self.__sparse_optimizer_state_dict = None
 
-  def init_from_model_file(self, model_file):
+  def init_from_model_file(self, model_file, local_rank):
     """
     Initializes the model from a pre-trained model
 
@@ -195,7 +195,7 @@ class Recoder(object):
     log.info('Loading model from: {}'.format(model_file))
     if not os.path.isfile(model_file):
       raise Exception('No state file found in {}'.format(model_file))
-    model_saved_state = torch.load(model_file, map_location='cpu')
+    model_saved_state = torch.load(model_file, map_location='cuda:{}'.format(local_rank))
     model_params = model_saved_state['model_params']
     self.current_epoch = model_saved_state['last_epoch']
     self.loss = model_saved_state.get('loss', self.loss)

@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import math
 import os
 import random
 import shutil
@@ -154,14 +155,18 @@ def main():
         os.mkdir(args.checkpoint_dir)
     checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
     if os.path.exists(checkpoint_path):
+        try:    
             print("=> loading checkpoint '{}'".format(checkpoint_path))
-            checkpoint = torch.load(checkpoint_path)
+            checkpoint = torch.load(checkpoint_path,
+                                    map_location='cuda:{}'.format(args.local_rank))
             args.start_epoch = checkpoint['epoch']
             # best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(checkpoint_path, checkpoint['epoch']))
+        except Exception as e:
+            print('=> Could not load from checkpoint: %s' % (e))
     else:
         print("=> no checkpoint found at '{}'".format(checkpoint_path))
 
@@ -210,6 +215,12 @@ def main():
         train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
                                      args.distributed,
                                      args.sched_addr, args.sched_port)
+
+    if args.num_minibatches is not None:
+        args.epochs = math.ceil(float(args.num_minibatches) *
+                                args.batch_size / len(train_loader))
+
+    epoch = args.start_epoch
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -243,13 +254,14 @@ def main():
 
         # remember best acc@1 and save checkpoint
         #best_acc1 = max(acc1, best_acc1)
-    save_checkpoint({
-        'epoch': epoch + 1,
-        'arch': args.arch,
-        'state_dict': model.state_dict(),
-        # 'best_acc1': best_acc1,
-        'optimizer' : optimizer.state_dict(),
-    }, checkpoint_path)
+    if not args.distributed or args.rank == 0:
+        save_checkpoint({
+            'epoch': epoch,
+            'arch': args.arch,
+            'state_dict': model.state_dict(),
+            # 'best_acc1': best_acc1,
+            'optimizer' : optimizer.state_dict(),
+        }, checkpoint_path)
 
 def train(train_loader, model, criterion, optimizer, epoch,
           total_minibatches, max_minibatches, total_elapsed_time,
