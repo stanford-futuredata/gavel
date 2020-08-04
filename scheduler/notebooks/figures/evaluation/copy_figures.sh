@@ -3,3 +3,4 @@ cp -r makespan ~/Documents/research/gpusched_papers/osdi20/figures
 cp -r philly ~/Documents/research/gpusched_papers/osdi20/figures
 cp -r solver_scaling ~/Documents/research/gpusched_papers/osdi20/figures
 cp -r physical_cluster_experiments ~/Documents/research/gpusched_papers/osdi20/figures
+cp -r throughput_estimation ~/Documents/research/gpusched_papers/osdi20/figures
