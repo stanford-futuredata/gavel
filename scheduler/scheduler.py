@@ -1300,7 +1300,8 @@ class Scheduler:
                                                   [all_num_steps[job_id]]))
                     self._running_jobs.add(job_id)
             else:
-                scheduled_jobs = self._schedule_jobs_on_workers()
+                with self._scheduler_lock:
+                    scheduled_jobs = self._schedule_jobs_on_workers()
                 for (job_id, worker_ids) in scheduled_jobs:
                     worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
                     for worker_id in worker_ids:
@@ -1615,7 +1616,8 @@ class Scheduler:
             for job_id in self._jobs
         }
         state['times_since_start'] = {
-            job_id: self.get_current_timestamp() - self._per_job_start_timestamps[job_id]
+            job_id: self.get_current_timestamp() - \
+                        self._per_job_start_timestamps[job_id]
             for job_id in self._jobs
         }
         state['throughputs'] = copy.deepcopy(self._throughputs)
@@ -1644,8 +1646,8 @@ class Scheduler:
         when calling this function.
 
         Returns:
-            A 2-level dict indexed by job_id and then worker_type. For
-            example,
+            A 2-level dict indexed by job_id and then worker_type (the
+            unflattened allocation). For example,
 
             {0: {"v100": 0.25, "p100": 0.95}, 1: {"v100": 0.75, "p100": 0.05}}
 
@@ -1663,45 +1665,48 @@ class Scheduler:
 
         # Compute the allocation.
         if self._policy.name == "AlloX_Perf":
-            unflattened_allocation = self._policy.get_allocation(
+            allocation = self._policy.get_allocation(
                 throughputs, scale_factors,
                 times_since_start, num_steps_remaining,
                 cluster_spec)
         elif self._policy.name.startswith("FinishTimeFairness"):
-            unflattened_allocation = self._policy.get_allocation(
+            allocation = self._policy.get_allocation(
                 throughputs, scale_factors, priority_weights,
                 times_since_start, num_steps_remaining,
                 cluster_spec)
         elif self._policy.name == "Isolated":
-            unflattened_allocation = self._policy.get_allocation(
+            allocation = self._policy.get_allocation(
                 throughputs, scale_factors, cluster_spec)
         elif self._policy.name.startswith("MaxMinFairness"):
-            unflattened_allocation = self._policy.get_allocation(
+            allocation = self._policy.get_allocation(
                 throughputs, scale_factors, priority_weights,
                 cluster_spec)
         elif self._policy.name.startswith("MinTotalDuration"):
-            unflattened_allocation = self._policy.get_allocation(
+            allocation = self._policy.get_allocation(
                 throughputs, scale_factors, num_steps_remaining,
                 cluster_spec)
         elif self._policy.name.startswith("ThroughputNormalizedByCostSum"):
             instance_costs = state['instance_costs']
             if 'SLO' in self._policy.name:
                 SLOs = state['SLOs']
-                unflattened_allocation = self._policy.get_allocation(
+                allocation = self._policy.get_allocation(
                     throughputs, scale_factors, cluster_spec,
                     instance_costs=instance_costs,
                     SLOs=SLOs,
                     num_steps_remaining=num_steps_remaining)
             else:
-                unflattened_allocation = self._policy.get_allocation(
+                allocation = self._policy.get_allocation(
                     throughputs, scale_factors, self._cluster_spec,
                     instance_costs=instance_costs)
         else:
-            unflattened_allocation = self._policy.get_allocation(
+            allocation = self._policy.get_allocation(
                 throughputs, scale_factors, self._cluster_spec)
-        return unflattened_allocation
+        if allocation is None:
+            allocation = {}
+        return allocation
 
     def _allocation_thread(self):
+        """Computes the allocation asynchronously."""
         while True:
             # Check whether allocation needs to be re-computed.
             self._scheduler_cv.acquire()
@@ -1709,29 +1714,33 @@ class Scheduler:
                 self._scheduler_cv.wait()
             state = self._get_allocation_state()
             self._scheduler_cv.release()
-            self._compute_allocation(state)
+            allocation = self._compute_allocation(state)
 
             # Update allocation and clean up.
-            with self._scheduler_lock:
-                # TODO: Decide how to redistribute unclaimed allocation
-                unclaimed_allocation = {}
-                for worker_type in self._cluster_spec:
-                    unclaimed_allocation[worker_type] = 0.0
-                for job_id in unflattened_allocation:
-                    still_active = True
-                    for single_job_id in job_id.singletons():
-                        if single_job_id not in self._jobs:
-                            still_active = False
-                            break
-                    if not still_active:
-                        worker_types = unflattened_allocation[job_id].keys()
-                        for worker_type in worker_types:
-                            unclaimed_allocation[worker_type] += \
-                                unflattened_allocation[job_id][worker_type]
-                            del unflattened_allocation[job_id][worker_type]
-                        del unflattened_allocation[job_id]
-                self._allocation = unflattened_allocation
-                self._need_to_update_allocation = False
+            self._scheduler_cv.acquire()
+            for job_id in allocation:
+                still_active = []
+                for single_job_id in job_id.singletons():
+                    if single_job_id in self._jobs:
+                        still_active.append(True)
+                    else:
+                        still_active.append(False)
+                if not all(still_active):
+                    worker_types = allocation[job_id].keys()
+                    for i, single_job_id in enumerate(job_id.singletons()):
+                        if still_active[i]:
+                            # If only one job in a job combination is still
+                            # active, re-distribute the job combination's
+                            # allocation to the still-active job's isolated
+                            # allocation.
+                            for worker_type in worker_types:
+                                allocation[single_job_id][worker_type] += \
+                                    allocation[job_id][worker_type]
+                                del allocation[job_id][worker_type]
+                            del allocation[job_id]
+            self._allocation = allocation
+            self._need_to_update_allocation = False
+            self._scheduler_cv.release()
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _populate_job_combination_metadata(self, job_id, worker_type):
@@ -1756,6 +1765,7 @@ class Scheduler:
                     self._job_time_so_far[merged_job_id] = {}
                     self._priorities[worker_type][job_id] = 0.0
                     self._deficits[worker_type][job_id] = 0.0
+                self._job_time_so_far[merged_job_id][worker_type] = 0.0
                 if self._estimate_throughputs:
                     reference_job_types = \
                         [self._reference_job_map[job_id],
@@ -1903,18 +1913,17 @@ class Scheduler:
 
         NOTE: Used when scheduling is performed in rounds.
         """
-        with self._scheduler_lock:
-            time_since_last_reset = self.get_current_timestamp() - self._last_reset_time
-            reset_interval_elapsed = time_since_last_reset >= \
-                self._minimum_time_between_allocation_resets
-            if (self._need_to_update_allocation and
-                (reset_interval_elapsed or self._last_reset_time == 0)):
-                self._reset_time_run_so_far()
-                # In simulation mode, wait for allocation computation to complete
-                # before proceeding.
-                if self._simulate:
-                    self._allocation = self._compute_allocation()
-                    self._need_to_update_allocation = False
+        time_since_last_reset = self.get_current_timestamp() - self._last_reset_time
+        reset_interval_elapsed = time_since_last_reset >= \
+            self._minimum_time_between_allocation_resets
+        if (self._need_to_update_allocation and
+            (reset_interval_elapsed or self._last_reset_time == 0)):
+            self._reset_time_run_so_far()
+            # In simulation mode, wait for allocation computation to complete
+            # before proceeding.
+            if self._simulate:
+                self._allocation = self._compute_allocation()
+                self._need_to_update_allocation = False
 
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
