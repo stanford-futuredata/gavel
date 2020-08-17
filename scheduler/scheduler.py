@@ -565,6 +565,18 @@ class Scheduler:
 
         Assigns workers in a strided fashion to minimize the number
         of servers used.
+
+        Args:
+          job_id: The job (combination) ID to schedule.
+          scale_factor: The number of GPUs requested.
+          worker_type: The worker type to allocate.
+          worker_state: A dict comprised of the following information:
+            worker_ids: Worker IDs organized into servers.
+            reserved_worker_ids: A set of worker IDs that are already in use.
+            server_id_ptr: The server to assign workers from.
+            num_workers_assigned: The total number of allocated workers.
+          worker_assignments: A list of (job_id, worker_ids) assignment tuples.
+          worker_ids_for_job: An optional list of worker IDs to assign.
         """
         worker_ids = worker_state['worker_ids']
         reserved_worker_ids = worker_state['reserved_worker_ids']
@@ -579,8 +591,13 @@ class Scheduler:
                 worker_ids_to_assign = worker_ids[server_id_ptr][:num_workers]
                 ineligible_worker_ids = \
                     set(worker_ids_to_assign).intersection(reserved_worker_ids)
+                # Only assign the worker IDs if they have not been reserved
+                # for a different job.
                 if len(ineligible_worker_ids) == 0:
                     worker_ids_for_job.extend(worker_ids_to_assign)
+                # Update metadata regardless of whether the worker IDs were
+                # assigned to this job; a different job could have reserved
+                # these workers.
                 worker_ids[server_id_ptr] = \
                     worker_ids[server_id_ptr][num_workers:]
                 server_id_ptr += 1
@@ -739,7 +756,6 @@ class Scheduler:
             # Sort jobs by the scale factor: want to assign jobs from largest
             # to smallest to minimize fragmentation.
             scheduled_jobs[worker_type].sort(key=lambda x: x[1], reverse=True)
-            # Worker IDs organized into servers.
             worker_ids = copy.copy(
                 self._worker_type_to_worker_id_mapping[worker_type])
             worker_state[worker_type] = {
