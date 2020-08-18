@@ -113,6 +113,8 @@ class Scheduler:
         self._available_worker_ids = queue.Queue()
         # Allocations for all current incomplete applications.
         self._allocation = {}
+        # Current list of assignments of workers to job combinations.
+        self._current_worker_assignments = []
         # Iterations run on each worker_id, for all current incomplete
         # applications.
         self._steps_run_so_far = {}
@@ -556,6 +558,79 @@ class Scheduler:
     ======================================================================
     """
 
+    def _assign_workers_to_job(self, job_id, scale_factor, worker_type,
+                               worker_state, worker_assignments,
+                               worker_ids_for_job=None):
+        """Assign workers to jobs.
+
+        Assigns workers in a strided fashion to minimize the number
+        of servers used.
+
+        Args:
+          job_id: The job (combination) ID to schedule.
+          scale_factor: The number of GPUs requested.
+          worker_type: The worker type to allocate.
+          worker_state: A dict comprised of the following information:
+            worker_ids: Worker IDs organized into servers.
+            reserved_worker_ids: A set of worker IDs that are already in use.
+            server_id_ptr: The server to assign workers from.
+            num_workers_assigned: The total number of allocated workers.
+          worker_assignments: A list of (job_id, worker_ids) assignment tuples.
+          worker_ids_for_job: An optional list of worker IDs to assign.
+        """
+        worker_ids = worker_state['worker_ids']
+        reserved_worker_ids = worker_state['reserved_worker_ids']
+        server_id_ptr = worker_state['server_id_ptr']
+        num_workers_assigned = worker_state['num_workers_assigned']
+
+        if worker_ids_for_job is None:
+            worker_ids_for_job = []
+            while len(worker_ids_for_job) < scale_factor:
+                num_workers = min(len(worker_ids[server_id_ptr]),
+                                  scale_factor - len(worker_ids_for_job))
+                worker_ids_to_assign = worker_ids[server_id_ptr][:num_workers]
+                ineligible_worker_ids = \
+                    set(worker_ids_to_assign).intersection(reserved_worker_ids)
+                # Only assign the worker IDs if they have not been reserved
+                # for a different job.
+                if len(ineligible_worker_ids) == 0:
+                    worker_ids_for_job.extend(worker_ids_to_assign)
+                # Update metadata regardless of whether the worker IDs were
+                # assigned to this job; a different job could have reserved
+                # these workers.
+                worker_ids[server_id_ptr] = \
+                    worker_ids[server_id_ptr][num_workers:]
+                server_id_ptr += 1
+                server_id_ptr = server_id_ptr % len(worker_ids)
+        worker_assignments.append(
+                (job_id,
+                 tuple(worker_ids_for_job)))
+        num_workers_assigned += scale_factor
+
+        for single_job_id in job_id.singletons():
+            self._per_job_latest_timestamps[single_job_id] = \
+                self.get_current_timestamp()
+            self._running_jobs.add(single_job_id)
+        worker_types = sorted(self._allocation[job_id].keys())
+        allocation_str = ''
+        for x in worker_types:
+            allocation_str += \
+                ' [%4s %f]' % (x, self._allocation[job_id][x])
+        print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
+               'Worker type: %s\tWorker ID(s): %s\t'
+               'Priority: %f\tDeficit: %f\t'
+               'Allocation: %s') % (self.get_current_timestamp(),
+                                   job_id, worker_type,
+                                   ",".join(["%d" % x
+                                             for x in worker_ids_for_job]),
+                                   self._priorities[worker_type][job_id],
+                                   self._deficits[worker_type][job_id],
+                                   allocation_str))
+        # Update state.
+        worker_state['worker_ids'] = worker_ids
+        worker_state['server_id_ptr'] = server_id_ptr
+        worker_state['num_workers_assigned'] = num_workers_assigned
+
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_types):
         """Greedily selects the jobs to run in the next round by iterating
@@ -673,61 +748,59 @@ class Scheduler:
             'Packing' not in self._policy.name):
             self._worker_type_shuffler.shuffle(worker_types)
 
-        worker_assignments = []
+        new_worker_assignments = []
         scheduled_jobs = self._schedule_jobs_on_workers_helper(worker_types)
 
+        worker_state = {}
         for worker_type in worker_types:
-            # Worker IDs organized into servers.
+            # Sort jobs by the scale factor: want to assign jobs from largest
+            # to smallest to minimize fragmentation.
+            scheduled_jobs[worker_type].sort(key=lambda x: x[1], reverse=True)
             worker_ids = copy.copy(
                 self._worker_type_to_worker_id_mapping[worker_type])
-            server_id_ptr = 0
-            # Sort jobs by the scale factor: want to assign jobs from largest to smallest
-            # scale factor to minimize fragmentation.
-            scheduled_jobs[worker_type].sort(key=lambda x: x[1], reverse=True)
-            num_workers_assigned = 0
+            worker_state[worker_type] = {
+                'worker_ids': worker_ids,
+                'reserved_worker_ids': set(),
+                'server_id_ptr': 0,
+                'num_workers_assigned': 0,
+            }
 
+        # Keep jobs on the same server if possible.
+        already_scheduled_jobs = set()
+        new_worker_types = {}
+        for worker_type in scheduled_jobs:
+            for (job_id, scale_factor) in scheduled_jobs[worker_type]:
+                new_worker_types[job_id] = worker_type
+        for (job_id, worker_ids) in self._current_worker_assignments:
+            current_worker_type = \
+                self._worker_id_to_worker_type_mapping[worker_ids[0]]
+            if job_id not in new_worker_types:
+                continue
+            if new_worker_types[job_id] == current_worker_type:
+                reserved_worker_ids = \
+                    worker_state[current_worker_type]['reserved_worker_ids']
+                scale_factor = len(worker_ids)
+                for worker_id in worker_ids:
+                    reserved_worker_ids.add(worker_id)
+                already_scheduled_jobs.add(job_id)
+                self._assign_workers_to_job(job_id, scale_factor,
+                                            current_worker_type,
+                                            worker_state[current_worker_type],
+                                            new_worker_assignments,
+                                            worker_ids)
+
+        # Assign all jobs that have an updated placement.
+        for worker_type in worker_types:
             for (job_id, scale_factor) in scheduled_jobs[worker_type]:
                 if self._allocation is None or job_id not in self._allocation:
                     continue
-
-                # Assign workers to jobs. Assign workers in a strided fashion to
-                # minimize the number of servers used.
-                worker_ids_for_job = []
-                while len(worker_ids_for_job) < scale_factor:
-                    num_workers = min(len(worker_ids[server_id_ptr]),
-                                      scale_factor - len(worker_ids_for_job))
-                    worker_ids_for_job.extend(worker_ids[server_id_ptr][:num_workers])
-                    worker_ids[server_id_ptr] = worker_ids[server_id_ptr][num_workers:]
-                    server_id_ptr += 1
-                    server_id_ptr = server_id_ptr % len(worker_ids)
-                worker_assignments.append(
-                        (job_id,
-                         tuple(worker_ids_for_job)))
-                num_workers_assigned += scale_factor
-
-                for single_job_id in job_id.singletons():
-                    num_steps = self._jobs[single_job_id].total_steps
-                    self._per_job_latest_timestamps[single_job_id] = \
-                        self.get_current_timestamp()
-                    self._running_jobs.add(single_job_id)
-                worker_types = []
-                for x in self._allocation[job_id]:
-                    worker_types.append(x)
-                worker_types = sorted(worker_types)
-                allocation_str = ''
-                for x in worker_types:
-                    allocation_str += \
-                        ' [%4s %f]' % (x, self._allocation[job_id][x])
-                print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
-                       'Worker type: %s\tWorker ID(s): %s\t'
-                       'Priority: %f\tDeficit: %f\t'
-                       'Allocation: %s') % (self.get_current_timestamp(),
-                                           job_id, worker_type,
-                                           ",".join(["%d" % x
-                                                     for x in worker_ids_for_job]),
-                                           self._priorities[worker_type][job_id],
-                                           self._deficits[worker_type][job_id],
-                                           allocation_str))
+                elif job_id in already_scheduled_jobs:
+                    continue
+                self._assign_workers_to_job(job_id, scale_factor, worker_type,
+                                            worker_state[worker_type],
+                                            new_worker_assignments)
+            num_workers_assigned = \
+                worker_state[worker_type]['num_workers_assigned']
             if num_workers_assigned < self._cluster_spec[worker_type]:
                 print(('WARNING: %d GPUs of type %s left unused. '
                        'Number of active jobs: %d') % (
@@ -735,7 +808,7 @@ class Scheduler:
                     worker_type,
                     len(self._jobs)))
 
-        return worker_assignments
+        return new_worker_assignments
 
     def _get_num_steps(self, job_id, worker_type, single_job_id=None):
         if self._simulate:
@@ -1302,6 +1375,7 @@ class Scheduler:
             else:
                 with self._scheduler_lock:
                     scheduled_jobs = self._schedule_jobs_on_workers()
+                    self._current_worker_assignments = scheduled_jobs
                 for (job_id, worker_ids) in scheduled_jobs:
                     worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
                     for worker_id in worker_ids:
@@ -1363,6 +1437,7 @@ class Scheduler:
                 for worker_id in self._worker_ids:
                     self._add_available_worker_id(worker_id)
                 scheduled_jobs = self._schedule_jobs_on_workers()
+                self._current_worker_assignments = scheduled_jobs
                 master_port_offsets = {}
                 for (job_id, worker_ids) in scheduled_jobs:
                     master_addr = None
