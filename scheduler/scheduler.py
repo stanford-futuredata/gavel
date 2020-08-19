@@ -1568,9 +1568,20 @@ class Scheduler:
                             next_worker_ids = \
                                 set(self._next_worker_assignments[job_id])
                             if current_worker_ids == next_worker_ids:
+                                # Job will be scheduled on the same workers in
+                                # upcoming round; extend its lease.
                                 self._jobs_with_extended_lease.add(job_id)
                             elif job_id in self._jobs_with_extended_lease:
+                                # Job will not be scheduled on the same workers
+                                # in upcoming round; remove it from the
+                                # extended lease set if it had previously
+                                # received an extended lease.
                                 self._jobs_with_extended_lease.remove(job_id)
+                        elif job_id in self._jobs_with_extended_lease:
+                            # Job will not be scheduled in upcoming round;
+                            # remove it from the extended lease set if it
+                            # had previously received an extended lease.
+                            self._jobs_with_extended_lease.remove(job_id)
                 elif elapsed_time >= self._time_per_iteration:
                     for job_id in self._jobs_with_extended_lease:
                         current_worker_ids = \
