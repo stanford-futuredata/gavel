@@ -107,10 +107,15 @@ class GavelIterator:
                                           self._duration,
                                           self._lease.max_steps,
                                           self._lease.max_duration)
+        next_lease_update_steps = \
+            int(updated_max_steps * LEASE_UPDATE_FRACTION +
+                self._lease.max_steps * (1.0 - LEASE_UPDATE_FRACTION))
+        next_lease_update_time = \
+            (updated_max_duration * LEASE_UPDATE_FRACTION +
+             self._lease.max_duration * (1.0 - LEASE_UPDATE_FRACTION))
+        self._steps_until_next_lease_update = \
+            next_lease_update_steps - self._steps
+        self._time_until_next_lease_update = \
+            next_lease_update_time - self._duration
         self._lease.max_steps = updated_max_steps
         self._lease.max_duration = updated_max_duration
-        # TODO: Fix this when lease extends to subsequent round.
-        self._steps_until_next_lease_update = \
-            self._lease.max_steps * LEASE_UPDATE_FRACTION
-        self._time_until_next_lease_update = \
-            self._lease.max_duration * LEASE_UPDATE_FRACTION
