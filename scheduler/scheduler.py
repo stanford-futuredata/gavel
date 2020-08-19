@@ -1454,6 +1454,32 @@ class Scheduler:
               '(%.2f hours)' % (self._current_timestamp,
                                 self._current_timestamp / 3600.0))
 
+    def _recompute_schedule_and_update_leases(self):
+        # Recompute the schedule for the upcoming round.
+        self._next_worker_assignments = self._schedule_jobs_on_workers()
+        # Check whether we should update the lease for any jobs.
+        for job_id in self._current_worker_assignments:
+            current_worker_ids = \
+                set(self._current_worker_assignments[job_id])
+            if job_id in self._next_worker_assignments:
+                next_worker_ids = \
+                    set(self._next_worker_assignments[job_id])
+                if current_worker_ids == next_worker_ids:
+                    # Job will be scheduled on the same workers in
+                    # upcoming round; extend its lease.
+                    self._jobs_with_extended_lease.add(job_id)
+                elif job_id in self._jobs_with_extended_lease:
+                    # Job will not be scheduled on the same workers
+                    # in upcoming round; remove it from the
+                    # extended lease set if it had previously
+                    # received an extended lease.
+                    self._jobs_with_extended_lease.remove(job_id)
+            elif job_id in self._jobs_with_extended_lease:
+                # Job will not be scheduled in upcoming round;
+                # remove it from the extended lease set if it
+                # had previously received an extended lease.
+                self._jobs_with_extended_lease.remove(job_id)
+
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.
 
@@ -1488,9 +1514,9 @@ class Scheduler:
                     scheduled_jobs = self._schedule_jobs_on_workers()
                 self._current_worker_assignments = scheduled_jobs
                 self._print_schedule_summary()
-                self._jobs_with_extended_lease = set()
                 master_port_offsets = {}
                 active_jobs = False
+                assert(len(self._jobs_with_extended_lease) == 0)
                 for (job_id, worker_ids) in scheduled_jobs.items():
                     # Job could have been completed after schedule was
                     # computed; if so, update port data if necessary and skip.
@@ -1552,42 +1578,26 @@ class Scheduler:
                             len(job_id.singletons())
             round_start_time = self.get_current_timestamp(in_seconds=True)
             while not self._available_worker_ids.full():
-                # If the specified duration of the current round has completed,
-                # compute the schedule for the subsequent round.
-                current_time = self.get_current_timestamp(in_seconds=True)
-                elapsed_time = current_time - round_start_time
-                if (elapsed_time >= recompute_schedule_time and
-                    self._next_worker_assignments is None):
-                    self._next_worker_assignments = \
-                        self._schedule_jobs_on_workers()
-                    # Check whether we should extend the lease for any jobs.
-                    for job_id in self._current_worker_assignments:
-                        current_worker_ids = \
-                            set(self._current_worker_assignments[job_id])
-                        if job_id in self._next_worker_assignments:
-                            next_worker_ids = \
-                                set(self._next_worker_assignments[job_id])
-                            if current_worker_ids == next_worker_ids:
-                                # Job will be scheduled on the same workers in
-                                # upcoming round; extend its lease.
-                                self._jobs_with_extended_lease.add(job_id)
-                            elif job_id in self._jobs_with_extended_lease:
-                                # Job will not be scheduled on the same workers
-                                # in upcoming round; remove it from the
-                                # extended lease set if it had previously
-                                # received an extended lease.
-                                self._jobs_with_extended_lease.remove(job_id)
-                        elif job_id in self._jobs_with_extended_lease:
-                            # Job will not be scheduled in upcoming round;
-                            # remove it from the extended lease set if it
-                            # had previously received an extended lease.
+                with self._scheduler_lock:
+                    current_time = self.get_current_timestamp(in_seconds=True)
+                    elapsed_time = current_time - round_start_time
+                    if (elapsed_time >= recompute_schedule_time and
+                        self._next_worker_assignments is None):
+                        # If the specified duration of the current round has
+                        # completed, compute the schedule for the subsequent
+                        # round.
+                        self._recompute_schedule_and_update_leases()
+                    elif elapsed_time >= self._time_per_iteration:
+                        # When the round completes, reset any extended leases.
+                        jobs_with_extended_lease = \
+                            list(self._jobs_with_extended_lease)
+                        for job_id in jobs_with_extended_lease:
+                            if job_id in self._jobs:
+                                current_worker_ids = \
+                                    self._current_worker_assignments[job_id]
+                                for worker_id in current_worker_ids:
+                                    self._add_available_worker_id(worker_id)
                             self._jobs_with_extended_lease.remove(job_id)
-                elif elapsed_time >= self._time_per_iteration:
-                    for job_id in self._jobs_with_extended_lease:
-                        current_worker_ids = \
-                            self._current_worker_assignments[job_id]
-                        for worker_id in current_worker_ids:
-                            self._add_available_worker_id(worker_id)
                 time.sleep(2)
                 continue
             # Only record a completed round if at least one job was active.
@@ -2140,12 +2150,7 @@ class Scheduler:
     def _add_available_worker_id(self, worker_id):
         """Adds a worker_id to the list of available workers."""
 
-        try:
-            self._available_worker_ids.put(worker_id, block=False)
-        except queue.Full:
-            # Worker could be added twice if job had extended lease but it
-            # finished mid-round.
-            pass
+        self._available_worker_ids.put(worker_id)
 
     def _remove_available_worker_id(self, worker_id=None):
         """Returns the worker_id of the next available worker."""
