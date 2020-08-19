@@ -1597,6 +1597,14 @@ class Scheduler:
                                     self._current_worker_assignments[job_id]
                                 for worker_id in current_worker_ids:
                                     self._add_available_worker_id(worker_id)
+                            # NOTE: There is a possibility that a job which
+                            # should receive an extended lease requests a lease
+                            # update after we have removed the job from the
+                            # extended lease set but before we begin the
+                            # next round - in this case the job will
+                            # simply be re-scheduled on the exact same workers.
+                            # While this is not optimal, it is safe and also
+                            # unlikely to occur in practice.
                             self._jobs_with_extended_lease.remove(job_id)
                 time.sleep(2)
                 continue
