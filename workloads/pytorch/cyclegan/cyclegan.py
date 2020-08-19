@@ -172,7 +172,8 @@ val_dataloader = DataLoader(
 
 if opt.enable_gavel_iterator:
     dataloader = GavelIterator(dataloader, opt.job_id, opt.worker_id,
-                               False, opt.sched_addr, opt.sched_port)
+                               False, opt.sched_addr, opt.sched_port,
+                               opt.checkpoint_dir)
 
 if opt.n_steps is not None:
     opt.n_epochs = math.ceil(opt.n_steps * opt.batch_size / len(dataloader))
