@@ -89,7 +89,7 @@ model = DynamicAutoencoder(hidden_layers=[200], activation_type='tanh',
 trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
                   loss='logistic', user_based=False, job_id=args.job_id,
                   worker_id=args.worker_id, sched_addr=args.sched_addr,
-                  sched_port=args.sched_port)
+                  sched_port=args.sched_port, gavel_dir=args.checkpoint_dir)
 if os.path.exists(checkpoint_path):
     try:
         print('Loading checkpoint from %s...' % (checkpoint_path))

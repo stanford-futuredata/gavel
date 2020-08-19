@@ -214,7 +214,8 @@ def main():
     if args.enable_gavel_iterator:
         train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
                                      args.distributed,
-                                     args.sched_addr, args.sched_port)
+                                     args.sched_addr, args.sched_port,
+                                     args.checkpoint_dir)
 
     if args.num_minibatches is not None:
         args.epochs = math.ceil(float(args.num_minibatches) *

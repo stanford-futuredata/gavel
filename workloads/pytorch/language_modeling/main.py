@@ -56,7 +56,7 @@ parser.add_argument('--cuda', action='store_true',
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
 parser.add_argument('--checkpoint_dir', type=str,
-                    default=None,
+                    default='/lfs/1/keshav2/checkpoints',
                     help='Checkpoint dir')
 parser.add_argument('--onnx-export', type=str, default='',
                     help='path to export the final model in onnx format')
@@ -232,7 +232,8 @@ test_loader = torch.utils.data.DataLoader(test_dataset,
 if args.enable_gavel_iterator:
     train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
                                  args.distributed,
-                                 args.sched_addr, args.sched_port)
+                                 args.sched_addr, args.sched_port,
+                                 args.checkpoint_dir)
 
 
 cumulative_steps = 0
@@ -369,6 +370,7 @@ try:
         elif done:
           break
         print('-' * 89)
+    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
     with open(checkpoint_path, 'wb') as f:
         print('Saving checkpoint at %s...' % (checkpoint_path))
         if args.distributed:

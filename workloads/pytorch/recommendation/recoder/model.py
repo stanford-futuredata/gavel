@@ -62,7 +62,8 @@ class Recoder(object):
                loss_params=None, use_cuda=False,
                user_based=True, item_based=True,
                job_id=None, worker_id=None,
-               sched_addr=None, sched_port=None):
+               sched_addr=None, sched_port=None,
+               gavel_dir=None):
 
     self.model = model
     self.num_items = num_items
@@ -95,6 +96,7 @@ class Recoder(object):
         self._distributed = False
         self._sched_addr = sched_addr
         self._sched_port = sched_port
+        self._gavel_dir = gavel_dir
     else:
         self._enable_gavel_iterator = False
 
@@ -351,7 +353,7 @@ class Recoder(object):
                                          self._worker_id,
                                          self._distributed,
                                          self._sched_addr, self._sched_port,
-                                         synthetic_data=True)
+                                         self._gavel_dir, synthetic_data=True)
 
     if lr_milestones is not None:
       _last_epoch = -1 if self.current_epoch == 1 else (self.current_epoch - 2)

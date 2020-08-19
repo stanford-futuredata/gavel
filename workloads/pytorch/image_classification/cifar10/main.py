@@ -130,7 +130,8 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 
 if enable_gavel_iterator:
     trainloader = GavelIterator(trainloader, args.job_id, args.worker_id,
-                                args.distributed, args.sched_addr, args.sched_port)
+                                args.distributed, args.sched_addr,
+                                args.sched_port, args.checkpoint_dir)
 
 cumulative_steps = 0
 cumulative_time = 0

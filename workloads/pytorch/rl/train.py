@@ -55,7 +55,7 @@ def train(rank, args, shared_model, optimizer, env_conf):
     if args.enable_gavel_iterator and rank == 0:
         iters = GavelIterator(iters, args.job_id, args.worker_id,
                               args.distributed, args.sched_addr,
-                              args.sched_port)
+                              args.sched_port, args.checkpoint_dir)
 
     for i in iters:
         if i % 100 == 0:

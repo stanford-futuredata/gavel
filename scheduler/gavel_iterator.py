@@ -1,6 +1,6 @@
 from collections.abc import Iterable
+import os
 import time
-
 import torch
 from torch.utils.data.dataloader import DataLoader
 
@@ -12,7 +12,8 @@ LEASE_UPDATE_FRACTION = 0.75
 
 class GavelIterator:
     def __init__(self, data_loader, job_id, worker_id, distributed,
-                 server_addr, server_port, synthetic_data=False):
+                 server_addr, server_port, gavel_dir, synthetic_data=False,
+                 verbose=True):
         self._prev_time = time.time()
         if not isinstance(data_loader, Iterable):
             raise ValueError('Data is of uniterable '
@@ -31,8 +32,12 @@ class GavelIterator:
         self._lease = Lease(0, 0)
         self._update_lease()
         self._synthetic_data = synthetic_data
+        self._verbose = verbose
         if self._synthetic_data:
             self._initial_val = None
+        assert(os.path.isdir(os.path.join(gavel_dir)))
+        self._steps_file = os.path.join(gavel_dir, '.gavel_steps')
+        self._write_steps()
 
     def __iter__(self):
         self._iterator = iter(self._data_loader)
@@ -52,15 +57,17 @@ class GavelIterator:
 
         # Check if the lease has expired.
         if self._duration >= self._lease.max_duration:
-            print('Gavel lease expired: %f seconds '
-                  '(max %f seconds)' % (self._duration,
-                                        self._lease.max_duration))
+            if self._verbose:
+                print('Gavel lease expired: %f seconds '
+                      '(max %f seconds)' % (self._duration,
+                                            self._lease.max_duration))
             self.complete()
             raise StopIteration
         elif self._steps >= self._lease.max_steps:
-            print('Gavel lease expired: %d steps '
-                  '(max %d steps)' % (self._steps,
-                                      self._lease.max_steps))
+            if self._verbose:
+                print('Gavel lease expired: %d steps '
+                      '(max %d steps)' % (self._steps,
+                                          self._lease.max_steps))
             self.complete()
             raise StopIteration
 
@@ -76,13 +83,13 @@ class GavelIterator:
         except StopIteration as e:
             # TODO: Enforce contract that application calls complete before
             # exiting.
-            print('\n[GavelIterator] %d' % (self._steps))
+            self._write_steps()
             raise StopIteration
 
         if self._synthetic_data and self._steps % len(self._data_loader) == 0:
             # TODO: Enforce contract that application calls complete before
             # exiting.
-            print('\n[GavelIterator] %d' % (self._steps))
+            self._write_steps()
             raise StopIteration
 
         self._steps_until_next_lease_update -= 1
@@ -99,7 +106,14 @@ class GavelIterator:
 
     def complete(self):
         self._done = True
-        print('\n[GavelIterator] %d' % (self._steps))
+        self._write_steps()
+
+    def _write_steps(self):
+        try:
+            with open(self._steps_file, 'w') as f:
+                f.write('%d' % (self._steps))
+        except Exception as e:
+            print(e)
 
     def _update_lease(self):
         (updated_max_steps, updated_max_duration) = \

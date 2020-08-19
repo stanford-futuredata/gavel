@@ -106,12 +106,12 @@ class Dispatcher:
                                         self._sched_addr, self._sched_port))
         return command
 
-    def _get_steps_from_output(self, output):
-        steps = None
-        for line in output.split('\n'):
-            match = re.search('\[GavelIterator\] (\d+)', line)
-            if match is not None:
-                steps = int(match.group(1))
+    def _get_steps(self, job_id):
+        checkpoint_dir = os.path.join(self._checkpoint_dir,
+                                      'job_id=%d' % (job_id))
+        steps_file = os.path.join(checkpoint_dir, '.gavel_steps')
+        with open(steps_file, 'r') as f:
+            steps = int(f.read())
         return steps
 
     def _kill_job(self, pid):
@@ -156,7 +156,7 @@ class Dispatcher:
                                   shell=True)
             execution_time = time.time() - start_time
             output = proc.stdout.decode('utf-8').strip()
-            completed_steps = self._get_steps_from_output(output)
+            completed_steps = self._get_steps(job.job_id)
             if completed_steps is None:
                 self._write_queue.put('Could not get completed steps for job '
                                       '%s (worker %d), '

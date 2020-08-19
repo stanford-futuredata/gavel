@@ -394,7 +394,8 @@ def main():
     if opt.enable_gavel_iterator:
         training_data = GavelIterator(training_data, opt.job_id,
                                       opt.worker_id, opt.distributed,
-                                      opt.sched_addr, opt.sched_port)
+                                      opt.sched_addr, opt.sched_port,
+                                      opt.checkpoint_dir)
 
     optimizer = ScheduledOptim(
         optim.Adam(
