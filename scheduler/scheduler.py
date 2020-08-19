@@ -122,9 +122,9 @@ class Scheduler:
         self._available_worker_ids = queue.Queue()
         # Allocations for all current incomplete applications.
         self._allocation = {}
-        # Current list of assignments of workers to job combinations.
+        # Current map from job combinations to assigned workers.
         self._current_worker_assignments = collections.OrderedDict()
-        # List of worker assignments for the upcoming round.
+        # Map of jobs to worker assignments for the upcoming round.
         self._next_worker_assignments = None
         # Set of jobs that have been dispatched to workers.
         self._dispatched_jobs = set()
@@ -1564,8 +1564,7 @@ class Scheduler:
                     for job_id in self._current_worker_assignments:
                         current_worker_ids = \
                             set(self._current_worker_assignments[job_id])
-                        if (self._next_worker_assignments is not None and
-                            job_id in self._next_worker_assignments):
+                        if job_id in self._next_worker_assignments:
                             next_worker_ids = \
                                 set(self._next_worker_assignments[job_id])
                             if current_worker_ids == next_worker_ids:
