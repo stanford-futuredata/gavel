@@ -128,7 +128,7 @@ class Scheduler:
         self._next_worker_assignments = None
         # Set of jobs that have been dispatched to workers.
         self._dispatched_jobs = set()
-        # Set of jobs with an extended lease for the subsequent round.
+        # Set of jobs with an extended lease for the upcoming round.
         self._jobs_with_extended_lease = set()
         # Iterations run on each worker_id, for all current incomplete
         # applications.
@@ -1584,7 +1584,7 @@ class Scheduler:
                     if (elapsed_time >= recompute_schedule_time and
                         self._next_worker_assignments is None):
                         # If the specified duration of the current round has
-                        # completed, compute the schedule for the subsequent
+                        # completed, compute the schedule for the upcoming
                         # round.
                         self._recompute_schedule_and_update_leases()
                     elif elapsed_time >= self._time_per_iteration:
@@ -2288,7 +2288,7 @@ class Scheduler:
             return (remaining_steps, self._time_per_iteration)
 
         # Extend the lease if the job has been placed on the same workers
-        # for the subsequent round.
+        # for the upcoming round.
         with self._scheduler_lock:
             if job_id in self._jobs_with_extended_lease:
                 return (max_steps, max_duration + self._time_per_iteration)
