@@ -1567,7 +1567,8 @@ class Scheduler:
                         if job_id not in self._dispatched_jobs:
                             self._worker_connections[worker_id].run(
                                     job_descriptions, worker_id)
-                            self._dispatched_jobs.add(job_id)
+                            if i == len(worker_ids) - 1:
+                                self._dispatched_jobs.add(job_id)
                         self._remove_available_worker_id(worker_id)
                     # Reset update metadata.
                     self._in_progress_updates[job_id] = []
