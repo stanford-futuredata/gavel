@@ -13,7 +13,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import utils
 
-BUFFER_TIME = 90
 CUDA_MPS_PIPE_DIRECTORY = '/tmp/nvidia-mps'
 CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
 
@@ -152,7 +151,6 @@ class Dispatcher:
             proc = subprocess.run(command,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,
-                                  timeout=(self._round_duration + BUFFER_TIME),
                                   shell=True)
             execution_time = time.time() - start_time
             output = proc.stdout.decode('utf-8').strip()
