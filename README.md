@@ -1,10 +1,27 @@
-# Principled GPU Cluster Scheduling
+# Heterogeneity-Aware Cluster Scheduling Policies for Deep Learning Workloads
 
-`scheduler/` contains most of the scheduling code, including the scheduling mechanism
-(`scheduler.py`), implementations of performance-aware policies (`policies.py`), and
-a basic communication stack between servers and clients (`runtime/`).
+This repository contains the source code implementation of the OSDI paper
+"Heterogeneity-Aware Cluster Scheduling Policies for Deep Learning Workloads".
 
-`workloads/` contains implementations of target workloads in PyTorch.
+## Directory Structure
 
-`docs/` contains some documentation, including writeups on some of the policies implemented,
-the scheduling mechanism used, and related work.
+### `scheduler`
+Code for the scheduler, including the scheduling mechanism and simulator
+(`scheduler.py`), implementations of performance-aware policies (`policies/`),
+`GavelIterator` as a Python module, and a communication stack between the scheduler
+and workers that uses [gRPC](https://grpc.io/) (`runtime/`).
+
+### `workloads`
+Implementations of target workloads in PyTorch, including changes needed to
+integrate with the `GavelIterator`.
+
+
+## Setup
+
+### Software Dependencies
+
+To run Gavel, a few Python packages are needed. These can be installed using
+
+```bash
+pip install -r scheduler/requirements.txt
+```
