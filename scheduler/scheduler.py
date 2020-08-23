@@ -20,6 +20,7 @@ from job import Job
 import job_id_pair
 from job_table import JobTable
 from runtime.rpc import scheduler_server, scheduler_client
+import set_queue
 from throughput_estimator import ThroughputEstimator
 import utils
 
@@ -119,7 +120,7 @@ class Scheduler:
         self._scheduler_lock = threading.Lock()
         self._scheduler_cv = threading.Condition(self._scheduler_lock)
         # List of available worker IDs.
-        self._available_worker_ids = queue.Queue()
+        self._available_worker_ids = set_queue.SetQueue()
         # Allocations for all current incomplete applications.
         self._allocation = {}
         # Current map from job combinations to assigned workers.
