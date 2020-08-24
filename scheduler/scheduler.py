@@ -127,8 +127,10 @@ class Scheduler:
         self._current_worker_assignments = collections.OrderedDict()
         # Map of jobs to worker assignments for the upcoming round.
         self._next_worker_assignments = None
-        # Set of jobs that have been dispatched to workers.
-        self._dispatched_jobs = set()
+        # Set of jobs that have been dispatched in the current round.
+        self._current_dispatched_jobs = set()
+        # Set of jobs that have been dispatched for the upcoming round.
+        self._next_dispatched_jobs = set()
         # Set of jobs with an extended lease for the upcoming round.
         self._jobs_with_extended_lease = set()
         # Iterations run on each worker_id, for all current incomplete
@@ -1485,7 +1487,7 @@ class Scheduler:
                 # had previously received an extended lease.
                 self._jobs_with_extended_lease.remove(job_id)
 
-    def _try_dispatch_job(self, job_id, worker_ids):
+    def _try_dispatch_job(self, job_id, worker_ids, next_round=False):
         """Attempts to dispatch the specified job combination.
 
            Updates relevant metadata and returns if job has already been
@@ -1536,11 +1538,15 @@ class Scheduler:
                          num_steps))
             # Do not dispatch the job again if it is already
             # running.
-            if job_id not in self._dispatched_jobs:
+            if next_round:
+                dispatched_jobs_set = self._next_dispatched_jobs
+            else:
+                dispatched_jobs_set = self._current_dispatched_jobs
+            if job_id not in dispatched_jobs_set:
                 self._worker_connections[worker_id].run(
                         job_descriptions, worker_id)
                 if i == len(worker_ids) - 1:
-                    self._dispatched_jobs.add(job_id)
+                    dispatched_jobs_set.add(job_id)
             self._remove_available_worker_id(worker_id)
         # Reset update metadata.
         self._in_progress_updates[job_id] = []
@@ -1573,7 +1579,7 @@ class Scheduler:
         self._current_worker_assignments = self._next_worker_assignments
         self._next_worker_assignments = None
 
-        if len(self._dispatched_jobs) > 0:
+        if len(self._current_dispatched_jobs) > 0:
             self._num_completed_rounds += 1
 
     def _schedule_with_rounds_async(self):
@@ -1607,7 +1613,11 @@ class Scheduler:
             with self._scheduler_lock:
                 for (job_id, worker_ids) in \
                     self._current_worker_assignments.items():
-                    self._try_dispatch_job(job_id, worker_ids)
+                    if job_id not in self._next_dispatched_jobs:
+                        self._try_dispatch_job(job_id, worker_ids)
+                self._current_dispatched_jobs.update(
+                    self._next_dispatched_jobs)
+                self._next_dispatched_jobs = set()
 
             # Compute the schedule for the upcoming round partway through the
             # current round and extend leases if necessary.
@@ -2443,8 +2453,8 @@ class Scheduler:
             if len(self._in_progress_updates[job_id]) < scale_factor:
                 return
             else:
-                assert(job_id in self._dispatched_jobs)
-                self._dispatched_jobs.remove(job_id)
+                assert(job_id in self._current_dispatched_jobs)
+                self._current_dispatched_jobs.remove(job_id)
                 micro_task_succeeded = True
                 all_worker_ids = \
                     [x[0] for x in self._in_progress_updates[job_id]]
@@ -2555,6 +2565,5 @@ class Scheduler:
             for next_worker_id in next_worker_ids:
                 if next_worker_id not in self._available_worker_ids:
                     return
-            self._write_queue.put(
-                'Trying to dispatch job %s early' % (next_job_id))
-            self._try_dispatch_job(next_job_id, next_worker_ids)
+            self._try_dispatch_job(next_job_id, next_worker_ids,
+                                   next_round=True)
