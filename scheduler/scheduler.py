@@ -125,6 +125,8 @@ class Scheduler:
         self._allocation = {}
         # Current map from job combinations to assigned workers.
         self._current_worker_assignments = collections.OrderedDict()
+        # Set of completed jobs in current round.
+        self._completed_jobs_in_current_round = set()
         # Map of jobs to worker assignments for the upcoming round.
         self._next_worker_assignments = None
         # Set of jobs that have been dispatched in the current round.
@@ -236,6 +238,7 @@ class Scheduler:
         port = SCHEDULER_PORT
         callbacks = {
             'RegisterWorker': self._register_worker_callback,
+            'InitJob': self._init_job_callback,
             'UpdateLease': self._update_lease_callback,
             'Done': self._done_callback,
         }
@@ -465,6 +468,12 @@ class Scheduler:
         return job_id
 
     def remove_job(self, job_id):
+        """Public-facing interface to _remove_job."""
+        with self._scheduler_lock:
+            self._remove_job(job_id)
+            self._scheduler_cv.notify()
+
+    def _remove_job(self, job_id):
         """Removes a job from the scheduler.
 
         Enables users to remove a previously scheduled job. Updates
@@ -474,29 +483,19 @@ class Scheduler:
             job_id: The job_id of the job to remove.
         """
 
-        job_id = job_id_pair.JobIdPair(job_id, None)
-        with self._scheduler_lock:
-            self._completed_jobs.add(job_id)
-            duration = self._per_job_latest_timestamps[job_id] - \
-                self._per_job_start_timestamps[job_id]
-            self._job_priority_weights[job_id] = \
-                self._jobs[job_id].priority_weight
-            job_type = self._jobs[job_id].job_type
-            scale_factor = self._jobs[job_id].scale_factor
-            job_type_key = (job_type, scale_factor)
-            del self._jobs[job_id]
-            if self._num_failures_per_job[job_id] >= MAX_FAILED_ATTEMPTS:
-                print("Job %d failed\n\tStart timestamp: %.2f\n\t"
-                      "End timestamp: %.2f\nDuration: %.2f %s\n"
-                      "Number of remaining active jobs: %d\n" % (
-                          job_id[0],
-                          self._per_job_start_timestamps[job_id],
-                          self._per_job_latest_timestamps[job_id],
-                          duration, "seconds", len(self._jobs))
-                      )
-                self._job_completion_times[job_id] = None
-            else:
-                print("Job %d completed\n\tStart timestamp: %.2f\n\t"
+        if type(job_id) is int:
+            job_id = job_id_pair.JobIdPair(job_id, None)
+        self._completed_jobs.add(job_id)
+        duration = self._per_job_latest_timestamps[job_id] - \
+            self._per_job_start_timestamps[job_id]
+        self._job_priority_weights[job_id] = \
+            self._jobs[job_id].priority_weight
+        job_type = self._jobs[job_id].job_type
+        scale_factor = self._jobs[job_id].scale_factor
+        job_type_key = (job_type, scale_factor)
+        del self._jobs[job_id]
+        if self._num_failures_per_job[job_id] >= MAX_FAILED_ATTEMPTS:
+            print("Job %d failed\n\tStart timestamp: %.2f\n\t"
                   "End timestamp: %.2f\nDuration: %.2f %s\n"
                   "Number of remaining active jobs: %d\n" % (
                       job_id[0],
@@ -504,51 +503,60 @@ class Scheduler:
                       self._per_job_latest_timestamps[job_id],
                       duration, "seconds", len(self._jobs))
                   )
-                self._job_completion_times[job_id] = duration
-            job_type_key = self._job_id_to_job_type[job_id]
-            self._job_type_to_job_ids[job_type_key].remove(job_id)
-            del self._steps_run_so_far[job_id]
-            del self._job_time_so_far[job_id]
-            del self._throughputs[job_id]
-            del self._job_id_to_job_type[job_id]
-            del self._num_failures_per_job[job_id]
-            if job_id in self._in_progress_updates:
-                del self._in_progress_updates[job_id]
-            if job_id in self._lease_update_requests:
-                del self._lease_update_requests[job_id]
-            if job_id in self._max_steps:
-                del self._max_steps[job_id]
-            if job_id in self._jobs_with_extended_lease:
-                self._jobs_with_extended_lease.remove(job_id)
-            if self._job_packing:
-                to_delete = []
-                for other_job_id in self._throughputs:
-                    if (other_job_id.is_pair() and
-                        job_id.overlaps_with(other_job_id)):
-                        to_delete.append(other_job_id)
-                for other_job_id in to_delete:
-                    del self._throughputs[other_job_id]
-                    del self._job_time_so_far[other_job_id]
-                    if other_job_id in self._in_progress_updates:
-                        del self._in_progress_updates[other_job_id]
-                    if other_job_id in self._lease_update_requests:
-                        del self._lease_update_requests[other_job_id]
-                    if other_job_id in self._max_steps:
-                        del self._max_steps[other_job_id]
-                    if other_job_id in self._jobs_with_extended_lease:
-                        self._jobs_with_extended_lease.remove(other_job_id)
+            self._job_completion_times[job_id] = None
+        else:
+            print("Job %d completed\n\tStart timestamp: %.2f\n\t"
+              "End timestamp: %.2f\nDuration: %.2f %s\n"
+              "Number of remaining active jobs: %d\n" % (
+                  job_id[0],
+                  self._per_job_start_timestamps[job_id],
+                  self._per_job_latest_timestamps[job_id],
+                  duration, "seconds", len(self._jobs))
+              )
+            self._job_completion_times[job_id] = duration
+        job_type_key = self._job_id_to_job_type[job_id]
+        self._job_type_to_job_ids[job_type_key].remove(job_id)
+        del self._steps_run_so_far[job_id]
+        del self._job_time_so_far[job_id]
+        del self._throughputs[job_id]
+        del self._job_id_to_job_type[job_id]
+        del self._num_failures_per_job[job_id]
+        if job_id in self._in_progress_updates:
+            del self._in_progress_updates[job_id]
+        if job_id in self._lease_update_requests:
+            del self._lease_update_requests[job_id]
+        if job_id in self._max_steps:
+            del self._max_steps[job_id]
+        if job_id in self._jobs_with_extended_lease:
+            self._jobs_with_extended_lease.remove(job_id)
+        if self._job_packing:
+            to_delete = []
+            for other_job_id in self._throughputs:
+                if (other_job_id.is_pair() and
+                    job_id.overlaps_with(other_job_id)):
+                    to_delete.append(other_job_id)
+            for other_job_id in to_delete:
+                del self._throughputs[other_job_id]
+                del self._job_time_so_far[other_job_id]
+                if other_job_id in self._in_progress_updates:
+                    del self._in_progress_updates[other_job_id]
+                if other_job_id in self._lease_update_requests:
+                    del self._lease_update_requests[other_job_id]
+                if other_job_id in self._max_steps:
+                    del self._max_steps[other_job_id]
+                if other_job_id in self._jobs_with_extended_lease:
+                    self._jobs_with_extended_lease.remove(other_job_id)
 
-                if len(self._job_type_to_job_ids[job_type_key]) == 0:
-                    del self._job_type_to_job_ids[job_type_key]
-                    del self._job_type_throughputs[job_type_key]
-                    for other_job_type_key in self._job_type_throughputs:
-                        for worker_type in self._job_type_throughputs[other_job_type_key]:
-                            if job_type_key in self._job_type_throughputs[other_job_type_key][worker_type]:
-                                del self._job_type_throughputs[other_job_type_key][worker_type][job_type_key]
-            self._remove_from_priorities(job_id)
-            # TODO: Add a flag to choose whether to update allocation here.
-            self._need_to_update_allocation = True
-            self._scheduler_cv.notify()
+            if len(self._job_type_to_job_ids[job_type_key]) == 0:
+                del self._job_type_to_job_ids[job_type_key]
+                del self._job_type_throughputs[job_type_key]
+                for other_job_type_key in self._job_type_throughputs:
+                    for worker_type in self._job_type_throughputs[other_job_type_key]:
+                        if job_type_key in self._job_type_throughputs[other_job_type_key][worker_type]:
+                            del self._job_type_throughputs[other_job_type_key][worker_type][job_type_key]
+        self._remove_from_priorities(job_id)
+        # TODO: Add a flag to choose whether to update allocation here.
+        self._need_to_update_allocation = True
 
     def num_workers(self):
         """Returns the number of workers the scheduler is connected to."""
@@ -1547,7 +1555,8 @@ class Scheduler:
                         job_descriptions, worker_id)
                 if i == len(worker_ids) - 1:
                     dispatched_jobs_set.add(job_id)
-            self._remove_available_worker_id(worker_id)
+            if not next_round:
+                self._remove_available_worker_id(worker_id)
         # Reset update metadata.
         self._in_progress_updates[job_id] = []
         self._lease_update_requests[job_id] = []
@@ -1558,6 +1567,15 @@ class Scheduler:
 
     def _end_round(self):
         """Ends the current round."""
+        # Wait for jobs from current round to complete.
+        jobs_to_complete = set(self._current_worker_assignments.keys())
+        for job_id in self._jobs_with_extended_lease:
+            self._completed_jobs_in_current_round.add(job_id)
+        while self._completed_jobs_in_current_round != jobs_to_complete:
+            self._write_queue.put(
+                'Waiting for jobs in round %d to complete...' % (self._num_completed_rounds))
+            self._scheduler_cv.wait()
+
         # Reset extended leases.
         jobs_with_extended_lease = list(self._jobs_with_extended_lease)
         for job_id in jobs_with_extended_lease:
@@ -1575,9 +1593,18 @@ class Scheduler:
             # between the lease update request time and the end of the round.
             self._jobs_with_extended_lease.remove(job_id)
 
+        for (job_id, worker_ids) in self._next_worker_assignments.items():
+            assert(job_id in self._next_dispatched_jobs)
+            for worker_id in worker_ids:
+                self._remove_available_worker_id(worker_id)
+
+        # Reset metadata.
         assert(self._next_worker_assignments is not None)
+        self._completed_jobs_in_current_round = set()
         self._current_worker_assignments = self._next_worker_assignments
         self._next_worker_assignments = None
+        self._current_dispatched_jobs = self._next_dispatched_jobs
+        self._next_dispatched_jobs = set()
 
         if len(self._current_dispatched_jobs) > 0:
             self._num_completed_rounds += 1
@@ -1598,39 +1625,43 @@ class Scheduler:
         while self._allocation == {}:
             self._scheduler_cv.wait()
 
-        # Compute initial schedule.
+        # Compute initial schedule and dispatch initial set of jobs.
         self._current_worker_assignments = self._schedule_jobs_on_workers()
-        self._print_schedule_summary()
+        for (job_id, worker_ids) in self._current_worker_assignments.items():
+            self._try_dispatch_job(job_id, worker_ids)
         self._scheduler_cv.release()
 
         while True:
+            with self._scheduler_lock:
+                current_round = self._num_completed_rounds
+                self._write_queue.put(
+                    '*** START ROUND %d ***' % (current_round))
+                self._print_schedule_summary()
+
             round_start_time = self.get_current_timestamp(in_seconds=True)
             recompute_schedule_time = round_start_time + \
                     (self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION)
             round_end_time = round_start_time + self._time_per_iteration
 
-            # Dispatch jobs.
-            with self._scheduler_lock:
-                for (job_id, worker_ids) in \
-                    self._current_worker_assignments.items():
-                    if job_id not in self._next_dispatched_jobs:
-                        self._try_dispatch_job(job_id, worker_ids)
-                self._current_dispatched_jobs.update(
-                    self._next_dispatched_jobs)
-                self._next_dispatched_jobs = set()
-
             # Compute the schedule for the upcoming round partway through the
-            # current round and extend leases if necessary.
+            # current round and extend leases if necessary. Then dispatch jobs
+            # for the upcoming round.
             time.sleep(recompute_schedule_time - round_start_time)
             with self._scheduler_lock:
                 self._recompute_schedule_and_extend_leases()
                 self._master_port_offsets = {}
+                for (job_id, worker_ids) in \
+                    self._next_worker_assignments.items():
+                    if job_id in self._jobs_with_extended_lease:
+                        self._next_dispatched_jobs.add(job_id)
+                    self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
             # End the current round.
             current_time = self.get_current_timestamp(in_seconds=True)
             time.sleep(round_end_time - current_time)
-            with self._scheduler_lock:
+            with self._scheduler_cv:
                 self._end_round()
+                self._write_queue.put('*** END ROUND %d ***' % (current_round))
             if self.is_done():
                 break
 
@@ -2374,6 +2405,12 @@ class Scheduler:
 
         return (per_worker_ids, self._time_per_iteration)
 
+    def _init_job_callback(self, job_id):
+        with self._scheduler_cv:
+            while (job_id in self._next_dispatched_jobs and
+                   job_id not in self._completed_jobs_in_current_round):
+                self._scheduler_cv.wait()
+
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
         # Round the remaining steps to the nearest multiple of scale_factor.
@@ -2455,6 +2492,7 @@ class Scheduler:
             else:
                 assert(job_id in self._current_dispatched_jobs)
                 self._current_dispatched_jobs.remove(job_id)
+                self._completed_jobs_in_current_round.add(job_id)
                 micro_task_succeeded = True
                 all_worker_ids = \
                     [x[0] for x in self._in_progress_updates[job_id]]
@@ -2485,7 +2523,6 @@ class Scheduler:
                                'Job ID: %s') % (current_timestamp, job_id))
                         to_remove.append(job_id)
                 self._need_to_update_allocation = True
-                self._scheduler_cv.notify()
 
             else:
                 print(('%s]\t[Micro-task succeeded]\t'
@@ -2543,27 +2580,11 @@ class Scheduler:
                     self._cumulative_worker_time_so_far[worker_id] += \
                         max_execution_time
 
-        self._update_throughput(job_id, worker_type,
-                                all_num_steps,
-                                all_execution_times)
+            self._update_throughput(job_id, worker_type,
+                                    all_num_steps,
+                                    all_execution_times)
 
-        for single_job_id in to_remove:
-            self.remove_job(single_job_id[0])
+            for single_job_id in to_remove:
+                self._remove_job(single_job_id)
 
-        # Try to dispatch the next job that uses this worker.
-        dispatch_next_job = False
-        if not self._simulate and self._next_worker_assignments is not None:
-            # Check whether this worker has been assigned a new job.
-            for next_job_id in self._next_worker_assignments:
-                for next_worker_id in self._next_worker_assignments[job_id]:
-                    if worker_id == next_worker_id:
-                        dispatch_next_job = True
-                        next_worker_ids = self._next_worker_assignments[job_id]
-                        break
-        if dispatch_next_job:
-            # Ensure that all workers used by the next job are available.
-            for next_worker_id in next_worker_ids:
-                if next_worker_id not in self._available_worker_ids:
-                    return
-            self._try_dispatch_job(next_job_id, next_worker_ids,
-                                   next_round=True)
+            self._scheduler_cv.notify()

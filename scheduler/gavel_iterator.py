@@ -38,6 +38,8 @@ class GavelIterator:
         assert(os.path.isdir(os.path.join(gavel_dir)))
         self._steps_file = os.path.join(gavel_dir, '.gavel_steps')
         self._write_steps()
+        # TODO: Tie this with loading the checkpoint
+        self._init()
 
     def __iter__(self):
         self._iterator = iter(self._data_loader)
@@ -114,6 +116,9 @@ class GavelIterator:
                 f.write('%d' % (self._steps))
         except Exception as e:
             print(e)
+
+    def _init(self):
+        self._rpc_client.init()
 
     def _update_lease(self):
         (updated_max_steps, updated_max_duration) = \

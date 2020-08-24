@@ -3,8 +3,14 @@ syntax = "proto3";
 import "common.proto";
 
 service IteratorToScheduler {
+    // Initializes the job.
+    rpc InitJob (InitJobRequest) returns (Empty);
     // Updates the lease.
     rpc UpdateLease (UpdateLeaseRequest) returns (UpdateLeaseResponse);
+}
+
+message InitJobRequest {
+    uint64 job_id = 1;
 }
 
 message UpdateLeaseRequest {
