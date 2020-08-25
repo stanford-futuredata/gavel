@@ -216,6 +216,7 @@ class Scheduler:
         # Port offsets from rank-0 nodes of distributed jobs.
         self._master_port_offsets = {}
         # Currently running jobs.
+        # TODO: De-dup with self._current_dispatched_jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
         self._worker_start_times = {}
@@ -2427,10 +2428,12 @@ class Scheduler:
             if len(self._in_progress_updates[job_id]) < scale_factor:
                 return
             else:
-                if job_id not in self._current_dispatched_jobs:
-                    msg = 'Job %s not in current dispatched jobs!' % (job_id)
-                    raise RuntimeError(msg)
-                self._current_dispatched_jobs.remove(job_id)
+                if not self._simulate:
+                    if job_id not in self._current_dispatched_jobs:
+                        msg = \
+                            'Job %s not in current dispatched jobs!' % (job_id)
+                        raise RuntimeError(msg)
+                    self._current_dispatched_jobs.remove(job_id)
                 self._completed_jobs_in_current_round.add(job_id)
                 micro_task_succeeded = True
                 all_worker_ids = \
