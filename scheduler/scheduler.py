@@ -260,7 +260,7 @@ class Scheduler:
             self.server_thread.start()
 
             self._mechanism_thread = \
-                threading.Thread(target=self._schedule_with_rounds_async)
+                threading.Thread(target=self._schedule_with_rounds)
             self._mechanism_thread.daemon = True
             self._mechanism_thread.start()
 
@@ -1613,7 +1613,14 @@ class Scheduler:
 
         self._scheduler_cv.notifyAll()
 
-    def _schedule_with_rounds_async(self):
+    def _schedule_with_rounds(self):
+        """Schedules jobs on workers using rounds.
+
+        In a loop, schedules in rounds the applications most in need of
+        being run (that is, the applications with the highest
+        fraction_allocated/fraction_run ratio) using a DP algorithm.
+        """
+
         self._scheduler_cv.acquire()
         # Wait for jobs to arrive and all workers to register with scheduler.
         while (len(self._jobs) == 0 or
@@ -1667,81 +1674,6 @@ class Scheduler:
                 self._end_round()
                 self._write_queue.put('*** END ROUND %d ***' % (current_round))
 
-    def _schedule_with_rounds(self):
-        """Schedules jobs on workers using rounds.
-
-        In a loop, schedules in rounds the applications most in need of
-        being run (that is, the applications with the highest
-        fraction_allocated/fraction_run ratio) using a DP algorithm.
-        """
-
-        recompute_schedule_time = (self._time_per_iteration *
-                                   SCHEDULE_RECOMPUTE_FRACTION)
-        while True:
-            time.sleep(5)
-            with self._scheduler_lock:
-                num_workers = len(self._worker_ids)
-                num_jobs = len(self._jobs)
-                if num_workers == 0 or num_jobs == 0:
-                    continue
-                elif (self._expected_num_workers is not None and
-                      num_workers < self._expected_num_workers):
-                    # Wait for all workers to be launched before starting
-                    # to dispatch jobs.
-                    # TODO: Replace this with cluster_spec?
-                    continue
-                # Reset available_worker_ids to the desired size.
-                self._available_worker_ids = set_queue.Queue(num_workers)
-                for worker_id in self._worker_ids:
-                    self._add_available_worker_id(worker_id)
-                if self._next_worker_assignments is not None:
-                    scheduled_jobs = self._next_worker_assignments
-                    self._next_worker_assignments = None
-                else:
-                    scheduled_jobs = self._schedule_jobs_on_workers()
-                self._current_worker_assignments = scheduled_jobs
-                self._print_schedule_summary()
-                self._master_port_offsets = {}
-                assert(len(self._jobs_with_extended_lease) == 0)
-                for (job_id, worker_ids) in scheduled_jobs.items():
-                    self._try_dispatch_job(job_id, worker_ids)
-            round_start_time = self.get_current_timestamp(in_seconds=True)
-            while not self._available_worker_ids.full():
-                with self._scheduler_lock:
-                    current_time = self.get_current_timestamp(in_seconds=True)
-                    elapsed_time = current_time - round_start_time
-                    if (elapsed_time >= recompute_schedule_time and
-                        self._next_worker_assignments is None):
-                        # If the specified duration of the current round has
-                        # completed, compute the schedule for the upcoming
-                        # round.
-                        self._recompute_schedule_and_extend_leases()
-                    elif elapsed_time >= self._time_per_iteration:
-                        # When the round completes, reset any extended leases.
-                        jobs_with_extended_lease = \
-                            list(self._jobs_with_extended_lease)
-                        for job_id in jobs_with_extended_lease:
-                            if job_id in self._jobs:
-                                current_worker_ids = \
-                                    self._current_worker_assignments[job_id]
-                                for worker_id in current_worker_ids:
-                                    self._add_available_worker_id(worker_id)
-                            # NOTE: There is a possibility that a job which
-                            # should receive an extended lease requests a lease
-                            # update after we have removed the job from the
-                            # extended lease set but before we begin the
-                            # next round - in this case the job will
-                            # simply be re-scheduled on the exact same workers.
-                            # While this is not optimal, it is safe and also
-                            # unlikely to occur in practice.
-                            self._jobs_with_extended_lease.remove(job_id)
-                time.sleep(2)
-                continue
-            # Only record a completed round if at least one job was active.
-            if len(self._dispatched_jobs) > 0:
-                self._num_completed_rounds += 1
-            if self.is_done():
-                break
 
     def get_average_jct(self, job_ids=None, verbose=True):
         """Computes the average job completion time.
