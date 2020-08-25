@@ -11,6 +11,7 @@ import threading
 import time
 import datetime
 import random
+import sched
 import math
 import matrix_completion
 import warnings
@@ -135,6 +136,12 @@ class Scheduler:
         self._next_dispatched_jobs = set()
         # Set of jobs with an extended lease for the upcoming round.
         self._jobs_with_extended_lease = set()
+        # Event scheduler to trigger round completions for jobs with
+        # extended leases.
+        self._lease_extension_scheduler = \
+            sched.scheduler(time.time, time.sleep)
+        # Map from job ID to lease extension scheduler event.
+        self._lease_extension_events = {}
         # Iterations run on each worker_id, for all current incomplete
         # applications.
         self._steps_run_so_far = {}
@@ -1482,8 +1489,6 @@ class Scheduler:
                 if current_worker_ids == next_worker_ids:
                     # Job will be scheduled on the same workers in
                     # upcoming round; extend its lease.
-                    self._write_queue.put(
-                        'Extending lease of job %s' % (job_id))
                     self._jobs_with_extended_lease.add(job_id)
                 elif job_id in self._jobs_with_extended_lease:
                     # Job will not be scheduled on the same workers
@@ -1567,17 +1572,34 @@ class Scheduler:
             self._master_port_offsets[master_addr] += \
                 len(job_id.singletons())
 
-    def _end_round(self):
+    def _schedule_extended_lease_completion_events(self, round_end_time):
+        """Schedules completion events for jobs with extended lease."""
+        current_time = self.get_current_timestamp()
+        delay = round_end_time - current_time
+        for job_id in self._jobs_with_extended_lease:
+            event = self._lease_extension_scheduler.enter(
+                    delay=delay, priority=1,
+                    action=self._done_callback_extended_lease,
+                    argument=(job_id,))
+            self._lease_extension_events[job_id] = event
+        lease_extension_thread = threading.Thread(
+                target=self._lease_extension_scheduler.run)
+        lease_extension_thread.daemon = True
+        lease_extension_thread.start()
+
+    def _end_round(self, round_end_time):
         """Ends the current round."""
+        # Schedule extended lease completion events.
+        self._schedule_extended_lease_completion_events(round_end_time)
+
         # Wait for jobs from current round to complete.
         jobs_to_complete = set()
         for job_id in self._current_worker_assignments:
             if job_id in self._jobs:
                 jobs_to_complete.add(job_id)
-        for job_id in self._jobs_with_extended_lease:
-            self._completed_jobs_in_current_round.add(job_id)
         while not jobs_to_complete.issubset(self._completed_jobs_in_current_round):
             self._scheduler_cv.wait()
+        assert(self._lease_extension_events == {})
 
         # Reset extended leases.
         jobs_with_extended_lease = list(self._jobs_with_extended_lease)
@@ -1652,7 +1674,7 @@ class Scheduler:
                     '*** START ROUND %d ***' % (current_round))
                 self._print_schedule_summary()
 
-            round_start_time = self.get_current_timestamp(in_seconds=True)
+            round_start_time = self.get_current_timestamp()
             recompute_schedule_time = round_start_time + \
                     (self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION)
             round_end_time = round_start_time + self._time_per_iteration
@@ -1672,11 +1694,8 @@ class Scheduler:
                         self._next_dispatched_jobs.add(job_id)
                     self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
-            # End the current round.
-            current_time = self.get_current_timestamp(in_seconds=True)
-            time.sleep(round_end_time - current_time)
             with self._scheduler_cv:
-                self._end_round()
+                self._end_round(round_end_time)
                 self._write_queue.put('*** END ROUND %d ***' % (current_round))
 
 
@@ -2442,6 +2461,13 @@ class Scheduler:
                 assert max_steps is not None
                 return (max_steps, INFINITY)
 
+    def _done_callback_extended_lease(self, job_id):
+        with self._scheduler_cv:
+            if job_id in self._lease_extension_events:
+                self._completed_jobs_in_current_round.add(job_id)
+                del self._lease_extension_events[job_id]
+                self._scheduler_cv.notifyAll()
+
     def _done_callback(self, job_id, worker_id, all_num_steps,
                        all_execution_times):
         """Handles completion of a scheduled job.
@@ -2476,6 +2502,11 @@ class Scheduler:
                             'Job %s not in current dispatched jobs!' % (job_id)
                         raise RuntimeError(msg)
                     self._current_dispatched_jobs.remove(job_id)
+                self._current_dispatched_jobs.remove(job_id)
+                if job_id in self._lease_extension_events:
+                    event = self._lease_extension_events[job_id]
+                    self._lease_extension_scheduler.cancel(event)
+                    del self._lease_extension_events[job_id]
                 self._completed_jobs_in_current_round.add(job_id)
                 micro_task_succeeded = True
                 all_worker_ids = \
