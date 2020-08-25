@@ -2362,8 +2362,10 @@ class Scheduler:
         # Extend the lease if the job has been placed on the same workers
         # for the upcoming round.
         with self._scheduler_lock:
-            if job_id in self._jobs_with_extended_lease:
-                return (max_steps, max_duration + self._time_per_iteration)
+            # TODO: Remove scan of self._jobs_with_extended_lease.
+            for job_id_combination in self._jobs_with_extended_lease:
+                if job_id.overlaps_with(job_id_combination):
+                    return (max_steps, max_duration + self._time_per_iteration)
 
         if scale_factor == 1:
             return (max_steps, max_duration)
