@@ -1657,6 +1657,8 @@ class Scheduler:
             # Compute the schedule for the upcoming round partway through the
             # current round and extend leases if necessary. Then dispatch jobs
             # for the upcoming round.
+            # NOTE: This updates self._next_worker_assignments. We update
+            # self._current_worker_assignments when we end the round.
             time.sleep(recompute_schedule_time - round_start_time)
             with self._scheduler_lock:
                 self._recompute_schedule_and_extend_leases()
