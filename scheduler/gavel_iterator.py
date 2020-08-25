@@ -14,7 +14,6 @@ class GavelIterator:
     def __init__(self, data_loader, job_id, worker_id, distributed,
                  server_addr, server_port, gavel_dir, synthetic_data=False,
                  verbose=True):
-        self._prev_time = time.time()
         if not isinstance(data_loader, Iterable):
             raise ValueError('Data is of uniterable '
                              'type %s' % (type(data_loader)))
@@ -29,14 +28,18 @@ class GavelIterator:
         self._duration = 0
         self._distributed = distributed
         self._done = False
-        self._lease = Lease(0, 0)
-        self._update_lease()
         self._synthetic_data = synthetic_data
         self._verbose = verbose
         if self._synthetic_data:
             self._initial_val = None
         assert(os.path.isdir(os.path.join(gavel_dir)))
         self._steps_file = os.path.join(gavel_dir, '.gavel_steps')
+        self._lease = Lease(0, 0)
+
+        # TODO: Tie this with loading the checkpoint
+        self._init()
+        self._prev_time = time.time()
+        self._update_lease()
         self._write_steps()
 
     def __iter__(self):
@@ -114,6 +117,9 @@ class GavelIterator:
                 f.write('%d' % (self._steps))
         except Exception as e:
             print(e)
+
+    def _init(self):
+        self._rpc_client.init()
 
     def _update_lease(self):
         (updated_max_steps, updated_max_duration) = \

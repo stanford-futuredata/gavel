@@ -17,13 +17,14 @@ SLEEP_TIME = 10
 
 def main(args):
     # Set up jobs.
+    jobs_to_complete = set()
     jobs, arrival_times = utils.parse_trace(args.trace_file)
     if args.window_start is not None and args.window_end is not None:
-        jobs_to_complete = set()
         for i in range(args.window_start, args.window_end):
             jobs_to_complete.add(JobIdPair(i, None))
     else:
-        jobs_to_complete = None
+        for i in range(len(jobs)):
+            jobs_to_complete.add(JobIdPair(i, None))
     job_queue = queue.Queue()
     for (job, arrival_time) in zip(jobs, arrival_times):
         job_queue.put((job, arrival_time))

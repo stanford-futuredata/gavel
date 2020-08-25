@@ -23,6 +23,16 @@ class IteratorRpcClient:
                                                self._worker_id,
                                                message))
 
+    def init(self):
+        request = i2s_pb2.InitJobRequest(job_id=self._job_id)
+        with grpc.insecure_channel(self._sched_loc) as channel:
+            stub = i2s_pb2_grpc.IteratorToSchedulerStub(channel)
+            try:
+                response = stub.InitJob(request)
+                self._log('Initialized job')
+            except grpc.RpcError as e:
+                self._log('Job initialization error: %s' % (e))
+
     def update_lease(self, steps, duration, max_steps, max_duration):
         request = i2s_pb2.UpdateLeaseRequest(job_id=self._job_id,
                                              worker_id=self._worker_id,
