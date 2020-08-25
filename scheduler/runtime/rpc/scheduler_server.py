@@ -74,12 +74,12 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
         self._write_queue = write_queue
 
     def InitJob(self, request, context):
-        job_id = request.job_id
+        job_id = JobIdPair(request.job_id, None)
         self._write_queue.put(
-            'Received job initialization request from job %d' % (job_id))
+            'Received job initialization request from job %s' % (job_id))
         init_job_callback = self._callbacks['InitJob']
         init_job_callback(job_id=job_id)
-        self._write_queue.put('Initialized job %d' % (job_id))
+        self._write_queue.put('Initialized job %s' % (job_id))
         return common_pb2.Empty()
 
     def UpdateLease(self, request, context):

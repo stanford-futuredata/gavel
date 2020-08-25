@@ -314,7 +314,7 @@ class Scheduler:
                 self._per_worker_type_prices[worker_type] = latest_price
                 self._scheduler_cv.acquire()
                 self._need_to_update_allocation = True
-                self._scheduler_cv.notify()
+                self._scheduler_cv.notifyAll()
                 self._scheduler_cv.release()
 
     def _update_throughput(self, job_id, worker_type, all_num_steps,
@@ -463,7 +463,7 @@ class Scheduler:
                 timestamp = self.get_current_timestamp()
             self._per_job_start_timestamps[job_id] = timestamp
             print('%s]\t[Job dispatched]\tJob ID: %s' % (timestamp, job_id))
-            self._scheduler_cv.notify()
+            self._scheduler_cv.notifyAll()
 
         return job_id
 
@@ -471,7 +471,7 @@ class Scheduler:
         """Public-facing interface to _remove_job."""
         with self._scheduler_lock:
             self._remove_job(job_id)
-            self._scheduler_cv.notify()
+            self._scheduler_cv.notifyAll()
 
     def _remove_job(self, job_id):
         """Removes a job from the scheduler.
@@ -741,6 +741,7 @@ class Scheduler:
         for job_id, worker_type, *_ in sorted_job_queue:
             if num_workers_left[worker_type] == 0:
                 continue
+
             # Don't schedule jobs that have already been scheduled.
             if ((not job_id.is_pair() and job_id in already_scheduled_jobs) or
                 (job_id.is_pair() and
@@ -854,7 +855,7 @@ class Scheduler:
         # Assign all jobs that have an updated placement.
         for worker_type in worker_types:
             for (job_id, scale_factor) in scheduled_jobs[worker_type]:
-                if self._allocation is None or job_id not in self._allocation:
+                if job_id not in self._allocation:
                     continue
                 elif job_id in already_scheduled_jobs:
                     continue
@@ -1390,8 +1391,6 @@ class Scheduler:
                 time_to_next_event = next_job_arrival_time - self._current_timestamp
                 all_num_steps = {}
                 self._update_priorities()
-                if self._allocation is None:
-                    continue
                 for job_id in self._allocation:
                     for worker_type in self._allocation[job_id]:
                         time_spent_on_worker_type = self._allocation[job_id][worker_type] * \
@@ -1568,12 +1567,13 @@ class Scheduler:
     def _end_round(self):
         """Ends the current round."""
         # Wait for jobs from current round to complete.
-        jobs_to_complete = set(self._current_worker_assignments.keys())
+        jobs_to_complete = set()
+        for job_id in self._current_worker_assignments:
+            if job_id in self._jobs:
+                jobs_to_complete.add(job_id)
         for job_id in self._jobs_with_extended_lease:
             self._completed_jobs_in_current_round.add(job_id)
-        while self._completed_jobs_in_current_round != jobs_to_complete:
-            self._write_queue.put(
-                'Waiting for jobs in round %d to complete...' % (self._num_completed_rounds))
+        while not jobs_to_complete.issubset(self._completed_jobs_in_current_round):
             self._scheduler_cv.wait()
 
         # Reset extended leases.
@@ -1595,8 +1595,13 @@ class Scheduler:
 
         for (job_id, worker_ids) in self._next_worker_assignments.items():
             assert(job_id in self._next_dispatched_jobs)
+            if job_id not in self._jobs:
+                continue
             for worker_id in worker_ids:
                 self._remove_available_worker_id(worker_id)
+
+        if len(self._completed_jobs_in_current_round) > 0:
+            self._num_completed_rounds += 1
 
         # Reset metadata.
         assert(self._next_worker_assignments is not None)
@@ -1606,8 +1611,7 @@ class Scheduler:
         self._current_dispatched_jobs = self._next_dispatched_jobs
         self._next_dispatched_jobs = set()
 
-        if len(self._current_dispatched_jobs) > 0:
-            self._num_completed_rounds += 1
+        self._scheduler_cv.notifyAll()
 
     def _schedule_with_rounds_async(self):
         self._scheduler_cv.acquire()
@@ -1621,8 +1625,8 @@ class Scheduler:
         for worker_id in self._worker_ids:
             self._available_worker_ids.put(worker_id)
 
-        # Wait for allocation to be computed.
-        while self._allocation == {}:
+        # Wait for initial allocation to be computed.
+        while self._need_to_update_allocation:
             self._scheduler_cv.wait()
 
         # Compute initial schedule and dispatch initial set of jobs.
@@ -1662,8 +1666,6 @@ class Scheduler:
             with self._scheduler_cv:
                 self._end_round()
                 self._write_queue.put('*** END ROUND %d ***' % (current_round))
-            if self.is_done():
-                break
 
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.
@@ -2063,7 +2065,7 @@ class Scheduler:
                             del allocation[job_id]
             self._allocation = allocation
             self._need_to_update_allocation = False
-            self._scheduler_cv.notify()
+            self._scheduler_cv.notifyAll()
             self._scheduler_cv.release()
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
@@ -2158,7 +2160,7 @@ class Scheduler:
 
                 # Compute the time this job_id should have received since the
                 # last reset event.
-                if self._allocation is None or job_id not in self._allocation:
+                if job_id not in self._allocation:
                     time_should_have_received = 0
                 else:
                     time_should_have_received = \
@@ -2266,7 +2268,7 @@ class Scheduler:
                 #
                 # Scale the default value by the allocation so that newly
                 # added jobs run according to their respective allocations.
-                if self._allocation is None or job_id not in self._allocation:
+                if job_id not in self._allocation:
                     self._priorities[worker_type][job_id] = 0.0
                 else:
                     new_priority = self._allocation[job_id][worker_type] * 1e9
@@ -2401,14 +2403,15 @@ class Scheduler:
                 self._worker_start_times[worker_id] = self.get_current_timestamp()
             self._worker_type_to_worker_id_mapping[worker_type].append(per_worker_ids)
             self._need_to_update_allocation = True
-            self._scheduler_cv.notify()
+            self._scheduler_cv.notifyAll()
 
         return (per_worker_ids, self._time_per_iteration)
 
     def _init_job_callback(self, job_id):
         with self._scheduler_cv:
-            while (job_id in self._next_dispatched_jobs and
-                   job_id not in self._completed_jobs_in_current_round):
+            # TODO: Don't wait for previous round to end?
+            while (self._next_dispatched_jobs is not None and
+                   job_id in self._next_dispatched_jobs):
                 self._scheduler_cv.wait()
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
@@ -2490,7 +2493,9 @@ class Scheduler:
             if len(self._in_progress_updates[job_id]) < scale_factor:
                 return
             else:
-                assert(job_id in self._current_dispatched_jobs)
+                if job_id not in self._current_dispatched_jobs:
+                    msg = 'Job %s not in current dispatched jobs!' % (job_id)
+                    raise RuntimeError(msg)
                 self._current_dispatched_jobs.remove(job_id)
                 self._completed_jobs_in_current_round.add(job_id)
                 micro_task_succeeded = True
@@ -2587,4 +2592,4 @@ class Scheduler:
             for single_job_id in to_remove:
                 self._remove_job(single_job_id)
 
-            self._scheduler_cv.notify()
+            self._scheduler_cv.notifyAll()
