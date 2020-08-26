@@ -1681,11 +1681,11 @@ class Scheduler:
 
             # Compute the schedule for the upcoming round partway through the
             # current round and extend leases if necessary. Then dispatch jobs
-            # for the upcoming round.
+            # for the upcoming round and wait for jobs to complete.
             # NOTE: This updates self._next_worker_assignments. We update
             # self._current_worker_assignments when we end the round.
             time.sleep(recompute_schedule_time - round_start_time)
-            with self._scheduler_lock:
+            with self._scheduler_cv:
                 self._recompute_schedule_and_extend_leases()
                 self._master_port_offsets = {}
                 for (job_id, worker_ids) in \
@@ -1693,8 +1693,6 @@ class Scheduler:
                     if job_id in self._jobs_with_extended_lease:
                         self._next_dispatched_jobs.add(job_id)
                     self._try_dispatch_job(job_id, worker_ids, next_round=True)
-
-            with self._scheduler_cv:
                 self._end_round(round_end_time)
                 self._write_queue.put('*** END ROUND %d ***' % (current_round))
 
