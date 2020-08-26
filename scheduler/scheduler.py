@@ -2484,15 +2484,6 @@ class Scheduler:
             if job_id in self._lease_extension_events:
                 self._completed_jobs_in_current_round.add(job_id)
                 del self._lease_extension_events[job_id]
-                worker_ids = self._current_worker_assignments[job_id]
-                worker_type = \
-                    self._worker_id_to_worker_type_mapping[worker_ids[0]]
-                current_time = self.get_current_timestamp()
-                dispatch_time = \
-                    self._per_job_latest_timestamps[job_id.singletons()[0]]
-                elapsed_time = current_time - dispatch_time
-                self._job_time_so_far[job_id][worker_type] += elapsed_time
-                self._worker_time_so_far[worker_type] += elapsed_time
                 self._scheduler_cv.notifyAll()
 
     def _done_callback(self, job_id, worker_id, all_num_steps,
