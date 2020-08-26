@@ -2189,8 +2189,11 @@ class Scheduler:
                 self._allocation = self._compute_allocation()
                 self._need_to_update_allocation = False
 
-        # Account for time elpased since job was dispatched if running on a
-        # physical cluster.
+        # Account for time elapsed since job was dispatched if running on a
+        # physical cluster. Note that the the total time for each job is the
+        # sum of a) the time for all microtasks that have finished
+        # (accounted for by self._job_time_so_far), and b) the unaccounted time
+        # for all microtasks that are currently running (elapsed_job_time).
         if not self._simulate:
             elapsed_job_time = {}
             elapsed_worker_time = {}
@@ -2214,6 +2217,7 @@ class Scheduler:
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
 
+        # Compute priorities.
         for worker_type in self._worker_types:
             fractions[worker_type] = {}
             worker_time_so_far = self._worker_time_so_far[worker_type]
