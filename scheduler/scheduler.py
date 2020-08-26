@@ -2209,7 +2209,7 @@ class Scheduler:
                 self._need_to_update_allocation = False
 
         # Account for time elapsed since job was dispatched if running on a
-        # physical cluster. Note that the the total time for each job is the
+        # physical cluster. Note that the total time for each job is the
         # sum of a) the time for all microtasks that have finished
         # (accounted for by self._job_time_so_far), and b) the unaccounted time
         # for all microtasks that are currently running (elapsed_job_time).
@@ -2511,7 +2511,6 @@ class Scheduler:
                             'Job %s not in current dispatched jobs!' % (job_id)
                         raise RuntimeError(msg)
                     self._current_dispatched_jobs.remove(job_id)
-                self._current_dispatched_jobs.remove(job_id)
                 if job_id in self._lease_extension_events:
                     event = self._lease_extension_events[job_id]
                     self._lease_extension_scheduler.cancel(event)
