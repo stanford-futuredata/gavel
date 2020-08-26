@@ -1480,16 +1480,10 @@ class Scheduler:
     def _begin_round(self, round_start_time):
         """Executes beginning stage of a scheduling round."""
 
-        with self._scheduler_lock:
-            current_round = self._num_completed_rounds
-            self._write_queue.put(
-                '*** START ROUND %d ***' % (current_round))
-            self._print_schedule_summary()
-
-        # Wait for partway through round to recompute schedule.
-        recompute_schedule_time = round_start_time + \
-                (self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION)
-        time.sleep(recompute_schedule_time - round_start_time)
+        current_round = self._num_completed_rounds
+        self._write_queue.put(
+            '*** START ROUND %d ***' % (current_round))
+        self._print_schedule_summary()
 
     def _mid_round(self, round_start_time, pool):
         """Executes intermediate stage of a scheduling round.
@@ -1723,7 +1717,14 @@ class Scheduler:
         with ThreadPoolExecutor(max_workers=1) as pool:
             while True:
                 round_start_time = self.get_current_timestamp()
-                self._begin_round(round_start_time)
+                with self._scheduler_cv:
+                    self._begin_round(round_start_time)
+
+                # Wait for partway through round to recompute schedule.
+                recompute_schedule_time = round_start_time + \
+                        (self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION)
+                time.sleep(recompute_schedule_time - round_start_time)
+
                 with self._scheduler_cv:
                     self._mid_round(round_start_time, pool)
                     self._end_round()
