@@ -1537,6 +1537,10 @@ class Scheduler:
             self._next_worker_assignments.items():
             if job_id in self._jobs_with_extended_lease:
                 self._next_dispatched_jobs.add(job_id)
+            # NOTE: We still want to call _try_dispatch_job for jobs with
+            # extended leases because we still want to update any relevant
+            # metadata. However, the job will not be physically sent to the
+            # worker(s) again.
             self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
         # Schedule extended lease completion events.
@@ -1613,7 +1617,14 @@ class Scheduler:
                 len(job_id.singletons())
 
     def _schedule_extended_lease_completion_events(self, round_end_time, pool):
-        """Schedules completion events for jobs with extended lease."""
+        """Schedules completion events for jobs with extended lease.
+
+        A completion event in this setting is a callback that will be
+        triggered at the conclusion of the current round to indicate that the
+        specified job has completed the round. This is necessary because
+        jobs with extended leases will not trigger the standard done_callback
+        at the end of the round.
+        """
         current_time = self.get_current_timestamp()
         delay = round_end_time - current_time
         for job_id in self._jobs_with_extended_lease:
@@ -2520,6 +2531,8 @@ class Scheduler:
                             'Job %s not in current dispatched jobs!' % (job_id)
                         raise RuntimeError(msg)
                     self._current_dispatched_jobs.remove(job_id)
+                # If a job with an extended lease completes before the end
+                # of the round, cancel the job's completion event.
                 if job_id in self._lease_extension_events:
                     event = self._lease_extension_events[job_id]
                     self._lease_extension_scheduler.cancel(event)
