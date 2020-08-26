@@ -7,6 +7,7 @@ import numpy as np
 import os
 # from preconditions import preconditions
 import queue
+from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
 import datetime
@@ -1476,9 +1477,37 @@ class Scheduler:
               '(%.2f hours)' % (self._current_timestamp,
                                 self._current_timestamp / 3600.0))
 
-    def _recompute_schedule_and_extend_leases(self):
+    def _begin_round(self, round_start_time):
+        """Executes beginning stage of a scheduling round."""
+
+        with self._scheduler_lock:
+            current_round = self._num_completed_rounds
+            self._write_queue.put(
+                '*** START ROUND %d ***' % (current_round))
+            self._print_schedule_summary()
+
+        # Wait for partway through round to recompute schedule.
+        recompute_schedule_time = round_start_time + \
+                (self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION)
+        time.sleep(recompute_schedule_time - round_start_time)
+
+    def _mid_round(self, round_start_time, pool):
+        """Executes intermediate stage of a scheduling round.
+
+        Computes the schedule for the upcoming round partway through the
+        current round and extends leases if necessary. Then dispatches jobs
+        for the upcoming round and schedules callbacks for jobs with extended
+        leases.
+
+        Note that this updates self._next_worker_assignments. We update
+        self._current_worker_assignments when we end the round.
+        """
+
+        round_end_time = round_start_time + self._time_per_iteration
+
         # Recompute the schedule for the upcoming round.
         self._next_worker_assignments = self._schedule_jobs_on_workers()
+
         # Check whether we should update the lease for any jobs.
         for job_id in self._current_worker_assignments:
             current_worker_ids = \
@@ -1501,6 +1530,17 @@ class Scheduler:
                 # remove it from the extended lease set if it
                 # had previously received an extended lease.
                 self._jobs_with_extended_lease.remove(job_id)
+
+        # Dispatch jobs for upcoming round.
+        self._master_port_offsets = {}
+        for (job_id, worker_ids) in \
+            self._next_worker_assignments.items():
+            if job_id in self._jobs_with_extended_lease:
+                self._next_dispatched_jobs.add(job_id)
+            self._try_dispatch_job(job_id, worker_ids, next_round=True)
+
+        # Schedule extended lease completion events.
+        self._schedule_extended_lease_completion_events(round_end_time, pool)
 
     def _try_dispatch_job(self, job_id, worker_ids, next_round=False):
         """Attempts to dispatch the specified job combination.
@@ -1572,7 +1612,7 @@ class Scheduler:
             self._master_port_offsets[master_addr] += \
                 len(job_id.singletons())
 
-    def _schedule_extended_lease_completion_events(self, round_end_time):
+    def _schedule_extended_lease_completion_events(self, round_end_time, pool):
         """Schedules completion events for jobs with extended lease."""
         current_time = self.get_current_timestamp()
         delay = round_end_time - current_time
@@ -1582,22 +1622,22 @@ class Scheduler:
                     action=self._done_callback_extended_lease,
                     argument=(job_id,))
             self._lease_extension_events[job_id] = event
-        lease_extension_thread = threading.Thread(
-                target=self._lease_extension_scheduler.run)
-        lease_extension_thread.daemon = True
-        lease_extension_thread.start()
+        pool.submit(self._lease_extension_scheduler.run)
 
-    def _end_round(self, round_end_time):
-        """Ends the current round."""
-        # Schedule extended lease completion events.
-        self._schedule_extended_lease_completion_events(round_end_time)
+    def _end_round(self):
+        """Executes final stage of a scheduling round.
 
-        # Wait for jobs from current round to complete.
+        Waits for all currently dispatched jobs to complete, then resets
+        the set of jobs with extended leases as well as relevant metadata.
+        """
+
+        # Wait for jobs in current round to complete.
         jobs_to_complete = set()
         for job_id in self._current_worker_assignments:
             if job_id in self._jobs:
                 jobs_to_complete.add(job_id)
-        while not jobs_to_complete.issubset(self._completed_jobs_in_current_round):
+        while not jobs_to_complete.issubset(
+            self._completed_jobs_in_current_round):
             self._scheduler_cv.wait()
         assert(self._lease_extension_events == {})
 
@@ -1625,8 +1665,8 @@ class Scheduler:
             for worker_id in worker_ids:
                 self._remove_available_worker_id(worker_id)
 
-        if len(self._completed_jobs_in_current_round) > 0:
-            self._num_completed_rounds += 1
+        current_round = self._num_completed_rounds
+        self._num_completed_rounds += 1
 
         # Reset metadata.
         assert(self._next_worker_assignments is not None)
@@ -1637,6 +1677,8 @@ class Scheduler:
         self._next_dispatched_jobs = set()
 
         self._scheduler_cv.notifyAll()
+
+        self._write_queue.put('*** END ROUND %d ***' % (current_round))
 
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.
@@ -1667,35 +1709,13 @@ class Scheduler:
             self._try_dispatch_job(job_id, worker_ids)
         self._scheduler_cv.release()
 
-        while True:
-            with self._scheduler_lock:
-                current_round = self._num_completed_rounds
-                self._write_queue.put(
-                    '*** START ROUND %d ***' % (current_round))
-                self._print_schedule_summary()
-
-            round_start_time = self.get_current_timestamp()
-            recompute_schedule_time = round_start_time + \
-                    (self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION)
-            round_end_time = round_start_time + self._time_per_iteration
-
-            # Compute the schedule for the upcoming round partway through the
-            # current round and extend leases if necessary. Then dispatch jobs
-            # for the upcoming round and wait for jobs to complete.
-            # NOTE: This updates self._next_worker_assignments. We update
-            # self._current_worker_assignments when we end the round.
-            time.sleep(recompute_schedule_time - round_start_time)
-            with self._scheduler_cv:
-                self._recompute_schedule_and_extend_leases()
-                self._master_port_offsets = {}
-                for (job_id, worker_ids) in \
-                    self._next_worker_assignments.items():
-                    if job_id in self._jobs_with_extended_lease:
-                        self._next_dispatched_jobs.add(job_id)
-                    self._try_dispatch_job(job_id, worker_ids, next_round=True)
-                self._end_round(round_end_time)
-                self._write_queue.put('*** END ROUND %d ***' % (current_round))
-
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            while True:
+                round_start_time = self.get_current_timestamp()
+                self._begin_round(round_start_time)
+                with self._scheduler_cv:
+                    self._mid_round(round_start_time, pool)
+                    self._end_round()
 
     def get_average_jct(self, job_ids=None, verbose=True):
         """Computes the average job completion time.
