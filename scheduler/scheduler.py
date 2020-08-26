@@ -216,6 +216,7 @@ class Scheduler:
         # Port offsets from rank-0 nodes of distributed jobs.
         self._master_port_offsets = {}
         # Currently running jobs.
+        # TODO: De-dup with self._current_dispatched_jobs.
         self._running_jobs = set()
         # The timestamp when each worker entered the cluster.
         self._worker_start_times = {}
@@ -683,6 +684,8 @@ class Scheduler:
         worker_assignments[job_id] = tuple(worker_ids_for_job)
         num_workers_assigned += scale_factor
 
+        # TODO: Move this to when a job is actually dispatched when running
+        # on a physical cluster.
         for single_job_id in job_id.singletons():
             self._per_job_latest_timestamps[single_job_id] = \
                 self.get_current_timestamp()
@@ -2173,7 +2176,8 @@ class Scheduler:
 
         NOTE: Used when scheduling is performed in rounds.
         """
-        time_since_last_reset = self.get_current_timestamp() - self._last_reset_time
+        current_time = self.get_current_timestamp()
+        time_since_last_reset = current_time - self._last_reset_time
         reset_interval_elapsed = time_since_last_reset >= \
             self._minimum_time_between_allocation_resets
         if (self._need_to_update_allocation and
@@ -2185,17 +2189,52 @@ class Scheduler:
                 self._allocation = self._compute_allocation()
                 self._need_to_update_allocation = False
 
+        # Account for time elapsed since job was dispatched if running on a
+        # physical cluster. Note that the the total time for each job is the
+        # sum of a) the time for all microtasks that have finished
+        # (accounted for by self._job_time_so_far), and b) the unaccounted time
+        # for all microtasks that are currently running (elapsed_job_time).
+        if not self._simulate:
+            elapsed_job_time = {}
+            elapsed_worker_time = {}
+            for job_id in self._current_dispatched_jobs:
+                single_job_id = job_id.singletons()[0]
+                if single_job_id not in self._per_job_latest_timestamps:
+                    continue
+                dispatch_time = self._per_job_latest_timestamps[single_job_id]
+                elapsed_time = current_time - dispatch_time
+                elapsed_job_time[job_id] = {}
+                worker_ids = self._current_worker_assignments[job_id]
+                worker_type = \
+                    self._worker_id_to_worker_type_mapping[worker_ids[0]]
+                if worker_type not in elapsed_job_time[job_id]:
+                    elapsed_job_time[job_id][worker_type] = 0.0
+                if worker_type not in elapsed_worker_time:
+                    elapsed_worker_time[worker_type] = 0.0
+                elapsed_job_time[job_id][worker_type] += elapsed_time
+                elapsed_worker_time[worker_type] += elapsed_time
+
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
 
+        # Compute priorities.
         for worker_type in self._worker_types:
             fractions[worker_type] = {}
+            worker_time_so_far = self._worker_time_so_far[worker_type]
             for job_id in self._job_time_so_far:
-                if self._worker_time_so_far[worker_type] == 0.0 or worker_type not in self._job_time_so_far[job_id]:
+                worker_time_so_far = self._worker_time_so_far[worker_type]
+                if not self._simulate and worker_type in elapsed_worker_time:
+                    worker_time_so_far += elapsed_worker_time[worker_type]
+                if (worker_time_so_far == 0.0 or
+                    worker_type not in self._job_time_so_far[job_id]):
                     fraction = 0.0
                 else:
-                    fraction = self._job_time_so_far[job_id][worker_type] / \
-                             self._worker_time_so_far[worker_type]
+                    job_time_so_far = \
+                        self._job_time_so_far[job_id][worker_type]
+                    if not self._simulate and job_id in elapsed_job_time:
+                        job_time_so_far += \
+                            elapsed_job_time[job_id][worker_type]
+                    fraction = job_time_so_far / worker_time_so_far
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 # Don't use inf so 2*new_priority > new_priority.
@@ -2347,6 +2386,8 @@ class Scheduler:
             while (self._next_dispatched_jobs is not None and
                    job_id in self._next_dispatched_jobs):
                 self._scheduler_cv.wait()
+            self._per_job_latest_timestamps[job_id] = \
+                self.get_current_timestamp()
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
@@ -2361,8 +2402,10 @@ class Scheduler:
         # Extend the lease if the job has been placed on the same workers
         # for the upcoming round.
         with self._scheduler_lock:
-            if job_id in self._jobs_with_extended_lease:
-                return (max_steps, max_duration + self._time_per_iteration)
+            # TODO: Remove scan of self._jobs_with_extended_lease.
+            for job_id_combination in self._jobs_with_extended_lease:
+                if job_id.overlaps_with(job_id_combination):
+                    return (max_steps, max_duration + self._time_per_iteration)
 
         if scale_factor == 1:
             return (max_steps, max_duration)
@@ -2427,10 +2470,12 @@ class Scheduler:
             if len(self._in_progress_updates[job_id]) < scale_factor:
                 return
             else:
-                if job_id not in self._current_dispatched_jobs:
-                    msg = 'Job %s not in current dispatched jobs!' % (job_id)
-                    raise RuntimeError(msg)
-                self._current_dispatched_jobs.remove(job_id)
+                if not self._simulate:
+                    if job_id not in self._current_dispatched_jobs:
+                        msg = \
+                            'Job %s not in current dispatched jobs!' % (job_id)
+                        raise RuntimeError(msg)
+                    self._current_dispatched_jobs.remove(job_id)
                 self._completed_jobs_in_current_round.add(job_id)
                 micro_task_succeeded = True
                 all_worker_ids = \
