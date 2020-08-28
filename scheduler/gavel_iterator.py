@@ -34,12 +34,11 @@ class GavelIterator:
             self._initial_val = None
         assert(os.path.isdir(os.path.join(gavel_dir)))
         self._info_file = os.path.join(gavel_dir, '.gavel_info')
-        self._lease = Lease(0, 0)
 
         # TODO: Tie this with loading the checkpoint
-        self._init()
+        initial_max_steps, initial_max_duration = self._init()
+        self._lease = Lease(initial_max_steps, initial_max_duration)
         self._prev_time = time.time()
-        self._update_lease()
         self._write_info()
 
     def __iter__(self):

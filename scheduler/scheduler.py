@@ -2430,8 +2430,16 @@ class Scheduler:
             while (self._next_dispatched_jobs is not None and
                    job_id in self._next_dispatched_jobs):
                 self._scheduler_cv.wait()
+
+            # Record initializiation as latest job event.
             self._per_job_latest_timestamps[job_id] = \
                 self.get_current_timestamp()
+
+            # Return initial lease.
+            scale_factor = self._jobs[job_id].scale_factor
+            remaining_steps = self._get_remaining_steps(job_id)
+            remaining_steps = int(math.ceil(remaining_steps / scale_factor))
+            return (remaining_steps, time_per_iteration)
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):

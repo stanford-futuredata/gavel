@@ -29,9 +29,17 @@ class IteratorRpcClient:
             stub = i2s_pb2_grpc.IteratorToSchedulerStub(channel)
             try:
                 response = stub.InitJob(request)
-                self._log('Initialized job')
+                if response.max_steps > 0 and response.max_duration > 0:
+                    self._log(
+                        'Initialized job %d with initial lease max_steps=%d, '
+                        'max_duration=%f' % (job_id, response.max_steps,
+                                             response.max_duration))
+                else:
+                    self._log('Failed to initialize job %d' % (job_id))
+                return (response.max_steps, response.max_duration)
             except grpc.RpcError as e:
                 self._log('Job initialization error: %s' % (e))
+            return(0, 0)
 
     def update_lease(self, steps, duration, max_steps, max_duration):
         request = i2s_pb2.UpdateLeaseRequest(job_id=self._job_id,
