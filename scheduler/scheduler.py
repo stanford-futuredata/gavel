@@ -1601,6 +1601,11 @@ class Scheduler:
                     dispatched_jobs_set.add(job_id)
             if not next_round:
                 self._remove_available_worker_id(worker_id)
+        if not next_round:
+            # Initialize metadata for distributed jobs.
+            self._in_progress_updates[job_id] = []
+            self._lease_update_requests[job_id] = []
+            self._max_steps[job_id] = None
         if master_addr is not None:
             master_port_offsets[master_addr] += len(job_id.singletons())
 

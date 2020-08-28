@@ -105,10 +105,11 @@ class Dispatcher:
                                         self._sched_addr, self._sched_port))
         return command
 
-    def _get_steps_and_execution_time(self, job_id):
+    def _get_steps_and_execution_time(self, job_id, worker_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
                                       'job_id=%d' % (job_id))
-        info_file = os.path.join(checkpoint_dir, '.gavel_info')
+        info_file = os.path.join(checkpoint_dir,
+                                 '.gavel_info_worker=%d' % (worker_id))
         try:
             with open(info_file, 'r') as f:
                 lines = f.readlines()
@@ -161,7 +162,7 @@ class Dispatcher:
                                   shell=True)
             output = proc.stdout.decode('utf-8').strip()
             completed_steps, execution_time = \
-                self._get_steps_and_execution_time(job.job_id)
+                self._get_steps_and_execution_time(job.job_id, worker_id)
             if completed_steps is None:
                 self._write_queue.put('Could not get completed steps for job '
                                       '%s (worker %d), '

@@ -33,7 +33,8 @@ class GavelIterator:
         if self._synthetic_data:
             self._initial_val = None
         assert(os.path.isdir(os.path.join(gavel_dir)))
-        self._info_file = os.path.join(gavel_dir, '.gavel_info')
+        self._info_file = os.path.join(gavel_dir,
+                                       '.gavel_info_worker=%d' % (worker_id))
 
         # TODO: Tie this with loading the checkpoint
         self._lease = Lease(0, 0)
