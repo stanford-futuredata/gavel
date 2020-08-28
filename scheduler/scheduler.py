@@ -2425,7 +2425,7 @@ class Scheduler:
     def _init_job_callback(self, job_id):
         with self._scheduler_cv:
             # Wait if this job has been scheduled for the next round
-            # but the it is still running in the previous round.
+            # but it is still running in the previous round.
             while (self._next_dispatched_jobs is not None and
                    job_id in self._next_dispatched_jobs and
                    job_id in self._current_dispatched_jobs):
@@ -2505,13 +2505,6 @@ class Scheduler:
                 self._lease_update_requests[job_id] = []
                 self._max_steps[job_id] = None
                 
-                if job_id in self._jobs:
-                    current_worker_ids = \
-                        self._current_worker_assignments[job_id]
-                    for worker_id in current_worker_ids:
-                        self._add_available_worker_id(worker_id)
-                self._jobs_with_extended_lease.remove(job_id)
-
                 del self._lease_extension_events[job_id]
                 self._scheduler_cv.notifyAll()
 
