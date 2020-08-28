@@ -1653,13 +1653,6 @@ class Scheduler:
                     self._current_worker_assignments[job_id]
                 for worker_id in current_worker_ids:
                     self._add_available_worker_id(worker_id)
-            # NOTE: It is possibile that a job which should receive an extended
-            # lease requests a lease update after we have removed the job from
-            # the extended lease set but before we begin the next round -
-            # in this case the job will simply be re-scheduled on the exact
-            # same workers. While this is not optimal, it is safe and also
-            # unlikely to occur in practice given a sufficiently large delta
-            # between the lease update request time and the end of the round.
             self._jobs_with_extended_lease.remove(job_id)
 
         for (job_id, worker_ids) in self._next_worker_assignments.items():
@@ -2511,6 +2504,13 @@ class Scheduler:
                 self._in_progress_updates[job_id] = []
                 self._lease_update_requests[job_id] = []
                 self._max_steps[job_id] = None
+                
+                if job_id in self._jobs:
+                    current_worker_ids = \
+                        self._current_worker_assignments[job_id]
+                    for worker_id in current_worker_ids:
+                        self._add_available_worker_id(worker_id)
+                self._jobs_with_extended_lease.remove(job_id)
 
                 del self._lease_extension_events[job_id]
                 self._scheduler_cv.notifyAll()
