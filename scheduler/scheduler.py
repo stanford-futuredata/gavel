@@ -221,8 +221,6 @@ class Scheduler:
         self._lease_update_requests = {}
         # List of all RPC clients.
         self._all_rpc_clients = []
-        # Port offsets from rank-0 nodes of distributed jobs.
-        self._master_port_offsets = {}
         # Currently running jobs.
         # TODO: De-dup with self._current_dispatched_jobs.
         self._running_jobs = set()
@@ -1526,7 +1524,7 @@ class Scheduler:
                 self._jobs_with_extended_lease.remove(job_id)
 
         # Dispatch jobs for upcoming round.
-        self._master_port_offsets = {}
+        master_port_offsets = {}
         for (job_id, worker_ids) in \
             self._next_worker_assignments.items():
             if job_id in self._jobs_with_extended_lease:
@@ -1535,12 +1533,14 @@ class Scheduler:
             # extended leases because we still want to update any relevant
             # metadata. However, the job will not be physically sent to the
             # worker(s) again.
-            self._try_dispatch_job(job_id, worker_ids, next_round=True)
+            self._try_dispatch_job(job_id, worker_ids, master_port_offsets,
+                                   next_round=True)
 
         # Schedule extended lease completion events.
         self._schedule_extended_lease_completion_events(round_end_time, pool)
 
-    def _try_dispatch_job(self, job_id, worker_ids, next_round=False):
+    def _try_dispatch_job(self, job_id, worker_ids, master_port_offsets,
+                          next_round=False):
         """Attempts to dispatch the specified job combination.
 
            Updates relevant metadata and returns if job has already been
@@ -1554,9 +1554,8 @@ class Scheduler:
                 master_addr = \
                     self._worker_connections[worker_ids[0]].addr
                 if master_addr not in master_port_offsets:
-                    self._master_port_offsets[master_addr] = 1
-                self._master_port_offsets[master_addr] += \
-                    len(job_id.singletons())
+                    master_port_offsets[master_addr] = 1
+                master_port_offsets[master_addr] += len(job_id.singletons())
             return
         master_addr = None
         worker_type = \
@@ -1571,9 +1570,9 @@ class Scheduler:
                 if scale_factor > 1:
                     master_addr = \
                         self._worker_connections[worker_ids[0]].addr
-                    if master_addr not in self._master_port_offsets:
-                        self._master_port_offsets[master_addr] = 1
-                    offset = self._master_port_offsets[master_addr]
+                    if master_addr not in master_port_offsets:
+                        master_port_offsets[master_addr] = 1
+                    offset = master_port_offsets[master_addr]
                     master_port = \
                         self._worker_connections[worker_ids[0]].port
                     command = ('%s --master_addr %s '
@@ -1602,13 +1601,8 @@ class Scheduler:
                     dispatched_jobs_set.add(job_id)
             if not next_round:
                 self._remove_available_worker_id(worker_id)
-        # Reset update metadata.
-        self._in_progress_updates[job_id] = []
-        self._lease_update_requests[job_id] = []
-        self._max_steps[job_id] = None
         if master_addr is not None:
-            self._master_port_offsets[master_addr] += \
-                len(job_id.singletons())
+            master_port_offsets[master_addr] += len(job_id.singletons())
 
     def _schedule_extended_lease_completion_events(self, round_end_time, pool):
         """Schedules completion events for jobs with extended lease.
@@ -1710,8 +1704,9 @@ class Scheduler:
 
         # Compute initial schedule and dispatch initial set of jobs.
         self._current_worker_assignments = self._schedule_jobs_on_workers()
+        master_port_offsets = {}
         for (job_id, worker_ids) in self._current_worker_assignments.items():
-            self._try_dispatch_job(job_id, worker_ids)
+            self._try_dispatch_job(job_id, worker_ids, master_port_offsets)
         self._scheduler_cv.release()
 
         with ThreadPoolExecutor(max_workers=1) as pool:
@@ -2494,7 +2489,14 @@ class Scheduler:
     def _done_callback_extended_lease(self, job_id):
         with self._scheduler_cv:
             if job_id in self._lease_extension_events:
+                # Mark job as completed.
                 self._completed_jobs_in_current_round.add(job_id)
+
+                # Reset metadata for distributed jobs.
+                self._in_progress_updates[job_id] = []
+                self._lease_update_requests[job_id] = []
+                self._max_steps[job_id] = None
+
                 del self._lease_extension_events[job_id]
                 self._scheduler_cv.notifyAll()
 
@@ -2555,6 +2557,10 @@ class Scheduler:
                         all_num_steps[i] += all_num_steps_[i]
                         all_execution_times[i] = max(all_execution_times[i],
                                                      all_execution_times_[i])
+            # Reset metadata for distributed jobs.
+            self._in_progress_updates[job_id] = []
+            self._lease_update_requests[job_id] = []
+            self._max_steps[job_id] = None
 
             if not micro_task_succeeded:
                 # Micro-task failed.
