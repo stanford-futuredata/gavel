@@ -2431,9 +2431,11 @@ class Scheduler:
 
     def _init_job_callback(self, job_id):
         with self._scheduler_cv:
-            # TODO: Don't wait for previous round to end?
+            # Wait if this job has been scheduled for the next round
+            # but the it is still running in the previous round.
             while (self._next_dispatched_jobs is not None and
-                   job_id in self._next_dispatched_jobs):
+                   job_id in self._next_dispatched_jobs and
+                   job_id in self._current_dispatched_jobs):
                 self._scheduler_cv.wait()
 
             # Record initializiation as latest job event.
