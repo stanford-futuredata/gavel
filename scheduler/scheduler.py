@@ -1675,7 +1675,7 @@ class Scheduler:
         self._current_dispatched_jobs = self._next_dispatched_jobs
         self._next_dispatched_jobs = set()
 
-	self._scheduler_cv.notifyAll()
+        self._scheduler_cv.notifyAll()
 
         self._write_queue.put('*** END ROUND %d ***' % (current_round))
 
@@ -2490,14 +2490,14 @@ class Scheduler:
         with self._scheduler_cv:
             if job_id in self._lease_extension_events:
                 # Mark job as completed.
-		self._completed_jobs_in_current_round.add(job_id)
+                self._completed_jobs_in_current_round.add(job_id)
 
-		# Reset metadata for distributed jobs.
-		self._in_progress_updates[job_id] = []
-		self._lease_update_requests[job_id] = []
-		self._max_steps[job_id] = None
+                # Reset metadata for distributed jobs.
+                self._in_progress_updates[job_id] = []
+                self._lease_update_requests[job_id] = []
+                self._max_steps[job_id] = None
 
-		del self._lease_extension_events[job_id]
+                del self._lease_extension_events[job_id]
                 self._scheduler_cv.notifyAll()
 
     def _done_callback(self, job_id, worker_id, all_num_steps,
@@ -2557,10 +2557,10 @@ class Scheduler:
                         all_num_steps[i] += all_num_steps_[i]
                         all_execution_times[i] = max(all_execution_times[i],
                                                      all_execution_times_[i])
-	    # Reset metadata for distributed jobs.
-	    self._in_progress_updates[job_id] = []
-	    self._lease_update_requests[job_id] = []
-	    self._max_steps[job_id] = None
+            # Reset metadata for distributed jobs.
+            self._in_progress_updates[job_id] = []
+            self._lease_update_requests[job_id] = []
+            self._max_steps[job_id] = None
 
             if not micro_task_succeeded:
                 # Micro-task failed.
