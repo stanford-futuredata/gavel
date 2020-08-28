@@ -33,14 +33,14 @@ class GavelIterator:
         if self._synthetic_data:
             self._initial_val = None
         assert(os.path.isdir(os.path.join(gavel_dir)))
-        self._steps_file = os.path.join(gavel_dir, '.gavel_steps')
+        self._info_file = os.path.join(gavel_dir, '.gavel_info')
         self._lease = Lease(0, 0)
 
         # TODO: Tie this with loading the checkpoint
         self._init()
         self._prev_time = time.time()
         self._update_lease()
-        self._write_steps()
+        self._write_info()
 
     def __iter__(self):
         self._iterator = iter(self._data_loader)
@@ -86,13 +86,13 @@ class GavelIterator:
         except StopIteration as e:
             # TODO: Enforce contract that application calls complete before
             # exiting.
-            self._write_steps()
+            self._write_info()
             raise StopIteration
 
         if self._synthetic_data and self._steps % len(self._data_loader) == 0:
             # TODO: Enforce contract that application calls complete before
             # exiting.
-            self._write_steps()
+            self._write_info()
             raise StopIteration
 
         self._steps_until_next_lease_update -= 1
@@ -109,14 +109,16 @@ class GavelIterator:
 
     def complete(self):
         self._done = True
-        self._write_steps()
+        self._write_info()
 
-    def _write_steps(self):
+    def _write_info(self):
         try:
-            with open(self._steps_file, 'w') as f:
-                f.write('%d' % (self._steps))
+            with open(self._info_file, 'w') as f:
+                f.write('%d\n%f' % (self._steps, self._duration))
         except Exception as e:
-            print(e)
+            if self._verbose:
+                print('Error writing info to \"%s\": %s' % (self._info_file,
+                                                            e))
 
     def _init(self):
         self._rpc_client.init()
