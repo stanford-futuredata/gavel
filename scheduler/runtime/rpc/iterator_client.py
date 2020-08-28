@@ -39,7 +39,7 @@ class IteratorRpcClient:
                 return (response.max_steps, response.max_duration)
             except grpc.RpcError as e:
                 self._log('Job initialization error: %s' % (e))
-            return(0, 0)
+            return (0, 0)
 
     def update_lease(self, steps, duration, max_steps, max_duration):
         request = i2s_pb2.UpdateLeaseRequest(job_id=self._job_id,
