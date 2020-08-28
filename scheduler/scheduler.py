@@ -2504,7 +2504,7 @@ class Scheduler:
                 self._in_progress_updates[job_id] = []
                 self._lease_update_requests[job_id] = []
                 self._max_steps[job_id] = None
-                
+
                 del self._lease_extension_events[job_id]
                 self._scheduler_cv.notifyAll()
 
