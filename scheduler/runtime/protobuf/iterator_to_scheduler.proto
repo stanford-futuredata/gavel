@@ -1,10 +1,8 @@
 syntax = "proto3";
 
-import "common.proto";
-
 service IteratorToScheduler {
-    // Initializes the job.
-    rpc InitJob (InitJobRequest) returns (Empty);
+    // Initializes the job and returns the initial lease.
+    rpc InitJob (InitJobRequest) returns (UpdateLeaseResponse);
     // Updates the lease.
     rpc UpdateLease (UpdateLeaseRequest) returns (UpdateLeaseResponse);
 }
