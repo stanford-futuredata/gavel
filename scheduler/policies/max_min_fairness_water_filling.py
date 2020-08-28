@@ -331,7 +331,7 @@ class MaxMinFairnessWaterFillingPolicy(Policy, WaterFillingAlgorithm):
             new_unflattened_throughputs[job_id] = {}
             for worker_type in unflattened_throughputs[job_id]:
                  new_unflattened_throughputs[job_id][worker_type] = \
-                     unflattened_throughputs[job_id]['v100']
+                     unflattened_throughputs[job_id][worker_types[0]]
 
         unflattened_x = \
             self._max_min_fairness_perf_policy.get_allocation(
