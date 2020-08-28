@@ -32,10 +32,10 @@ class IteratorRpcClient:
                 if response.max_steps > 0 and response.max_duration > 0:
                     self._log(
                         'Initialized job %d with initial lease max_steps=%d, '
-                        'max_duration=%f' % (job_id, response.max_steps,
+                        'max_duration=%f' % (self._job_id, response.max_steps,
                                              response.max_duration))
                 else:
-                    self._log('Failed to initialize job %d' % (job_id))
+                    self._log('Failed to initialize job %d!' % (self._job_id))
                 return (response.max_steps, response.max_duration)
             except grpc.RpcError as e:
                 self._log('Job initialization error: %s' % (e))

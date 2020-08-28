@@ -36,8 +36,8 @@ class GavelIterator:
         self._info_file = os.path.join(gavel_dir, '.gavel_info')
 
         # TODO: Tie this with loading the checkpoint
-        initial_max_steps, initial_max_duration = self._init()
-        self._lease = Lease(initial_max_steps, initial_max_duration)
+        self._lease = Lease(0, 0)
+        self._update_lease(init=True)
         self._prev_time = time.time()
         self._write_info()
 
@@ -119,15 +119,15 @@ class GavelIterator:
                 print('Error writing info to \"%s\": %s' % (self._info_file,
                                                             e))
 
-    def _init(self):
-        return self._rpc_client.init()
-
-    def _update_lease(self):
-        (updated_max_steps, updated_max_duration) = \
-            self._rpc_client.update_lease(self._steps,
-                                          self._duration,
-                                          self._lease.max_steps,
-                                          self._lease.max_duration)
+    def _update_lease(self, init=False):
+        if init:
+            (updated_max_steps, updated_max_duration) = self._rpc_client.init()
+        else:
+            (updated_max_steps, updated_max_duration) = \
+                self._rpc_client.update_lease(self._steps,
+                                              self._duration,
+                                              self._lease.max_steps,
+                                              self._lease.max_duration)
         next_lease_update_steps = \
             int(updated_max_steps * LEASE_UPDATE_FRACTION +
                 self._lease.max_steps * (1.0 - LEASE_UPDATE_FRACTION))

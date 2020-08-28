@@ -2439,7 +2439,7 @@ class Scheduler:
             scale_factor = self._jobs[job_id].scale_factor
             remaining_steps = self._get_remaining_steps(job_id)
             remaining_steps = int(math.ceil(remaining_steps / scale_factor))
-            return (remaining_steps, time_per_iteration)
+            return (remaining_steps, self._time_per_iteration)
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
