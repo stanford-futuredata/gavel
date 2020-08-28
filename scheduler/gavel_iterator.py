@@ -120,7 +120,7 @@ class GavelIterator:
                                                             e))
 
     def _init(self):
-        self._rpc_client.init()
+        return self._rpc_client.init()
 
     def _update_lease(self):
         (updated_max_steps, updated_max_duration) = \
