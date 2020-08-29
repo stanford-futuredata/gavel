@@ -12,57 +12,6 @@ from job import Job
 from job_id_pair import JobIdPair
 from job_table import JobTable
 
-def generate_job(rng, oracle_throughputs, generate_multi_gpu_jobs=False,
-                  generate_multi_priority_jobs=False,
-                  run_dir='/tmp', job_template=None, job_id=None):
-    """Generates a new job for simulation."""
-
-    scale_factor = 1
-    if ((job_template is not None and job_template.distributed and
-         generate_multi_gpu_jobs) or
-        (job_template is None and generate_multi_gpu_jobs)):
-        r = rng.uniform(0, 1)
-        if 0.7 <= r <= 0.8:
-            scale_factor = 2
-        elif 0.8 <= r <= 0.95:
-            scale_factor = 4
-        elif 0.95 <= r:
-            scale_factor = 8
-    if job_template is None:
-        while True:
-            job_template = rng.choice(JobTable)
-            if scale_factor == 1 or job_template.distributed:
-                break
-    job_type = job_template.model
-    run_time = 60 * (10 ** random.uniform(2, 4))
-    assert(run_time > 0)
-    num_steps = \
-        run_time * oracle_throughputs['v100'][(job_type, scale_factor)]['null']
-    assert(num_steps > 0)
-
-    if job_template.needs_data_dir:
-        command = job_template.command % (run_dir, run_dir)
-    else:
-        command = job_template.command % (run_dir)
-
-    priority_weight = 1.0
-    if generate_multi_priority_jobs:
-        # NOTE: Distribution modified for test purposes.
-        r = rng.uniform(0, 1)
-        if 0.0 <= r <= 0.4:
-            priority_weight = 5.0
-
-    job = Job(job_id=job_id,
-              job_type=job_type,
-              command=command,
-              num_steps_arg=job_template.num_steps_arg,
-              total_steps=num_steps,
-              duration=None,
-              scale_factor=scale_factor,
-              priority_weight=priority_weight)
-
-    return job
-
 def get_job_throughputs(jobs, oracle_throughputs, worker_types):
     throughputs = {}
     for i, job in enumerate(jobs):
@@ -184,11 +133,13 @@ def main(args):
     for i in range(args.num_jobs):
         job_template = JobTable[i % len(JobTable)]
         job_id = JobIdPair(i, None)
-        jobs.append(generate_job(rng, oracle_throughputs,
-                                 args.generate_multi_gpu_jobs,
-                                 args.generate_multi_priority_jobs,
-                                 job_template=job_template,
-                                 job_id=job_id))
+        job = utils.generate_job(
+                throughputs=oracle_throughputs,
+                worker_type='v100',
+                rng=rng, job_id=job_id,
+                generate_multi_gpu_jobs=args.generate_multi_gpu_jobs,
+                generate_multi_priority_jobs=args.generate_multi_priority_jobs)
+        jobs.append(job)
     policy = utils.get_policy('max_min_fairness_packed', solver=args.solver)
     scale_factors = {
         job.job_id: job.scale_factor for job in jobs

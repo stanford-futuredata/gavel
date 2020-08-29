@@ -13,11 +13,8 @@ import utils
 def generate_interarrival_time(rng, lam):
     return -math.log(1.0 - rng.random()) * lam
 
-def get_total_steps(rng, durations, throughputs, job_type, scale_factor):
-    duration = rng.choice(durations) * 3600
-    steps =\
-        int(throughputs['v100'][(job_type, scale_factor)]['null'] * duration)
-    return max(1, steps)
+def generate_duration(durations, rng):
+    return 3600 * rng.choice(durations)
 
 def main(args):
     job_generator = random.Random()
@@ -26,56 +23,32 @@ def main(args):
     interarrival_time_generator = random.Random()
     interarrival_time_generator.seed(args.seed + 1)
 
-    duration_generator = random.Random()
-    duration_generator.seed(args.seed + 2)
-    
-    scale_factor_generator = random.Random()
-    scale_factor_generator.seed(args.seed + 3)
-
     throughputs = utils.read_all_throughputs_json_v2(args.throughputs_file)
 
     durations = np.linspace(args.min_duration, args.max_duration,
                             args.num_durations)
+    duration_generator_func = lambda rng: generate_duration(durations, rng)
 
     prev_arrival_time = None
     with open(args.output_file, 'w') as f:
         for i in range(args.num_jobs):
-            job_template = job_generator.choice(JobTable)
-            job_type = job_template.model
-            command = job_template.command
-            num_steps_arg = job_template.num_steps_arg
-            needs_data_dir = job_template.needs_data_dir
-            scale_factor = 1
-            if args.generate_multi_gpu_jobs and job_template.distributed:
-                r = scale_factor_generator.uniform(0, 1)
-                if 0.7 <= r <= 0.8:
-                    scale_factor = 2
-                elif 0.8 <= r:
-                    scale_factor = 4
-            total_steps = get_total_steps(duration_generator,
-                                          durations,
-                                          throughputs,
-                                          job_type,
-                                          scale_factor)
-            priority_weight = 1
-            SLO = -1
+            job = utils.generate_job(
+                    throughputs=throughputs,
+                    worker_type='v100',
+                    rng=job_generator,
+                    job_id=None,
+                    fixed_job_duration=None,
+                    generate_multi_gpu_jobs=args.generate_multi_gpu_jobs,
+                    generate_multi_priority_jobs=args.generate_multi_priority_jobs,
+                    duration_generator_func=duration_generator_func)
             if prev_arrival_time is None:
                 arrival_time = 0
             elif args.lam > 0:
-                arrival_time = (prev_arrival_time +
-                                generate_interarrival_time(
-                                    interarrival_time_generator, args.lam))
+                interarrival_time = \
+                    generate_interarrival_time(interarrival_time_generator,
+                                               args.lam)
+                arrival_time = prev_arrival_time + interarrival_time
             prev_arrival_time = arrival_time
-            job = Job(job_id=None,
-                      job_type=job_type,
-                      command=command,
-                      num_steps_arg=num_steps_arg,
-                      total_steps=total_steps,
-                      duration=None,
-                      scale_factor=scale_factor,
-                      priority_weight=priority_weight,
-                      SLO=SLO,
-                      needs_data_dir=needs_data_dir)
             f.write('%s\t%d\n' % (str(job), arrival_time))
 
 if __name__=='__main__':
@@ -99,6 +72,9 @@ if __name__=='__main__':
                         default=False,
                         help=('If set, generates multi-GPU jobs according to '
                               'a pre-defined distribution'))
+    parser.add_argument('--generate-multi-priority-jobs', action='store_true',
+                        default=False,
+                        help=('If set, generates some jobs with higher priority'))
     parser.add_argument('--output_file', type=str, required=True,
                         help='Output file name')
     args = parser.parse_args()
