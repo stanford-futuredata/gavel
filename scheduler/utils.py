@@ -488,7 +488,7 @@ def parse_trace(trace_file):
                             duration=None,
                             scale_factor=int(scale_factor),
                             priority_weight=float(priority_weight),
-                                SLO=float(SLO)))
+                            SLO=float(SLO)))
             arrival_times.append(float(arrival_time))
     return jobs, arrival_times
 
