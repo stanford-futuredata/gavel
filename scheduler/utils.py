@@ -37,7 +37,7 @@ def _generate_duration(rng):
 def generate_job(throughputs, reference_worker_type='v100', rng=None,
                  job_id=None, fixed_job_duration=None,
                  generate_multi_gpu_jobs=False,
-                 generate_multi_priority_jobs=False, run_dir='/tmp',
+                 generate_multi_priority_jobs=False, run_dir=None,
                  scale_factor_generator_func=_generate_scale_factor,
                  duration_generator_func=_generate_duration,
                  scale_factor_rng=None, duration_rng=None, SLO_rng=None,
@@ -108,10 +108,12 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
     job_type = job_template.model
 
     # Complete the job command with the run directory.
-    if job_template.needs_data_dir:
-        command = job_template.command % (run_dir, run_dir)
-    else:
-        command = job_template.command % (run_dir)
+    command = job_template.command
+    if run_dir is not None:
+        if job_template.needs_data_dir:
+            command = command % (run_dir, run_dir)
+        else:
+            command = command % (run_dir)
 
     # Compute the number of steps the job will run for given its duration.
     key = (job_type, scale_factor)
@@ -145,7 +147,8 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
               duration=run_time,
               scale_factor=scale_factor,
               priority_weight=priority_weight,
-              SLO=SLO)
+              SLO=SLO,
+              needs_data_dir=job_template.needs_data_dir)
 
     return job
 
