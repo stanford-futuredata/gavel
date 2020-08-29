@@ -55,7 +55,7 @@ def generate_job(throughputs, worker_type='v100', rng=None, job_id=None,
          scale_factor_generator_func: A function that accepts an RNG parameter
                                       and returns a job size.
          duration_generator_func: A function that accepts an RNG parameter and
-                                  returns a job duration.
+                                  returns a job duration in seconds.
 
       Returns:
         The generated Job.
