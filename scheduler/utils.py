@@ -37,11 +37,11 @@ def _generate_duration(rng):
 def generate_job(throughputs, reference_worker_type='v100', rng=None,
                  job_id=None, fixed_job_duration=None,
                  generate_multi_gpu_jobs=False,
-                 generate_multi_priority_jobs=False, SLO_rng=None,
-                 run_dir='/tmp',
+                 generate_multi_priority_jobs=False, run_dir='/tmp',
                  scale_factor_generator_func=_generate_scale_factor,
                  duration_generator_func=_generate_duration,
-                 scale_factor_rng=None, always_generate_scale_factor=True):
+                 scale_factor_rng=None, duration_rng=None, SLO_rng=None,
+                 always_generate_scale_factor=True):
     """Generates a new job.
 
        Args:
@@ -52,7 +52,6 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
          fixed_job_duration: If set, fixes the duration to the specified value.
          generate_multi_gpu_jobs: If set, generate a scale factor >= 1.
          generate_multi_priority_jobs: If set, generate a priority >= 1.
-         SLO_rng: If set, generate an SLO >= 1 using this RNG.
          run_dir: The directory to run the job from.
          scale_factor_generator_func: A function that accepts an RNG parameter
                                       and returns a job size.
@@ -60,6 +59,9 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
                                   returns a job duration in seconds.
          scale_factor_rng: A random number generator specifically for
                            generating scale factors.
+         duration_rng: A random number generator specifically for generating
+                       durations.
+         SLO_rng: If set, generate an SLO >= 1 using this RNG.
          always_generate_scale_factor: If set, generate a scale factor
                                        regardless of whether user has
                                        requested multi-GPU jobs.
@@ -71,6 +73,8 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
         rng = random.Random()
     if scale_factor_rng is None:
         scale_factor_rng = rng
+    if duration_rng is None:
+        duration_rng = rng
 
     job_template = None
 
@@ -88,7 +92,7 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
     if fixed_job_duration:
         run_time = fixed_job_duration
     else:
-        run_time = duration_generator_func(rng)
+        run_time = duration_generator_func(duration_rng)
     if not generate_multi_gpu_jobs:
         scale_factor = 1
     assert(run_time > 0)

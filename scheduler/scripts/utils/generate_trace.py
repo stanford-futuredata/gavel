@@ -32,6 +32,9 @@ def main(args):
     interarrival_time_generator = random.Random()
     interarrival_time_generator.seed(args.seed + 1)
 
+    duration_generator = random.Random()
+    duration_generator.seed(args.seed + 2)
+
     scale_factor_generator = random.Random()
     scale_factor_generator.seed(args.seed + 3)
 
@@ -55,6 +58,7 @@ def main(args):
 		    scale_factor_generator_func=generate_scale_factor,
                     duration_generator_func=duration_generator_func,
                     scale_factor_rng=scale_factor_generator,
+                    duration_rng=duration_generator,
                     always_generate_scale_factor=False)
             if prev_arrival_time is None:
                 arrival_time = 0
