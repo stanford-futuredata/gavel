@@ -10,9 +10,13 @@ matplotlib
 matrix_completion
 opencv-python
 pandas
+<<<<<<< HEAD
 pillow==6.1
 preconditions
 seaborn
 setproctitle
 torch==1.2.0
 torchvision==0.4.0
+annoy
+numa
+sklearn
