@@ -1036,90 +1036,6 @@ class Scheduler:
            to the specified rate parameter."""
         return -math.log(1.0 - self._interarrival_time_generator.random()) / rate_parameter
 
-    def _generate_job(self, fixed_job_duration=None,
-                      generate_multi_gpu_jobs=False,
-                      generate_multi_priority_jobs=False,
-                      run_dir='/tmp'):
-        """Generates a new job for simulation."""
-
-        # Sample the job duration and scale factor from the Philly job
-        # distribution.
-        if fixed_job_duration:
-            print('Running for fixed duration '
-                  '%d minutes' % (fixed_job_duration / 60.0))
-            run_time = fixed_job_duration
-            # TODO: Select the scale factor from the distribution here?
-            scale_factor = 1
-        else:
-            scale_factor = 1
-            r = self._job_generator.uniform(0, 1)
-            if 0.7 <= r <= 0.8:
-                scale_factor = 2
-            elif 0.8 <= r <= 0.95:
-                scale_factor = 4
-            elif 0.95 <= r:
-                scale_factor = 8
-            if self._job_generator.random() >= 0.8:
-                run_time = 60 * (10 ** self._job_generator.uniform(3, 4))
-            else:
-                run_time = 60 * (10 ** self._job_generator.uniform(1.5, 3))
-        if not generate_multi_gpu_jobs:
-            scale_factor = 1
-        assert(run_time > 0)
-        assert(scale_factor >= 1 and scale_factor <= 8)
-
-        # Sample the job type.
-        while True:
-            job_template = self._job_generator.choice(JobTable)
-            if (scale_factor == 1 or
-                (scale_factor > 1 and job_template.distributed)):
-                break
-        job_type = job_template.model
-
-        # Complete the job command with the run directory.
-        if job_template.needs_data_dir:
-            command = job_template.command % (run_dir, run_dir)
-        else:
-            command = job_template.command % (run_dir)
-
-        # Compute the number of steps the job will run for given its duration.
-        key = (job_type, scale_factor)
-        assert(key in self._oracle_throughputs['v100'])
-        num_steps = \
-            (run_time *
-             self._oracle_throughputs['v100'][key]['null'])
-        assert(num_steps > 0)
-
-        # Optionally assign a priority to the job.
-        priority_weight = 1.0
-        if generate_multi_priority_jobs:
-            r = self._job_generator.uniform(0, 1)
-            if 0.0 <= r <= 0.2:
-                priority_weight = 5.0
-
-        # Optionally assign an SLO to the job.
-        SLO = None
-        if self._SLOs is not None:
-            r = self._SLO_generator.uniform(0, 1)
-            if 0.0 <= r < 0.33:
-                SLO = 1.2
-            elif 0.33 <= r < 0.67:
-                SLO = 2.0
-            else:
-                SLO = 10.0
-
-        job = Job(job_id=None,
-                  job_type=job_type,
-                  command=command,
-                  num_steps_arg=job_template.num_steps_arg,
-                  total_steps=num_steps,
-                  duration=run_time,
-                  scale_factor=scale_factor,
-                  priority_weight=priority_weight,
-                  SLO=SLO)
-
-        return job
-
     def simulate(self, cluster_spec, arrival_times=None, jobs=None,
                  measure_steady_state_jobs=False, lam=None,
                  jobs_to_complete=None,
@@ -1201,6 +1117,7 @@ class Scheduler:
         current_round_start_time = 0
         current_round_end_time = None
         window_start_time = None
+        SLO_generator = self._SLO_generator if self._SLOs is not None else None
 
         # Set up the cluster according to the provided spec.
         worker_types = sorted([worker_type for worker_type in cluster_spec])
@@ -1231,10 +1148,15 @@ class Scheduler:
             for worker_type in worker_types:
                 num_remaining_workers = cluster_spec[worker_type]
                 while num_remaining_workers > 0:
-                    job = self._generate_job(
-                        fixed_job_duration=fixed_job_duration,
-                        generate_multi_gpu_jobs=generate_multi_gpu_jobs,
-                        generate_multi_priority_jobs=generate_multi_priority_jobs)
+                    job = utils.generate_job(
+                            throughputs=self._oracle_throughputs,
+                            reference_worker_type='v100',
+                            rng=self._job_generator,
+                            job_id=None,
+                            fixed_job_duration=fixed_job_duration,
+                            generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                            generate_multi_priority_jobs=generate_multi_priority_jobs,
+                            SLO_rng=SLO_generator)
                     if ((jobs_to_complete is None or
                          window_start_time is not None) and
                         output_trace_file is not None):
@@ -1350,10 +1272,15 @@ class Scheduler:
                     if num_total_jobs is not None:
                         if num_jobs_generated >= num_total_jobs:
                             break
-                    job = self._generate_job(
-                        fixed_job_duration=fixed_job_duration,
-                        generate_multi_gpu_jobs=generate_multi_gpu_jobs,
-                        generate_multi_priority_jobs=generate_multi_priority_jobs)
+                    job = utils.generate_job(
+                            throughputs=self._oracle_throughputs,
+                            reference_worker_type='v100',
+                            rng=self._job_generator,
+                            job_id=None,
+                            fixed_job_duration=fixed_job_duration,
+                            generate_multi_gpu_jobs=generate_multi_gpu_jobs,
+                            generate_multi_priority_jobs=generate_multi_priority_jobs,
+                            SLO_rng=SLO_generator)
                     num_jobs_generated += 1
                     self._all_jobs.append((next_job_arrival_time, job))
                     job_id = self.add_job(job, timestamp=next_job_arrival_time)

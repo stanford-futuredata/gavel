@@ -3,14 +3,154 @@ from datetime import datetime
 import json
 import os
 import pickle
+import random
 import re
 import socket
 import subprocess
 
-import job
+from job import Job
+from job_table import JobTable
 from policies import allox, fifo, finish_time_fairness, gandiva, isolated, \
     max_min_fairness, max_min_fairness_water_filling, max_sum_throughput, \
     min_total_duration
+
+def _generate_scale_factor(rng):
+    # Sample the scale factor from the Philly distribution.
+    scale_factor = 1
+    r = rng.uniform(0, 1)
+    if 0.7 <= r <= 0.8:
+        scale_factor = 2
+    elif 0.8 <= r <= 0.95:
+        scale_factor = 4
+    elif 0.95 <= r:
+        scale_factor = 8
+    return scale_factor
+
+def _generate_duration(rng):
+    # Sample the job duration from the Philly distribution.
+    if rng.random() >= 0.8:
+        run_time = 60 * (10 ** rng.uniform(3, 4))
+    else:
+        run_time = 60 * (10 ** rng.uniform(1.5, 3))
+    return run_time
+
+def generate_job(throughputs, reference_worker_type='v100', rng=None,
+                 job_id=None, fixed_job_duration=None,
+                 generate_multi_gpu_jobs=False,
+                 generate_multi_priority_jobs=False, run_dir=None,
+                 scale_factor_generator_func=_generate_scale_factor,
+                 duration_generator_func=_generate_duration,
+                 scale_factor_rng=None, duration_rng=None, SLO_rng=None,
+                 always_generate_scale_factor=True):
+    """Generates a new job.
+
+       Args:
+         throughputs: A dict containing pre-measured throughputs.
+         reference_worker_type: The worker type to use when calculating steps.
+         rng: A random number generator for selecting job parameters.
+         job_id: The job's ID.
+         fixed_job_duration: If set, fixes the duration to the specified value.
+         generate_multi_gpu_jobs: If set, generate a scale factor >= 1.
+         generate_multi_priority_jobs: If set, generate a priority >= 1.
+         run_dir: The directory to run the job from.
+         scale_factor_generator_func: A function that accepts an RNG parameter
+                                      and returns a job size.
+         duration_generator_func: A function that accepts an RNG parameter and
+                                  returns a job duration in seconds.
+         scale_factor_rng: A random number generator specifically for
+                           generating scale factors.
+         duration_rng: A random number generator specifically for generating
+                       durations.
+         SLO_rng: If set, generate an SLO >= 1 using this RNG.
+         always_generate_scale_factor: If set, generate a scale factor
+                                       regardless of whether user has
+                                       requested multi-GPU jobs.
+      Returns:
+        The generated Job.
+    """
+
+    if rng is None:
+        rng = random.Random()
+    if scale_factor_rng is None:
+        scale_factor_rng = rng
+    if duration_rng is None:
+        duration_rng = rng
+
+    job_template = None
+
+    if always_generate_scale_factor:
+        scale_factor = scale_factor_generator_func(scale_factor_rng)
+    else:
+        # NOTE: We select the job template here to maintain backwards
+        # compatability with scripts/utils/generate_trace.py
+        job_template = rng.choice(JobTable)
+        if generate_multi_gpu_jobs and job_template.distributed:
+            scale_factor = scale_factor_generator_func(scale_factor_rng)
+        else:
+            scale_factor = 1
+
+    if fixed_job_duration:
+        run_time = fixed_job_duration
+    else:
+        run_time = duration_generator_func(duration_rng)
+    if not generate_multi_gpu_jobs:
+        scale_factor = 1
+    assert(run_time > 0)
+    assert(scale_factor >= 1 and scale_factor <= 8)
+
+    # Sample the job type.
+    if job_template is None:
+        while True:
+            job_template = rng.choice(JobTable)
+            if (scale_factor == 1 or
+                (scale_factor > 1 and job_template.distributed)):
+                break
+    job_type = job_template.model
+
+    # Complete the job command with the run directory.
+    command = job_template.command
+    if run_dir is not None:
+        if job_template.needs_data_dir:
+            command = command % (run_dir, run_dir)
+        else:
+            command = command % (run_dir)
+
+    # Compute the number of steps the job will run for given its duration.
+    key = (job_type, scale_factor)
+    assert(key in throughputs[reference_worker_type])
+    num_steps = run_time * throughputs[reference_worker_type][key]['null']
+    assert(num_steps > 0)
+
+    # Optionally assign a priority to the job.
+    priority_weight = 1.0
+    if generate_multi_priority_jobs:
+        r = rng.uniform(0, 1)
+        if 0.0 <= r <= 0.2:
+            priority_weight = 5.0
+
+    # Optionally assign an SLO to the job.
+    SLO = None
+    if SLO_rng is not None:
+        r = SLO_rng.uniform(0, 1)
+        if 0.0 <= r < 0.33:
+            SLO = 1.2
+        elif 0.33 <= r < 0.67:
+            SLO = 2.0
+        else:
+            SLO = 10.0
+
+    job = Job(job_id=job_id,
+              job_type=job_type,
+              command=command,
+              num_steps_arg=job_template.num_steps_arg,
+              total_steps=num_steps,
+              duration=run_time,
+              scale_factor=scale_factor,
+              priority_weight=priority_weight,
+              SLO=SLO,
+              needs_data_dir=job_template.needs_data_dir)
+
+    return job
 
 def load_philly_job_distribution():
     with open('philly_job_distribution.pickle', 'rb') as f:
@@ -367,16 +507,16 @@ def parse_trace(trace_file):
              scale_factor, priority_weight, SLO,
              arrival_time) = line.split('\t')
             assert(int(scale_factor) >= 1)
-            jobs.append(job.Job(job_id=None,
-                                job_type=job_type,
-                                command=command,
-                                needs_data_dir=bool(int(needs_data_dir)),
-                                num_steps_arg=num_steps_arg,
-                                total_steps=int(total_steps),
-                                duration=None,
-                                scale_factor=int(scale_factor),
-                                priority_weight=float(priority_weight),
-                                SLO=float(SLO)))
+            jobs.append(Job(job_id=None,
+                            job_type=job_type,
+                            command=command,
+                            needs_data_dir=bool(int(needs_data_dir)),
+                            num_steps_arg=num_steps_arg,
+                            total_steps=int(total_steps),
+                            duration=None,
+                            scale_factor=int(scale_factor),
+                            priority_weight=float(priority_weight),
+                            SLO=float(SLO)))
             arrival_times.append(float(arrival_time))
     return jobs, arrival_times
 
