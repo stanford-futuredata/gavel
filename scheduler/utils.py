@@ -40,13 +40,14 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
                  generate_multi_priority_jobs=False, SLO_rng=None,
                  run_dir='/tmp',
                  scale_factor_generator_func=_generate_scale_factor,
-                 duration_generator_func=_generate_duration):
+                 duration_generator_func=_generate_duration,
+                 scale_factor_rng=None, always_generate_scale_factor=True):
     """Generates a new job.
 
        Args:
          throughputs: A dict containing pre-measured throughputs.
          reference_worker_type: The worker type to use when calculating steps.
-         rng: A random number generator for selecting job type and size.
+         rng: A random number generator for selecting job parameters.
          job_id: The job's ID.
          fixed_job_duration: If set, fixes the duration to the specified value.
          generate_multi_gpu_jobs: If set, generate a scale factor >= 1.
@@ -57,15 +58,33 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
                                       and returns a job size.
          duration_generator_func: A function that accepts an RNG parameter and
                                   returns a job duration in seconds.
-
+         scale_factor_rng: A random number generator specifically for
+                           generating scale factors.
+         always_generate_scale_factor: If set, generate a scale factor
+                                       regardless of whether user has
+                                       requested multi-GPU jobs.
       Returns:
         The generated Job.
     """
 
     if rng is None:
         rng = random.Random()
+    if scale_factor_rng is None:
+        scale_factor_rng = rng
 
-    scale_factor = scale_factor_generator_func(rng)
+    job_template = None
+
+    if always_generate_scale_factor:
+        scale_factor = scale_factor_generator_func(scale_factor_rng)
+    else:
+        #NOTE: We select the job template here to maintain backwards
+        # compatability with scripts/utils/generate_trace.py
+        job_template = rng.choice(JobTable)
+        if generate_multi_gpu_jobs and job_template.distributed:
+            scale_factor = scale_factor_generator_func(scale_factor_rng)
+        else:
+            scale_factor = 1
+
     if fixed_job_duration:
         run_time = fixed_job_duration
     else:
@@ -76,11 +95,12 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
     assert(scale_factor >= 1 and scale_factor <= 8)
 
     # Sample the job type.
-    while True:
-        job_template = rng.choice(JobTable)
-        if (scale_factor == 1 or
-            (scale_factor > 1 and job_template.distributed)):
-            break
+    if job_template is None:
+        while True:
+            job_template = rng.choice(JobTable)
+            if (scale_factor == 1 or
+                (scale_factor > 1 and job_template.distributed)):
+                break
     job_type = job_template.model
 
     # Complete the job command with the run directory.

@@ -16,12 +16,24 @@ def generate_interarrival_time(rng, lam):
 def generate_duration(durations, rng):
     return 3600 * rng.choice(durations)
 
+def generate_scale_factor(rng):
+    scale_factor = 1
+    r = rng.uniform(0, 1)
+    if 0.7 <= r <= 0.8:
+        scale_factor = 2
+    elif 0.8 <= r:
+        scale_factor = 4
+    return scale_factor
+
 def main(args):
     job_generator = random.Random()
     job_generator.seed(args.seed)
 
     interarrival_time_generator = random.Random()
     interarrival_time_generator.seed(args.seed + 1)
+
+    scale_factor_generator = random.Random()
+    scale_factor_generator.seed(args.seed + 3)
 
     throughputs = utils.read_all_throughputs_json_v2(args.throughputs_file)
 
@@ -40,7 +52,10 @@ def main(args):
                     fixed_job_duration=None,
                     generate_multi_gpu_jobs=args.generate_multi_gpu_jobs,
                     generate_multi_priority_jobs=args.generate_multi_priority_jobs,
-                    duration_generator_func=duration_generator_func)
+		    scale_factor_generator_func=generate_scale_factor,
+                    duration_generator_func=duration_generator_func,
+                    scale_factor_rng=scale_factor_generator,
+                    always_generate_scale_factor=False)
             if prev_arrival_time is None:
                 arrival_time = 0
             elif args.lam > 0:
