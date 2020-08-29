@@ -55,7 +55,7 @@ def main(args):
                     fixed_job_duration=None,
                     generate_multi_gpu_jobs=args.generate_multi_gpu_jobs,
                     generate_multi_priority_jobs=args.generate_multi_priority_jobs,
-		    scale_factor_generator_func=generate_scale_factor,
+                    scale_factor_generator_func=generate_scale_factor,
                     duration_generator_func=duration_generator_func,
                     scale_factor_rng=scale_factor_generator,
                     duration_rng=duration_generator,
