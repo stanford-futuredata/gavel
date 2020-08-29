@@ -34,7 +34,7 @@ def main(args):
         for i in range(args.num_jobs):
             job = utils.generate_job(
                     throughputs=throughputs,
-                    worker_type='v100',
+                    reference_worker_type='v100',
                     rng=job_generator,
                     job_id=None,
                     fixed_job_duration=None,

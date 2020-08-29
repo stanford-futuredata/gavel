@@ -34,8 +34,9 @@ def _generate_duration(rng):
         run_time = 60 * (10 ** rng.uniform(1.5, 3))
     return run_time
 
-def generate_job(throughputs, worker_type='v100', rng=None, job_id=None,
-                 fixed_job_duration=None, generate_multi_gpu_jobs=False,
+def generate_job(throughputs, reference_worker_type='v100', rng=None,
+                 job_id=None, fixed_job_duration=None,
+                 generate_multi_gpu_jobs=False,
                  generate_multi_priority_jobs=False, SLO_rng=None,
                  run_dir='/tmp',
                  scale_factor_generator_func=_generate_scale_factor,
@@ -44,7 +45,7 @@ def generate_job(throughputs, worker_type='v100', rng=None, job_id=None,
 
        Args:
          throughputs: A dict containing pre-measured throughputs.
-         worker_type: The worker type to use when calculating steps.
+         reference_worker_type: The worker type to use when calculating steps.
          rng: A random number generator for selecting job type and size.
          job_id: The job's ID.
          fixed_job_duration: If set, fixes the duration to the specified value.
@@ -90,8 +91,8 @@ def generate_job(throughputs, worker_type='v100', rng=None, job_id=None,
 
     # Compute the number of steps the job will run for given its duration.
     key = (job_type, scale_factor)
-    assert(key in throughputs[worker_type])
-    num_steps = run_time * throughputs[worker_type][key]['null']
+    assert(key in throughputs[reference_worker_type])
+    num_steps = run_time * throughputs[reference_worker_type][key]['null']
     assert(num_steps > 0)
 
     # Optionally assign a priority to the job.

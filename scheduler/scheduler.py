@@ -1150,7 +1150,7 @@ class Scheduler:
                 while num_remaining_workers > 0:
                     job = utils.generate_job(
                             throughputs=self._oracle_throughputs,
-                            worker_type='v100',
+                            reference_worker_type='v100',
                             rng=self._job_generator,
                             job_id=None,
                             fixed_job_duration=fixed_job_duration,
@@ -1274,7 +1274,7 @@ class Scheduler:
                             break
                     job = utils.generate_job(
                             throughputs=self._oracle_throughputs,
-                            worker_type='v100',
+                            reference_worker_type='v100',
                             rng=self._job_generator,
                             job_id=None,
                             fixed_job_duration=fixed_job_duration,

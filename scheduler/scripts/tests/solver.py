@@ -135,7 +135,7 @@ def main(args):
         job_id = JobIdPair(i, None)
         job = utils.generate_job(
                 throughputs=oracle_throughputs,
-                worker_type='v100',
+                reference_worker_type='v100',
                 rng=rng, job_id=job_id,
                 generate_multi_gpu_jobs=args.generate_multi_gpu_jobs,
                 generate_multi_priority_jobs=args.generate_multi_priority_jobs)
