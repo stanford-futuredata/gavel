@@ -1512,6 +1512,7 @@ class Scheduler:
                 job_descriptions.append(
                         (single_job_id,
                          command,
+                         self._jobs[single_job_id].working_directory,
                          self._jobs[single_job_id].needs_data_dir,
                          self._jobs[single_job_id].num_steps_arg,
                          num_steps))

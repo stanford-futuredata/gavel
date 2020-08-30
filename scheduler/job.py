@@ -1,10 +1,11 @@
 class Job:
-    def __init__(self, job_id, job_type, command, num_steps_arg,
-                 total_steps, duration, scale_factor=1,
+    def __init__(self, job_id, job_type, command, working_directory,
+                 num_steps_arg, total_steps, duration, scale_factor=1,
                  priority_weight=1, SLO=None, needs_data_dir=False):
         self._job_id = job_id
         self._job_type = job_type
         self._command = command
+        self._working_directory = working_directory
         self._needs_data_dir = needs_data_dir
         self._num_steps_arg = num_steps_arg
         self._total_steps = total_steps
@@ -18,14 +19,10 @@ class Job:
 
     def __str__(self):
         SLO = -1 if self._SLO is None else self._SLO
-        return ('%s\t%s\t%s\t%d\t%d\t%d\t%d\t%f' % (self._job_type,
-                                                    self._command,
-                                                    self._num_steps_arg,
-                                                    self._needs_data_dir,
-                                                    self._total_steps,
-                                                    self._scale_factor,
-                                                    self._priority_weight,
-                                                    SLO))
+        return ('%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%f' % (
+            self._job_type, self._command, self._working_directory,
+            self._num_steps_arg, self._needs_data_dir, self._total_steps,
+            self._scale_factor, self._priority_weight, SLO))
 
     @staticmethod
     def from_proto(job_proto):
@@ -33,7 +30,8 @@ class Job:
         if job_proto.has_duration:
             duration = job_proto.duration
         return Job(job_proto.job_id, job_proto.job_type, job_proto.command,
-                   job_proto.num_steps_arg, job_proto.num_steps, duration,
+                   job_proto.working_directory, job_proto.num_steps_arg,
+                   job_proto.num_steps, duration,
                    needs_data_dir=job_proto.needs_data_dir)
 
     @property
@@ -47,6 +45,10 @@ class Job:
     @property
     def command(self):
         return self._command
+
+    @property
+    def working_directory(self):
+        return self._working_directory
 
     @property
     def needs_data_dir(self):

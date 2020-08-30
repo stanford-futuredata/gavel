@@ -142,6 +142,7 @@ def generate_job(throughputs, reference_worker_type='v100', rng=None,
     job = Job(job_id=job_id,
               job_type=job_type,
               command=command,
+              working_directory=job_template.working_directory,
               num_steps_arg=job_template.num_steps_arg,
               total_steps=num_steps,
               duration=run_time,
@@ -503,13 +504,14 @@ def parse_trace(trace_file):
     arrival_times = []
     with open(trace_file, 'r') as f:
         for line in f:
-            (job_type, command, num_steps_arg, needs_data_dir, total_steps,
-             scale_factor, priority_weight, SLO,
+            (job_type, command, working_directory, num_steps_arg,
+             needs_data_dir, total_steps, scale_factor, priority_weight, SLO,
              arrival_time) = line.split('\t')
             assert(int(scale_factor) >= 1)
             jobs.append(Job(job_id=None,
                             job_type=job_type,
                             command=command,
+                            working_directory=working_directory,
                             needs_data_dir=bool(int(needs_data_dir)),
                             num_steps_arg=num_steps_arg,
                             total_steps=int(total_steps),

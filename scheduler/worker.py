@@ -94,6 +94,7 @@ class Worker:
 
     def _signal_handler(self, sig, frame):
         self._dispatcher.shutdown()
+        sys.exit(0)
 
     def _reset_callback(self):
         self._dispatcher.reset()
