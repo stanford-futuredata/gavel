@@ -149,13 +149,10 @@ class Dispatcher:
                    '--sched_port %d' % (command, job.job_id, worker_id,
                                         self._sched_addr, self._sched_port))
 
-        # TODO: Enable this code after removing "cd ___" from command
-        """
         if self._numa_available:
             cpus = self._numa_cpu_map[gpu_id]
             cpus_str = ','.join([str(cpu) for cpu in cpus])
             command = 'numactl --physcpubind=%s \"%s\"' % (cpus_str, command)
-        """
 
         return command
 
