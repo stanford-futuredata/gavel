@@ -1,20 +1,20 @@
-Transformer (batch size 128)	python3 train.py -data %s/data/translation/multi30k.atok.low.pt-batch_size 128 -proj_share_weight	gpusched/workloads/pytorch/translation	-step	1	346	2	1	-1.000000	0
-Recommendation (batch size 8192)	python3 train.py --data_dir %s/data/ml-20m/pro_sg/ --batch_size 8192	gpusched/workloads/pytorch/recommendation	-n	1	36	1	1	-1.000000	0
-Transformer (batch size 256)	python3 train.py -data %s/data/translation/multi30k.atok.low.pt-batch_size 256 -proj_share_weight	gpusched/workloads/pytorch/translation	-step	1	102	1	1	-1.000000	0
-ResNet-18 (batch size 32)	python3 main.py --data_dir=%s/data/cifar10 --batch_size 32	gpusched/workloads/pytorch/image_classification/cifar10	--num_steps	1	3948	2	1	-1.000000	0
-ResNet-50 (batch size 16)	python3 main.py -j 8 -a resnet50 -b 16 %s/data/imagenet/pytorch	gpusched/workloads/pytorch/image_classification/imagenet	--num_minibatches	1	170	1	1	-1.000000	0
-LM (batch size 10)	python main.py --cuda --data %s/data/wikitext2 --batch_size 10	gpusched/workloads/pytorch/language_modeling	--steps	1	8601	1	1	-1.000000	0
-LM (batch size 5)	python main.py --cuda --data %s/data/wikitext2 --batch_size 5	gpusched/workloads/pytorch/language_modeling	--steps	1	10027	1	1	-1.000000	0
-Transformer (batch size 128)	python3 train.py -data %s/data/translation/multi30k.atok.low.pt-batch_size 128 -proj_share_weight	gpusched/workloads/pytorch/translation	-step	1	346	1	1	-1.000000	0
-CycleGAN	python3 cyclegan.py --dataset_path %s/data/monet2photo --decay_epoch 0	gpusched/workloads/pytorch/cyclegan	--n_steps	1	295	1	1	-1.000000	0
-Transformer (batch size 16)	python3 train.py -data %s/data/translation/multi30k.atok.low.pt-batch_size 16 -proj_share_weight	gpusched/workloads/pytorch/translation	-step	1	770	1	1	-1.000000	0
-LM (batch size 5)	python main.py --cuda --data %s/data/wikitext2 --batch_size 5	gpusched/workloads/pytorch/language_modeling	--steps	1	10027	2	1	-1.000000	0
-Transformer (batch size 64)	python3 train.py -data %s/data/translation/multi30k.atok.low.pt-batch_size 64 -proj_share_weight	gpusched/workloads/pytorch/translation	-step	1	574	1	1	-1.000000	0
-LM (batch size 40)	python main.py --cuda --data %s/data/wikitext2 --batch_size 40	gpusched/workloads/pytorch/language_modeling	--steps	1	4303	1	1	-1.000000	0
-ResNet-50 (batch size 32)	python3 main.py -j 8 -a resnet50 -b 32 %s/data/imagenet/pytorch	gpusched/workloads/pytorch/image_classification/imagenet	--num_minibatches	1	595	1	1	-1.000000	0
-LM (batch size 10)	python main.py --cuda --data %s/data/wikitext2 --batch_size 10	gpusched/workloads/pytorch/language_modeling	--steps	1	8601	1	1	-1.000000	0
-ResNet-18 (batch size 16)	python3 main.py --data_dir=%s/data/cifar10 --batch_size 16	gpusched/workloads/pytorch/image_classification/cifar10	--num_steps	1	1019	1	1	-1.000000	0
-Transformer (batch size 16)	python3 train.py -data %s/data/translation/multi30k.atok.low.pt-batch_size 16 -proj_share_weight	gpusched/workloads/pytorch/translation	-step	1	770	1	1	-1.000000	0
-ResNet-18 (batch size 16)	python3 main.py --data_dir=%s/data/cifar10 --batch_size 16	gpusched/workloads/pytorch/image_classification/cifar10	--num_steps	1	1019	1	1	-1.000000	0
-Recommendation (batch size 8192)	python3 train.py --data_dir %s/data/ml-20m/pro_sg/ --batch_size 8192	gpusched/workloads/pytorch/recommendation	-n	1	36	1	1	-1.000000	0
-ResNet-18 (batch size 16)	python3 main.py --data_dir=%s/data/cifar10 --batch_size 16	gpusched/workloads/pytorch/image_classification/cifar10	--num_steps	1	1817	1	1	-1.000000	0
+Transformer (batch size 128)	python3 train.py -data %s/translation/multi30k.atok.low.pt-batch_size 128 -proj_share_weight	translation	-step	1	346	2	1	-1.000000	0
+Recommendation (batch size 8192)	python3 train.py --data_dir %s/ml-20m/pro_sg/ --batch_size 8192	recommendation	-n	1	36	1	1	-1.000000	0
+Transformer (batch size 256)	python3 train.py -data %s/translation/multi30k.atok.low.pt-batch_size 256 -proj_share_weight	translation	-step	1	102	1	1	-1.000000	0
+ResNet-18 (batch size 32)	python3 main.py --data_dir=%s/cifar10 --batch_size 32	image_classification/cifar10	--num_steps	1	3948	2	1	-1.000000	0
+ResNet-50 (batch size 16)	python3 main.py -j 8 -a resnet50 -b 16 %s/imagenet/pytorch	image_classification/imagenet	--num_minibatches	1	170	1	1	-1.000000	0
+LM (batch size 10)	python main.py --cuda --data %s/wikitext2 --batch_size 10	language_modeling	--steps	1	8601	1	1	-1.000000	0
+LM (batch size 5)	python main.py --cuda --data %s/wikitext2 --batch_size 5	language_modeling	--steps	1	10027	1	1	-1.000000	0
+Transformer (batch size 128)	python3 train.py -data %s/translation/multi30k.atok.low.pt-batch_size 128 -proj_share_weight	translation	-step	1	346	1	1	-1.000000	0
+CycleGAN	python3 cyclegan.py --dataset_path %s/monet2photo --decay_epoch 0	cyclegan	--n_steps	1	295	1	1	-1.000000	0
+Transformer (batch size 16)	python3 train.py -data %s/translation/multi30k.atok.low.pt-batch_size 16 -proj_share_weight	translation	-step	1	770	1	1	-1.000000	0
+LM (batch size 5)	python main.py --cuda --data %s/wikitext2 --batch_size 5	language_modeling	--steps	1	10027	2	1	-1.000000	0
+Transformer (batch size 64)	python3 train.py -data %s/translation/multi30k.atok.low.pt-batch_size 64 -proj_share_weight	translation	-step	1	574	1	1	-1.000000	0
+LM (batch size 40)	python main.py --cuda --data %s/wikitext2 --batch_size 40	language_modeling	--steps	1	4303	1	1	-1.000000	0
+ResNet-50 (batch size 32)	python3 main.py -j 8 -a resnet50 -b 32 %s/imagenet/pytorch	image_classification/imagenet	--num_minibatches	1	595	1	1	-1.000000	0
+LM (batch size 10)	python main.py --cuda --data %s/wikitext2 --batch_size 10	language_modeling	--steps	1	8601	1	1	-1.000000	0
+ResNet-18 (batch size 16)	python3 main.py --data_dir=%s/cifar10 --batch_size 16	image_classification/cifar10	--num_steps	1	1019	1	1	-1.000000	0
+Transformer (batch size 16)	python3 train.py -data %s/translation/multi30k.atok.low.pt-batch_size 16 -proj_share_weight	translation	-step	1	770	1	1	-1.000000	0
+ResNet-18 (batch size 16)	python3 main.py --data_dir=%s/cifar10 --batch_size 16	image_classification/cifar10	--num_steps	1	1019	1	1	-1.000000	0
+Recommendation (batch size 8192)	python3 train.py --data_dir %s/ml-20m/pro_sg/ --batch_size 8192	recommendation	-n	1	36	1	1	-1.000000	0
+ResNet-18 (batch size 16)	python3 main.py --data_dir=%s/cifar10 --batch_size 16	image_classification/cifar10	--num_steps	1	1817	1	1	-1.000000	0
