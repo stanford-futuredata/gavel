@@ -11,10 +11,10 @@ matrix_completion
 numa
 opencv-python
 pandas
-pillow==6.1
+pillow
 preconditions
 seaborn
 setproctitle
 sklearn
-torch==1.2.0
-torchvision==0.4.0
+torch==1.4.0
+torchvision==0.5.0
