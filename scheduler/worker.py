@@ -18,7 +18,7 @@ CHECKPOINT_DIR_NAME = 'checkpoints'
 
 class Worker:
     def __init__(self, worker_type, sched_addr, sched_port, worker_port,
-                 num_gpus, run_dir):
+                 num_gpus, run_dir, data_dir, checkpoint_dir):
         num_available_gpus = utils.get_num_gpus()
         if num_gpus > num_available_gpus:
             raise ValueError('%d GPUs requested active, but only %d total '
@@ -58,7 +58,6 @@ class Worker:
         if error:
             raise RuntimeError(error)
 
-        checkpoint_dir = os.path.join(run_dir, CHECKPOINT_DIR_NAME)
         if not os.path.isdir(checkpoint_dir):
             # Set up a new checkpoint directory if does not already exist.
             os.mkdir(checkpoint_dir)
@@ -68,15 +67,17 @@ class Worker:
                 if os.path.isdir(os.path.join(checkpoint_dir, dirname)):
                     shutil.rmtree(os.path.join(checkpoint_dir, dirname))
 
+        use_mps = worker_type == 'v100'
         self._dispatcher = dispatcher.Dispatcher(self._round_duration,
                                                  self._gpu_ids,
                                                  self._worker_rpc_client,
                                                  sched_addr,
                                                  sched_port,
                                                  run_dir,
+                                                 data_dir,
                                                  checkpoint_dir,
                                                  self._write_queue,
-                                                 use_mps=(worker_type == 'v100'))
+                                                 use_mps=use_mps)
 
         self._server_thread.join()
 
@@ -125,6 +126,10 @@ if __name__=='__main__':
                         help='Number of available GPUs')
     parser.add_argument('--run_dir', type=str, required=True,
                         help='Directory to run jobs from')
+    parser.add_argument('--data_dir', type=str, required=True,
+                        help='Directory where data is stored')
+    parser.add_argument('--checkpoint_dir', type=str, required=True,
+                        help='Directory where checkpoints is stored')
     args = parser.parse_args()
     opt_dict = vars(args)
 

@@ -16,7 +16,7 @@ CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
 
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
-                 sched_addr, sched_port, run_dir, checkpoint_dir,
+                 sched_addr, sched_port, run_dir, data_dir, checkpoint_dir,
                  write_queue, use_mps=False):
         self._thread_pool = ThreadPool()
         self._round_duration = round_duration
@@ -24,6 +24,7 @@ class Dispatcher:
         self._sched_addr = sched_addr
         self._sched_port = sched_port
         self._run_dir = run_dir
+        self._data_dir = data_dir
         self._checkpoint_dir = checkpoint_dir
         self._gpu_ids = gpu_ids
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
@@ -91,7 +92,7 @@ class Dispatcher:
                 os.mkdir(checkpoint_dir)
 
         if job.needs_data_dir:
-            command = job.command % (self._run_dir)
+            command = job.command % (self._data_dir)
 
         command = '%s --local_rank %d' % (command, gpu_id)
         command = '%s %s %d' % (command, job.num_steps_arg, job.total_steps)
