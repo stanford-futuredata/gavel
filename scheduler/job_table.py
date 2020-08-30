@@ -4,7 +4,7 @@ import sys
 from job_template import JobTemplate
 
 def resnet18(batch_size, gavel_dir):
-    model = 'ResNet18 (batch size %d)' % (batch_size)
+    model = 'ResNet-18 (batch size %d)' % (batch_size)
     command = 'python3 main.py --data_dir=%s/data/cifar10'
     command += ' --batch_size %d' % (batch_size)
     working_directory = \
@@ -15,7 +15,7 @@ def resnet18(batch_size, gavel_dir):
                        num_steps_arg=num_steps_arg, distributed=True)
 
 def resnet50(batch_size, gavel_dir):
-    model = 'ResNet50 (batch size %d)' % (batch_size)
+    model = 'ResNet-50 (batch size %d)' % (batch_size)
     command = 'python3 main.py -j 8 -a resnet50 -b %d' % (batch_size)
     command += ' %s/data/imagenet/pytorch'
     working_directory = \

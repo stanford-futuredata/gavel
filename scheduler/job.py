@@ -1,8 +1,7 @@
 class Job:
     def __init__(self, job_id, job_type, command, working_directory,
                  num_steps_arg, total_steps, duration, scale_factor=1,
-                 priority_weight=1, SLO=None, needs_data_dir=False,
-                 working_directory=''):
+                 priority_weight=1, SLO=None, needs_data_dir=False):
         self._job_id = job_id
         self._job_type = job_type
         self._command = command
@@ -31,8 +30,8 @@ class Job:
         if job_proto.has_duration:
             duration = job_proto.duration
         return Job(job_proto.job_id, job_proto.job_type, job_proto.command,
-                   working_directory=job_proto.working_directory,
-                   job_proto.num_steps_arg, job_proto.num_steps, duration,
+                   job_proto.working_directory, job_proto.num_steps_arg,
+                   job_proto.num_steps, duration,
                    needs_data_dir=job_proto.needs_data_dir)
 
     @property

@@ -15,11 +15,12 @@ message JobDescription {
     uint64 job_id = 1;
     string job_type = 2;
     string command = 3;
-    bool needs_data_dir = 4;
-    string num_steps_arg = 5;
-    uint64 num_steps = 6;
-    bool has_duration = 7;
-    uint64 duration = 8;
+    string working_directory = 4;
+    bool needs_data_dir = 5;
+    string num_steps_arg = 6;
+    uint64 num_steps = 7;
+    bool has_duration = 8;
+    uint64 duration = 9;
 }
 
 message RunRequest {
