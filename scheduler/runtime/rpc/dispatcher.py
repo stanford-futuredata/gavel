@@ -152,7 +152,7 @@ class Dispatcher:
         if self._numa_available:
             cpus = self._numa_cpu_map[gpu_id]
             cpus_str = ','.join([str(cpu) for cpu in cpus])
-            command = 'numactl --physcpubind=%s \"%s\"' % (cpus_str, command)
+            command = 'numactl --physcpubind=%s %s' % (cpus_str, command)
 
         return command
 
