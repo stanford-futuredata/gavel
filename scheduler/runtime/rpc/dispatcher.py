@@ -1,4 +1,6 @@
 from multiprocessing.pool import ThreadPool
+import math
+import numa
 import os
 import queue
 import re
@@ -13,6 +15,7 @@ import utils
 
 CUDA_MPS_PIPE_DIRECTORY = '/tmp/nvidia-mps'
 CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
+MAX_CPUS_PER_GPU = 8
 
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
@@ -33,6 +36,7 @@ class Dispatcher:
         self._lock = threading.Lock()
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
+        self._configure_numa()
         self._use_mps = use_mps
         if use_mps:
             self._mps_initially_enabled = self._mps_status()
@@ -42,6 +46,50 @@ class Dispatcher:
                 mps_enabled = self._enable_mps()
                 if not mps_enabled:
                     raise RuntimeError('Failed to enable CUDA MPS')
+
+    def _configure_numa(self):
+        self._numa_available = numa.available()
+        if not self._numa_available:
+            return
+        num_numa_nodes = numa.get_max_node() + 1
+        self._numa_cpu_map = {}
+        num_gpus = len(self._gpu_ids)
+
+        # Calculate how many CPUs to allocate for each GPU. Ensure this number
+        # is a power of 2.
+        num_cpus = 0
+        for i in range(num_numa_nodes):
+            num_cpus += len(numa.node_to_cpus(i))
+        num_cpus_per_gpu = min(MAX_CPUS_PER_GPU, max(num_cpus // num_gpus, 1))
+        num_cpus_per_gpu = pow(2, round(math.log(num_cpus_per_gpu, 2)))
+
+        # Find blocks of contiguous CPUs.
+        contiguous_blocks = []
+        for i in range(num_numa_nodes):
+            cpus = sorted(numa.node_to_cpus(i))
+            contiguous_block = [cpus[0]]
+            for j in range(1, len(cpus)):
+                if (cpus[j] - cpus[j-1] == 1 and
+                    len(contiguous_block) < num_cpus_per_gpu):
+                    contiguous_block.append(cpus[j])
+                else:
+                    contiguous_blocks.append((contiguous_block,
+                                              len(contiguous_block)))
+                    contiguous_block = [cpus[j]]
+            if len(contiguous_block) > 0:
+                contiguous_blocks.append((contiguous_block,
+                                          len(contiguous_block)))
+        contiguous_blocks.sort(key=lambda x: x[-1], reverse=True)
+
+        # Assign CPUs to GPUs.
+        block_idx = 0
+        for i in range(num_gpus):
+            self._numa_cpu_map[i] = []
+            while len(self._numa_cpu_map[i]) < num_cpus_per_gpu:
+                self._numa_cpu_map[i] += contiguous_blocks[block_idx][0]
+                block_idx = (block_idx + 1) % len(contiguous_blocks)
+            self._write_queue.put(
+                'GPU %d assigned CPUs %s' % (i, str(self._numa_cpu_map[i])))
 
     def _mps_status(self):
         """Returns True if MPS is running."""
@@ -100,6 +148,12 @@ class Dispatcher:
         command = ('%s --job_id %d --worker_id %d --sched_addr %s '
                    '--sched_port %d' % (command, job.job_id, worker_id,
                                         self._sched_addr, self._sched_port))
+
+        if self._numa_available:
+            cpus = self._numa_cpu_map[gpu_id]
+            cpus_str = ','.join([str(cpu) for cpu in cpus])
+            command = 'numactl --physcpubind=%s %s' % (cpus_str, command)
+
         return command
 
     def _get_steps_and_execution_time(self, job_id, worker_id):
