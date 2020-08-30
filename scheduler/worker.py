@@ -136,4 +136,5 @@ if __name__=='__main__':
     # TODO: Just pass args directly to maintain consistency with other code.
     worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
                     opt_dict['sched_port'], opt_dict['worker_port'],
-                    opt_dict['num_gpus'], opt_dict['run_dir'])
+                    opt_dict['num_gpus'], opt_dict['run_dir'],
+                    opt_dict['data_dir'], opt_dict['checkpoint_dir'])
