@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from multiprocessing.pool import ThreadPool
 import os
 import queue
@@ -93,8 +91,6 @@ class Dispatcher:
                 os.mkdir(checkpoint_dir)
 
         if job.needs_data_dir:
-            command = job.command % (self._run_dir, self._run_dir)
-        else:
             command = job.command % (self._run_dir)
 
         command = '%s --local_rank %d' % (command, gpu_id)
@@ -155,10 +151,12 @@ class Dispatcher:
 
     def launch_job(self, job, command, worker_id):
         output = ''
+        cwd = os.path.join(self._run_dir, job.working_directory)
         try:
             proc = subprocess.run(command,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,
+                                  cwd=cwd,
                                   shell=True)
             output = proc.stdout.decode('utf-8').strip()
             completed_steps, execution_time = \

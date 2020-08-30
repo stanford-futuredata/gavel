@@ -508,17 +508,17 @@ def parse_trace(trace_file):
              needs_data_dir, total_steps, scale_factor, priority_weight, SLO,
              arrival_time) = line.split('\t')
             assert(int(scale_factor) >= 1)
-            jobs.append(job.Job(job_id=None,
-                                job_type=job_type,
-                                command=command,
-                                working_directory=working_directory,
-                                needs_data_dir=bool(int(needs_data_dir)),
-                                num_steps_arg=num_steps_arg,
-                                total_steps=int(total_steps),
-                                duration=None,
-                                scale_factor=int(scale_factor),
-                                priority_weight=float(priority_weight),
-                                SLO=float(SLO)))
+            jobs.append(Job(job_id=None,
+                            job_type=job_type,
+                            command=command,
+                            working_directory=working_directory,
+                            needs_data_dir=bool(int(needs_data_dir)),
+                            num_steps_arg=num_steps_arg,
+                            total_steps=int(total_steps),
+                            duration=None,
+                            scale_factor=int(scale_factor),
+                            priority_weight=float(priority_weight),
+                            SLO=float(SLO)))
             arrival_times.append(float(arrival_time))
     return jobs, arrival_times
 
