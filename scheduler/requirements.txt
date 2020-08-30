@@ -8,15 +8,13 @@ gym
 gym[atari]
 matplotlib
 matrix_completion
+numa
 opencv-python
 pandas
-<<<<<<< HEAD
 pillow==6.1
 preconditions
 seaborn
 setproctitle
+sklearn
 torch==1.2.0
 torchvision==0.4.0
-annoy
-numa
-sklearn
