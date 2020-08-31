@@ -52,14 +52,17 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
 
     def Done(self, request, context):
         done_callback = self._callbacks['Done']
-        self._write_queue.put(
-            'Received completion notification '
-            'from worker %d...' % (request.worker_id))
         try:
             if len(request.job_id) > 1:
                 job_id = JobIdPair(request.job_id[0], request.job_id[1])
             else:
                 job_id = JobIdPair(request.job_id[0], None)
+            self._write_queue.put(
+                'Received completion notification: '
+                'Job ID: %s, Worker ID: %d, Num steps: %s, '
+                'Execution time: %s' % (job_id, request.worker_id,
+                                        str(request.num_steps),
+                                        str(request.execution_time)))
             done_callback(job_id, request.worker_id,
                           request.num_steps, request.execution_time)
         except Exception as e:
@@ -89,13 +92,14 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
                                            max_duration=max_duration)
 
     def UpdateLease(self, request, context):
+        job_id = JobIdPair(request.job_id, None)
         self._write_queue.put('Received lease update request: '
                               'job_id=%s, '
                               'worker_id=%d, '
                               'steps=%d, '
                               'duration=%f, '
                               'max_steps=%d,'
-                              'max_duration=%f' % (request.job_id,
+                              'max_duration=%f' % (job_id,
                                                    request.worker_id,
                                                    request.steps,
                                                    request.duration,
@@ -103,19 +107,25 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
                                                    request.max_duration))
 
         update_lease_callback = self._callbacks['UpdateLease']
-        (max_steps, max_duration) = \
-            update_lease_callback(job_id=JobIdPair(request.job_id, None),
-                                  worker_id=request.worker_id,
-                                  steps=request.steps,
-                                  duration=request.duration,
-                                  max_steps=request.max_steps,
-                                  max_duration=request.max_duration)
-        self._write_queue.put('Sending new lease to job %d (worker %d) '
-                              'with max_steps=%d, '
-                              'max_duration=%f' % (request.job_id,
-                                                   request.worker_id,
-                                                   max_steps,
-                                                   max_duration))
+        try:
+            (max_steps, max_duration) = \
+                update_lease_callback(job_id=job_id,
+                                      worker_id=request.worker_id,
+                                      steps=request.steps,
+                                      duration=request.duration,
+                                      max_steps=request.max_steps,
+                                      max_duration=request.max_duration)
+            self._write_queue.put('Sending new lease to job %s (worker %d) '
+                                  'with max_steps=%d, '
+                                  'max_duration=%f' % (job_id,
+                                                       request.worker_id,
+                                                       max_steps,
+                                                       max_duration))
+        except Exception as e:
+            self._write_queue.put(
+                'Could not update lease for job %s: %s' % (job_id, str(e)))
+            max_steps = request.max_steps
+            max_duration = request.max_duration
 
         return i2s_pb2.UpdateLeaseResponse(max_steps=max_steps,
                                            max_duration=max_duration)
