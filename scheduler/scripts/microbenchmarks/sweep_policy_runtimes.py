@@ -26,7 +26,7 @@ def generate_input(num_active_jobs,
     for i in range(num_active_jobs):
         job_id = JobIdPair(i, None)
         jobs[i] = utils.generate_job(throughputs=oracle_throughputs,
-                                     rng = rng,
+                                     rng=rng,
                                      generate_multi_gpu_jobs=generate_multi_gpu_jobs,
                                      generate_multi_priority_jobs=generate_multi_priority_jobs)
         job_type_key = (jobs[i].job_type, jobs[i].scale_factor)
