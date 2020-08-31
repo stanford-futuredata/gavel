@@ -79,7 +79,7 @@ if __name__=='__main__':
     parser.add_argument('--checkpoint_file', default=None,
                         help=('Load checkpoint located at passed in'
                               'checkpoint_file'))
-    parser.add_argument('--time_per_iteration', type=int, default=1920,
+    parser.add_argument('--time_per_iteration', type=int, default=360,
                         help='Time per iteration in seconds')
     parser.add_argument('-s', '--window-start', type=int, default=None,
                         help='measurement window start (job id)')

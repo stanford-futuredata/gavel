@@ -46,7 +46,7 @@ class Scheduler:
 
     # TODO: Make assign_SLOs a configurable parameter from scripts.
     def __init__(self, policy, simulate=False, throughputs_file=None,
-                 seed=0, time_per_iteration=1920, profiling_percentage=1.0,
+                 seed=0, time_per_iteration=360, profiling_percentage=1.0,
                  num_reference_models=len(JobTable),
                  per_instance_type_prices_dir=None,
                  available_clouds=[],

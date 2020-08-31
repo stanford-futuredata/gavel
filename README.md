@@ -32,7 +32,7 @@ cd scheduler; make
 ```
 
 
-## Reproducing Experiments
+## Getting Started
 
 Gavel's heterogeneity-aware policies and scheduling mechanism can be evaluated
 either in simulation or on a physical cluster.
@@ -121,3 +121,6 @@ To evaluate policies on static traces (jobs only added to the cluster at the sta
 of the trace), one can use the `scripts/sweeps/run_sweep_static.py` script, which
 runs different policies on multiple _static_ traces, generated using different
 seeds and numbers of jobs.
+
+For more detailed instructions on how to reproduce results from the OSDI paper,
+see [EXPERIMENTS.md](EXPERIMENTS.md).

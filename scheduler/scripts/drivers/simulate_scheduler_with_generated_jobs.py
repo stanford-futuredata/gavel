@@ -151,7 +151,7 @@ if __name__=='__main__':
                         choices=utils.get_available_policies(),
                         help='Scheduler policy')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
-    parser.add_argument('-i', '--interval', type=int, default=1920,
+    parser.add_argument('-i', '--interval', type=int, default=360,
                         help='Interval length (in seconds)')
     parser.add_argument('-l', '--lam', type=float, required=True,
                         help='Lambda for Poisson arrival rate')

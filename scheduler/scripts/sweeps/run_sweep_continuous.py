@@ -282,7 +282,7 @@ if __name__=='__main__':
     parser.add_argument('--seeds', type=int, nargs='+',
                         default=[0, 1, 2, 3, 4],
                         help='List of random seeds')
-    parser.add_argument('-i', '--interval', type=int, default=1920,
+    parser.add_argument('-i', '--interval', type=int, default=360,
                         help='Interval length (in seconds)')
     parser.add_argument('-f', '--fixed-job-duration', type=int, default=None,
                         help=('If set, fixes the duration of all jobs to the '
