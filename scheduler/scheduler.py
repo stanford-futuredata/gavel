@@ -143,6 +143,8 @@ class Scheduler:
             sched.scheduler(time.time, time.sleep)
         # Map from job ID to lease extension scheduler event.
         self._lease_extension_events = {}
+        # Set of ports in use for each worker.
+        self._active_ports = {}
         # Iterations run on each worker_id, for all current incomplete
         # applications.
         self._steps_run_so_far = {}
@@ -1424,6 +1426,11 @@ class Scheduler:
 
         round_end_time = round_start_time + self._time_per_iteration
 
+        # If current round is round r, wait for round r-1 to end before
+        # scheduling jobs for round r+1.
+        while self._next_worker_assignments is not None:
+            self._scheduler_cv.wait()
+
         # Recompute the schedule for the upcoming round.
         self._next_worker_assignments = self._schedule_jobs_on_workers()
 
@@ -1456,38 +1463,47 @@ class Scheduler:
             self._next_worker_assignments.items():
             if job_id in self._jobs_with_extended_lease:
                 self._next_dispatched_jobs.add(job_id)
-            # NOTE: We still want to call _try_dispatch_job for jobs with
-            # extended leases because we still want to update any relevant
-            # metadata. However, the job will not be physically sent to the
-            # worker(s) again.
-            self._try_dispatch_job(job_id, worker_ids, master_port_offsets,
-                                   next_round=True)
+            else:
+                self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
         # Schedule extended lease completion events.
         self._schedule_extended_lease_completion_events(round_end_time, pool)
 
-    def _try_dispatch_job(self, job_id, worker_ids, master_port_offsets,
-                          next_round=False):
+    def _try_dispatch_job(self, job_id, worker_ids, next_round=False):
         """Attempts to dispatch the specified job combination.
 
            Updates relevant metadata and returns if job has already been
            dispatched.
         """
-        # Job could have been completed after schedule was
-        # computed; if so, update port data if necessary and return.
+        # Job could have been completed after schedule was computed.
         if job_id not in self._jobs:
-            scale_factor = len(worker_ids)
-            if scale_factor > 1:
-                master_addr = \
-                    self._worker_connections[worker_ids[0]].addr
-                if master_addr not in master_port_offsets:
-                    master_port_offsets[master_addr] = 1
-                master_port_offsets[master_addr] += len(job_id.singletons())
             return
-        master_addr = None
+
+        # Initialize metadata for distributed jobs.
+        if not job_id in self._current_dispatched_jobs:
+            self._in_progress_updates[job_id] = []
+            self._lease_update_requests[job_id] = []
+            self._max_steps[job_id] = None
+
+        # Find available ports to use for distributed jobs.
+        scale_factor = len(worker_ids)
         worker_type = \
             self._worker_id_to_worker_type_mapping[worker_ids[0]]
-        scale_factor = len(worker_ids)
+        if scale_factor > 1:
+            master_addr = self._worker_connections[worker_ids[0]].addr
+            master_server_port = self._worker_connections[worker_ids[0]].port
+            active_ports_for_worker = set()
+            for job_id_ in self._active_ports[worker_ids[0]]:
+                active_ports_for_worker.add(
+                    self._active_ports[worker_ids[0]][job_id_])
+            for single_job_id in job_id.singletons():
+                master_job_port = master_server_port + 1
+                while master_job_port in active_ports_for_worker:
+                    master_job_port += 1
+                self._active_ports[worker_ids[0]][single_job_id] = \
+                    master_job_port
+
+        # Dispatch the job.
         for i, worker_id in enumerate(worker_ids):
             job_descriptions = []
             for j, single_job_id in enumerate(job_id.singletons()):
@@ -1495,19 +1511,14 @@ class Scheduler:
                 command = self._jobs[single_job_id].command
                 # Add distributed args if necessary.
                 if scale_factor > 1:
-                    master_addr = \
-                        self._worker_connections[worker_ids[0]].addr
-                    if master_addr not in master_port_offsets:
-                        master_port_offsets[master_addr] = 1
-                    offset = master_port_offsets[master_addr]
-                    master_port = \
-                        self._worker_connections[worker_ids[0]].port
+                    master_job_port = \
+                        self._active_ports[worker_ids[0]][single_job_id]
                     command = ('%s --master_addr %s '
                                '--master_port %d '
                                '--world_size %d '
                                '--rank %d' % (command,
                                               master_addr,
-                                              master_port + j + offset,
+                                              master_job_port,
                                               scale_factor, i))
                 job_descriptions.append(
                         (single_job_id,
@@ -1523,19 +1534,12 @@ class Scheduler:
             else:
                 dispatched_jobs_set = self._current_dispatched_jobs
             if job_id not in dispatched_jobs_set:
-                self._worker_connections[worker_id].run(
-                        job_descriptions, worker_id)
+                self._worker_connections[worker_id].run(job_descriptions,
+                                                        worker_id)
                 if i == len(worker_ids) - 1:
                     dispatched_jobs_set.add(job_id)
             if not next_round:
                 self._remove_available_worker_id(worker_id)
-        if not next_round:
-            # Initialize metadata for distributed jobs.
-            self._in_progress_updates[job_id] = []
-            self._lease_update_requests[job_id] = []
-            self._max_steps[job_id] = None
-        if master_addr is not None:
-            master_port_offsets[master_addr] += len(job_id.singletons())
 
     def _schedule_extended_lease_completion_events(self, round_end_time, pool):
         """Schedules completion events for jobs with extended lease.
@@ -1565,7 +1569,7 @@ class Scheduler:
 
         # Wait for jobs in current round to complete.
         jobs_to_complete = set()
-        for job_id in self._current_worker_assignments:
+        for job_id in self._current_dispatched_jobs:
             if job_id in self._jobs:
                 jobs_to_complete.add(job_id)
         while not jobs_to_complete.issubset(
@@ -1593,8 +1597,14 @@ class Scheduler:
         current_round = self._num_completed_rounds
         self._num_completed_rounds += 1
 
+        """
+        # Ensure that the schedule for the next round has been computed
+        # before continuing.
+        while self._next_worker_assignments is None:
+            self._scheduler_cv.wait()
+        """
+
         # Reset metadata.
-        assert(self._next_worker_assignments is not None)
         self._completed_jobs_in_current_round = set()
         self._current_worker_assignments = self._next_worker_assignments
         self._next_worker_assignments = None
@@ -1630,9 +1640,8 @@ class Scheduler:
 
         # Compute initial schedule and dispatch initial set of jobs.
         self._current_worker_assignments = self._schedule_jobs_on_workers()
-        master_port_offsets = {}
         for (job_id, worker_ids) in self._current_worker_assignments.items():
-            self._try_dispatch_job(job_id, worker_ids, master_port_offsets)
+            self._try_dispatch_job(job_id, worker_ids)
         self._scheduler_cv.release()
 
         with ThreadPoolExecutor(max_workers=1) as pool:
@@ -2342,6 +2351,7 @@ class Scheduler:
                 self._cluster_spec[worker_type] += 1
                 if not self._simulate:
                     self._worker_connections[worker_id] = rpc_client
+                    self._active_ports[worker_id] = {}
 
                 self._worker_start_times[worker_id] = self.get_current_timestamp()
             self._worker_type_to_worker_id_mapping[worker_type].append(per_worker_ids)
@@ -2372,6 +2382,7 @@ class Scheduler:
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
+
         # Round the remaining steps to the nearest multiple of scale_factor.
         scale_factor = self._jobs[job_id].scale_factor
         remaining_steps = self._get_remaining_steps(job_id)
@@ -2454,6 +2465,14 @@ class Scheduler:
 
         to_remove = []
         with self._scheduler_lock:
+            # If current round is r, job might have been dispatched for
+            # round r+1 and completed before round r is done. If so,
+            # wait for round r to finish before proceeding.
+            if not self._simulate:
+                while job_id not in self._current_dispatched_jobs:
+                    self._write_queue.put('Waiting to complete job %s...' % job_id)
+                    self._scheduler_cv.wait()
+
             current_timestamp = self.get_current_timestamp()
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             self._add_available_worker_id(worker_id)
@@ -2465,12 +2484,22 @@ class Scheduler:
             if len(self._in_progress_updates[job_id]) < scale_factor:
                 return
             else:
+                # Reset metadata when running on a physical cluster.
                 if not self._simulate:
-                    if job_id not in self._current_dispatched_jobs:
-                        msg = \
-                            'Job %s not in current dispatched jobs!' % (job_id)
-                        raise RuntimeError(msg)
                     self._current_dispatched_jobs.remove(job_id)
+                    # TODO: We need to iterate through all keys in
+                    # self._active_ports because we do not know at this point
+                    # which worker served as the master for this job. Fix this?
+                    for worker_id_ in self._active_ports:
+                        jobs_with_ports = self._active_ports[worker_id_].keys()
+                        for single_job_id in job_id.singletons():
+                            if single_job_id in jobs_with_ports:
+                                del self._active_ports[worker_id_][single_job_id]
+                                break
+                    self._in_progress_updates[job_id] = []
+                    self._lease_update_requests[job_id] = []
+                    self._max_steps[job_id] = None
+
                 # If a job with an extended lease completes before the end
                 # of the round, cancel the job's completion event.
                 if job_id in self._lease_extension_events:
@@ -2494,10 +2523,6 @@ class Scheduler:
                         all_num_steps[i] += all_num_steps_[i]
                         all_execution_times[i] = max(all_execution_times[i],
                                                      all_execution_times_[i])
-            # Reset metadata for distributed jobs.
-            self._in_progress_updates[job_id] = []
-            self._lease_update_requests[job_id] = []
-            self._max_steps[job_id] = None
 
             if not micro_task_succeeded:
                 # Micro-task failed.
