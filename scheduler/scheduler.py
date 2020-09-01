@@ -2466,9 +2466,8 @@ class Scheduler:
                 # Reset ports when running on a physical cluster.
                 if not self._simulate and scale_factor > 1:
                     master_addr = self._worker_connections[worker_id].addr
-                    jobs_with_ports = self._active_ports[master_addr].keys()
                     for single_job_id in job_id.singletons():
-                        if single_job_id in jobs_with_ports:
+                        if single_job_id in self._active_ports[master_addr]:
                             del self._active_ports[master_addr][single_job_id]
 
                 # If a job with an extended lease completes before the end
