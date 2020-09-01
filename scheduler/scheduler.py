@@ -1456,10 +1456,10 @@ class Scheduler:
                 self._jobs_with_extended_lease.remove(job_id)
 
         # Dispatch jobs for upcoming round.
-        master_port_offsets = {}
         for (job_id, worker_ids) in \
             self._next_worker_assignments.items():
             if job_id not in self._jobs_with_extended_lease:
+                self._write_queue.put('Dispatching job %s' % (job_id))
                 self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
         # Schedule extended lease completion events.
@@ -1583,13 +1583,6 @@ class Scheduler:
 
         current_round = self._num_completed_rounds
         self._num_completed_rounds += 1
-
-        """
-        # Ensure that the schedule for the next round has been computed
-        # before continuing.
-        while self._next_worker_assignments is None:
-            self._scheduler_cv.wait()
-        """
 
         # Reset metadata.
         self._completed_jobs_in_current_round = set()

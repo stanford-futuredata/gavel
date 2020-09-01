@@ -56,9 +56,8 @@ def main(args):
                     time.sleep(SLEEP_TIME)
 
         # Wait for scheduler to complete.
-        sleep_seconds = 30
         while not sched.is_done(jobs_to_complete):
-            time.sleep(sleep_seconds)
+            time.sleep(SLEEP_TIME)
 
         # Print summary information.
         sched.get_average_jct(jobs_to_complete)

@@ -141,6 +141,8 @@ class Dispatcher:
 
         if job.needs_data_dir:
             command = job.command % (self._data_dir)
+        else:
+            command = job.command
 
         command = '%s --local_rank %d' % (command, gpu_id)
         command = '%s %s %d' % (command, job.num_steps_arg, job.total_steps)
@@ -287,19 +289,31 @@ class Dispatcher:
         self._write_queue.put('Constructing commands for '
                               'worker %d...' % (worker_id))
 
-        commands = \
-            [self._construct_command(job, gpu_id, worker_id) for job in jobs]
-        results = []
+        commands = []
+        for job in jobs:
+            try:
+                command = self._construct_command(job, gpu_id, worker_id)
+                commands.append(command)
+            except Exception as e:
+                self._write_queue.put(
+                    'Failed to construct command for job %s: %s' % (job_id,
+                                                                    str(e)))
+                commands = None
+                break
 
-        # Launch the jobs.
-        for job, command in zip(jobs, commands):
-            self._write_queue.put('Running job %d on GPU %d, '
-                                  'command: "%s"' % (job.job_id, gpu_id,
-                                                     command))
-            results.append(self._thread_pool.apply_async(self.launch_job,
-                                                         (job, command,
-                                                          worker_id)))
-        job_descriptions = [result.get() for result in results]
+        if commands is not None:
+            # Launch the jobs.
+            results = []
+            for job, command in zip(jobs, commands):
+                self._write_queue.put('Running job %d on GPU %d, '
+                                      'command: "%s"' % (job.job_id, gpu_id,
+                                                         command))
+                results.append(self._thread_pool.apply_async(self.launch_job,
+                                                             (job, command,
+                                                              worker_id)))
+            job_descriptions = [result.get() for result in results]
+        else:
+            job_descriptions = [[job.job_id, -1, 0] for job in jobs]
 
         # Cleanup and notify the scheduler.
         self._gpu_queue.put(gpu_id)
