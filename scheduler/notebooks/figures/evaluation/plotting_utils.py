@@ -61,7 +61,7 @@ def plot_metric_vs_inverse_lambda(logfile_paths,
             data["seed"] += [0]
             data["policy"] += [labels[policy]]
     df = pd.DataFrame(data)
-    grouped_df = df.groupby(["policy", "input_job_rate"])
+    grouped_df = df.groupby(["policy", "input_job_rate", "seed"])
     for name_of_the_group, group in grouped_df:
         print(name_of_the_group)
         print(group.mean())
