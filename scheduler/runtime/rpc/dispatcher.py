@@ -168,6 +168,8 @@ class Dispatcher:
                 lines = f.readlines()
             steps = int(lines[0])
             execution_time = float(lines[1])
+            with self._lock:
+                os.remove(info_file)
         except Exception as e:
             self._write_queue.put(
                 'Error recovering steps and execution time: %s' % (e))

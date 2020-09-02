@@ -125,12 +125,12 @@ class Scheduler:
         self._available_worker_ids = set_queue.SetQueue()
         # Allocations for all current incomplete applications.
         self._allocation = {}
-        # Current map from job combinations to assigned workers.
+        # Map from job combinations to assigned workers for current round.
         self._current_worker_assignments = collections.OrderedDict()
+        # Map from job combinations to assigned workers for the upcoming round.
+        self._next_worker_assignments = None
         # Set of completed jobs in current round.
         self._completed_jobs_in_current_round = set()
-        # Map of jobs to worker assignments for the upcoming round.
-        self._next_worker_assignments = None
         # Set of jobs with an extended lease for the upcoming round.
         self._jobs_with_extended_lease = set()
         # Event scheduler to trigger round completions for jobs with
@@ -1400,15 +1400,16 @@ class Scheduler:
               '(%.2f hours)' % (self._current_timestamp,
                                 self._current_timestamp / 3600.0))
 
-    def _begin_round(self, round_start_time):
+    def _begin_round(self):
         """Executes beginning stage of a scheduling round."""
 
+        self._current_round_start_time = self.get_current_timestamp()
         current_round = self._num_completed_rounds
         self._write_queue.put(
             '*** START ROUND %d ***' % (current_round))
         self._print_schedule_summary()
 
-    def _mid_round(self, round_start_time, pool):
+    def _mid_round(self, pool):
         """Executes intermediate stage of a scheduling round.
 
         Computes the schedule for the upcoming round partway through the
@@ -1420,12 +1421,8 @@ class Scheduler:
         self._current_worker_assignments when we end the round.
         """
 
-        round_end_time = round_start_time + self._time_per_iteration
-
-        # If current round is round r, wait for round r-1 to end before
-        # scheduling jobs for round r+1.
-        while self._next_worker_assignments is not None:
-            self._scheduler_cv.wait()
+        round_end_time = \
+            self._current_round_start_time + self._time_per_iteration
 
         # Recompute the schedule for the upcoming round.
         self._next_worker_assignments = self._schedule_jobs_on_workers()
@@ -1575,6 +1572,12 @@ class Scheduler:
                     self._add_available_worker_id(worker_id)
             self._jobs_with_extended_lease.remove(job_id)
 
+        # The next worker assignments must have been computed here as
+        # _end_round is called sequentially after _mid_round.
+        if self._next_worker_assignments is None:
+            raise RuntimeError(
+                'Next worker assignments have not been computed!')
+
         for (job_id, worker_ids) in self._next_worker_assignments.items():
             if job_id not in self._jobs:
                 continue
@@ -1626,15 +1629,14 @@ class Scheduler:
             while True:
                 round_start_time = self.get_current_timestamp()
                 with self._scheduler_cv:
-                    self._begin_round(round_start_time)
+                    self._begin_round()
 
                 # Wait for partway through round to recompute schedule.
-                recompute_schedule_time = round_start_time + \
-                        (self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION)
-                time.sleep(recompute_schedule_time - round_start_time)
+                delay = self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION
+                time.sleep(delay)
 
                 with self._scheduler_cv:
-                    self._mid_round(round_start_time, pool)
+                    self._mid_round(pool)
                     self._end_round()
 
     def get_average_jct(self, job_ids=None, verbose=True):
@@ -2356,7 +2358,16 @@ class Scheduler:
             scale_factor = self._jobs[job_id].scale_factor
             remaining_steps = self._get_remaining_steps(job_id)
             remaining_steps = int(math.ceil(remaining_steps / scale_factor))
-            return (remaining_steps, self._time_per_iteration)
+            extra_time = 0
+            # Add additional time to the lease if the job was dispatched early.
+            if (self._next_worker_assignments is not None and
+                job_id in self._next_worker_assignments):
+                current_time = self.get_current_timestamp()
+                elapsed_time_in_round = \
+                    current_time - self._current_round_start_time
+                # TODO: Maybe cap this at 0?
+                extra_time += self._time_per_iteration - elapsed_time_in_round
+            return (remaining_steps, self._time_per_iteration, extra_time)
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):

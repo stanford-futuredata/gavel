@@ -23,4 +23,5 @@ message UpdateLeaseRequest {
 message UpdateLeaseResponse {
     uint64 max_steps = 1;
     double max_duration = 2;
+    double extra_time = 3;
 }

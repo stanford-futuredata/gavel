@@ -8,6 +8,7 @@ from lease import Lease
 
 from runtime.rpc import iterator_client
 
+INFINITY = (1e9)
 LEASE_UPDATE_FRACTION = 0.75
 
 class GavelIterator:
@@ -122,22 +123,35 @@ class GavelIterator:
 
     def _update_lease(self, init=False):
         if init:
-            (updated_max_steps, updated_max_duration) = self._rpc_client.init()
+            (updated_max_steps, updated_max_duration, extra_time) = \
+                self._rpc_client.init()
         else:
             (updated_max_steps, updated_max_duration) = \
                 self._rpc_client.update_lease(self._steps,
                                               self._duration,
                                               self._lease.max_steps,
                                               self._lease.max_duration)
-        next_lease_update_steps = \
-            int(updated_max_steps * LEASE_UPDATE_FRACTION +
-                self._lease.max_steps * (1.0 - LEASE_UPDATE_FRACTION))
-        next_lease_update_time = \
-            (updated_max_duration * LEASE_UPDATE_FRACTION +
-             self._lease.max_duration * (1.0 - LEASE_UPDATE_FRACTION))
-        self._steps_until_next_lease_update = \
-            next_lease_update_steps - self._steps
-        self._time_until_next_lease_update = \
-            next_lease_update_time - self._duration
+            extra_time = 0
+        # Update when the next lease update will be. If the lease max steps or
+        # max duration has not changed, then assume this will be the final
+        # max steps or max duration.
+        if updated_max_steps == self._lease.max_steps:
+            self._steps_until_next_lease_update = INFINITY
+        else:
+            next_lease_update_steps = \
+                int(updated_max_steps * LEASE_UPDATE_FRACTION +
+                    self._lease.max_steps * (1.0 - LEASE_UPDATE_FRACTION))
+            self._steps_until_next_lease_update = \
+                next_lease_update_steps - self._steps
+        if updated_max_duration == self._lease.max_duration:
+            self._time_until_next_lease_update = INFINITY
+        else:
+            next_lease_update_time = \
+                (updated_max_duration * LEASE_UPDATE_FRACTION +
+                 self._lease.max_duration * (1.0 - LEASE_UPDATE_FRACTION))
+            self._time_until_next_lease_update = \
+                next_lease_update_time - self._duration + extra_time
+
+        # Update the lease.
         self._lease.max_steps = updated_max_steps
-        self._lease.max_duration = updated_max_duration
+        self._lease.max_duration = updated_max_duration + extra_time

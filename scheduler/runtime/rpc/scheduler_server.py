@@ -81,15 +81,18 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
         self._write_queue.put(
             'Received job initialization request from job %s' % (job_id))
         init_job_callback = self._callbacks['InitJob']
-        max_steps, max_duration = init_job_callback(job_id=job_id)
+        max_steps, max_duration, extra_time = init_job_callback(job_id=job_id)
         if max_steps > 0 and max_duration > 0:
             self._write_queue.put(
                     'Initialized job %s with initial lease max_steps=%d, '
-                    'max_duration=%f' % (job_id, max_steps, max_duration))
+                    'max_duration=%f, extra_time=%f' % (job_id, max_steps,
+                                                        max_duration,
+                                                        extra_time))
         else:
             self._write_queue.put('Failed to initialize job %s!' % (job_id))
         return i2s_pb2.UpdateLeaseResponse(max_steps=max_steps,
-                                           max_duration=max_duration)
+                                           max_duration=max_duration,
+                                           extra_time=extra_time)
 
     def UpdateLease(self, request, context):
         job_id = JobIdPair(request.job_id, None)
