@@ -185,7 +185,7 @@ if args.checkpoint_dir is not None:
                     state = torch.load(f, map_location='cuda:{}'.format(args.local_rank))
                     model = state['model'].to(device)
                 load_from_checkpoint = True
-            except RuntimeError as e:
+            except Exception as e:
                 print('Could not load from checkpoint: %s' % (e))
                 load_from_checkpoint = False
 if not load_from_checkpoint:

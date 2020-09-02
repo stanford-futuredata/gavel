@@ -5,9 +5,6 @@ import iterator_to_scheduler_pb2_grpc as i2s_pb2_grpc
 
 from lease import Lease
 
-MAX_ATTEMPTS = 5
-TIMEOUT = 5
-
 class IteratorRpcClient:
 
     def __init__(self, job_id, worker_id, sched_ip_addr, sched_port,
@@ -36,10 +33,11 @@ class IteratorRpcClient:
                                              response.max_duration))
                 else:
                     self._log('Failed to initialize job %d!' % (self._job_id))
-                return (response.max_steps, response.max_duration)
+                return (response.max_steps, response.max_duration,
+                        response.extra_time)
             except grpc.RpcError as e:
                 self._log('Job initialization error: %s' % (e))
-            return (0, 0)
+            return (0, 0, 0)
 
     def update_lease(self, steps, duration, max_steps, max_duration):
         request = i2s_pb2.UpdateLeaseRequest(job_id=self._job_id,
@@ -50,18 +48,14 @@ class IteratorRpcClient:
                                              max_duration=max_duration)
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = i2s_pb2_grpc.IteratorToSchedulerStub(channel)
-            attempts = 0
-            while attempts < MAX_ATTEMPTS:
-                self._log('Requesting new lease '
-                          '(attempt %d)...' % (attempts + 1))
-                try:
-                    response = stub.UpdateLease(request, timeout=TIMEOUT)
-                    self._log('Received new lease: '
-                              '%d, %f' % (response.max_steps,
-                                          response.max_duration))
-                    return (response.max_steps, response.max_duration)
-                except grpc.RpcError as e:
-                    self._log('UpdateLease error: %s' % (e))
-                    attempts += 1
-            self._log('WARNING: Failed to receive new lease!')
-            return (max_steps, max_duration)
+            self._log('Requesting new lease')
+            try:
+                response = stub.UpdateLease(request)
+                self._log('Received new lease: '
+                          '%d, %f' % (response.max_steps,
+                                      response.max_duration))
+                return (response.max_steps, response.max_duration)
+            except grpc.RpcError as e:
+                self._log('UpdateLease error: %s' % (e))
+                self._log('WARNING: Failed to receive new lease!')
+        return (max_steps, max_duration)

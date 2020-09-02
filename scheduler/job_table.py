@@ -23,7 +23,7 @@ def resnet50(batch_size):
 def transformer(batch_size):
     model = 'Transformer (batch size %d)' % (batch_size)
     command = 'python3 train.py -data %s/translation/multi30k.atok.low.pt'
-    command += '-batch_size %d -proj_share_weight' % (batch_size)
+    command += ' -batch_size %d -proj_share_weight' % (batch_size)
     working_directory = 'translation'
     num_steps_arg = '-step'
     return JobTemplate(model=model, command=command,
