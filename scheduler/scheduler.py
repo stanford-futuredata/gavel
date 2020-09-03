@@ -7,7 +7,6 @@ import heapq
 import numpy as np
 import os
 # from preconditions import preconditions
-from hanging_threads import start_monitoring
 import queue
 import sys
 from concurrent.futures import ThreadPoolExecutor
