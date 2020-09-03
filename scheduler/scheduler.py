@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import collections
 import copy
+import faulthandler
 import heapq
 import numpy as np
 import os
@@ -248,6 +249,11 @@ class Scheduler:
         }
 
         if not self._simulate:
+            faulthandler.enable()
+            f = open('.stack_trace.log', 'w')
+            faulthandler.dump_traceback_later(30, repeat=True, file=f,
+                                              exit=False)
+
             self._logging_thread = threading.Thread(target=self._print_logs)
             self._logging_thread.daemon = True
             self._logging_thread.start()
@@ -267,7 +273,6 @@ class Scheduler:
                 threading.Thread(target=self._schedule_with_rounds)
             self._mechanism_thread.daemon = True
             self._mechanism_thread.start()
-
 
     def _initialize_seeds(self, seed):
         np.random.seed(seed)
@@ -668,23 +673,20 @@ class Scheduler:
 
         if worker_ids_for_job is None:
             worker_ids_for_job = []
-            while len(worker_ids_for_job) < scale_factor:
-                num_workers = min(len(worker_ids[server_id_ptr]),
-                                  scale_factor - len(worker_ids_for_job))
-                worker_ids_to_assign = worker_ids[server_id_ptr][:num_workers]
-                ineligible_worker_ids = \
-                    set(worker_ids_to_assign).intersection(reserved_worker_ids)
-                # Only assign the worker IDs if they have not been reserved
-                # for a different job.
-                if len(ineligible_worker_ids) == 0:
-                    worker_ids_for_job.extend(worker_ids_to_assign)
-                # Update metadata regardless of whether the worker IDs were
-                # assigned to this job; a different job could have reserved
-                # these workers.
-                worker_ids[server_id_ptr] = \
-                    worker_ids[server_id_ptr][num_workers:]
-                server_id_ptr += 1
-                server_id_ptr = server_id_ptr % len(worker_ids)
+            while (len(worker_ids_for_job) < scale_factor and
+                   server_id_ptr < len(worker_ids)):
+                if len(worker_ids[server_id_ptr]) == 0:
+                    server_id_ptr += 1
+                    continue
+                worker_id_to_assign = worker_ids[server_id_ptr][0]
+                if worker_id_to_assign not in reserved_worker_ids:
+                    worker_ids_for_job.append(worker_id_to_assign)
+                worker_ids[server_id_ptr].pop(0)
+
+        if len(worker_ids_for_job) != scale_factor:
+            raise RuntimeError(
+                'Could not assign workers to job %s!' % (job_id))
+
         worker_assignments[job_id] = tuple(worker_ids_for_job)
         num_workers_assigned += scale_factor
 
@@ -826,7 +828,7 @@ class Scheduler:
             # Sort jobs by the scale factor: want to assign jobs from largest
             # to smallest to minimize fragmentation.
             scheduled_jobs[worker_type].sort(key=lambda x: x[1], reverse=True)
-            worker_ids = copy.copy(
+            worker_ids = copy.deepcopy(
                 self._worker_type_to_worker_id_mapping[worker_type])
             worker_state[worker_type] = {
                 'worker_ids': worker_ids,
