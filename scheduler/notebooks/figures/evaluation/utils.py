@@ -65,7 +65,7 @@ def average_jct_fn(logfile_path, min_job_id=None, max_job_id=None):
                         job_completion_times.append(
                             job_completion_time)
     if len(job_completion_times) == 0:
-        return 110.0
+        return None
     return np.mean(job_completion_times) / 3600
 
 def average_jct_low_priority_fn(logfile_path, min_job_id=None,
