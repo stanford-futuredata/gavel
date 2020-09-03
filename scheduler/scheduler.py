@@ -8,7 +8,6 @@ import numpy as np
 import os
 # from preconditions import preconditions
 import queue
-import sys
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
@@ -251,7 +250,7 @@ class Scheduler:
 
         if not self._simulate:
             faulthandler.enable()
-            f = open('stack_trace.log', 'w')
+            f = open('.stack_trace.log', 'w')
             faulthandler.dump_traceback_later(30, repeat=True, file=f,
                                               exit=False)
 
