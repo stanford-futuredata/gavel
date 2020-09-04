@@ -44,6 +44,9 @@ We provide a JSON file with measured throughputs for the target workloads
 used in our experiments at `simulation_throughputs.json`. Experiments
 are run from the `scheduler/` sub-directory.
 
+We also include instructions on how to deploy Gavel on a small physical
+cluster.
+
 ### Figure 8: Least Attained Service Policy on Continuous-Single Trace
 
 To reproduce Figure 8 in the paper (that is, evaluate variants of the LAS
@@ -163,3 +166,44 @@ sweep commands above -- in our experiment, we used the `max_min_fairness` policy
 The round durations used by the scheduling mechanism can be similarly studied
 by using the `-i` argument -- the default used is 360 seconds, but other round
 durations can be used as well.
+
+
+### Physical Cluster
+
+In a physical cluster, Gavel is comprised of a centralized scheduler (deployed on a separate scheduling
+server) and workers (each worker has 1 or more GPUs). Jobs are submitted
+to the scheduler. The scheduler then computes a heterogeneity-aware allocation for
+each active job using its policy framework. It then uses its round-based scheduling
+mechanism to determine how to grant resources to jobs.
+
+We provide scripts to launch both the scheduler and workers. Make sure software
+dependencies are installed on the scheduler and workers, as described above.
+To launch the scheduler, use `scripts/drivers/run_scheduler.py` as follows:
+```bash
+python scripts/drivers/run_scheduler_with_trace.py \
+  --trace traces/physical_cluster/artifact_evaluation.trace \
+  --seed 0 \
+  --solver ECOS \
+  --throughputs_file physical_cluster_throughputs.json \
+  --time_per_iteration 360 \
+  --policy max_min_fairness_perf \
+  --expected_num_workers 4
+```
+Running this command will start the scheduler and log the IP address
+the server is running with. Using this IP address, we can launch a worker
+as follows:
+```bash
+python worker.py \
+  -t v100 \
+  -i [IP_ADDRESS] -w 50061 -g 4 \
+  --run_dir /path/to/workloads \
+  --data_dir /path/to/data \
+  --checkpoint_dir /path/to/checkpoints
+```
+This should be done for all workers in the cluster.
+
+The included trace for artifact evaluation should complete in XX hours using
+a cluster size of XX, and is intended merely to show that the infrastructure
+required to deploy Gavel in a physical cluster is included; actually replicating
+the physical cluster experiments shown in the paper will require many more
+resources.
