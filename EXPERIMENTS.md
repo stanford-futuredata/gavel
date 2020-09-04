@@ -39,20 +39,22 @@ for how to find and launch a public AMI (this assumes you have a valid billable 
 Gavel's heterogeneity-aware policies and scheduling mechanism can be evaluated
 either in simulation or on a physical cluster.
 
-The evaluation in the paper largely shows results on a simulated cluster.
+The evaluation in the paper largely shows results on a simulated cluster. Experiments
+are run from the `scheduler/` sub-directory.
 
 ### Figure 8: Least Attained Service Policy on Continuous-Single Trace
 
 To reproduce Figure 8 in the paper (that is, evaluate variants of the LAS
 policy (`max_min_fairness*`) in simulation), one can use the following command
 line (this sweep script runs the different policies for multiple traces,
-generated using different seeds and Poisson arrival rates):
+generated using different seeds and Poisson arrival rates on a cluster with
+36 V100 GPUs, 36 P100 GPUs, and 36 K80 GPUs):
 
 ```bash
 python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l <LOG_DIRECTORY> -j <NUM_CORES> -p allox gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds <LIST OF SEEDS> -c 36:36:36 -a 0.0 -b 6.0 -n 16
 ```
 
-The output of this script looks like this,
+The output of this script looks like this:
 
 ```bash
 >> python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l test_logs -j 6 -p allox gandiva max_min_fairness max_min_fairness_perf --seeds 42 1234 15 -c 36:36:36 -a 0.0 -b 6.0 -n 16
@@ -75,30 +77,41 @@ The output of this script looks like this,
 ...
 ```
 
+This script can take on the order of hours to complete for most of the datapoints,
+and multiple days to a week for the tail; we suggest using `tmux`. The
+`max_min_fairness_packed` policy is particularly slow, and can be ommited to
+start to get results quickly. There are a couple of different ways to obtain results quicker:
+a) use a smaller cluster (e.g., 16 GPUs of each type, controlled by the `-c`
+argument), and consequently with a smaller range of input job rates (controlled
+by `-a` and `-b` command line arguments), b) use a fewer number of seeds,
+c) sweep fewer input job rates (controlled by the `-n` argument),
+d) adjust the `-s` and `-e` arguments, which control the
+size of the trace, and the size of the set of jobs of interest (e.g., `-s 2000 -e 3000`).
+
 Some policies might need to be run for higher input job rates as well. Our
 experiments were run using seeds 0, 1, and 2; results with other seeds should
-look similar. Note that this can take a while to complete: on the order of days
-to a week. There are a couple of different ways to obtain results quicker:
-a) run with a fewer number of seeds, b) sweep fewer input job rates (controlled
-by the `-n` argument), c) run on a smaller cluster (controlled by
-the `-c` argument), d) adjust the `-s` and `-e` arguments, which control the
-size of the trace, and the size of the set of jobs of interest.
+look similar (and we encourage using different seeds).
 
 `scheduler/notebooks/figures/evaluation/continuous_jobs.ipynb` contains
 code to parse the resulting logs and produce graphs (can be run using `jupyter
-notebook`). The notebook should
-use the right `log_directory`.
+notebook`). The notebook should use the appropriate `log_directory` used
+in the above command line.
+
+Notebooks can be used to view the results of in-progress runs -- the sweep
+script can be killed once sufficient points are run.
 
 ### Figure 9: Least Attained Service Policy on Continuous-Multiple Trace
 
-To reproduce Figure 9, one can use the following command line:
+To reproduce Figure 9, one can use the following command line (use a different
+log directory for each figure):
 
 ```bash
 python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l <LOG_DIRECTORY> -j <NUM_CORES> -p gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds <LIST OF SEEDS> -c 36:36:36 -a 0.0 -b 3.0 -n 11 --generate-multi-gpu-jobs
 ```
 
 `scheduler/notebooks/figures/evaluation/continuous_jobs_multigpu.ipynb` contains
-relevant parsing and plotting code.
+relevant parsing and plotting code. As before, `max_min_fairness_packed` takes
+the longest time and can be omitted to obtain results quicker.
 
 ### Figure 10: Finish Time Fairness Policy on Continuous-Multiple Trace
 
@@ -108,6 +121,9 @@ To reproduce Figure 10, one can use the following command line:
 python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l <LOG_DIRECTORY> -j <NUM_CORES> -p finish_time_fairness finish_time_fairness_perf --seeds <LIST OF SEEDS> -c 36:36:36 -a 0.0 -b 3.0 -n 11 --generate-multi-gpu-jobs
 ```
 
+Relevant parsing and plotting code is in the
+`scheduler/notebooks/figures/evaluation/continuous_jobs_multigpu.ipynb` notebook.
+
 ### Makespan Policy on Static-Multiple Trace
 
 To reproduce the results with the makespan policy:
@@ -115,6 +131,9 @@ To reproduce the results with the makespan policy:
 ```bash
 python -u scripts/sweeps/run_sweep_static.py -l <LOG_DIRECTORY> -j <NUM_CORES> -p gandiva max_min_fairness min_total_duration min_total_duration_packed fifo gandiva --seeds <LIST OF SEEDS> -c 36:36:36 -a 0 -b 500 -n 6 --generate-multi-gpu-jobs
 ```
+
+Parsing and plotting code is in the
+`scheduler/notebooks/figures/evaluation/makespan.ipynb` notebook.
 
 ### Figure 11: Multi-Level Fairness Policy
 
@@ -125,7 +144,7 @@ The code for the simulation shown in Figure 11 is in `scheduler/notebooks/figure
 Policy runtimes can be measured using the following command (TODO: Fix this):
 
 ```bash
-python scripts/microbenchmarks/sweep_policy_runtimes.py -n 32 -p max_min_fairness --num_trials 1
+python scripts/microbenchmarks/sweep_policy_runtimes.py -n <LIST_OF_NUM_JOBS> -p max_min_fairness_perf max_min_fairness_packed max_min_fairness_water_filling max_min_fairness_water_filling_packed --num_trials 3
 ```
 
 `scheduler/notebooks/figures/evaluation/policy_runtimes.ipynb` contains relevant
@@ -137,7 +156,8 @@ The time proportions returned by the policy can be used directly to grant jobs
 times on each resource type between "reset events" -- this is a useful comparison
 for our scheduling mechanism. This "ideal" scheduling mechanism can be run
 for a given policy and trace by appending the `--ideal` argument to any of the
-sweep commands above.
+sweep commands above -- in our experiment, we used the `max_min_fairness` policy.
 
 The round durations used by the scheduling mechanism can be similarly studied
-by using the `-i` argument.
+by using the `-i` argument -- the default used is 360 seconds, but other round
+durations can be used as well.
