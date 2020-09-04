@@ -36,7 +36,7 @@ python worker.py \
   -t v100 \
   -i [IP_ADDRESS] -w 50061 -g 4 \
   --run_dir /path/to/workloads \
-  --data_dir /path/to/data
+  --data_dir /path/to/data \
   --checkpoint_dir /path/to/checkpoints
 ```
 This should be done for all workers in the cluster.
