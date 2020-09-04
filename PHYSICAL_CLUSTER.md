@@ -4,14 +4,15 @@
 
 Gavel is comprised of a centralized scheduler (deployed on a separate scheduling
 server) and workers (each worker has 1 or more GPUs). Jobs are submitted
-to the scheduler; the scheduler then computes a heterogeneity-aware allocation,
-and then grants resources to jobs in rounds.
+to the scheduler. The scheduler then computes a heterogeneity-aware allocation for
+each active job using its policy framework. It then uses its round-based scheduling
+mechanism to determine how to grant resources to jobs.
 
 ## Environment setup
 
 To setup the environment necessary to run Gavel, simply run
-`pip install -r scheduler/requirements.txt` followed by `make` on the
-scheduler server as well as all worker servers.
+`pip install -r scheduler/requirements.txt` followed by `make` -- this needs to be done
+on the scheduler server as well as on all the worker servers.
 
 ## Scripts
 
