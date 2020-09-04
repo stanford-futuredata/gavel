@@ -2,6 +2,7 @@ from concurrent import futures
 import time
 
 import grpc
+import logging
 import os
 import sys
 import socket
@@ -16,11 +17,13 @@ import common_pb2
 from job_id_pair import JobIdPair
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
+LOG_FORMAT = '{name}:{levelname} [{asctime}] {message}'
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
-    def __init__(self, callbacks, write_queue):
+    def __init__(self, callbacks, logger):
         self._callbacks = callbacks
-        self._write_queue = write_queue
+        self._logger = logger
 
     def _device_proto_to_device(self, device_proto):
         # TODO
@@ -34,14 +37,16 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
                                          num_gpus=request.num_gpus,
                                          ip_addr=request.ip_addr,
                                          port=request.port)
-            self._write_queue.put('Successfully registered %s worker '
-                                  'with id(s) %s' % (request.worker_type,
-                                                     str(worker_ids)))
+            self._logger.info(
+                'Successfully registered {worker_type} worker '
+                'with id(s) {worker_ids}'.format(
+                    worker_type=request.worker_type,
+                    worker_ids=str(worker_ids)))
             return w2s_pb2.RegisterWorkerResponse(success=True,
                                                   worker_ids=worker_ids,
                                                   round_duration=round_duration)
         except Exception as e:
-            self._write_queue.put('Could not register worker: %s' % (e))
+            self._logger.error('Could not register worker: {0}'.format(e))
             return w2s_pb2.RegisterWorkerResponse(successful=False,
                                                   error_message=e)
 
@@ -57,57 +62,57 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
                 job_id = JobIdPair(request.job_id[0], request.job_id[1])
             else:
                 job_id = JobIdPair(request.job_id[0], None)
-            self._write_queue.put(
+            self._logger.info(
                 'Received completion notification: '
-                'Job ID: %s, Worker ID: %d, Num steps: %s, '
-                'Execution time: %s' % (job_id, request.worker_id,
-                                        str(request.num_steps),
-                                        str(request.execution_time)))
+                'Job ID: {job_id}, Worker ID: {worker_id}, '
+                'Num steps: {num_steps}, '
+                'Execution time: {execution_time}'.format(
+                    job_id=job_id, worker_id=request.worker_id,
+                    num_steps=str(request.num_steps),
+                    execution_time=str(request.execution_time)))
             done_callback(job_id, request.worker_id,
                           request.num_steps, request.execution_time)
         except Exception as e:
-            self._write_queue.put('Could not process completion '
-                                  'notification: %s' % (e))
+            self._logger.error('Could not process completion '
+                               'notification: {0}'.format(e))
 
         return common_pb2.Empty()
 
 class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
-    def __init__(self, callbacks, write_queue):
+    def __init__(self, callbacks, logger):
         self._callbacks = callbacks
-        self._write_queue = write_queue
+        self._logger = logger
 
     def InitJob(self, request, context):
         job_id = JobIdPair(request.job_id, None)
-        self._write_queue.put(
-            'Received job initialization request from job %s' % (job_id))
+        self._logger.info(
+            'Received job initialization request from job {0}'.format(job_id))
         init_job_callback = self._callbacks['InitJob']
         max_steps, max_duration, extra_time = init_job_callback(job_id=job_id)
         if max_steps > 0 and max_duration > 0:
-            self._write_queue.put(
-                    'Initialized job %s with initial lease max_steps=%d, '
-                    'max_duration=%f, extra_time=%f' % (job_id, max_steps,
-                                                        max_duration,
-                                                        extra_time))
+            self._logger.info(
+                'Initialized job {job_id} with initial lease '
+                'max_steps={max_steps}, max_duration={max_duration:.2f}, '
+                'extra_time={extra_time:.2f}'.format(
+                    job_id=job_id, max_steps=max_steps,
+                    max_duration=max_duration, extra_time=extra_time))
         else:
-            self._write_queue.put('Failed to initialize job %s!' % (job_id))
+            self._logger.error('Failed to initialize job {0}!'.format(job_id))
         return i2s_pb2.UpdateLeaseResponse(max_steps=max_steps,
                                            max_duration=max_duration,
                                            extra_time=extra_time)
 
     def UpdateLease(self, request, context):
         job_id = JobIdPair(request.job_id, None)
-        self._write_queue.put('Received lease update request: '
-                              'job_id=%s, '
-                              'worker_id=%d, '
-                              'steps=%d, '
-                              'duration=%f, '
-                              'max_steps=%d,'
-                              'max_duration=%f' % (job_id,
-                                                   request.worker_id,
-                                                   request.steps,
-                                                   request.duration,
-                                                   request.max_steps,
-                                                   request.max_duration))
+        self._logger.info(
+            'Received lease update request: '
+            'job_id={job_id}, worker_id={worker_id}, steps={steps}, '
+            'duration={duration:.2f}, max_steps={max_steps},'
+            'max_duration={max_duration:.2f}'.format(
+                job_id=job_id, worker_id=request.worker_id,
+                steps=request.steps, duration=request.duration,
+                max_steps=request.max_steps,
+                max_duration=request.max_duration))
 
         update_lease_callback = self._callbacks['UpdateLease']
         try:
@@ -118,30 +123,37 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
                                       duration=request.duration,
                                       max_steps=request.max_steps,
                                       max_duration=request.max_duration)
-            self._write_queue.put('Sending new lease to job %s (worker %d) '
-                                  'with max_steps=%d, '
-                                  'max_duration=%f' % (job_id,
-                                                       request.worker_id,
-                                                       max_steps,
-                                                       max_duration))
+            self._logger.info(
+                'Sending new lease to job {job_id} (worker {worker_id}) '
+                'with max_steps={max_steps}, '
+                'max_duration={max_duration:.2f}'.format(
+                    job_id=job_id, worker_id=request.worker_id,
+                    max_steps=max_steps, max_duration=max_duration))
         except Exception as e:
-            self._write_queue.put(
-                'Could not update lease for job %s: %s' % (job_id, str(e)))
+            self._logger.error(
+                'Could not update lease for job {0}: {1}'.format(
+                    job_id, str(e)))
             max_steps = request.max_steps
             max_duration = request.max_duration
 
         return i2s_pb2.UpdateLeaseResponse(max_steps=max_steps,
                                            max_duration=max_duration)
 
-def serve(port, callbacks, write_queue):
+def serve(port, callbacks):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT,
+                                      style='{'))
+    logger.addHandler(ch)
     server = grpc.server(futures.ThreadPoolExecutor())
     w2s_pb2_grpc.add_WorkerToSchedulerServicer_to_server(
-            SchedulerRpcServer(callbacks, write_queue), server)
+            SchedulerRpcServer(callbacks, logger), server)
     i2s_pb2_grpc.add_IteratorToSchedulerServicer_to_server(
-            SchedulerIteratorRpcServer(callbacks, write_queue), server)
+            SchedulerIteratorRpcServer(callbacks, logger), server)
     ip_address = socket.gethostbyname(socket.gethostname())
     server.add_insecure_port('%s:%d' % (ip_address, port))
-    write_queue.put('Starting server at %s:%s' % (ip_address, port))
+    logger.info('Starting server at {0}:{1}'.format(ip_address, port))
     server.start()
     try:
         while True:

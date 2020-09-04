@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import logging
 import os
 import queue
 import shutil
@@ -15,27 +16,33 @@ from runtime.rpc import worker_server
 import utils
 
 CHECKPOINT_DIR_NAME = 'checkpoints'
+LOG_FORMAT = '{name}:{levelname} [{asctime}] {message}'
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 class Worker:
     def __init__(self, worker_type, sched_addr, sched_port, worker_port,
                  num_gpus, run_dir, data_dir, checkpoint_dir):
+        logger = logging.getLogger('worker')
+        logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        ch.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT,
+                                          style='{'))
+        logger.addHandler(ch)
+        self._logger = logger
+
         num_available_gpus = utils.get_num_gpus()
         if num_gpus > num_available_gpus:
             raise ValueError('%d GPUs requested active, but only %d total '
                              'GPUs are available' % (num_gpus,
                                                      num_available_gpus))
         signal.signal(signal.SIGINT, self._signal_handler)
-        self._write_queue = queue.Queue()
         self._gpu_ids = list(range(num_gpus))
         self._worker_type = worker_type
         self._worker_addr = socket.gethostbyname(socket.gethostname())
         self._worker_port = worker_port
         self._worker_rpc_client = worker_client.WorkerRpcClient(
                 self._worker_type, self._worker_addr,
-                self._worker_port, sched_addr, sched_port,
-                self._write_queue)
-
-        self._write_queue.put('Starting server at port %d' % (worker_port))
+                self._worker_port, sched_addr, sched_port)
 
         callbacks = {
             'Run': self._run_callback,
@@ -43,13 +50,9 @@ class Worker:
             'Shutdown': self._shutdown_callback,
         }
 
-        self._logging_thread = threading.Thread(target=self._print_logs)
-        self._logging_thread.daemon = True
-        self._logging_thread.start()
-
         self._server_thread = threading.Thread(
             target=worker_server.serve,
-            args=(worker_port, callbacks, self._write_queue,))
+            args=(worker_port, callbacks,))
         self._server_thread.daemon = True
         self._server_thread.start()
 
@@ -76,7 +79,6 @@ class Worker:
                                                  run_dir,
                                                  data_dir,
                                                  checkpoint_dir,
-                                                 self._write_queue,
                                                  use_mps=use_mps)
 
         self._server_thread.join()
@@ -90,7 +92,7 @@ class Worker:
                 break
             except Exception as e:
               continue
-        self._write_queue.put('Dispatching run request')
+        self._logger.debug('Dispatching run request')
         self._dispatcher.dispatch_jobs(jobs, worker_id)
 
     def _signal_handler(self, sig, frame):
@@ -102,12 +104,6 @@ class Worker:
 
     def _shutdown_callback(self):
         self._dispatcher.shutdown()
-
-    def _print_logs(self):
-        while True:
-            output = self._write_queue.get()
-            print('[%s] %s' % (str(datetime.datetime.now()), output),
-                  flush=True)
 
     def join(self):
         self._server_thread.join()
