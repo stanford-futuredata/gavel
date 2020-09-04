@@ -5,18 +5,13 @@
 Gavel is comprised of a `Scheduler` deployed on the main scheduling
 server and one `Worker` deployed on each GPU server. Jobs are submitted
 to the `Scheduler` which computes a heterogeneity-aware scheduling policy
-and then deploys jobs accordingly to the `Worker`s in rounds.
+and then deploys jobs accordingly to the `Worker`(s) in rounds.
 
 ## Environment setup
 
-Gavel requires an NFS deployment to share models between different workers.
-Instructions for how to configure NFS can be found
-[here](https://www.tecmint.com/install-nfs-server-on-ubuntu/).
-
-Within the NFS root directory, Gavel requires three subdirectories:
-1. A directory for the model code (e.g. `workloads`).
-2. A directory for the training data (e.g. `data`).
-3. A directory for model checkpoints (e.g. `checkpoints`).
+To setup the environment necessary to run Gavel, simply run
+`pip install -r requirements.txt` followed by `make` on the
+scheduler server as well as all worker servers in the cluster.
 
 ## Scripts
 
@@ -24,7 +19,7 @@ Gavel provides scripts to launch both the `Scheduler` and the `Worker`s.
 To launch a `Scheduler`, use `scripts/drivers/run_scheduler.py` as follows:
 ```bash
 python scripts/drivers/run_scheduler_with_trace.py \
-  --trace traces/physical_cluster/debug.trace \
+  --trace traces/physical_cluster/artifact_evaluation.trace \
   --seed 0 \
   --solver ECOS \
   --throughputs_file physical_cluster_throughputs.json \
@@ -43,3 +38,9 @@ python worker.py \
   --data_dir /path/to/data
   --checkpoint_dir /path/to/checkpoints
 ```
+
+The included trace for artifact evaluation should complete in XX hours using
+a cluster size of XX. Note that while jobs will write out checkpoints
+at the end of every micro-task, these checkpoints will not be synchronized
+between workers as this requires configuring an NFS deployment which we do
+not cover here.
