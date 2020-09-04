@@ -17,6 +17,7 @@ import sched
 import math
 import matrix_completion
 import warnings
+import logging
 
 # TODO: clean these up.
 from job import Job
@@ -24,6 +25,7 @@ import job_id_pair
 from job_table import JobTable
 from runtime.rpc import scheduler_server, scheduler_client
 import set_queue
+from custom_logging import SchedulerAdapter
 from throughput_estimator import ThroughputEstimator
 import utils
 
@@ -42,6 +44,8 @@ EMA_ALPHA = .5
 MAX_FAILED_ATTEMPTS = 5
 # Fraction of the round to wait for before re-computing the schedule.
 SCHEDULE_RECOMPUTE_FRACTION = 0.5
+# Format string for logging.
+LOG_FORMAT = '{name}:{levelname} {message}'
 
 class Scheduler:
 
@@ -57,21 +61,45 @@ class Scheduler:
                  minimum_time_between_allocation_resets=1920,
                  max_rounds=None):
 
+        # Flag to control whether scheduler runs in simulation mode.
+        self._simulate = simulate
+
+        # Initial timestamp.
+        if self._simulate:
+            self._start_timestamp = 0
+        else:
+            self._start_timestamp = time.time()
+        # Latest simulated timestamp.
+        self._current_timestamp = self._start_timestamp
+
+        # Configure logger.
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        ch.setFormatter(logging.Formatter(LOG_FORMAT, style='{'))
+        logger.addHandler(ch)
+        self._logger = \
+            SchedulerAdapter(logger,
+                             {'scheduler': self,
+                              'start_timestamp': datetime.datetime.now()})
 
         # Print config information.
         if simulate:
-            print('Running scheduler in simulation with the following args:')
+            loc = 'in simulation'
         else:
-            print('Running scheduler at %s:%s with the '
-                  'following args:' % (utils.get_ip_address(), SCHEDULER_PORT))
-        print('policy=%s' % (policy.name))
-        print('seed=%d' % (seed))
-        print('time_per_iteration=%d' % (time_per_iteration))
-        print('profiling_percentage=%f' % (profiling_percentage))
-        print('num_reference_models=%d' % (num_reference_models))
+            loc = 'at {addr}:{port}'.format(addr=utils.get_ip_address(),
+                                            port=SCHEDULER_PORT)
+        self._logger.info(
+            'Running scheduler {loc} with the following args: '
+            'policy={policy}, seed={seed}, '
+            'time_per_iteration={time_per_iteration}, '
+            'profiling_percentage={profiling_percentage}, '
+            'num_reference_models={num_reference_models}'.format(
+                loc=loc, policy=policy.name, seed=seed,
+                time_per_iteration=time_per_iteration,
+                profiling_percentage=profiling_percentage,
+                num_reference_models=num_reference_models))
 
-        # Flag to control whether scheduler runs in simulation mode.
-        self._simulate = simulate
         # Initialize seeds.
         self._initialize_seeds(seed)
         # Initialize time in seconds each iteration should run for.
@@ -84,12 +112,6 @@ class Scheduler:
         self._minimum_time_between_allocation_resets = \
             minimum_time_between_allocation_resets
 
-        if self._simulate:
-            self._start_timestamp = 0
-        else:
-            self._start_timestamp = time.time()
-        # Latest simulated timestamp.
-        self._current_timestamp = 0
         # Start and last processed timestamp for each job_id.
         self._per_job_start_timestamps = {}
         self._per_job_latest_timestamps = {}
@@ -229,8 +251,6 @@ class Scheduler:
         # Data structures for debugging.
         self._micro_tasks_per_job = {}
         self._all_jobs = []
-        # Queue for printing log information in a thread-safe way.
-        self._write_queue = queue.Queue()
         # In-progress updates for distributed jobs.
         self._in_progress_updates = {}
         # Set of completed job IDs.
@@ -254,10 +274,6 @@ class Scheduler:
             faulthandler.dump_traceback_later(30, repeat=True, file=f,
                                               exit=False)
 
-            self._logging_thread = threading.Thread(target=self._print_logs)
-            self._logging_thread.daemon = True
-            self._logging_thread.start()
-
             self._allocation_thread = \
                 threading.Thread(target=self._allocation_thread)
             self._allocation_thread.daemon = True
@@ -265,7 +281,7 @@ class Scheduler:
 
             self.server_thread = threading.Thread(
                 target=scheduler_server.serve,
-                args=(port, callbacks, self._write_queue))
+                args=(port, callbacks))
             self.server_thread.daemon = True
             self.server_thread.start()
 
@@ -303,12 +319,6 @@ class Scheduler:
                                    num_reference_models,
                                    profiling_percentage,
                                    seed)
-
-    def _print_logs(self):
-        while True:
-            output = self._write_queue.get()
-            print('[%s] %s' % (str(datetime.datetime.now()), output),
-                  flush=True)
 
     def _update_per_worker_type_prices(self):
         assert(self._per_worker_type_prices is not None)
@@ -370,12 +380,15 @@ class Scheduler:
             if np.min(all_execution_times) <= 0:
                 if job_id.is_pair():
                     self._throughputs[job_id][worker_type] = [0.0, 0.0]
-            new_throughput_str =\
-                str(self._throughputs[job_id][worker_type])
-            self._write_queue.put(('Job %s throughput on worker type %s: '
-                                   '%s -> %s') % (job_id, worker_type,
-                                                  str(old_throughput),
-                                                  new_throughput_str))
+            if job_id.is_pair():
+                new_throughput = self._throughputs[job_id][worker_type]
+            else:
+                new_throughput = [self._throughputs[job_id][worker_type]]
+            self._logger.info(
+                'Job {job_id} throughput on worker type {worker_type}: '
+                '{orig} -> {updated}'.format(
+                    job_id=job_id, worker_type=worker_type,
+                    orig=str(old_throughput), updated=str(new_throughput)))
 
     def _read_throughputs_for_job_type(self, job_type_key):
         """Reads oracle throughputs for passed in job type.
@@ -472,7 +485,8 @@ class Scheduler:
             if timestamp is None:
                 timestamp = self.get_current_timestamp()
             self._per_job_start_timestamps[job_id] = timestamp
-            print('%s]\t[Job dispatched]\tJob ID: %s' % (timestamp, job_id))
+            self._logger.info(
+                '[Job dispatched]\tJob ID: {job_id}'.format(job_id=job_id))
             self._scheduler_cv.notifyAll()
 
         return job_id
@@ -505,24 +519,8 @@ class Scheduler:
         job_type_key = (job_type, scale_factor)
         del self._jobs[job_id]
         if self._num_failures_per_job[job_id] >= MAX_FAILED_ATTEMPTS:
-            print("Job %d failed\n\tStart timestamp: %.2f\n\t"
-                  "End timestamp: %.2f\nDuration: %.2f %s\n"
-                  "Number of remaining active jobs: %d\n" % (
-                      job_id[0],
-                      self._per_job_start_timestamps[job_id],
-                      self._per_job_latest_timestamps[job_id],
-                      duration, "seconds", len(self._jobs))
-                  )
             self._job_completion_times[job_id] = None
         else:
-            print("Job %d completed\n\tStart timestamp: %.2f\n\t"
-              "End timestamp: %.2f\nDuration: %.2f %s\n"
-              "Number of remaining active jobs: %d\n" % (
-                  job_id[0],
-                  self._per_job_start_timestamps[job_id],
-                  self._per_job_latest_timestamps[job_id],
-                  duration, "seconds", len(self._jobs))
-              )
             self._job_completion_times[job_id] = duration
         job_type_key = self._job_id_to_job_type[job_id]
         self._job_type_to_job_ids[job_type_key].remove(job_id)
@@ -566,7 +564,9 @@ class Scheduler:
                             del self._job_type_throughputs[other_job_type_key][worker_type][job_type_key]
         self._remove_from_priorities(job_id)
         # TODO: Add a flag to choose whether to update allocation here.
+        # NOTE: Scheduler cv will be notified by calling function.
         self._need_to_update_allocation = True
+        self._logger.info('Remaining active jobs: {0}'.format(len(self._jobs)))
 
     def num_workers(self):
         """Returns the number of workers the scheduler is connected to."""
@@ -615,17 +615,18 @@ class Scheduler:
             allocation_str = ''
             for x in worker_types:
                 allocation_str += \
-                    ' [%4s %f]' % (x, self._allocation[job_id][x])
+                    ' [%4s %.2f]' % (x, self._allocation[job_id][x])
             worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-            print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
-                   'Worker type: %s\tWorker ID(s): %s\t'
-                   'Priority: %f\tDeficit: %f\t'
-                   'Allocation: %s') % (self.get_current_timestamp(),
-                                       job_id, worker_type,
-                                       ",".join([str(x) for x in worker_ids]),
-                                       self._priorities[worker_type][job_id],
-                                       self._deficits[worker_type][job_id],
-                                       allocation_str))
+            self._logger.info(
+                '[Micro-task scheduled]\tJob ID: {job_id}\t'
+                'Worker type: {worker_type}\tWorker ID(s): {worker_ids}\t'
+                'Priority: {priority:.2f}\tDeficit: {deficit:.2f}\t'
+                'Allocation: {allocation}'.format(
+                    job_id=job_id, worker_type=worker_type,
+                    worker_ids=",".join([str(x) for x in worker_ids]),
+                    priority=self._priorities[worker_type][job_id],
+                    deficit=self._deficits[worker_type][job_id],
+                    allocation=allocation_str))
         num_workers_assigned = {}
         for job_id, worker_ids in self._current_worker_assignments.items():
             if job_id not in self._jobs:
@@ -641,10 +642,11 @@ class Scheduler:
                 self._cluster_spec[worker_type]):
                 unused_workers = (self._cluster_spec[worker_type] -
                                   num_workers_assigned[worker_type])
-                print(('WARNING: %d GPUs of type %s left unused. '
-                       'Number of active jobs: %d') % (unused_workers,
-                                                       worker_type,
-                                                       len(self._jobs)))
+                self._logger.warn(
+                    '{num_gpus} GPUs of type {worker_type} left unused. '
+                    'Number of active jobs: {num_active_jobs}'.format(
+                        num_gpus=unused_workers, worker_type=worker_type,
+                        num_active_jobs=len(self._jobs)))
 
     def _assign_workers_to_job(self, job_id, scale_factor, worker_type,
                                worker_state, worker_assignments,
@@ -943,7 +945,11 @@ class Scheduler:
                 else:
                     print(single_job_id)
                     print(worker_type)
-                    raise Exception("Throughput should not be less than 0!")
+                    raise RuntimeError('Throughput for job {job_id} on '
+                                       'worker type {worker_type}'
+                                       'should not be less than 0!'.format(
+                                           job_id=single_job_id,
+                                           worker_type=worker_type))
             else:
                 execution_time = num_steps / throughput
                 finish_time = (self.get_current_timestamp() + \
@@ -1172,7 +1178,8 @@ class Scheduler:
             if jobs_to_complete is not None:
                 num_completed_jobs = \
                     len(jobs_to_complete.intersection(self._completed_jobs))
-                print('Number of completed jobs: %d' % (num_completed_jobs))
+                self._logger.info(
+                    'Number of completed jobs: {0}'.format(num_completed_jobs))
                 if self.is_done(jobs_to_complete):
                     break
             elif (num_total_jobs is not None and
@@ -1288,8 +1295,9 @@ class Scheduler:
                         job_id == min(jobs_to_complete)):
                         window_start_time = next_job_arrival_time
                         if output_trace_file is not None:
-                            print('%d running jobs '
-                                  'at window start' % (len(self._jobs) - 1))
+                            self._logger.info(
+                                '{0} running jobs at window start'.format(
+                                    len(self._jobs) - 1))
                             # Dump already running jobs.
                             for running_job_id in sorted(self._jobs.keys()):
                                 remaining_steps = \
@@ -1352,10 +1360,10 @@ class Scheduler:
                     for x in worker_types:
                         allocation_str += \
                             ' [%4s %f]' % (x, self._allocation[job_id][x])
-                    print(('%s]\t[Micro-task scheduled]\tJob ID: %s\t'
-                           'Allocation: %s') % (self.get_current_timestamp(),
-                                                job_id,
-                                                allocation_str))
+                    self._logger.info(
+                        '[Micro-task scheduled]\tJob ID: {job_id}\t'
+                           'Allocation: {allocation}'.format(
+                               job_id=job_id, allocation=allocation_str))
                     heapq.heappush(running_jobs, (-next_job_arrival_time, job_id,
                                                   (0,),
                                                   [all_num_steps[job_id]]))
@@ -1407,8 +1415,7 @@ class Scheduler:
 
         self._current_round_start_time = self.get_current_timestamp()
         current_round = self._num_completed_rounds
-        self._write_queue.put(
-            '*** START ROUND %d ***' % (current_round))
+        self._logger.info('*** START ROUND {0} ***'.format(current_round))
         self._print_schedule_summary()
 
     def _mid_round(self, pool):
@@ -1440,8 +1447,8 @@ class Scheduler:
                     # Job will be scheduled on the same workers in
                     # upcoming round; extend its lease.
                     self._jobs_with_extended_lease.add(job_id)
-                    self._write_queue.put(
-                        'Extending lease for job %s' % (job_id))
+                    self._logger.info(
+                        'Extending lease for job {0}'.format(job_id))
                 elif job_id in self._jobs_with_extended_lease:
                     # Job will not be scheduled on the same workers
                     # in upcoming round; remove it from the
@@ -1458,7 +1465,7 @@ class Scheduler:
         for (job_id, worker_ids) in \
             self._next_worker_assignments.items():
             if job_id not in self._jobs_with_extended_lease:
-                self._write_queue.put('Dispatching job %s' % (job_id))
+                self._logger.info('Dispatching job {0}'.format(job_id))
                 self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
         # Schedule extended lease completion events.
@@ -1596,7 +1603,7 @@ class Scheduler:
 
         self._scheduler_cv.notifyAll()
 
-        self._write_queue.put('*** END ROUND %d ***' % (current_round))
+        self._logger.info('*** END ROUND {0} ***'.format(current_round))
 
     def _schedule_with_rounds(self):
         """Schedules jobs on workers using rounds.
@@ -2461,8 +2468,8 @@ class Scheduler:
             # wait for round r to finish before proceeding.
             if not self._simulate:
                 while job_id not in self._current_worker_assignments:
-                    self._write_queue.put(
-                        'Waiting to complete job %s...' % job_id)
+                    self._logger.debug(
+                        'Waiting to complete job {0}...'.format(job_id))
                     self._scheduler_cv.wait()
 
             current_timestamp = self.get_current_timestamp()
@@ -2519,25 +2526,32 @@ class Scheduler:
 
             if not micro_task_succeeded:
                 # Micro-task failed.
-                print(('%s]\t[Micro-task failed]\t'
-                       'Job ID: %s') % (current_timestamp,
-                                        job_id))
+                self._logger.info(
+                    '[Micro-task failed]\tJob ID: {job_id}'.format(
+                        job_id=job_id))
                 if not job_id.is_pair():
                     self._num_failures_per_job[job_id] += 1
                     if (self._num_failures_per_job[job_id] >=
                         MAX_FAILED_ATTEMPTS):
-                        print(('%s]\t[Job failed]\t'
-                               'Job ID: %s') % (current_timestamp, job_id))
+                        self._logger.info(
+                            '[Job failed]\tJob ID: {job_id}\t'
+                            'Start timestamp: {start_timestamp:.2f}\t'
+                            'End timestamp: {end_timestamp:.2f}\t'
+                            'Duration: {duration:.2f}'.format(
+                                job_id=single_job_id,
+                                start_timestamp=start_time,
+                                end_timestamp=finish_time,
+                                duration=duration))
                         to_remove.append(job_id)
                 self._need_to_update_allocation = True
 
             else:
-                print(('%s]\t[Micro-task succeeded]\t'
-                       'Job ID: %s\tWorker type: %s\t'
-                       'Worker ID(s): %s') % (current_timestamp,
-                                           job_id,
-                                           worker_type,
-                                           str(all_worker_ids)))
+                self._logger.info(
+                    '[Micro-task succeeded]\t'
+                    'Job ID: {job_id}\tWorker type: {worker_type}\t'
+                    'Worker ID(s): {worker_ids}'.format(
+                        job_id=job_id, worker_type=worker_type,
+                        worker_ids=str(all_worker_ids)))
                 self._num_failures_per_job[job_id] = 0
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
@@ -2548,8 +2562,9 @@ class Scheduler:
                              execution_time / 3600.0 * scale_factor)
                         job_cost_so_far = \
                             self._job_cost_so_far[single_job_id]
-                        print('Job %s cost so far: $%.2f' % (single_job_id,
-                                                             job_cost_so_far))
+                        self._logger.info(
+                            'Job {job_id} cost so far: ${cost:.2f}'.format(
+                                job_id=single_job_id, cost=job_cost_so_far))
                     # Job may be multi-GPU, and have already been removed from
                     # running_jobs by another worker.
                     if single_job_id in self._running_jobs:
@@ -2561,11 +2576,19 @@ class Scheduler:
                             self._jobs[single_job_id].total_steps):
                             pass
                         else:
+                            start_time = self._per_job_start_timestamps[job_id]
                             finish_time = \
                                 self._per_job_latest_timestamps[single_job_id]
-                            print(('%s]\t[Job succeeded]\t'
-                                   'Job ID: %s') % (finish_time,
-                                                    single_job_id))
+                            duration = finish_time - start_time
+                            self._logger.info(
+                                '[Job succeeded]\tJob ID: {job_id}\t'
+                                'Start timestamp: {start_timestamp:.2f}\t'
+                                'End timestamp: {end_timestamp:.2f}\t'
+                                'Duration: {duration:.2f}'.format(
+                                    job_id=single_job_id,
+                                    start_timestamp=start_time,
+                                    end_timestamp=finish_time,
+                                    duration=duration))
                             to_remove.append(single_job_id)
                     if not self._simulate:
                         # NOTE: We update the timestamp before calling this

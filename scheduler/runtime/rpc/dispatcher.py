@@ -1,5 +1,6 @@
 from multiprocessing.pool import ThreadPool
 import math
+import logging
 import numa
 import os
 import queue
@@ -16,11 +17,20 @@ import utils
 CUDA_MPS_PIPE_DIRECTORY = '/tmp/nvidia-mps'
 CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
 MAX_CPUS_PER_GPU = 8
+LOG_FORMAT = '{name}:{levelname} [{asctime}] {message}'
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 class Dispatcher:
     def __init__(self, round_duration, gpu_ids, worker_rpc_client,
                  sched_addr, sched_port, run_dir, data_dir, checkpoint_dir,
-                 write_queue, use_mps=False):
+                 use_mps=False):
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        ch.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT,
+                                          style='{'))
+        logger.addHandler(ch)
+        self._logger = logger
         self._thread_pool = ThreadPool()
         self._round_duration = round_duration
         self._worker_rpc_client = worker_rpc_client
@@ -31,7 +41,6 @@ class Dispatcher:
         self._checkpoint_dir = checkpoint_dir
         self._gpu_ids = gpu_ids
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
-        self._write_queue = write_queue
         self._job_assignments = {}
         self._lock = threading.Lock()
         for gpu_id in self._gpu_ids:
@@ -41,7 +50,7 @@ class Dispatcher:
         if use_mps:
             self._mps_initially_enabled = self._mps_status()
             if self._mps_initially_enabled:
-                self._write_queue.put('CUDA MPS already running')
+                self._logger.info('CUDA MPS already running')
             else:
                 mps_enabled = self._enable_mps()
                 if not mps_enabled:
@@ -88,8 +97,8 @@ class Dispatcher:
             while len(self._numa_cpu_map[i]) < num_cpus_per_gpu:
                 self._numa_cpu_map[i] += contiguous_blocks[block_idx][0]
                 block_idx = (block_idx + 1) % len(contiguous_blocks)
-            self._write_queue.put(
-                'GPU %d assigned CPUs %s' % (i, str(self._numa_cpu_map[i])))
+            self._logger.info('GPU {gpu} assigned CPUs {cpus}'.format
+                    (gpu=i, cpus=str(self._numa_cpu_map[i])))
 
     def _mps_status(self):
         """Returns True if MPS is running."""
@@ -116,7 +125,7 @@ class Dispatcher:
                 subprocess.run(command, stdout=subprocess.PIPE,
                                check=True,
                                shell=True).stdout.decode('utf-8').strip()
-            self._write_queue.put('Successfully enabled CUDA MPS')
+            self._logger.info('Successfully enabled CUDA MPS')
             return True
         except subprocess.CalledProcessError as e:
             error_message = 'Unable to start CUDA MPS:\n'
@@ -124,13 +133,13 @@ class Dispatcher:
                 error_message += 'Stdout:\n%s' % (e.stdout.decode('utf-8'))
             if e.stderr is not None:
                 error_message += 'Stderr:\n%s' % (e.stderr.decode('utf-8'))
-            self._write_queue.put(error_message)
+            self._logger.error(error_message)
         return False
 
     def _shutdown_mps(self):
         command = 'echo quit | nvidia-cuda-mps-control'
         subprocess.run(command, shell=True)
-        self._write_queue.put('Shut down CUDA MPS')
+        self._logger.info('Shut down CUDA MPS')
 
     def _construct_command(self, job, gpu_id, worker_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
@@ -171,34 +180,32 @@ class Dispatcher:
             with self._lock:
                 os.remove(info_file)
         except Exception as e:
-            self._write_queue.put(
-                'Error recovering steps and execution time: %s' % (e))
+            self._logger.error(
+                'Error recovering steps and execution time: {0}'.format(e))
             steps = 0
             execution_time = -1
         return steps, execution_time
 
     def _kill_job(self, pid):
-        self._write_queue.put(
-            'Killing process %d' % (pid))
+        self._logger.debug('Killing process {0}'.format(pid))
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError as e:
-            self._write_queue.put(
-                'Could not find process %d' % (pid))
+            self._logger.debug('Could not find process {0}'.format(pid))
         except Exception as e:
-            self._write_queue.put(
-                'Could not kill process %d: %s' % (pid, str(e)))
+            self._logger.error(
+                'Could not kill process {0}: {1}'.format(pid, e))
 
     def _kill_jobs(self, job_id=None):
         with self._lock:
             if job_id is not None:
-                self._write_queue.put('Killing job %d...' % (job_id))
+                self._logger.debug('Killing job {0}...'.format(job_id))
             else:
-                self._write_queue.put('Killing all jobs!')
+                self._logger.debug('Killing all jobs!')
             if job_id is not None:
                 pids = utils.get_pid_for_job(job_id)
-                self._write_queue.put('PIDs for job %d: %s' % (job_id,
-                                                               str(pids)))
+                self._logger.debug('PIDs for job {0}: {1}'.format(
+                    job_id, str(pids)))
                 for pid in pids:
                     self._kill_job(pid)
             else:
@@ -206,7 +213,7 @@ class Dispatcher:
                     pids = utils.get_pid_for_job(job_id)
                     for pid in pids:
                         self._kill_job(pid)
-            self._write_queue.put('Finished killing job(s)')
+            self._logger.debug('Finished killing job(s)')
 
     def launch_job(self, job, command, worker_id):
         output = ''
@@ -221,23 +228,23 @@ class Dispatcher:
             completed_steps, execution_time = \
                 self._get_steps_and_execution_time(job.job_id, worker_id)
             if completed_steps is None:
-                self._write_queue.put('Could not get completed steps for job '
-                                      '%s (worker %d), '
-                                      'Output:\n%s' % (str(job.job_id),
-                                                       worker_id,
-                                                       output))
+                self._logger.error('Could not get completed steps for job '
+                                   '{job_id} (worker {worker_id}), '
+                                   'Output:\n{output}'.format(
+                                       job_id=job.job_id, worker_id=worker_id,
+                                       output=output))
                 completed_steps = 0
                 self._kill_jobs(job_id=job.job_id)
             else:
-                self._write_queue.put('Job ID: %s, '
-                                      'Worker ID: %d '
-                                      'Num steps: %d, '
-                                      'Execution time: %.3f seconds, '
-                                      'Output:\n%s' % (str(job.job_id),
-                                                       worker_id,
-                                                       completed_steps,
-                                                       execution_time,
-                                                       output))
+                self._logger.info(
+                    'Job ID: {job_id}, '
+                    'Worker ID: {worker_id}, '
+                    'Num steps: {num_steps}, '
+                    'Execution time: {execution_time:.2f} seconds, '
+                    'Output:\n{output}'.format(
+                        job_id=job.job_id, worker_id=worker_id,
+                        num_steps=completed_steps,
+                        execution_time=execution_time, output=output))
         except subprocess.CalledProcessError as e:
             error_message = ('Job %s (worker %d) failed with '
                              'error code %s' % (str(job.job_id),
@@ -249,7 +256,7 @@ class Dispatcher:
                 error_message += '\nStdout: %s' % (e.stdout.decode('utf-8'))
             if e.stderr is not None:
                 error_message += '\nStderr: %s' % (e.stderr.decode('utf-8'))
-            self._write_queue.put(error_message)
+            self._logger.error(error_message)
             execution_time = -1
             completed_steps = 0
             self._kill_jobs(job_id=job.job_id)
@@ -262,12 +269,12 @@ class Dispatcher:
                 error_message += '\nStdout: %s' % (e.stdout.decode('utf-8'))
             if e.stderr is not None:
                 error_message += '\nStderr: %s' % (e.stderr.decode('utf-8'))
-            self._write_queue.put(error_message)
+            self._logger.error(error_message)
             execution_time = -1
             completed_steps = 0
             self._kill_jobs(job_id=job.job_id)
         except Exception as e:
-            self._write_queue.put('Dispatcher failed: %s' % (str(e)))
+            self._logger.error('Dispatcher failed: %s' % (str(e)))
             execution_time = -1
             completed_steps = 0
 
@@ -275,21 +282,22 @@ class Dispatcher:
 
     def _dispatch_jobs_helper(self, jobs, worker_id):
         job_ids = [job.job_id for job in jobs]
-        self._write_queue.put(
-            'Requesting GPU for job(s) %s (worker %d)...' % (str(job_ids),
-                                                             worker_id))
+        self._logger.debug(
+            'Requesting GPU for job(s) {0} (worker {1})...'.format(
+                job_ids, worker_id))
         gpu_id = self._gpu_queue.get()
-        self._write_queue.put('Using GPU %d for job(s) '
-                              '%s (worker %d)' % (gpu_id, str(job_ids),
-                                                  worker_id))
+        self._logger.debug('Using GPU {gpu_id} for job(s) '
+                           '{job_id} (worker {worker_id})'.format(
+                               gpu_id=gpu_id, job_id=job_ids,
+                               worker_id=worker_id))
         with self._lock:
             for job_id in job_ids:
                 if job_id not in self._job_assignments:
                     self._job_assignments[job_id] = []
                 self._job_assignments[job_id].append(gpu_id)
 
-        self._write_queue.put('Constructing commands for '
-                              'worker %d...' % (worker_id))
+        self._logger.debug('Constructing commands for '
+                           'worker {0}...'.format(worker_id))
 
         commands = []
         for job in jobs:
@@ -297,9 +305,9 @@ class Dispatcher:
                 command = self._construct_command(job, gpu_id, worker_id)
                 commands.append(command)
             except Exception as e:
-                self._write_queue.put(
-                    'Failed to construct command for job %s: %s' % (job_id,
-                                                                    str(e)))
+                self._logger.error(
+                    'Failed to construct command for job {0}: {1}'.format(
+                        job_id, e))
                 commands = None
                 break
 
@@ -307,9 +315,10 @@ class Dispatcher:
             # Launch the jobs.
             results = []
             for job, command in zip(jobs, commands):
-                self._write_queue.put('Running job %d on GPU %d, '
-                                      'command: "%s"' % (job.job_id, gpu_id,
-                                                         command))
+                self._logger.info('Running job {job_id} on GPU {gpu_id}, '
+                                  'command: "{command}"'.format(
+                                      job_id=job.job_id, gpu_id=gpu_id,
+                                      command=command))
                 results.append(self._thread_pool.apply_async(self.launch_job,
                                                              (job, command,
                                                               worker_id)))
@@ -320,12 +329,12 @@ class Dispatcher:
         # Cleanup and notify the scheduler.
         self._gpu_queue.put(gpu_id)
         if len(jobs) == 1:
-            self._write_queue.put('Job %d has completed, '
-                                  'notifying scheduler...' % (jobs[0].job_id))
+            self._logger.debug('Job {0} has completed, '
+                               'notifying scheduler...'.format(jobs[0].job_id))
         else:
             job_ids = [job.job_id for job in jobs]
-            self._write_queue.put('Jobs %s have completed, '
-                                  'notifying scheduler...' % (str(job_ids)))
+            self._logger.debug('Jobs {0} have completed, '
+                               'notifying scheduler...'.format(job_ids))
         self._worker_rpc_client.notify_scheduler(worker_id,
                                                  job_descriptions)
 
@@ -334,19 +343,19 @@ class Dispatcher:
                                       (jobs, worker_id,))
 
     def reset(self):
-        self._write_queue.put('Resetting dispatcher...')
+        self._logger.debug('Resetting dispatcher...')
         self._kill_jobs()
         self._job_assignments = {}
         self._thread_pool = ThreadPool()
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
-        self._write_queue.put('Finished resetting dispatcher')
+        self._logger.debug('Finished resetting dispatcher')
 
     def shutdown(self, shut_down_mps=True):
-        self._write_queue.put('Shutting down dispatcher...')
+        self._logger.debug('Shutting down dispatcher...')
         self._kill_jobs()
         self._thread_pool.terminate()
         if self._use_mps and shut_down_mps and not self._mps_initially_enabled:
             self._shutdown_mps()
-        self._write_queue.put('Finished shutting down dispatcher')
+        self._logger.debug('Finished shutting down dispatcher')

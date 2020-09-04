@@ -1,7 +1,6 @@
 from concurrent import futures
-import time
-
 import grpc
+import logging
 import os
 import sys
 import threading
@@ -17,15 +16,17 @@ import enums_pb2
 import job
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
+LOG_FORMAT = '{name}:{levelname} [{asctime}] {message}'
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
-    def __init__(self, callbacks, condition, write_queue):
+    def __init__(self, callbacks, condition, logger):
         self._callbacks = callbacks
         self._condition = condition
-        self._write_queue = write_queue
+        self._logger = logger 
 
     def Run(self, request, context):
-        self._write_queue.put('Received run request from server')
+        self._logger.debug('Received run request from server')
         jobs = []
         for job_description in request.job_descriptions:
             jobs.append(job.Job.from_proto(job_description))
@@ -50,20 +51,25 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
 
         return common_pb2.Empty()
 
-def serve(port, callbacks, write_queue):
+def serve(port, callbacks):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT,
+                                      style='{'))
+    logger.addHandler(ch)
     condition = threading.Condition()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     s2w_pb2_grpc.add_SchedulerToWorkerServicer_to_server(
-            WorkerServer(callbacks, condition, write_queue), server)
+            WorkerServer(callbacks, condition, logger), server)
 
-    write_queue.put('Starting server at port %s' % (str(port)))
+    logger.info('Starting server at port {0}'.format(port))
     server.add_insecure_port('[::]:%d' % (port))
     server.start()
 
     # Wait for worker server to receive a shutdown RPC from scheduler.
-    condition.acquire()
-    condition.wait()
-    condition.release()
+    with condition:
+        condition.wait()
 
     # Wait for shutdown message to be sent to scheduler.
     time.sleep(5)
