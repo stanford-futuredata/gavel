@@ -1,7 +1,7 @@
 # OSDI 2020 Experiments
 
 This document describes how to run the main experiments in the OSDI 2020 paper.
-The goal of this document is to satisfy the "Artifact Functional" and
+The goal of this document is to satisfy the requirements for the "Artifact Functional" and
 "Results Reproduced" badges.
 
 ## Setup
