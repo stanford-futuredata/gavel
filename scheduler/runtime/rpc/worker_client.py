@@ -8,8 +8,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../rpc_stubs'))
 import worker_to_scheduler_pb2 as w2s_pb2
 import worker_to_scheduler_pb2_grpc as w2s_pb2_grpc
 
-MAX_ATTEMPTS = 5
-SLEEP_SECONDS = 5
 LOG_FORMAT = '{name}:{levelname} [{asctime}] {message}'
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -54,10 +52,6 @@ class WorkerRpcClient:
                 assert(response.HasField('error'))
                 self._logger.error('Failed to register worker!')
                 return (None, response.error)
-
-    def send_heartbeat(self, jobs):
-        #TODO
-        pass
 
     def notify_scheduler(self, worker_id, job_descriptions):
         # Send a Done message.
