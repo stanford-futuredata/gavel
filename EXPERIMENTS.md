@@ -52,6 +52,29 @@ generated using different seeds and Poisson arrival rates):
 python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l <LOG_DIRECTORY> -j <NUM_CORES> -p allox gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds <LIST OF SEEDS> -c 36:36:36 -a 0.0 -b 6.0 -n 16
 ```
 
+The output of this script looks like this,
+
+```bash
+>> python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l test_logs -j 6 -p allox gandiva max_min_fairness max_min_fairness_perf --seeds 42 1234 15 -c 36:36:36 -a 0.0 -b 6.0 -n 16
+[2020-09-03 17:17:49.260052] Running 180 total experiment(s)...
+[2020-09-03 17:17:49.535227] [Experiment ID:  0] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=42, lam=9000.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:17:49.600210] [Experiment ID:  1] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=1234, lam=9000.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:17:49.699429] [Experiment ID:  2] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=15, lam=9000.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:17:49.727137] [Experiment ID:  4] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=1234, lam=4500.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:17:49.826323] [Experiment ID:  3] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=42, lam=4500.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:17:49.875449] [Experiment ID:  5] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=15, lam=4500.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:21:27.936718] [Experiment ID:  3] Results: average JCT=59770.441018, utilization=0.121262
+[2020-09-03 17:21:28.072957] [Experiment ID:  6] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=42, lam=3000.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:21:30.507841] [Experiment ID:  4] Results: average JCT=64695.450528, utilization=0.123312
+[2020-09-03 17:21:30.639389] [Experiment ID:  7] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=1234, lam=3000.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:21:31.027912] [Experiment ID:  5] Results: average JCT=55072.401336, utilization=0.121365
+[2020-09-03 17:21:31.161566] [Experiment ID:  8] Configuration: cluster_spec=v100:36|p100:36|k80:36, policy=AlloX_Perf, seed=15, lam=3000.000000, profiling_percentage=1.000000, num_reference_models=26
+[2020-09-03 17:21:54.980905] [Experiment ID:  2] Results: average JCT=54834.129989, utilization=0.060839
+[2020-09-03 17:22:00.203122] [Experiment ID:  1] Results: average JCT=64494.582453, utilization=0.061878
+[2020-09-03 17:22:01.456350] [Experiment ID:  0] Results: average JCT=59492.106756, utilization=0.060797
+...
+```
+
 Some policies might need to be run for higher input job rates as well. Our
 experiments were run using seeds 0, 1, and 2; results with other seeds should
 look similar. Note that this can take a while to complete: on the order of days
