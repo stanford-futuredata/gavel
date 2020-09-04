@@ -56,7 +56,7 @@ generated using different seeds and Poisson arrival rates on a cluster with
 36 V100 GPUs, 36 P100 GPUs, and 36 K80 GPUs):
 
 ```bash
-python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l <LOG_DIRECTORY> -j <NUM_CORES> -p allox gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds <LIST OF SEEDS> -c 36:36:36 -a 0.0 -b 6.0 -n 16
+python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l /path/to/log/directory -j 24 -p allox gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds 0 1 2 -c 36:36:36 -a 0.0 -b 6.0 -n 16
 ```
 
 The output of this script looks like this:
@@ -111,7 +111,7 @@ To reproduce Figure 9, one can use the following command line (use a different
 log directory for each figure):
 
 ```bash
-python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l <LOG_DIRECTORY> -j <NUM_CORES> -p gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds <LIST OF SEEDS> -c 36:36:36 -a 0.0 -b 3.0 -n 11 --generate-multi-gpu-jobs
+python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l /path/to/log/directory -j 24 -p gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds 0 1 2 -c 36:36:36 -a 0.0 -b 3.0 -n 11 --generate-multi-gpu-jobs
 ```
 
 `scheduler/notebooks/figures/evaluation/continuous_jobs_multigpu.ipynb` contains
@@ -123,7 +123,7 @@ the longest time and can be omitted to obtain results quicker.
 To reproduce Figure 10, one can use the following command line:
 
 ```bash
-python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l <LOG_DIRECTORY> -j <NUM_CORES> -p finish_time_fairness finish_time_fairness_perf --seeds <LIST OF SEEDS> -c 36:36:36 -a 0.0 -b 3.0 -n 11 --generate-multi-gpu-jobs
+python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l /path/to/log/directory -j 24 -p finish_time_fairness finish_time_fairness_perf --seeds 0 1 2 -c 36:36:36 -a 0.0 -b 3.0 -n 11 --generate-multi-gpu-jobs
 ```
 
 Relevant parsing and plotting code is in the
@@ -134,7 +134,7 @@ Relevant parsing and plotting code is in the
 To reproduce the makespan policy results:
 
 ```bash
-python -u scripts/sweeps/run_sweep_static.py -l <LOG_DIRECTORY> -j <NUM_CORES> -p gandiva max_min_fairness min_total_duration min_total_duration_packed fifo gandiva --seeds <LIST OF SEEDS> -c 36:36:36 -a 0 -b 500 -n 6 --generate-multi-gpu-jobs
+python -u scripts/sweeps/run_sweep_static.py -l /path/to/log/directory -j 24 -p gandiva max_min_fairness min_total_duration min_total_duration_packed fifo gandiva --seeds 0 1 2 -c 36:36:36 -a 0 -b 500 -n 6 --generate-multi-gpu-jobs
 ```
 
 Parsing and plotting code is in the
@@ -149,7 +149,7 @@ The code for the simulation shown in Figure 11 is in `scheduler/notebooks/figure
 Policy runtimes can be measured using the following command (TODO: Fix this):
 
 ```bash
-python scripts/microbenchmarks/sweep_policy_runtimes.py -n <LIST_OF_NUM_JOBS> -p max_min_fairness_perf max_min_fairness_packed max_min_fairness_water_filling max_min_fairness_water_filling_packed --num_trials 3
+python scripts/microbenchmarks/sweep_policy_runtimes.py -n 32 64 128 256 512 1024 2048 -p max_min_fairness_perf max_min_fairness_packed max_min_fairness_water_filling max_min_fairness_water_filling_packed --num_trials 3
 ```
 
 `scheduler/notebooks/figures/evaluation/policy_runtimes.ipynb` contains relevant

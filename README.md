@@ -58,7 +58,7 @@ the different policies for multiple _continuous_ traces, generated using
 different seeds and Poisson arrival rates):
 
 ```bash
-python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l <LOG_DIRECTORY> -j <NUM_CORES> -p max_min_fairness max_min_fairness_perf --seeds <LIST OF SEEDS> -c 36:36:36 -a 0.0 -b 1.0 -n <NUM THROUGHPUTS>
+python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l /path/to/log/directory -j 6 -p max_min_fairness max_min_fairness_perf --seeds 0 1 2 -c 36:36:36 -a 0.0 -b 1.0 -n 5
 ```
 
 Other arguments for the `run_sweep_continuous.py` script are
