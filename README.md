@@ -23,8 +23,8 @@ integrate with the `GavelIterator`.
 
 ### Software Dependencies
 
-Gavel is implemented in Python. We have tested Gavel with Python 3.8; this can
-be installed using [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+Gavel is implemented in Python. We have tested Gavel on Ubuntu 16.04 with Python 3.8.
+Python 3.8 can be installed using [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 
 Required software dependencies can be installed using,
 
@@ -34,6 +34,18 @@ pip install -r scheduler/requirements.txt
 cd scheduler; make
 ```
 
+These software dependencies have already been installed on the following
+AMI on Amazon EC2,
+
+| Field  | Value |
+| -------------  | ------------- |
+| Cloud Provider | AWS |
+| Region         | us-east-1  |
+| AMI ID         | ami-0ba07d9d617dcef04  |
+| AMI Name       | gavel |
+
+See [this link](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/finding-an-ami.html)
+for how to find and launch a public AMI (this assumes you have a valid billable AWS account setup).
 
 ## Getting Started
 
