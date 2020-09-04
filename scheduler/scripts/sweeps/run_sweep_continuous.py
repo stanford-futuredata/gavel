@@ -29,9 +29,27 @@ def simulate_with_timeout(experiment_id, policy_name,
     checkpoint_file = None
     if checkpoint_threshold is not None:
         checkpoint_file = os.path.join(log_dir, 'lambda=%f.pickle' % lam)
+
+    cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
+                                                           cluster_spec['p100'],
+                                                           cluster_spec['k80'])
+    policy = utils.get_policy(policy_name, solver=solver, seed=seed)
+    if verbose:
+        current_time = datetime.datetime.now()
+        print('[%s] [Experiment ID: %2d] '
+              'Configuration: cluster_spec=%s, policy=%s, '
+              'seed=%d, lam=%f, '
+              'profiling_percentage=%f, '
+              'num_reference_models=%d' % (current_time,
+                                           experiment_id,
+                                           cluster_spec_str,
+                                           policy.name,
+                                           seed, lam,
+                                           profiling_percentage,
+                                           num_reference_models))
+
     with open(os.path.join(log_dir, lam_str), 'w') as f:
-        with contextlib.redirect_stdout(f):
-            policy = utils.get_policy(policy_name, solver=solver, seed=seed)
+        with contextlib.redirect_stderr(f), contextlib.redirect_stdout(f):
             sched = scheduler.Scheduler(
                             policy,
                             throughputs_file=throughputs_file,
@@ -40,24 +58,6 @@ def simulate_with_timeout(experiment_id, policy_name,
                             simulate=True,
                             profiling_percentage=profiling_percentage,
                             num_reference_models=num_reference_models)
-
-            cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
-                                                           cluster_spec['p100'],
-                                                           cluster_spec['k80'])
-            if verbose:
-                current_time = datetime.datetime.now()
-                print('[%s] [Experiment ID: %2d] '
-                      'Configuration: cluster_spec=%s, policy=%s, '
-                       'seed=%d, lam=%f, '
-                       'profiling_percentage=%f, '
-                       'num_reference_models=%d' % (current_time,
-                                                    experiment_id,
-                                                    cluster_spec_str,
-                                                    policy.name,
-                                                    seed, lam,
-                                                    profiling_percentage,
-                                                    num_reference_models),
-                      file=sys.stderr)
 
             if timeout is None:
                 sched.simulate(cluster_spec, lam=lam,
@@ -102,8 +102,7 @@ def simulate_with_timeout(experiment_id, policy_name,
               'Results: average JCT=%f, utilization=%f' % (current_time,
                                                            experiment_id,
                                                            average_jct,
-                                                           utilization),
-              file=sys.stderr)
+                                                           utilization))
 
     return average_jct, utilization
 
@@ -255,7 +254,6 @@ def main(args):
 if __name__=='__main__':
     parser = argparse.ArgumentParser(
             description='Sweep through lambda values')
-    automatic = parser.add_argument_group('Automatic sweep')
     fixed_range = parser.add_argument_group('Sweep over fixed range')
 
     parser.add_argument('-l', '--log-dir', type=str, default='logs',
@@ -332,9 +330,5 @@ if __name__=='__main__':
                                    'sweep'))
     fixed_range.add_argument('-n', '--num-data-points', type=int, default=20,
                              help='Number of data points to sweep through')
-    automatic.add_argument('-u', '--utilization-threshold', type=float,
-                           default=.98,
-                           help=('Utilization threshold to use when '
-                                 'automatically sweeping lambdas'))
     args = parser.parse_args()
     main(args)

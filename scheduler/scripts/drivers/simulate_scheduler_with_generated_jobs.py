@@ -115,7 +115,7 @@ def main(args):
 
     else:
         with open('/dev/null', 'w') as f:
-            with contextlib.redirect_stdout(f):
+            with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
                 simulate(args.policy, throughputs_file,
                          cluster_spec, args.lam, args.seed,
                          args.interval, jobs_to_complete,

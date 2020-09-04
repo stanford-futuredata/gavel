@@ -31,9 +31,23 @@ def simulate_with_timeout(experiment_id, policy_name,
     # TODO: Replace this with postprocessing in the log parsing script.
     time.sleep(random.uniform(0, 5))
     num_total_jobs_str = 'num_total_jobs=%d.log' % (num_total_jobs)
+
+    cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
+                                                   cluster_spec['p100'],
+                                                   cluster_spec['k80'])
+    policy = utils.get_policy(policy_name, seed=seed, solver=solver)
+    if verbose:
+        current_time = datetime.datetime.now()
+        print('[%s] [Experiment ID: %2d] '
+              'Configuration: cluster_spec=%s, policy=%s, '
+              'seed=%d, num_total_jobs=%d' % (current_time,
+                                              experiment_id,
+                                              cluster_spec_str,
+                                              policy.name,
+                                              seed, num_total_jobs))
+
     with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
-        with contextlib.redirect_stdout(f):
-            policy = utils.get_policy(policy_name, seed=seed, solver=solver)
+        with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
             sched = \
                 scheduler.Scheduler(
                     policy, throughputs_file=throughputs_file,
@@ -47,17 +61,6 @@ def simulate_with_timeout(experiment_id, policy_name,
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                            cluster_spec['p100'],
                                                            cluster_spec['k80'])
-            if verbose:
-                current_time = datetime.datetime.now()
-                print('[%s] [Experiment ID: %2d] '
-                      'Configuration: cluster_spec=%s, policy=%s, '
-                       'seed=%d, num_total_jobs=%d' % (current_time,
-                                                       experiment_id,
-                                                       cluster_spec_str,
-                                                       policy.name,
-                                                       seed, num_total_jobs),
-                      file=sys.stderr)
-
             if timeout is None:
                 sched.simulate(cluster_spec, lam=lam,
                                fixed_job_duration=fixed_job_duration,
@@ -101,8 +104,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                   average_jct,
                   utilization,
                   makespan,
-                  total_cost),
-              file=sys.stderr)
+                  total_cost))
 
     return average_jct, utilization
 
