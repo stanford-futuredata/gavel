@@ -39,7 +39,9 @@ for how to find and launch a public AMI (this assumes you have a valid billable 
 Gavel's heterogeneity-aware policies and scheduling mechanism can be evaluated
 either in simulation or on a physical cluster.
 
-The evaluation in the paper largely shows results on a simulated cluster. Experiments
+The evaluation in the paper largely shows results on a simulated cluster.
+We provide a JSON file with measured throughputs for the target workloads
+used in our experiments at `simulation_throughputs.json`. Experiments
 are run from the `scheduler/` sub-directory.
 
 ### Figure 8: Least Attained Service Policy on Continuous-Single Trace
