@@ -2576,7 +2576,7 @@ class Scheduler:
                             self._jobs[single_job_id].total_steps):
                             pass
                         else:
-                            start_time = self._per_job_start_timestamps[job_id]
+                            start_time = self._per_job_start_timestamps[single_job_id]
                             finish_time = \
                                 self._per_job_latest_timestamps[single_job_id]
                             duration = finish_time - start_time
