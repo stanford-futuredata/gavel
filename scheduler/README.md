@@ -11,3 +11,4 @@ and simulator.
 - `gavel_iterator.py`: Implementation of `GavelIterator` that facilitates
   seamless time sharing of deep learning training applications.
 - `scripts/`: Various scripts to run experiments and deploy the scheduler.
+- `notebooks/`: Code for analyzing experiment runs.

@@ -11,6 +11,9 @@ Code for the scheduler, including the scheduling mechanism and simulator
 `GavelIterator` as a Python module, and a communication stack between the scheduler
 and workers that uses [gRPC](https://grpc.io/) (`runtime/`).
 
+`scheduler/notebooks` contains parsing and plotting code to analyze experiment
+runs.
+
 ### `workloads`
 Implementations of target workloads in PyTorch, including changes needed to
 integrate with the `GavelIterator`.
