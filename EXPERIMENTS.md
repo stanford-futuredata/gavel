@@ -126,7 +126,7 @@ Relevant parsing and plotting code is in the
 
 ### Makespan Policy on Static-Multiple Trace
 
-To reproduce the results with the makespan policy:
+To reproduce the makespan policy results:
 
 ```bash
 python -u scripts/sweeps/run_sweep_static.py -l <LOG_DIRECTORY> -j <NUM_CORES> -p gandiva max_min_fairness min_total_duration min_total_duration_packed fifo gandiva --seeds <LIST OF SEEDS> -c 36:36:36 -a 0 -b 500 -n 6 --generate-multi-gpu-jobs
