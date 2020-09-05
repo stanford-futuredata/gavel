@@ -41,7 +41,7 @@ AMI on Amazon EC2,
 | -------------  | ------------- |
 | Cloud Provider | AWS |
 | Region         | us-east-1  |
-| AMI ID         | ami-0ba07d9d617dcef04  |
+| AMI ID         | ami-03e41a79bb745ce18  |
 | AMI Name       | gavel |
 
 See [this link](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/finding-an-ami.html)

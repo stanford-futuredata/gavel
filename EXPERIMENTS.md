@@ -27,12 +27,17 @@ AMI on Amazon EC2,
 | -------------  | ------------- |
 | Cloud Provider | AWS |
 | Region         | us-east-1  |
-| AMI ID         | ami-0ba07d9d617dcef04  |
+| AMI ID         | ami-03e41a79bb745ce18  |
 | AMI Name       | gavel |
 
 See [this link](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/finding-an-ami.html)
 for how to find and launch a public AMI (this assumes you have a valid billable AWS account setup).
 
+
+### Data for Physical Cluster Experiments
+
+Data for the workloads used in the physical cluster experiments are
+available in the `gavel` AMI available on Amazon EC2.
 
 ## Reproducing Experiments
 
@@ -202,8 +207,8 @@ python worker.py \
 ```
 This should be done for all workers in the cluster.
 
-The included trace for artifact evaluation should complete in XX hours using
-a cluster size of XX, and is intended merely to show that the infrastructure
+The included trace for artifact evaluation should complete in about an hour using
+a cluster size of 6 GPUs, and is intended merely to show that the infrastructure
 required to deploy Gavel in a physical cluster is included; actually replicating
-the physical cluster experiments shown in the paper will require many more
-resources.
+the physical cluster experiments shown in the paper will require more
+resources for a much longer duration.
