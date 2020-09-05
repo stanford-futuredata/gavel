@@ -15,7 +15,7 @@ with Python 3.8; this can be installed using
 Required software dependencies can be installed using,
 
 ```bash
-apt-get -y install gcc g++ libnuma-dev make
+apt-get -y install cmake g++ gcc libnuma-dev make zlib1g-dev
 pip install -r scheduler/requirements.txt
 cd scheduler; make
 ```
