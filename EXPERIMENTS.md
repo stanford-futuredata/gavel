@@ -191,24 +191,25 @@ python scripts/drivers/run_scheduler_with_trace.py \
   --solver ECOS \
   --throughputs_file physical_cluster_throughputs.json \
   --time_per_iteration 360 \
-  --policy max_min_fairness_perf \
-  --expected_num_workers 4
+  --policy min_total_duration \
+  --expected_num_workers 6
 ```
 Running this command will start the scheduler and log the IP address
 the server is running with. Using this IP address, we can launch a worker
 as follows:
 ```bash
 python worker.py \
-  -t v100 \
-  -i [IP_ADDRESS] -w 50061 -g 4 \
-  --run_dir /path/to/workloads \
+  -t [WORKER_TYPE] \
+  -i [IP_ADDRESS] -w 50061 -g [NUM_GPUS] \
+  --run_dir /path/to/gavel/workloads/pytorch \
   --data_dir /path/to/data \
   --checkpoint_dir /path/to/checkpoints
 ```
-This should be done for all workers in the cluster.
+This should be done for all workers in the cluster - for V100 GPUs use 'v100' as the
+worker type, and for K80 GPUs use 'k80'.
 
-The included trace for artifact evaluation should complete in about an hour using
-a cluster size of 6 GPUs, and is intended merely to show that the infrastructure
+The included trace for artifact evaluation should complete in about 2 hours using
+a cluster size of 6 GPUs (2 V100s and 4 K80s), and is intended merely to show that the infrastructure
 required to deploy Gavel in a physical cluster is included; actually replicating
 the physical cluster experiments shown in the paper will require more
 resources for a much longer duration.
