@@ -166,7 +166,7 @@ class Dispatcher:
 
         return command
 
-    def _prepare_gavel_info(self, gpu_id, job_id, worker_id):
+    def _prepare_gavel_info(self, job_id, worker_id):
         checkpoint_dir = \
             os.path.join(self._checkpoint_dir, 'job_id=%d' % (job_id))
         lock_file = os.path.join(checkpoint_dir, '.gavel.lock')
@@ -188,9 +188,10 @@ class Dispatcher:
                 json.dump(gavel_info, f)
 
         self._logger.debug(
-            'Gavel info for job {job_id}, worker {worker_id} (GPU {gpu_id}):\n'
-            '{output}'.format(job_id=job_id, worker_id=worker_id,
-                              gpu_id=gpu_id, output=json.dumps(gavel_info)))
+            'Gavel info for job {job_id}, worker {worker_id} '
+            'at dispatch time:\n{output}'.format(
+                job_id=job_id, worker_id=worker_id,
+                output=json.dumps(gavel_info, indent=2)))
 
     def _get_steps_and_execution_time(self, job_id, worker_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
@@ -203,6 +204,11 @@ class Dispatcher:
         with gavel_lock:
             with open(gavel_file, 'r') as f:
                 gavel_info = json.load(f)
+            self._logger.debug(
+                'Gavel info for job {job_id}, worker {worker_id} '
+                'at completion time:\n{output}'.format(
+                    job_id=job_id, worker_id=worker_id,
+                    output=json.dumps(gavel_info, indent=2)))
             steps = int(gavel_info[job_id][worker_id]['steps'])
             execution_time = \
                 float(gavel_info[job_id][worker_id]['duration'])
@@ -264,11 +270,10 @@ class Dispatcher:
                 'Job ID: {job_id}, '
                 'Worker ID: {worker_id}, '
                 'Num steps: {num_steps}, '
-                'Execution time: {execution_time:.2f} seconds, '
-                'Output:\n{output}'.format(
+                'Execution time: {execution_time:.2f} seconds'.format(
                     job_id=job.job_id, worker_id=worker_id,
                     num_steps=completed_steps,
-                    execution_time=execution_time, output=output))
+                    execution_time=execution_time))
         except subprocess.CalledProcessError as e:
             error_message = \
                 'Job {job_id} (worker {worker_id}) failed!'.format(
@@ -288,7 +293,9 @@ class Dispatcher:
             completed_steps = 0
             self._kill_jobs(job_id=job.job_id)
         except Exception as e:
-            self._logger.error('Dispatcher failed!')
+            self._logger.error('Dispatcher failed to launch '
+                               '{job_id}, worker {worker_id}!'.format(
+                                   job_id=job.job_id, worker_id=worker_id))
             traceback.print_exc()
             execution_time = 0
             completed_steps = 0
@@ -330,7 +337,7 @@ class Dispatcher:
         if success:
             for job in jobs:
                 try:
-                    self._prepare_gavel_info(gpu_id, job.job_id, worker_id)
+                    self._prepare_gavel_info(job.job_id, worker_id)
                 except Exception as e:
                     self._logger.error('Could not prepare Gavel info for '
                                         'job {0}!'.format(job.job_id))

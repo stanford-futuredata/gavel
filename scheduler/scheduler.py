@@ -2376,6 +2376,7 @@ class Scheduler:
                     current_time - self._current_round_start_time
                 # TODO: Maybe cap this at 0?
                 extra_time += self._time_per_iteration - elapsed_time_in_round
+                extra_time = max(extra_time, 0)
             return (remaining_steps, self._time_per_iteration, extra_time)
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
