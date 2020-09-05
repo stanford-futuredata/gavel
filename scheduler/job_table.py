@@ -13,7 +13,7 @@ def resnet18(batch_size):
 def resnet50(batch_size):
     model = 'ResNet-50 (batch size %d)' % (batch_size)
     command = 'python3 main.py -j 8 -a resnet50 -b %d' % (batch_size)
-    command += ' %s/imagenet/pytorch'
+    command += ' %s/imagenet/'
     working_directory = 'image_classification/imagenet'
     num_steps_arg = '--num_minibatches'
     return JobTemplate(model=model, command=command,
@@ -55,7 +55,7 @@ def a3c():
     command = ('python3 main.py --env PongDeterministic-v4 --workers 4 '
                '--amsgrad True')
     working_directory = 'rl'
-    num_steps_arg = '--max_steps'
+    num_steps_arg = '--max-steps'
     return JobTemplate(model=model, command=command,
                        working_directory=working_directory,
                        num_steps_arg=num_steps_arg,
