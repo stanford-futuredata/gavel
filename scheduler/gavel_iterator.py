@@ -23,15 +23,17 @@ class GavelIterator:
             self._data_loader = data_loader
 
         self._verbose = verbose
-        self._gpu_id = torch.cuda.current_device()
+        self._job_id = int(os.environ['GAVEL_JOB_ID'])
+        self._worker_id = int(os.environ['GAVEL_WORKER_ID'])
+        self._sched_addr = os.environ['GAVEL_SCHED_ADDR']
+        self._sched_port = int(os.environ['GAVEL_SCHED_PORT'])
         self._lock_file = os.path.join(gavel_dir, '.gavel.lock')
         self._gavel_file = os.path.join(gavel_dir, '.gavel.json')
         self._lock = FileLock(self._lock_file)
-        self._read_config()
         self._rpc_client = \
             iterator_client.IteratorRpcClient(self._job_id, self._worker_id,
-                                              self._server_addr,
-                                              self._server_port)
+                                              self._sched_addr,
+                                              self._sched_port)
         self._steps = 0
         self._duration = 0
         self._synthetic_data = synthetic_data
@@ -42,7 +44,6 @@ class GavelIterator:
         self._lease = Lease(0, 0)
         self._update_lease(init=True)
         self._prev_time = time.time()
-        self._write_info()
 
     def __iter__(self):
         self._iterator = iter(self._data_loader)
@@ -113,32 +114,15 @@ class GavelIterator:
         self._done = True
         self._write_info()
 
-    def _read_config(self):
-        if self._verbose:
-            print('Trying to read config info '
-                  'for GPU {0}...'.format(self._gpu_id))
-        gpu_id = str(self._gpu_id)
-        with self._lock:
-            try:
-                with open(self._gavel_file, 'r') as f:
-                    gavel_info = json.load(f)
-                    self._job_id = \
-                        gavel_info['job_info'][gpu_id]['job_id']
-                    self._worker_id = \
-                        gavel_info['job_info'][gpu_id]['worker_id']
-                    self._server_addr = gavel_info['server_info']['addr']
-                    self._server_port = gavel_info['server_info']['port']
-            except Exception as e:
-                raise RuntimeError('Could not read Gavel info: {0}'.format(e))
-
     def _write_info(self):
-        gpu_id = str(self._gpu_id)
+        job_id = str(self._job_id)
+        worker_id = str(self._worker_id)
         with self._lock:
             try:
                 with open(self._gavel_file, 'r') as f:
                     gavel_info = json.load(f)
-                gavel_info['job_info'][gpu_id]['steps'] = self._steps
-                gavel_info['job_info'][gpu_id]['duration'] = self._duration
+                gavel_info[job_id][worker_id]['steps'] = self._steps
+                gavel_info[job_id][worker_id]['duration'] = self._duration
                 with open(self._gavel_file, 'w') as f:
                     json.dump(gavel_info, f)
             except Exception as e:
