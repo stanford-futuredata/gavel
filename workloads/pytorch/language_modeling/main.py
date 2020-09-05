@@ -79,12 +79,8 @@ parser.add_argument('--master_port', default=None, type=int,
                             help='Master port to use for distributed run')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
-parser.add_argument('--job_id', type=int, default=None, help='Job ID')
-parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
-parser.add_argument('--sched_addr', type=str, default=None,
-                    help='Scheduler server')
-parser.add_argument('--sched_port', type=int, default=None,
-                    help='Scheduler port')
+parser.add_argument('--enable_gavel_iterator', action='store_true',
+                    default=False, help='If set, use Gavel iterator')
 
 args = parser.parse_args()
 
@@ -211,10 +207,6 @@ if args.distributed:
 else:
     train_sampler = None
 
-args.enable_gavel_iterator = False
-if args.job_id is not None:
-    args.enable_gavel_iterator = True
-
 train_loader = torch.utils.data.DataLoader(train_dataset,
                                            batch_size=args.batch_size,
                                            shuffle=False,
@@ -230,10 +222,7 @@ test_loader = torch.utils.data.DataLoader(test_dataset,
                                           drop_last=True)
 
 if args.enable_gavel_iterator:
-    train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
-                                 args.distributed,
-                                 args.sched_addr, args.sched_port,
-                                 args.checkpoint_dir)
+    train_loader = GavelIterator(train_loader, args.checkpoint_dir)
 
 
 cumulative_steps = 0

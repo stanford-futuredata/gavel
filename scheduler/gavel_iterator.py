@@ -1,3 +1,5 @@
+from filelock import FileLock
+import json
 from collections.abc import Iterable
 import os
 import time
@@ -12,31 +14,30 @@ INFINITY = (1e9)
 LEASE_UPDATE_FRACTION = 0.75
 
 class GavelIterator:
-    def __init__(self, data_loader, job_id, worker_id, distributed,
-                 server_addr, server_port, gavel_dir, synthetic_data=False,
+    def __init__(self, data_loader, gavel_dir, synthetic_data=False,
                  verbose=True):
         if not isinstance(data_loader, Iterable):
             raise ValueError('Data is of uniterable '
                              'type %s' % (type(data_loader)))
         else:
             self._data_loader = data_loader
-        self._rpc_client = iterator_client.IteratorRpcClient(job_id, worker_id,
-                                                             server_addr,
-                                                             server_port)
-        self._job_id = job_id
-        self._worker_id = worker_id
+
+        self._verbose = verbose
+        self._gpu_id = torch.cuda.current_device()
+        self._lock_file = os.path.join(gavel_dir, '.gavel.lock')
+        self._gavel_file = os.path.join(gavel_dir, '.gavel.json')
+        self._lock = FileLock(self._lock_file)
+        self._read_config()
+        self._rpc_client = \
+            iterator_client.IteratorRpcClient(self._job_id, self._worker_id,
+                                              self._server_addr,
+                                              self._server_port)
         self._steps = 0
         self._duration = 0
-        self._distributed = distributed
-        self._done = False
         self._synthetic_data = synthetic_data
-        self._verbose = verbose
+        self._done = False
         if self._synthetic_data:
             self._initial_val = None
-        assert(os.path.isdir(os.path.join(gavel_dir)))
-        self._info_file = os.path.join(gavel_dir,
-                                       '.gavel_info_worker=%d' % (worker_id))
-
         # TODO: Tie this with loading the checkpoint
         self._lease = Lease(0, 0)
         self._update_lease(init=True)
@@ -112,14 +113,36 @@ class GavelIterator:
         self._done = True
         self._write_info()
 
+    def _read_config(self):
+        if self._verbose:
+            print('Trying to read config info '
+                  'for GPU {0}...'.format(self._gpu_id))
+        gpu_id = str(self._gpu_id)
+        with self._lock:
+            try:
+                with open(self._gavel_file, 'r') as f:
+                    gavel_info = json.load(f)
+                    self._job_id = \
+                        gavel_info['job_info'][gpu_id]['job_id']
+                    self._worker_id = \
+                        gavel_info['job_info'][gpu_id]['worker_id']
+                    self._server_addr = gavel_info['server_info']['addr']
+                    self._server_port = gavel_info['server_info']['port']
+            except Exception as e:
+                raise RuntimeError('Could not read Gavel info: {0}'.format(e))
+
     def _write_info(self):
-        try:
-            with open(self._info_file, 'w') as f:
-                f.write('%d\n%f' % (self._steps, self._duration))
-        except Exception as e:
-            if self._verbose:
-                print('Error writing info to \"%s\": %s' % (self._info_file,
-                                                            e))
+        gpu_id = str(self._gpu_id)
+        with self._lock:
+            try:
+                with open(self._gavel_file, 'r') as f:
+                    gavel_info = json.load(f)
+                gavel_info['job_info'][gpu_id]['steps'] = self._steps
+                gavel_info['job_info'][gpu_id]['duration'] = self._duration
+                with open(self._gavel_file, 'w') as f:
+                    json.dump(gavel_info, f)
+            except Exception as e:
+                raise RuntimeError('Could not write Gavel info: {0}'.format(e))
 
     def _update_lease(self, init=False):
         if init:

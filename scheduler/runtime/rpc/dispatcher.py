@@ -1,3 +1,5 @@
+from filelock import FileLock
+import json
 from multiprocessing.pool import ThreadPool
 import math
 import logging
@@ -156,9 +158,6 @@ class Dispatcher:
         command = '%s --local_rank %d' % (command, gpu_id)
         command = '%s %s %d' % (command, job.num_steps_arg, job.total_steps)
         command = '%s --checkpoint_dir %s' % (command, checkpoint_dir)
-        command = ('%s --job_id %d --worker_id %d --sched_addr %s '
-                   '--sched_port %d' % (command, job.job_id, worker_id,
-                                        self._sched_addr, self._sched_port))
 
         if self._numa_available:
             cpus = self._numa_cpu_map[gpu_id]
@@ -167,23 +166,64 @@ class Dispatcher:
 
         return command
 
-    def _get_steps_and_execution_time(self, job_id, worker_id):
+    def _prepare_gavel_info(self, gpu_id, job_id, worker_id):
+        # NOTE: We assume that two packed jobs will not share the same
+        # checkpoint directory. This is currently enforced by the dispatcher,
+        # but in the future the dispatcher may no longer be responsible for
+        # creating checkpoint directories.
+        checkpoint_dir = \
+            os.path.join(self._checkpoint_dir, 'job_id=%d' % (job_id))
+        lock_file = os.path.join(checkpoint_dir, '.gavel.lock')
+        gavel_lock = FileLock(lock_file)
+        gavel_file = os.path.join(checkpoint_dir, '.gavel.json')
+        with gavel_lock:
+            if os.path.exists(gavel_file):
+                    with open(gavel_file, 'r') as f:
+                        gavel_info = json.load(f)
+            else:
+                gavel_info = {}
+            if 'job_info' not in gavel_info:
+                gavel_info['job_info'] = {}
+            gavel_info['job_info'][gpu_id] = {
+                'job_id': job_id,
+                'worker_id': worker_id,
+                'steps': 0,
+                'duration': 0,
+            }
+            if 'server_info' not in gavel_info:
+                gavel_info['server_info'] = {
+                    'addr': self._sched_addr,
+                    'port': self._sched_port,
+                }
+            with open(gavel_file, 'w') as f:
+                json.dump(gavel_info, f)
+
+        self._logger.debug(
+            'Gavel info for job {job_id}, worker {worker_id} (GPU {gpu_id}):\n'
+            '{output}'.format(job_id=job_id, worker_id=worker_id,
+                              gpu_id=gpu_id, output=json.dumps(gavel_info)))
+
+    def _get_steps_and_execution_time(self, gpu_id, job_id):
+        gpu_id = str(gpu_id)
         checkpoint_dir = os.path.join(self._checkpoint_dir,
                                       'job_id=%d' % (job_id))
-        info_file = os.path.join(checkpoint_dir,
-                                 '.gavel_info_worker=%d' % (worker_id))
-        try:
-            with open(info_file, 'r') as f:
-                lines = f.readlines()
-            steps = int(lines[0])
-            execution_time = float(lines[1])
-            with self._lock:
-                os.remove(info_file)
-        except Exception as e:
-            self._logger.error(
-                'Error recovering steps and execution time: {0}'.format(e))
-            steps = 0
-            execution_time = -1
+        lock_file = os.path.join(checkpoint_dir, '.gavel.lock')
+        gavel_lock = FileLock(lock_file)
+        gavel_file = os.path.join(checkpoint_dir, '.gavel.json')
+        with gavel_lock:
+            try:
+                with open(gavel_file, 'r') as f:
+                    gavel_info = json.load(f)
+                steps = int(gavel_info['job_info'][gpu_id]['steps'])
+                execution_time = \
+                    float(gavel_info['job_info'][str(gpu_id)]['duration'])
+                del gavel_info['job_info'][gpu_id]
+                with open(gavel_file, 'w') as f:
+                    json.dump(gavel_info, f)
+            except Exception as e:
+                self._logger.error(
+                    'Could not read steps and execution time: {0}'.format(e))
+                return (0, 0)
         return steps, execution_time
 
     def _kill_job(self, pid):
@@ -215,7 +255,7 @@ class Dispatcher:
                         self._kill_job(pid)
             self._logger.debug('Finished killing job(s)')
 
-    def launch_job(self, job, command, worker_id):
+    def launch_job(self, job, command, worker_id, gpu_id):
         output = ''
         cwd = os.path.join(self._run_dir, job.working_directory)
         try:
@@ -226,7 +266,7 @@ class Dispatcher:
                                   shell=True)
             output = proc.stdout.decode('utf-8').strip()
             completed_steps, execution_time = \
-                self._get_steps_and_execution_time(job.job_id, worker_id)
+                self._get_steps_and_execution_time(gpu_id, job.job_id)
             if completed_steps is None:
                 self._logger.error('Could not get completed steps for job '
                                    '{job_id} (worker {worker_id}), '
@@ -299,6 +339,7 @@ class Dispatcher:
         self._logger.debug('Constructing commands for '
                            'worker {0}...'.format(worker_id))
 
+        success = True
         commands = []
         for job in jobs:
             try:
@@ -308,10 +349,20 @@ class Dispatcher:
                 self._logger.error(
                     'Failed to construct command for job {0}: {1}'.format(
                         job_id, e))
-                commands = None
+                success = False
                 break
 
-        if commands is not None:
+        if success:
+            for job in jobs:
+                try:
+                    self._prepare_gavel_info(gpu_id, job.job_id, worker_id)
+                except Exception as e:
+                    self._logger.error('Could not prepare Gavel info for '
+                                        'job {0}: {1}'.format(job.job_id, e))
+                    success = False
+                    break
+
+        if success:
             # Launch the jobs.
             results = []
             for job, command in zip(jobs, commands):
@@ -321,7 +372,8 @@ class Dispatcher:
                                       command=command))
                 results.append(self._thread_pool.apply_async(self.launch_job,
                                                              (job, command,
-                                                              worker_id)))
+                                                              worker_id,
+                                                              gpu_id)))
             job_descriptions = [result.get() for result in results]
         else:
             job_descriptions = [[job.job_id, -1, 0] for job in jobs]
