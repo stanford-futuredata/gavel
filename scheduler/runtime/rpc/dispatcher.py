@@ -270,25 +270,29 @@ class Dispatcher:
                 'Job ID: {job_id}, '
                 'Worker ID: {worker_id}, '
                 'Num steps: {num_steps}, '
-                'Execution time: {execution_time:.2f} seconds'.format(
+                'Execution time: {execution_time:.2f} seconds, '
+                'Output: {output}'.format(
                     job_id=job.job_id, worker_id=worker_id,
                     num_steps=completed_steps,
-                    execution_time=execution_time))
+                    execution_time=execution_time,
+                    output=output))
         except subprocess.CalledProcessError as e:
             error_message = \
                 'Job {job_id} (worker {worker_id}) failed!'.format(
                     job_id=job.job_id, worker_id=worker_id) 
             self._logger.error(error_message)
             traceback.print_exc()
-            execution_time = 0
-            completed_steps = 0
-            self._kill_jobs(job_id=job.job_id)
-        except subprocess.TimeoutExpired as e:
-            error_message = \
-                'Job {job_id} (worker {worker_id}) timed out!'.format(
-                    job_id=job.job_id, worker_id=worker_id)
-            self._logger.error(error_message)
-            traceback.print_exc()
+            self._logger.error()
+            if e.stdout is not None:
+                self._logger.debug('Job {job_id} (worker {worker_id}) '
+                                   'stdout: {output}'.format(
+                                       job_id=job.job_id, worker_id=worker_id,
+                                       stdout=e.stdout))
+            if e.stderr is not None:
+                self._logger.debug('Job {job_id} (worker {worker_id}) '
+                                   'stderr: {output}'.format(
+                                       job_id=job.job_id, worker_id=worker_id,
+                                       stderr=e.stderr))
             execution_time = 0
             completed_steps = 0
             self._kill_jobs(job_id=job.job_id)
