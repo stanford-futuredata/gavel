@@ -2525,6 +2525,13 @@ class Scheduler:
             self._lease_update_requests[job_id] = []
             self._max_steps[job_id] = None
 
+            if not self._simulate:
+                # NOTE: We update the timestamp before calling this
+                # function in simulation.
+                for single_job_id in job_id.singletons():
+                    self._per_job_latest_timestamps[single_job_id] = \
+                            self.get_current_timestamp()
+
             if not micro_task_succeeded:
                 # Micro-task failed.
                 self._logger.info(
@@ -2534,6 +2541,11 @@ class Scheduler:
                     self._num_failures_per_job[job_id] += 1
                     if (self._num_failures_per_job[job_id] >=
                         MAX_FAILED_ATTEMPTS):
+                        start_time = \
+                            self._per_job_start_timestamps[single_job_id]
+                        finish_time = \
+                            self._per_job_latest_timestamps[single_job_id]
+                        duration = finish_time - start_time
                         self._logger.info(
                             '[Job failed]\tJob ID: {job_id}\t'
                             'Start timestamp: {start_timestamp:.2f}\t'
@@ -2577,7 +2589,8 @@ class Scheduler:
                             self._jobs[single_job_id].total_steps):
                             pass
                         else:
-                            start_time = self._per_job_start_timestamps[single_job_id]
+                            start_time = \
+                                self._per_job_start_timestamps[single_job_id]
                             finish_time = \
                                 self._per_job_latest_timestamps[single_job_id]
                             duration = finish_time - start_time
@@ -2591,11 +2604,6 @@ class Scheduler:
                                     end_timestamp=finish_time,
                                     duration=duration))
                             to_remove.append(single_job_id)
-                    if not self._simulate:
-                        # NOTE: We update the timestamp before calling this
-                        # function in simulation.
-                        self._per_job_latest_timestamps[single_job_id] = \
-                                self.get_current_timestamp()
 
                 # If we just ran co-located jobs, use the maximum of the
                 # individual execution times.

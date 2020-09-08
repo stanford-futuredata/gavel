@@ -8,6 +8,7 @@ import numa
 import os
 import queue
 import re
+from shutil import which
 import signal
 import subprocess
 import sys
@@ -62,7 +63,8 @@ class Dispatcher:
                     raise RuntimeError('Failed to enable CUDA MPS')
 
     def _configure_numa(self):
-        self._numa_available = numa.available()
+        self._numa_available = \
+            numa.available() and which('numactl') is not None
         if not self._numa_available:
             return
         num_numa_nodes = numa.get_max_node() + 1
