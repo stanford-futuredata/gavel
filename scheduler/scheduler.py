@@ -2533,12 +2533,16 @@ class Scheduler:
                     self._num_failures_per_job[job_id] += 1
                     if (self._num_failures_per_job[job_id] >=
                         MAX_FAILED_ATTEMPTS):
+                        start_time = self._per_job_start_timestamps[job_id]
+                        finish_time = \
+                            self._per_job_latest_timestamps[job_id]
+                        duration = finish_time - start_time
                         self._logger.info(
                             '[Job failed]\tJob ID: {job_id}\t'
                             'Start timestamp: {start_timestamp:.2f}\t'
                             'End timestamp: {end_timestamp:.2f}\t'
                             'Duration: {duration:.2f}'.format(
-                                job_id=single_job_id,
+                                job_id=job_id,
                                 start_timestamp=start_time,
                                 end_timestamp=finish_time,
                                 duration=duration))
