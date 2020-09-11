@@ -171,6 +171,8 @@ class Dispatcher:
     def _prepare_gavel_info(self, job_id, worker_id):
         checkpoint_dir = \
             os.path.join(self._checkpoint_dir, 'job_id=%d' % (job_id))
+        job_id = str(job_id)
+        worker_id = str(worker_id)
         lock_file = os.path.join(checkpoint_dir, '.gavel.lock')
         gavel_lock = FileLock(lock_file)
         gavel_file = os.path.join(checkpoint_dir, '.gavel.json')
