@@ -323,12 +323,8 @@ def main():
                         help='Steps between logging steps completed')
     parser.add_argument('--max_duration', type=int, default=None,
                         help='Maximum duration in seconds')
-    parser.add_argument('--job_id', type=int, default=None, help='Job ID')
-    parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
-    parser.add_argument('--sched_addr', type=str, default=None,
-                        help='Scheduler server')
-    parser.add_argument('--sched_port', type=int, default=None,
-                        help='Scheduler port')
+    parser.add_argument('--enable_gavel_iterator', action='store_true',
+                        default=False, help='If set, use Gavel iterator')
 
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda
@@ -350,10 +346,6 @@ def main():
                                 init_method=opt.dist_url,
                                 world_size=opt.world_size,
                                 rank=opt.rank)
-
-    opt.enable_gavel_iterator = False
-    if opt.job_id is not None:
-        opt.enable_gavel_iterator = True
 
     #========= Loading Dataset =========#
     data = torch.load(opt.data)
@@ -392,10 +384,7 @@ def main():
                           output_device=opt.local_rank)
 
     if opt.enable_gavel_iterator:
-        training_data = GavelIterator(training_data, opt.job_id,
-                                      opt.worker_id, opt.distributed,
-                                      opt.sched_addr, opt.sched_port,
-                                      opt.checkpoint_dir)
+        training_data = GavelIterator(training_data, opt.checkpoint_dir)
 
     optimizer = ScheduledOptim(
         optim.Adam(

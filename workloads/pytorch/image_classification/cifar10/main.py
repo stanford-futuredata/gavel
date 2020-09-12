@@ -59,12 +59,8 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
-parser.add_argument('--job_id', type=int, default=None, help='Job ID')
-parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
-parser.add_argument('--sched_addr', type=str, default=None,
-                    help='Scheduler server')
-parser.add_argument('--sched_port', type=int, default=None,
-                    help='Scheduler port')
+parser.add_argument('--enable_gavel_iterator', action='store_true',
+                    default=False, help='If set, use Gavel iterator')
 
 args = parser.parse_args()
 
@@ -98,10 +94,6 @@ if args.master_addr is not None:
             net, device_ids=[args.local_rank],
             output_device=args.local_rank)
 
-enable_gavel_iterator = False
-if args.job_id is not None:
-    enable_gavel_iterator = True
-
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
@@ -128,10 +120,8 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-if enable_gavel_iterator:
-    trainloader = GavelIterator(trainloader, args.job_id, args.worker_id,
-                                args.distributed, args.sched_addr,
-                                args.sched_port, args.checkpoint_dir)
+if args.enable_gavel_iterator:
+    trainloader = GavelIterator(trainloader, args.checkpoint_dir)
 
 cumulative_steps = 0
 cumulative_time = 0
@@ -243,7 +233,7 @@ if args.num_steps is not None:
 for epoch in range(start_epoch, args.num_epochs):
     (cumulative_steps, cumulative_time, done, finished_epoch) =\
             train(epoch, cumulative_steps, cumulative_time)
-    if enable_gavel_iterator:
+    if args.enable_gavel_iterator:
         if trainloader.done:
             break
         elif done:

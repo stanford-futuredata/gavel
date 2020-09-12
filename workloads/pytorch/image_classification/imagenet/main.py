@@ -88,12 +88,8 @@ parser.add_argument('--throughput_estimation_interval', type=int, default=None,
                     help='Steps between logging steps completed')
 parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
-parser.add_argument('--job_id', type=int, default=None, help='Job ID')
-parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
-parser.add_argument('--sched_addr', type=str, default=None,
-                    help='Scheduler server')
-parser.add_argument('--sched_port', type=int, default=None,
-                    help='Scheduler port')
+parser.add_argument('--enable_gavel_iterator', action='store_true',
+                    default=False, help='If set, use Gavel iterator')
 
 best_acc1 = 0
 total_minibatches = 0
@@ -124,10 +120,6 @@ def main():
                                 world_size=args.world_size,
                                 rank=args.rank,
                                 timeout=datetime.timedelta(seconds=30))
-
-    args.enable_gavel_iterator = False
-    if args.job_id is not None:
-        args.enable_gavel_iterator = True
 
     # create model
     if args.pretrained:
@@ -212,10 +204,7 @@ def main():
         return
 
     if args.enable_gavel_iterator:
-        train_loader = GavelIterator(train_loader, args.job_id, args.worker_id,
-                                     args.distributed,
-                                     args.sched_addr, args.sched_port,
-                                     args.checkpoint_dir)
+        train_loader = GavelIterator(train_loader, args.checkpoint_dir)
 
     if args.num_minibatches is not None:
         args.epochs = math.ceil(float(args.num_minibatches) *

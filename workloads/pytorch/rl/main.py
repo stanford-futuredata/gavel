@@ -130,22 +130,10 @@ parser.add_argument('--local_rank',
         default=0,
         type=int,
         help='Local rank')
-parser.add_argument('--job_id',
-        type=int,
-        default=None,
-        help='Job ID')
-parser.add_argument('--worker_id',
-        type=int,
-        default=None,
-        help='Worker ID')
-parser.add_argument('--sched_addr',
-        type=str,
-        default=None,
-        help='Scheduler server')
-parser.add_argument('--sched_port',
-        type=int,
-        default=None,
-        help='Scheduler port')
+parser.add_argument('--enable_gavel_iterator',
+        action='store_true',
+        default=False,
+        help='If set, use Gavel iterator')
 
 # Based on
 # https://github.com/pytorch/examples/tree/master/mnist_hogwild
@@ -190,9 +178,6 @@ if __name__ == '__main__':
         optimizer = None
 
     args.distributed = False
-    args.enable_gavel_iterator = False
-    if args.job_id is not None:
-        args.enable_gavel_iterator = True
 
     if args.max_steps is None:
         args.max_steps = INFINITY

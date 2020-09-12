@@ -35,12 +35,8 @@ parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
 parser.add_argument('--local_rank', default=0, type=int,
                     help='Local rank')
-parser.add_argument('--job_id', type=int, default=None, help='Job ID')
-parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
-parser.add_argument('--sched_addr', type=str, default=None,
-                    help='Scheduler server')
-parser.add_argument('--sched_port', type=int, default=None,
-                    help='Scheduler port')
+parser.add_argument('--enable_gavel_iterator', action='store_true',
+                    default=False, help='If set, use Gavel iterator')
 args = parser.parse_args()
 
 data_dir = args.data_dir
@@ -87,9 +83,8 @@ model = DynamicAutoencoder(hidden_layers=[200], activation_type='tanh',
 #                             dropout_prob=0.5, sparse=False)
 
 trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
-                  loss='logistic', user_based=False, job_id=args.job_id,
-                  worker_id=args.worker_id, sched_addr=args.sched_addr,
-                  sched_port=args.sched_port, gavel_dir=args.checkpoint_dir)
+                  loss='logistic', user_based=False,
+                  gavel_dir=(args.checkpoint_dir if args.enable_gavel_iterator else None))
 if os.path.exists(checkpoint_path):
     try:
         print('Loading checkpoint from %s...' % (checkpoint_path))

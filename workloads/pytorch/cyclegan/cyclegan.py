@@ -57,12 +57,8 @@ parser.add_argument('--max_duration', type=int, default=None,
                     help='Maximum duration in seconds')
 parser.add_argument('--local_rank', default=0, type=int,
                     help='Local rank')
-parser.add_argument('--job_id', type=int, default=None, help='Job ID')
-parser.add_argument('--worker_id', type=int, default=None, help='Worker ID')
-parser.add_argument('--sched_addr', type=str, default=None,
-                    help='Scheduler server')
-parser.add_argument('--sched_port', type=int, default=None,
-                    help='Scheduler port')
+parser.add_argument('--enable_gavel_iterator', action='store_true',
+                    default=False, help='If set, use Gavel iterator')
 opt = parser.parse_args()
 print(opt)
 
@@ -72,11 +68,6 @@ elif opt.n_steps is None and opt.n_epochs is None:
   raise ValueError('One of n_steps and n_epochs must be set')
 
 torch.cuda.set_device(opt.local_rank)
-
-opt.enable_gavel_iterator = False
-if opt.job_id is not None:
-    opt.enable_gavel_iterator = True
-
 
 # Create sample and checkpoint directories
 os.makedirs("images/%s" % opt.dataset_name, exist_ok=True)
@@ -171,9 +162,7 @@ val_dataloader = DataLoader(
 )
 
 if opt.enable_gavel_iterator:
-    dataloader = GavelIterator(dataloader, opt.job_id, opt.worker_id,
-                               False, opt.sched_addr, opt.sched_port,
-                               opt.checkpoint_dir)
+    dataloader = GavelIterator(dataloader, opt.checkpoint_dir)
 
 if opt.n_steps is not None:
     opt.n_epochs = math.ceil(opt.n_steps * opt.batch_size / len(dataloader))

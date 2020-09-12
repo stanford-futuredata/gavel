@@ -1,3 +1,6 @@
+import copy
+from filelock import FileLock
+import json
 from multiprocessing.pool import ThreadPool
 import math
 import logging
@@ -5,11 +8,14 @@ import numa
 import os
 import queue
 import re
+from shutil import which
 import signal
 import subprocess
 import sys
 import threading
 import time
+import traceback
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import utils
@@ -57,7 +63,8 @@ class Dispatcher:
                     raise RuntimeError('Failed to enable CUDA MPS')
 
     def _configure_numa(self):
-        self._numa_available = numa.available()
+        self._numa_available = \
+            numa.available() and which('numactl') is not None
         if not self._numa_available:
             return
         num_numa_nodes = numa.get_max_node() + 1
@@ -121,19 +128,15 @@ class Dispatcher:
         command = 'nvidia-cuda-mps-control -d'
 
         try:
-            output =\
+            output = \
                 subprocess.run(command, stdout=subprocess.PIPE,
                                check=True,
                                shell=True).stdout.decode('utf-8').strip()
             self._logger.info('Successfully enabled CUDA MPS')
             return True
         except subprocess.CalledProcessError as e:
-            error_message = 'Unable to start CUDA MPS:\n'
-            if e.stdout is not None:
-                error_message += 'Stdout:\n%s' % (e.stdout.decode('utf-8'))
-            if e.stderr is not None:
-                error_message += 'Stderr:\n%s' % (e.stderr.decode('utf-8'))
-            self._logger.error(error_message)
+            self._logger.error('Unable to start CUDA MPS!')
+            traceback.print_exc()
         return False
 
     def _shutdown_mps(self):
@@ -156,9 +159,7 @@ class Dispatcher:
         command = '%s --local_rank %d' % (command, gpu_id)
         command = '%s %s %d' % (command, job.num_steps_arg, job.total_steps)
         command = '%s --checkpoint_dir %s' % (command, checkpoint_dir)
-        command = ('%s --job_id %d --worker_id %d --sched_addr %s '
-                   '--sched_port %d' % (command, job.job_id, worker_id,
-                                        self._sched_addr, self._sched_port))
+        command = '%s --enable_gavel_iterator' % (command)
 
         if self._numa_available:
             cpus = self._numa_cpu_map[gpu_id]
@@ -167,24 +168,60 @@ class Dispatcher:
 
         return command
 
+    def _prepare_gavel_info(self, job_id, worker_id):
+        checkpoint_dir = \
+            os.path.join(self._checkpoint_dir, 'job_id=%d' % (job_id))
+        job_id = str(job_id)
+        worker_id = str(worker_id)
+        lock_file = os.path.join(checkpoint_dir, '.gavel.lock')
+        gavel_lock = FileLock(lock_file)
+        gavel_file = os.path.join(checkpoint_dir, '.gavel.json')
+        with gavel_lock:
+            if os.path.exists(gavel_file):
+                    with open(gavel_file, 'r') as f:
+                        gavel_info = json.load(f)
+            else:
+                gavel_info = {}
+            if job_id not in gavel_info:
+                gavel_info[job_id] = {}
+            gavel_info[job_id][worker_id] = {
+                'steps': 0,
+                'duration': 0,
+            }
+            with open(gavel_file, 'w') as f:
+                json.dump(gavel_info, f)
+
+        self._logger.debug(
+            'Gavel info for job {job_id}, worker {worker_id} '
+            'at dispatch time:\n{output}'.format(
+                job_id=job_id, worker_id=worker_id,
+                output=json.dumps(gavel_info, indent=2)))
+
     def _get_steps_and_execution_time(self, job_id, worker_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
                                       'job_id=%d' % (job_id))
-        info_file = os.path.join(checkpoint_dir,
-                                 '.gavel_info_worker=%d' % (worker_id))
-        try:
-            with open(info_file, 'r') as f:
-                lines = f.readlines()
-            steps = int(lines[0])
-            execution_time = float(lines[1])
-            with self._lock:
-                os.remove(info_file)
-        except Exception as e:
-            self._logger.error(
-                'Error recovering steps and execution time: {0}'.format(e))
-            steps = 0
-            execution_time = -1
-        return steps, execution_time
+        job_id = str(job_id)
+        worker_id = str(worker_id)
+        lock_file = os.path.join(checkpoint_dir, '.gavel.lock')
+        gavel_lock = FileLock(lock_file)
+        gavel_file = os.path.join(checkpoint_dir, '.gavel.json')
+        with gavel_lock:
+            with open(gavel_file, 'r') as f:
+                gavel_info = json.load(f)
+            self._logger.debug(
+                'Gavel info for job {job_id}, worker {worker_id} '
+                'at completion time:\n{output}'.format(
+                    job_id=job_id, worker_id=worker_id,
+                    output=json.dumps(gavel_info, indent=2)))
+            steps = int(gavel_info[job_id][worker_id]['steps'])
+            execution_time = \
+                float(gavel_info[job_id][worker_id]['duration'])
+            del gavel_info[job_id][worker_id]
+            if len(gavel_info[job_id]) == 0:
+                del gavel_info[job_id]
+            with open(gavel_file, 'w') as f:
+                json.dump(gavel_info, f)
+            return steps, execution_time
 
     def _kill_job(self, pid):
         self._logger.debug('Killing process {0}'.format(pid))
@@ -215,67 +252,60 @@ class Dispatcher:
                         self._kill_job(pid)
             self._logger.debug('Finished killing job(s)')
 
-    def launch_job(self, job, command, worker_id):
+    def launch_job(self, job, command, worker_id, gpu_id):
         output = ''
         cwd = os.path.join(self._run_dir, job.working_directory)
         try:
+            env = copy.deepcopy(os.environ)
+            env['GAVEL_JOB_ID'] = str(job.job_id)
+            env['GAVEL_WORKER_ID'] = str(worker_id)
+            env['GAVEL_SCHED_ADDR'] = self._sched_addr
+            env['GAVEL_SCHED_PORT'] = str(self._sched_port)
             proc = subprocess.run(command,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,
                                   cwd=cwd,
+                                  env=env,
                                   shell=True)
             output = proc.stdout.decode('utf-8').strip()
             completed_steps, execution_time = \
                 self._get_steps_and_execution_time(job.job_id, worker_id)
-            if completed_steps is None:
-                self._logger.error('Could not get completed steps for job '
-                                   '{job_id} (worker {worker_id}), '
-                                   'Output:\n{output}'.format(
-                                       job_id=job.job_id, worker_id=worker_id,
-                                       output=output))
-                completed_steps = 0
-                self._kill_jobs(job_id=job.job_id)
-            else:
-                self._logger.info(
-                    'Job ID: {job_id}, '
-                    'Worker ID: {worker_id}, '
-                    'Num steps: {num_steps}, '
-                    'Execution time: {execution_time:.2f} seconds, '
-                    'Output:\n{output}'.format(
-                        job_id=job.job_id, worker_id=worker_id,
-                        num_steps=completed_steps,
-                        execution_time=execution_time, output=output))
+            self._logger.info(
+                'Job ID: {job_id}, '
+                'Worker ID: {worker_id}, '
+                'Num steps: {num_steps}, '
+                'Execution time: {execution_time:.2f} seconds, '
+                'Output: {output}'.format(
+                    job_id=job.job_id, worker_id=worker_id,
+                    num_steps=completed_steps,
+                    execution_time=execution_time,
+                    output=output))
         except subprocess.CalledProcessError as e:
-            error_message = ('Job %s (worker %d) failed with '
-                             'error code %s' % (str(job.job_id),
-                                                worker_id,
-                                                str(e.returncode)))
-            if e.args is not None:
-                error_message += '\nArgs: %s' % (str(e.args))
-            if e.stdout is not None:
-                error_message += '\nStdout: %s' % (e.stdout.decode('utf-8'))
-            if e.stderr is not None:
-                error_message += '\nStderr: %s' % (e.stderr.decode('utf-8'))
+            error_message = \
+                'Job {job_id} (worker {worker_id}) failed!'.format(
+                    job_id=job.job_id, worker_id=worker_id) 
             self._logger.error(error_message)
-            execution_time = -1
-            completed_steps = 0
-            self._kill_jobs(job_id=job.job_id)
-        except subprocess.TimeoutExpired as e:
-            error_message = 'Job %s (worker %d) timed out' % (str(job.job_id),
-                                                              worker_id)
-            if e.args is not None:
-                error_message += '\nArgs: %s' % (str(e.args))
+            traceback.print_exc()
+            self._logger.error()
             if e.stdout is not None:
-                error_message += '\nStdout: %s' % (e.stdout.decode('utf-8'))
+                self._logger.debug('Job {job_id} (worker {worker_id}) '
+                                   'stdout: {output}'.format(
+                                       job_id=job.job_id, worker_id=worker_id,
+                                       stdout=e.stdout))
             if e.stderr is not None:
-                error_message += '\nStderr: %s' % (e.stderr.decode('utf-8'))
-            self._logger.error(error_message)
-            execution_time = -1
+                self._logger.debug('Job {job_id} (worker {worker_id}) '
+                                   'stderr: {output}'.format(
+                                       job_id=job.job_id, worker_id=worker_id,
+                                       stderr=e.stderr))
+            execution_time = 0
             completed_steps = 0
             self._kill_jobs(job_id=job.job_id)
         except Exception as e:
-            self._logger.error('Dispatcher failed: %s' % (str(e)))
-            execution_time = -1
+            self._logger.error('Dispatcher failed to launch '
+                               '{job_id}, worker {worker_id}!'.format(
+                                   job_id=job.job_id, worker_id=worker_id))
+            traceback.print_exc()
+            execution_time = 0
             completed_steps = 0
 
         return [job.job_id, execution_time, completed_steps]
@@ -299,19 +329,31 @@ class Dispatcher:
         self._logger.debug('Constructing commands for '
                            'worker {0}...'.format(worker_id))
 
+        success = True
         commands = []
         for job in jobs:
             try:
                 command = self._construct_command(job, gpu_id, worker_id)
                 commands.append(command)
             except Exception as e:
-                self._logger.error(
-                    'Failed to construct command for job {0}: {1}'.format(
-                        job_id, e))
-                commands = None
+                self._logger.error('Failed to construct command '
+                                   'for job {0}!'.format(job.job_id))
+                traceback.print_exc()
+                success = False
                 break
 
-        if commands is not None:
+        if success:
+            for job in jobs:
+                try:
+                    self._prepare_gavel_info(job.job_id, worker_id)
+                except Exception as e:
+                    self._logger.error('Could not prepare Gavel info for '
+                                        'job {0}!'.format(job.job_id))
+                    traceback.print_exc()
+                    success = False
+                    break
+
+        if success:
             # Launch the jobs.
             results = []
             for job, command in zip(jobs, commands):
@@ -321,7 +363,8 @@ class Dispatcher:
                                       command=command))
                 results.append(self._thread_pool.apply_async(self.launch_job,
                                                              (job, command,
-                                                              worker_id)))
+                                                              worker_id,
+                                                              gpu_id)))
             job_descriptions = [result.get() for result in results]
         else:
             job_descriptions = [[job.job_id, -1, 0] for job in jobs]
