@@ -2374,7 +2374,6 @@ class Scheduler:
                 current_time = self.get_current_timestamp()
                 elapsed_time_in_round = \
                     current_time - self._current_round_start_time
-                # TODO: Maybe cap this at 0?
                 extra_time += self._time_per_iteration - elapsed_time_in_round
                 extra_time = max(extra_time, 0)
             return (remaining_steps, self._time_per_iteration, extra_time)
@@ -2541,10 +2540,8 @@ class Scheduler:
                     self._num_failures_per_job[job_id] += 1
                     if (self._num_failures_per_job[job_id] >=
                         MAX_FAILED_ATTEMPTS):
-                        start_time = \
-                            self._per_job_start_timestamps[single_job_id]
-                        finish_time = \
-                            self._per_job_latest_timestamps[single_job_id]
+                        start_time = self._per_job_start_timestamps[job_id]
+                        finish_time = self._per_job_latest_timestamps[job_id]
                         duration = finish_time - start_time
                         self._logger.info(
                             '[Job failed]\tJob ID: {job_id}\t'
