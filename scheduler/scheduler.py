@@ -610,13 +610,17 @@ class Scheduler:
     def _print_schedule_summary(self):
         worker_types = sorted(self._cluster_spec.keys())
         for job_id, worker_ids in self._current_worker_assignments.items():
-            if job_id not in self._jobs:
+            worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
+            if job_id in self._completed_jobs_in_current_round:
+                self._logger.debug('Job {job_id} has already completed on '
+                                   '{num_gpus} {worker_type} GPUs'.format(
+                                       job_id=job_id, num_gpus=len(worker_ids),
+                                       worker_type=worker_type))
                 continue
             allocation_str = ''
             for x in worker_types:
                 allocation_str += \
                     ' [%4s %.2f]' % (x, self._allocation[job_id][x])
-            worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
             self._logger.info(
                 '[Micro-task scheduled]\tJob ID: {job_id}\t'
                 'Worker type: {worker_type}\tWorker ID(s): {worker_ids}\t'
@@ -629,8 +633,6 @@ class Scheduler:
                     allocation=allocation_str))
         num_workers_assigned = {}
         for job_id, worker_ids in self._current_worker_assignments.items():
-            if job_id not in self._jobs:
-                continue
             worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
             if worker_type not in num_workers_assigned:
                 num_workers_assigned[worker_type] = 0
@@ -1478,7 +1480,7 @@ class Scheduler:
            dispatched.
         """
         # Job could have been completed after schedule was computed.
-        if job_id not in self._jobs:
+        if job_id in self._completed_jobs_in_current_round:
             return
 
         # Initialize metadata for distributed jobs.
@@ -1530,8 +1532,8 @@ class Scheduler:
                          self._jobs[single_job_id].needs_data_dir,
                          self._jobs[single_job_id].num_steps_arg,
                          num_steps))
-                self._worker_connections[worker_id].run(job_descriptions,
-                                                        worker_id)
+            self._worker_connections[worker_id].run(job_descriptions,
+                                                    worker_id)
             if not next_round:
                 self._remove_available_worker_id(worker_id)
 
@@ -1564,8 +1566,7 @@ class Scheduler:
         # Wait for jobs in current round to complete.
         jobs_to_complete = set()
         for job_id in self._current_worker_assignments:
-            if job_id in self._jobs:
-                jobs_to_complete.add(job_id)
+            jobs_to_complete.add(job_id)
         while not jobs_to_complete.issubset(
             self._completed_jobs_in_current_round):
             self._scheduler_cv.wait()
@@ -1588,10 +1589,9 @@ class Scheduler:
                 'Next worker assignments have not been computed!')
 
         for (job_id, worker_ids) in self._next_worker_assignments.items():
-            if job_id not in self._jobs:
-                continue
-            for worker_id in worker_ids:
-                self._remove_available_worker_id(worker_id)
+            if job_id not in self._completed_jobs_in_current_round:
+                for worker_id in worker_ids:
+                    self._remove_available_worker_id(worker_id)
 
         current_round = self._num_completed_rounds
         self._num_completed_rounds += 1
@@ -2350,14 +2350,53 @@ class Scheduler:
         return (per_worker_ids, self._time_per_iteration)
 
     def _init_job_callback(self, job_id):
+        """Initializes a job.
+
+           Args:
+             job_id: The ID for the (single) job to initialize.
+        """
         with self._scheduler_cv:
             # Wait if this job has been scheduled for the next round
             # but is still running in the previous round (possibly on
             # a different worker).
-            while (self._next_worker_assignments is not None and
-                   job_id in self._next_worker_assignments and
-                   job_id in self._current_worker_assignments):
-                self._scheduler_cv.wait()
+            while True:
+                currently_active = False
+                next_job_combination = None
+
+                if self._next_worker_assignments is not None:
+                    for job_combination in self._next_worker_assignments:
+                        if job_id.overlaps_with(job_combination):
+                            next_job_combination = job_combination
+                            break
+
+                if next_job_combination is not None:
+                    # Check whether this job is blocked by a currently active
+                    # job - this could be a job (combination) involving this
+                    # job itself or this job's colocation partner in the
+                    # upcoming round. For example, consider the following
+                    # scenario:
+                    #
+                    # Round r: Job <0, 1> is scheduled
+                    # Round r+1 : Job <1, 2> is scheduled
+                    # Job 2 requests initialization partway through round r
+                    #
+                    # In this case, we would wait to intialize job 2 until
+                    # jobs 0 and 1 complete so that job 2 can execute together
+                    # with job 1.
+                    for job_combination in self._current_worker_assignments:
+                        for single_job_id in next_job_combination.singletons():
+                            if single_job_id.overlaps_with(job_combination):
+                                if (job_combination not in
+                                    self._completed_jobs_in_current_round):
+                                    currently_active = True
+                                    break
+                        if currently_active:
+                            break
+
+                if currently_active and next_job_combination is not None:
+                    self._scheduler_cv.wait()
+                else:
+                    break
 
             # Record initializiation as latest job event.
             self._per_job_latest_timestamps[job_id] = \
@@ -2370,7 +2409,7 @@ class Scheduler:
             extra_time = 0
             # Add additional time to the lease if the job was dispatched early.
             if (self._next_worker_assignments is not None and
-                job_id in self._next_worker_assignments):
+                next_job_combination is not None):
                 current_time = self.get_current_timestamp()
                 elapsed_time_in_round = \
                     current_time - self._current_round_start_time
