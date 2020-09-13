@@ -53,7 +53,7 @@ class Dispatcher:
             self._gpu_queue.put(gpu_id)
         self._configure_numa()
         self._use_mps = use_mps
-        if use_mps:
+        if self._use_mps:
             self._mps_initially_enabled = self._mps_status()
             if self._mps_initially_enabled:
                 self._logger.info('CUDA MPS already running')

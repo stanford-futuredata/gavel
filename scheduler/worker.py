@@ -21,7 +21,7 @@ DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 class Worker:
     def __init__(self, worker_type, sched_addr, sched_port, worker_port,
-                 num_gpus, run_dir, data_dir, checkpoint_dir):
+                 num_gpus, run_dir, data_dir, checkpoint_dir, use_mps):
         logger = logging.getLogger('worker')
         logger.setLevel(logging.DEBUG)
         ch = logging.StreamHandler()
@@ -70,7 +70,6 @@ class Worker:
                 if os.path.isdir(os.path.join(checkpoint_dir, dirname)):
                     shutil.rmtree(os.path.join(checkpoint_dir, dirname))
 
-        use_mps = worker_type == 'v100'
         self._dispatcher = dispatcher.Dispatcher(self._round_duration,
                                                  self._gpu_ids,
                                                  self._worker_rpc_client,
@@ -126,6 +125,8 @@ if __name__=='__main__':
                         help='Directory where data is stored')
     parser.add_argument('--checkpoint_dir', type=str, required=True,
                         help='Directory where checkpoints is stored')
+    parser.add_argument('--use_mps', action='store_true', default=False,
+                        help='If set, enable CUDA MPS')
     args = parser.parse_args()
     opt_dict = vars(args)
 
@@ -133,4 +134,5 @@ if __name__=='__main__':
     worker = Worker(opt_dict['worker_type'], opt_dict['ip_addr'],
                     opt_dict['sched_port'], opt_dict['worker_port'],
                     opt_dict['num_gpus'], opt_dict['run_dir'],
-                    opt_dict['data_dir'], opt_dict['checkpoint_dir'])
+                    opt_dict['data_dir'], opt_dict['checkpoint_dir'],
+                    opt_dict['use_mps'])
