@@ -611,7 +611,8 @@ class Scheduler:
         worker_types = sorted(self._cluster_spec.keys())
         for job_id, worker_ids in self._current_worker_assignments.items():
             worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
-            if job_id in self._completed_jobs_in_current_round:
+            if (job_id in self._completed_jobs_in_current_round or
+                job_id not in self._allocation):
                 self._logger.debug('Job {job_id} has already completed on '
                                    '{num_gpus} {worker_type} GPUs'.format(
                                        job_id=job_id, num_gpus=len(worker_ids),
@@ -2511,11 +2512,17 @@ class Scheduler:
                         'Waiting to complete job {0}...'.format(job_id))
                     self._scheduler_cv.wait()
 
+            # Check whether jobs are still active as jobs might have
+            # completed after being dispatched for the subsequent round.
+            is_active = {}
+            for single_job_id in job_id.singletons():
+                is_active[single_job_id] = single_job_id in self._jobs
+
             current_timestamp = self.get_current_timestamp()
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
             self._add_available_worker_id(worker_id)
 
-            scale_factor = self._jobs[job_id.singletons()[0]].scale_factor
+            scale_factor = len(self._current_worker_assignments[job_id])
             self._in_progress_updates[job_id].append((worker_id,
                                                       all_num_steps,
                                                       all_execution_times))
@@ -2549,10 +2556,13 @@ class Scheduler:
                 all_execution_times = [0] * len(job_id.singletons())
                 for (_, all_num_steps_, all_execution_times_) in \
                     self._in_progress_updates[job_id]:
-                    if (np.min(all_num_steps_) <= 0 or
-                        np.min(all_execution_times_) <= 0):
-                        micro_task_succeeded = False
-                        break
+                    for i in range(len(job_id.singletons())):
+                        if not is_active[job_id.singletons()[i]]:
+                            continue
+                        elif (all_num_steps_[i] <= 0 or
+                              all_execution_times_[i] <= 0):
+                            micro_task_succeeded = False
+                            break
                     for i in range(len(job_id.singletons())):
                         all_num_steps[i] += all_num_steps_[i]
                         all_execution_times[i] = max(all_execution_times[i],
@@ -2567,15 +2577,16 @@ class Scheduler:
                 # NOTE: We update the timestamp before calling this
                 # function in simulation.
                 for single_job_id in job_id.singletons():
-                    self._per_job_latest_timestamps[single_job_id] = \
-                            self.get_current_timestamp()
+                    if is_active[single_job_id]:
+                        self._per_job_latest_timestamps[single_job_id] = \
+                                self.get_current_timestamp()
 
             if not micro_task_succeeded:
                 # Micro-task failed.
                 self._logger.info(
                     '[Micro-task failed]\tJob ID: {job_id}'.format(
                         job_id=job_id))
-                if not job_id.is_pair():
+                if not job_id.is_pair() and is_active[job_id]:
                     self._num_failures_per_job[job_id] += 1
                     if (self._num_failures_per_job[job_id] >=
                         MAX_FAILED_ATTEMPTS):
@@ -2605,6 +2616,8 @@ class Scheduler:
                 for single_job_id, num_steps, execution_time in \
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
+                    if not is_active[single_job_id]:
+                            continue
                     if self._per_worker_type_prices is not None:
                         self._job_cost_so_far[single_job_id] += \
                             (self._per_worker_type_prices[worker_type] *

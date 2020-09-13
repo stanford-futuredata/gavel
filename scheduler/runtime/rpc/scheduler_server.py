@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import socket
+import traceback
 sys.path.append(os.path.join(os.path.dirname(__file__), '../rpc_stubs'))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
@@ -74,7 +75,8 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
                           request.num_steps, request.execution_time)
         except Exception as e:
             self._logger.error('Could not process completion '
-                               'notification: {0}'.format(e))
+                               'notification for job {0}'.format(job_id))
+            traceback.print_exc()
 
         return common_pb2.Empty()
 
