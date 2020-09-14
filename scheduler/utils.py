@@ -492,6 +492,8 @@ def get_policy(policy_name, solver=None, seed=None,
                                                         solver=solver)
     elif policy_name == 'min_total_duration':
         policy = min_total_duration.MinTotalDurationPolicy(solver=solver)
+    elif policy_name == 'min_total_duration_perf':
+        policy = min_total_duration.MinTotalDurationPolicyWithPerf(solver=solver)
     elif policy_name == 'min_total_duration_packed':
         policy = \
             min_total_duration.MinTotalDurationPolicyWithPacking(solver=solver)

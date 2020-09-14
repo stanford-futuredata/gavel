@@ -139,7 +139,7 @@ Relevant parsing and plotting code is in the
 To reproduce the makespan policy results:
 
 ```bash
-python -u scripts/sweeps/run_sweep_static.py -l /path/to/log/directory -j 24 -p gandiva max_min_fairness min_total_duration min_total_duration_packed fifo gandiva --seeds 0 1 2 -c 36:36:36 -a 0 -b 500 -n 6 --generate-multi-gpu-jobs
+python -u scripts/sweeps/run_sweep_static.py -l /path/to/log/directory -j 24 -p gandiva min_total_duration min_total_duration_perf min_total_duration_packed fifo gandiva --seeds 0 1 2 -c 36:36:36 -a 0 -b 500 -n 6 --generate-multi-gpu-jobs
 ```
 
 Parsing and plotting code is in the

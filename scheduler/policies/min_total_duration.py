@@ -9,6 +9,32 @@ from policy import Policy, PolicyWithPacking
 class MinTotalDurationPolicy(Policy):
 
     def __init__(self, solver):
+        self._name = 'MinTotalDuration'
+        self._min_total_duration_perf_policy = \
+            MinTotalDurationPolicyWithPerf(solver)
+
+    def get_allocation(self, unflattened_throughputs, scale_factors,
+                       num_steps_remaining, cluster_spec):
+        throughputs, index = super().flatten(unflattened_throughputs,
+                                             cluster_spec)
+        if throughputs is None: return None
+        (job_ids, worker_types) = index
+
+        new_unflattened_throughputs = {}
+        for job_id in unflattened_throughputs:
+            new_unflattened_throughputs[job_id] = {}
+            for worker_type in unflattened_throughputs[job_id]:
+                 new_unflattened_throughputs[job_id][worker_type] = \
+                     unflattened_throughputs[job_id]['v100']
+
+        return self._min_total_duration_perf_policy.get_allocation(
+            new_unflattened_throughputs, scale_factors, num_steps_remaining,
+            cluster_spec)
+
+
+class MinTotalDurationPolicyWithPerf(Policy):
+
+    def __init__(self, solver):
         Policy.__init__(self, solver)
         self._name = 'MinTotalDuration_Perf'
 
