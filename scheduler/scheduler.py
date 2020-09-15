@@ -638,11 +638,17 @@ class Scheduler:
             priorities = self._priorities
             deficits = self._deficits
 
+        completed_jobs = set()
         worker_types = sorted(self._cluster_spec.keys())
         for job_id, worker_ids in self._current_worker_assignments.items():
             worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
             if (job_id in self._completed_jobs_in_current_round or
-                job_id not in allocation):
+                job_id not in allocation or
+                job_id not in priorities[worker_type] or
+                job_id not in deficits[worker_type]):
+                completed_jobs.add(job_id)
+
+            if job_id in completed_jobs:
                 self._logger.debug('Job {job_id} has already completed on '
                                    '{num_gpus} {worker_type} GPUs'.format(
                                        job_id=job_id, num_gpus=len(worker_ids),
@@ -651,17 +657,6 @@ class Scheduler:
             allocation_str = ''
             for x in worker_types:
                 allocation_str += ' [%4s %.2f]' % (x, allocation[job_id][x])
-            if (job_id not in priorities[worker_type] or
-                  job_id not in deficits[worker_type]):
-                self._logger.error('Job {0} in allocation but not '
-                                   'in priorities!'.format(job_id))
-                self._logger.debug('Job {0} allocation: {1}'.format(
-                        job_id, allocation_str))
-                self._logger.debug('Job {0} priorities keys: {1}'.format(
-                    job_id, sorted(priorities[worker_type].keys())))
-                self._logger.debug('Job {0} deficits keys: {1}'.format(
-                    job_id, sorted(deficits[worker_type].keys())))
-                continue
             self._logger.info(
                 '[Micro-task scheduled]\tJob ID: {job_id}\t'
                 'Worker type: {worker_type}\tWorker ID(s): {worker_ids}\t'
@@ -674,6 +669,8 @@ class Scheduler:
                     allocation=allocation_str))
         num_workers_assigned = {}
         for job_id, worker_ids in self._current_worker_assignments.items():
+            if job_id in completed_jobs:
+                continue
             worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
             if worker_type not in num_workers_assigned:
                 num_workers_assigned[worker_type] = 0
@@ -1483,7 +1480,8 @@ class Scheduler:
         for job_id in self._current_worker_assignments:
             current_worker_ids = \
                 set(self._current_worker_assignments[job_id])
-            if job_id in self._next_worker_assignments:
+            if (job_id in self._next_worker_assignments and
+                job_id not in self._completed_jobs_in_current_round):
                 next_worker_ids = \
                     set(self._next_worker_assignments[job_id])
                 if current_worker_ids == next_worker_ids:
@@ -1507,7 +1505,9 @@ class Scheduler:
         # Dispatch jobs for upcoming round.
         for (job_id, worker_ids) in \
             self._next_worker_assignments.items():
-            if job_id not in self._jobs_with_extended_lease:
+            if (job_id not in self._jobs_with_extended_lease or
+                (job_id in self._jobs_with_extended_lease and
+                 job_id in self._completed_jobs_in_current_round)):
                 self._logger.info('Dispatching job {0}'.format(job_id))
                 self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
@@ -1521,7 +1521,8 @@ class Scheduler:
            dispatched.
         """
         # Job could have been completed after schedule was computed.
-        if job_id in self._completed_jobs_in_current_round:
+        if (job_id in self._completed_jobs_in_current_round or
+            not any([x in self._jobs for x in job_id.singletons()])):
             return
 
         # Initialize metadata for distributed jobs.
@@ -1604,13 +1605,26 @@ class Scheduler:
         the set of jobs with extended leases as well as relevant metadata.
         """
 
+        current_round = self._num_completed_rounds
+
         # Wait for jobs in current round to complete.
         jobs_to_complete = set()
         for job_id in self._current_worker_assignments:
-            jobs_to_complete.add(job_id)
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if is_active:
+                jobs_to_complete.add(job_id)
+        self._logger.debug('Waiting for following jobs '
+                           'to complete: {0}'.format(sorted(jobs_to_complete)))
         while not jobs_to_complete.issubset(
             self._completed_jobs_in_current_round):
             self._scheduler_cv.wait()
+            remaining_jobs = jobs_to_complete.difference(
+                                self._completed_jobs_in_current_round)
+            self._logger.debug('Remaining jobs in round: {0}'.format(
+                sorted(remaining_jobs)))
+        self._logger.debug(
+            'All jobs in round {0} have completed!'.format(current_round))
+
         if len(self._lease_extension_events) > 0:
             raise RuntimeError('Remaining lease extension events: {0}'.format(
                 self._lease_extension_events.keys()))
@@ -1624,6 +1638,7 @@ class Scheduler:
                 for worker_id in current_worker_ids:
                     self._add_available_worker_id(worker_id)
             self._jobs_with_extended_lease.remove(job_id)
+        self._logger.debug('Reset extended leases')
 
         # The next worker assignments must have been computed here as
         # _end_round is called sequentially after _mid_round.
@@ -1632,11 +1647,11 @@ class Scheduler:
                 'Next worker assignments have not been computed!')
 
         for (job_id, worker_ids) in self._next_worker_assignments.items():
-            if job_id not in self._completed_jobs_in_current_round:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if is_active:
                 for worker_id in worker_ids:
                     self._remove_available_worker_id(worker_id)
 
-        current_round = self._num_completed_rounds
         self._num_completed_rounds += 1
 
         # Reset metadata.
@@ -2566,7 +2581,7 @@ class Scheduler:
             for single_job_id in job_id.singletons():
                 is_active[single_job_id] = single_job_id in self._jobs
             if not any(is_active.values()):
-                self._logger.info('Job {job_id} (worker {worker_id} has '
+                self._logger.info('Job {job_id} (worker {worker_id}) has '
                                   'already completed!'.format(
                                       job_id=job_id, worker_id=worker_id))
                 return
