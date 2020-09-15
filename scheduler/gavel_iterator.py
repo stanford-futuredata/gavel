@@ -4,6 +4,7 @@ from collections.abc import Iterable
 import os
 import time
 import torch
+import traceback
 from torch.utils.data.dataloader import DataLoader
 
 from lease import Lease
@@ -43,6 +44,7 @@ class GavelIterator:
         # TODO: Tie this with loading the checkpoint
         self._lease = Lease(0, 0)
         self._update_lease(init=True)
+        self._write_info()
         self._prev_time = time.time()
 
     def __iter__(self):
@@ -119,14 +121,24 @@ class GavelIterator:
         worker_id = str(self._worker_id)
         with self._lock:
             try:
-                with open(self._gavel_file, 'r') as f:
-                    gavel_info = json.load(f)
+                if os.path.exists(self._gavel_file):
+                    with open(self._gavel_file, 'r') as f:
+                        gavel_info = json.load(f)
+                else:
+                    gavel_info = {}
+                if job_id not in gavel_info:
+                    gavel_info[job_id] = {}
+                if worker_id not in gavel_info[job_id]:
+                    gavel_info[job_id][worker_id] = {}
                 gavel_info[job_id][worker_id]['steps'] = self._steps
                 gavel_info[job_id][worker_id]['duration'] = self._duration
+                print('Gavel info:\n{0}'.format(
+                        json.dumps(gavel_info, indent=2)))
                 with open(self._gavel_file, 'w') as f:
                     json.dump(gavel_info, f)
             except Exception as e:
-                raise RuntimeError('Could not write Gavel info: {0}'.format(e))
+                traceback.print_exc()
+                raise RuntimeError('Could not write Gavel info!')
 
     def _update_lease(self, init=False):
         if init:

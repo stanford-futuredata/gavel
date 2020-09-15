@@ -339,7 +339,7 @@ class Scheduler:
     def _update_throughput(self, job_id, worker_type, all_num_steps,
                            all_execution_times):
         # Job might have already completed.
-        if not job_id.is_pair() and not job_id in self._jobs:
+        if job_id not in self._throughputs:
             return
         if self._simulate and self._estimate_throughputs:
             if not job_id.is_pair():
@@ -544,16 +544,22 @@ class Scheduler:
                     job_id.overlaps_with(other_job_id)):
                     to_delete.append(other_job_id)
             for other_job_id in to_delete:
+                other_job_is_active = False
+                for single_job_id in other_job_id.singletons():
+                    if single_job_id in self._jobs:
+                        other_job_is_active = True
+                        break
                 del self._throughputs[other_job_id]
                 del self._job_time_so_far[other_job_id]
-                if other_job_id in self._in_progress_updates:
-                    del self._in_progress_updates[other_job_id]
-                if other_job_id in self._lease_update_requests:
-                    del self._lease_update_requests[other_job_id]
-                if other_job_id in self._max_steps:
-                    del self._max_steps[other_job_id]
-                if other_job_id in self._jobs_with_extended_lease:
-                    self._jobs_with_extended_lease.remove(other_job_id)
+                if not other_job_is_active:
+                    if other_job_id in self._in_progress_updates:
+                        del self._in_progress_updates[other_job_id]
+                    if other_job_id in self._lease_update_requests:
+                        del self._lease_update_requests[other_job_id]
+                    if other_job_id in self._max_steps:
+                        del self._max_steps[other_job_id]
+                    if other_job_id in self._jobs_with_extended_lease:
+                        self._jobs_with_extended_lease.remove(other_job_id)
 
             if len(self._job_type_to_job_ids[job_type_key]) == 0:
                 del self._job_type_to_job_ids[job_type_key]
@@ -607,12 +613,36 @@ class Scheduler:
     ======================================================================
     """
 
-    def _print_schedule_summary(self):
+    def _get_state_snapshot(self, deepcopy=False):
+        if deepcopy:
+            state_snapshot = {
+                'allocation': copy.deepcopy(self._allocation),
+                'priorities': copy.deepcopy(self._priorities),
+                'deficits': copy.deepcopy(self._deficits),
+            }
+        else:
+            state_snapshot = {
+                'allocation': self._allocation,
+                'priorities': self._priorities,
+                'deficits': self._deficits,
+            }
+        return state_snapshot
+
+    def _print_schedule_summary(self, state_snapshot=None):
+        if state_snapshot is None:
+            allocation = state_snapshot['allocation']
+            priorities = state_snapshot['priorities']
+            deficits = state_snapshot['deficits']
+        else:
+            allocation = self._allocation
+            priorities = self._priorities
+            deficits = self._deficits
+
         worker_types = sorted(self._cluster_spec.keys())
         for job_id, worker_ids in self._current_worker_assignments.items():
             worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
             if (job_id in self._completed_jobs_in_current_round or
-                job_id not in self._allocation):
+                job_id not in allocation):
                 self._logger.debug('Job {job_id} has already completed on '
                                    '{num_gpus} {worker_type} GPUs'.format(
                                        job_id=job_id, num_gpus=len(worker_ids),
@@ -620,8 +650,18 @@ class Scheduler:
                 continue
             allocation_str = ''
             for x in worker_types:
-                allocation_str += \
-                    ' [%4s %.2f]' % (x, self._allocation[job_id][x])
+                allocation_str += ' [%4s %.2f]' % (x, allocation[job_id][x])
+            if (job_id not in priorities[worker_type] or
+                  job_id not in deficits[worker_type]):
+                self._logger.error('Job {0} in allocation but not '
+                                   'in priorities!'.format(job_id))
+                self._logger.debug('Job {0} allocation: {1}'.format(
+                        job_id, allocation_str))
+                self._logger.debug('Job {0} priorities keys: {1}'.format(
+                    job_id, sorted(priorities[worker_type].keys())))
+                self._logger.debug('Job {0} deficits keys: {1}'.format(
+                    job_id, sorted(deficits[worker_type].keys())))
+                continue
             self._logger.info(
                 '[Micro-task scheduled]\tJob ID: {job_id}\t'
                 'Worker type: {worker_type}\tWorker ID(s): {worker_ids}\t'
@@ -629,8 +669,8 @@ class Scheduler:
                 'Allocation: {allocation}'.format(
                     job_id=job_id, worker_type=worker_type,
                     worker_ids=",".join([str(x) for x in worker_ids]),
-                    priority=self._priorities[worker_type][job_id],
-                    deficit=self._deficits[worker_type][job_id],
+                    priority=priorities[worker_type][job_id],
+                    deficit=deficits[worker_type][job_id],
                     allocation=allocation_str))
         num_workers_assigned = {}
         for job_id, worker_ids in self._current_worker_assignments.items():
@@ -1413,13 +1453,13 @@ class Scheduler:
               '(%.2f hours)' % (self._current_timestamp,
                                 self._current_timestamp / 3600.0))
 
-    def _begin_round(self):
+    def _begin_round(self, state_snapshot=None):
         """Executes beginning stage of a scheduling round."""
 
         self._current_round_start_time = self.get_current_timestamp()
         current_round = self._num_completed_rounds
         self._logger.info('*** START ROUND {0} ***'.format(current_round))
-        self._print_schedule_summary()
+        self._print_schedule_summary(state_snapshot)
 
     def _mid_round(self, pool):
         """Executes intermediate stage of a scheduling round.
@@ -1571,7 +1611,9 @@ class Scheduler:
         while not jobs_to_complete.issubset(
             self._completed_jobs_in_current_round):
             self._scheduler_cv.wait()
-        assert(self._lease_extension_events == {})
+        if len(self._lease_extension_events) > 0:
+            raise RuntimeError('Remaining lease extension events: {0}'.format(
+                self._lease_extension_events.keys()))
 
         # Reset extended leases.
         jobs_with_extended_lease = list(self._jobs_with_extended_lease)
@@ -1630,6 +1672,7 @@ class Scheduler:
             self._scheduler_cv.wait()
 
         # Compute initial schedule and dispatch initial set of jobs.
+        state_snapshot = self._get_state_snapshot()
         self._current_worker_assignments = self._schedule_jobs_on_workers()
         for (job_id, worker_ids) in self._current_worker_assignments.items():
             self._try_dispatch_job(job_id, worker_ids)
@@ -1639,13 +1682,14 @@ class Scheduler:
             while True:
                 round_start_time = self.get_current_timestamp()
                 with self._scheduler_cv:
-                    self._begin_round()
+                    self._begin_round(state_snapshot)
 
                 # Wait for partway through round to recompute schedule.
                 delay = self._time_per_iteration * SCHEDULE_RECOMPUTE_FRACTION
                 time.sleep(delay)
 
                 with self._scheduler_cv:
+                    state_snapshot = self._get_state_snapshot(deepcopy=True)
                     self._mid_round(pool)
                     self._end_round()
 
@@ -2357,6 +2401,10 @@ class Scheduler:
              job_id: The ID for the (single) job to initialize.
         """
         with self._scheduler_cv:
+            # Job could have completed in previous round.
+            if job_id not in self._jobs:
+                return (0, 0, 0)
+
             # Wait if this job has been scheduled for the next round
             # but is still running in the previous round (possibly on
             # a different worker).
@@ -2517,6 +2565,11 @@ class Scheduler:
             is_active = {}
             for single_job_id in job_id.singletons():
                 is_active[single_job_id] = single_job_id in self._jobs
+            if not any(is_active.values()):
+                self._logger.info('Job {job_id} (worker {worker_id} has '
+                                  'already completed!'.format(
+                                      job_id=job_id, worker_id=worker_id))
+                return
 
             current_timestamp = self.get_current_timestamp()
             worker_type = self._worker_id_to_worker_type_mapping[worker_id]
@@ -2617,7 +2670,10 @@ class Scheduler:
                         zip(job_id.singletons(), all_num_steps,
                             all_execution_times):
                     if not is_active[single_job_id]:
-                            continue
+                        self._logger.debug('Job {0} is not active, not '
+                                           'updating metadata'.format(
+                                               single_job_id))
+                        continue
                     if self._per_worker_type_prices is not None:
                         self._job_cost_so_far[single_job_id] += \
                             (self._per_worker_type_prices[worker_type] *
@@ -2634,8 +2690,14 @@ class Scheduler:
                         self._steps_run_so_far[single_job_id][worker_type] += \
                                 num_steps
                         self._total_steps_run[single_job_id] += num_steps
-                        if (self._total_steps_run[single_job_id] <
-                            self._jobs[single_job_id].total_steps):
+                        remaining_steps = \
+                            self._get_remaining_steps(single_job_id)
+                        if remaining_steps > 0:
+                            self._logger.debug(
+                                'Job {job_id} has {steps} '
+                                'remaining steps'.format(
+                                    job_id=single_job_id,
+                                    steps=remaining_steps))
                             pass
                         else:
                             start_time = \
