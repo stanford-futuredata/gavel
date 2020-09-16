@@ -544,11 +544,8 @@ class Scheduler:
                     job_id.overlaps_with(other_job_id)):
                     to_delete.append(other_job_id)
             for other_job_id in to_delete:
-                other_job_is_active = False
-                for single_job_id in other_job_id.singletons():
-                    if single_job_id in self._jobs:
-                        other_job_is_active = True
-                        break
+                other_job_is_active = \
+                    any([x in self._jobs for x in other_job_id.singletons()])
                 del self._throughputs[other_job_id]
                 del self._job_time_so_far[other_job_id]
                 if not other_job_is_active:
