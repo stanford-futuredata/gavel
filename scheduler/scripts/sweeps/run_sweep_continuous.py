@@ -103,6 +103,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                                                            experiment_id,
                                                            average_jct,
                                                            utilization))
+    sched.shutdown()
 
     return average_jct, utilization
 
@@ -122,7 +123,7 @@ def main(args):
     profiling_percentages = args.profiling_percentages
     all_num_reference_models = args.num_reference_models
     estimate_throughputs = (min(profiling_percentages) < 1.0 or
-                            min(all_num_reference_models) < len(JobTable)) 
+                            min(all_num_reference_models) < len(JobTable))
     job_range = (args.window_start, args.window_end)
     experiment_id = 0
 

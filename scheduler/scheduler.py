@@ -78,10 +78,12 @@ class Scheduler:
         ch = logging.StreamHandler()
         ch.setFormatter(logging.Formatter(LOG_FORMAT, style='{'))
         logger.addHandler(ch)
+        self._orig_logger = logger
         self._logger = \
             SchedulerAdapter(logger,
                              {'scheduler': self,
                               'start_timestamp': datetime.datetime.now()})
+        self._logging_handler = ch
 
         # Print config information.
         if simulate:
@@ -596,9 +598,12 @@ class Scheduler:
 
     def shutdown(self):
         """Sends a shutdown signal to every worker and ends the scheduler."""
-        with self._scheduler_lock:
-            for rpc_client in self._all_rpc_clients:
-                rpc_client.shutdown()
+        if not self._simulate:
+            with self._scheduler_lock:
+                for rpc_client in self._all_rpc_clients:
+                    rpc_client.shutdown()
+        self._orig_logger.removeHandler(self._logging_handler)
+        self._logging_handler.close()
         # TODO: Any other cleanup?
 
     """

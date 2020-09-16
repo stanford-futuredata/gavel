@@ -29,6 +29,7 @@ class Worker:
                                           style='{'))
         logger.addHandler(ch)
         self._logger = logger
+        self._logging_handler = ch
 
         num_available_gpus = utils.get_num_gpus()
         if num_gpus > num_available_gpus:
@@ -96,6 +97,8 @@ class Worker:
 
     def _signal_handler(self, sig, frame):
         self._dispatcher.shutdown()
+        self._logger.removeHandler(self._logging_handler)
+        self._logging_handler.close()
         sys.exit(0)
 
     def _reset_callback(self):
@@ -103,6 +106,8 @@ class Worker:
 
     def _shutdown_callback(self):
         self._dispatcher.shutdown()
+        self._logger.removeHandler(self._logging_handler)
+        self._logging_handler.close()
 
     def join(self):
         self._server_thread.join()

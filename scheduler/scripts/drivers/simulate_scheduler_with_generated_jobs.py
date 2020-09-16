@@ -75,6 +75,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                                                        num_SLO_violations),
           file=sys.stderr)
 
+    sched.shutdown()
+
 def main(args):
     throughputs_file = args.throughputs_file
     num_gpus = args.cluster_spec.split(':')

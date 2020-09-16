@@ -106,6 +106,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                   makespan,
                   total_cost))
 
+    sched.shutdown()
+
     return average_jct, utilization
 
 def main(args):
