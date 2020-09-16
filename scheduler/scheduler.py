@@ -626,7 +626,7 @@ class Scheduler:
         return state_snapshot
 
     def _print_schedule_summary(self, state_snapshot=None):
-        if state_snapshot is None:
+        if state_snapshot is not None:
             allocation = state_snapshot['allocation']
             priorities = state_snapshot['priorities']
             deficits = state_snapshot['deficits']
@@ -645,7 +645,7 @@ class Scheduler:
                 job_id not in deficits[worker_type]):
                 completed_jobs.add(job_id)
 
-            if job_id in completed_jobs:
+            if not self._simulate and job_id in completed_jobs:
                 self._logger.debug('Job {job_id} has already completed on '
                                    '{num_gpus} {worker_type} GPUs'.format(
                                        job_id=job_id, num_gpus=len(worker_ids),
@@ -666,7 +666,7 @@ class Scheduler:
                     allocation=allocation_str))
         num_workers_assigned = {}
         for job_id, worker_ids in self._current_worker_assignments.items():
-            if job_id in completed_jobs:
+            if not self._simulate and job_id in completed_jobs:
                 continue
             worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
             if worker_type not in num_workers_assigned:
@@ -2705,11 +2705,12 @@ class Scheduler:
                         remaining_steps = \
                             self._get_remaining_steps(single_job_id)
                         if remaining_steps > 0:
-                            self._logger.debug(
-                                'Job {job_id} has {steps} '
-                                'remaining steps'.format(
-                                    job_id=single_job_id,
-                                    steps=remaining_steps))
+                            if not self._simulate:
+                                self._logger.debug(
+                                    'Job {job_id} has {steps} '
+                                    'remaining steps'.format(
+                                        job_id=single_job_id,
+                                        steps=remaining_steps))
                             pass
                         else:
                             start_time = \
