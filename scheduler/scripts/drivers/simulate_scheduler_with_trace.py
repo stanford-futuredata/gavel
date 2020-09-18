@@ -51,6 +51,7 @@ def main(args):
                    jobs_to_complete=jobs_to_complete)
     sched.get_average_jct(jobs_to_complete)
     sched.get_cluster_utilization()
+    sched.shutdown()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run scheduler with trace')
