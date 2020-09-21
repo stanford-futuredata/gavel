@@ -21,14 +21,17 @@ LEASE_UPDATE_FRACTION = 0.75
 
 class GavelIterator:
     def __init__(self, data_loader, gavel_dir, load_checkpoint_func,
-                 save_checkpoint_func, synthetic_data=False, verbose=True):
+                 save_checkpoint_func, synthetic_data=False,
+                 write_on_close=True, verbose=True):
         if not isinstance(data_loader, Iterable):
             raise ValueError('Data is of uniterable '
                              'type %s' % (type(data_loader)))
         else:
             self._data_loader = data_loader
 
-        atexit.register(self._write_info)
+        self._write_on_close = write_on_close
+        if self._write_on_close:
+            atexit.register(self._write_info)
         self._verbose = verbose
         self._load_checkpoint_func = load_checkpoint_func
         self._save_checkpoint_func = save_checkpoint_func
@@ -115,6 +118,8 @@ class GavelIterator:
 
     def complete(self):
         self._done = True
+        if not self._write_on_close:
+            self._write_info()
 
     def load_checkpoint(self, *args, **kwargs):
         print('[%s] Gavel loading checkpoint' % (datetime.datetime.now()))
