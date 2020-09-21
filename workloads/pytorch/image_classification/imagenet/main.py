@@ -185,8 +185,7 @@ def main():
 
     if args.enable_gavel_iterator:
         train_loader = GavelIterator(train_loader, args.checkpoint_dir,
-                                     load_checkpoint_func,
-                                     save_checkpoint_func)
+                                     load_checkpoint, save_checkpoint)
 
     # Load from checkpoint.
     if not os.path.isdir(args.checkpoint_dir):
@@ -194,9 +193,9 @@ def main():
     checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
     if os.path.exists(checkpoint_path):
         if args.enable_gavel_iterator:
-            checkpoint = train_loader.load_checkpoint(checkpoint_path)
+            checkpoint = train_loader.load_checkpoint(args, checkpoint_path)
         else:
-            checkpoint = load_checkpoint(checkpoint_path)
+            checkpoint = load_checkpoint(args, checkpoint_path)
 
         if checkpoint is not None:
             args.start_epoch = checkpoint['epoch']

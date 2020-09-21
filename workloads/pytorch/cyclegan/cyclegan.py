@@ -126,7 +126,7 @@ def load_checkpoint(opt, checkpoint_path):
     try:
         print('Loading checkpoint from %s...' % (checkpoint_path))
         checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(opt.local_rank))
-	return checkpoint
+        return checkpoint
     except Exception as e:
         print('Could not load from checkpoint: %s' % (e))
         return None

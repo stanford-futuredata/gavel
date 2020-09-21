@@ -237,7 +237,7 @@ if args.checkpoint_dir is not None:
             else:
                 state = load_checkpoint(args, checkpoint_path)
 if state is not None:
-    state['model'].to(device)
+    model = state['model'].to(device)
 else:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                            args.nlayers, args.dropout, args.tied).to(device)
@@ -383,7 +383,7 @@ try:
         else:
             state = {'model': model}
         if args.enable_gavel_iterator:
-            train_loader.save_checkpoint(state, f)
+            train_loader.save_checkpoint(state, checkpoint_path)
         else:
             save_checkpoint(state, f)
 except KeyboardInterrupt:
