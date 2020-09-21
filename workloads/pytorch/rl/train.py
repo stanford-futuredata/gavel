@@ -1,4 +1,5 @@
 from __future__ import division
+import dill
 from setproctitle import setproctitle as ptitle
 import torch
 import torch.optim as optim
@@ -12,6 +13,7 @@ import sys
 import time
 
 def train(rank, args, shared_model, optimizer, env_conf, iters):
+    iters = dill.loads(iters)
     ptitle('Training Agent: {}'.format(rank))
     gpu_id = args.gpu_ids[rank % len(args.gpu_ids)]
     torch.manual_seed(args.seed + rank)
@@ -121,4 +123,6 @@ def train(rank, args, shared_model, optimizer, env_conf, iters):
 
         if (args.max_duration is not None and
             elapsed_time >= args.max_duration):
-          return
+            break
+    if args.enable_gavel_iterator:
+        iters.complete()

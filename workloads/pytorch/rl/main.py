@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
 import argparse
+import dill
 import torch
 import torch.multiprocessing as mp
 from environment import atari_env
@@ -11,6 +12,7 @@ from train import train
 from test import test
 from shared_optim import SharedRMSprop, SharedAdam
 #from gym.configuration import undo_logger_setup
+import sys
 import time
 
 # TODO: Figure out a cleaner way of including gavel_iterator.
@@ -182,7 +184,8 @@ if __name__ == '__main__':
         iters[rank] = range(args.max_steps)
         if args.enable_gavel_iterator and rank == 0:
             iters[rank] = GavelIterator(iters[rank], args.checkpoint_dir,
-                                        load_checkpoint, save_checkpoint)
+                                        load_checkpoint, save_checkpoint,
+                                        write_on_close=False)
 
     if not os.path.isdir(args.checkpoint_dir):
         os.mkdir(args.checkpoint_dir)
@@ -214,8 +217,9 @@ if __name__ == '__main__':
 
     time.sleep(0.1)
     for rank in range(0, args.workers):
+        iters_ = dill.dumps(iters[rank])
         p = mp.Process(
-            target=train, args=(rank, args, shared_model, optimizer, env_conf, iters[rank]))
+            target=train, args=(rank, args, shared_model, optimizer, env_conf, iters_))
         p.start()
         processes.append(p)
         time.sleep(0.1)
