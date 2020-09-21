@@ -1,6 +1,9 @@
+import atexit
+import datetime
 from filelock import FileLock
 import json
 from collections.abc import Iterable
+import logging
 import os
 import time
 import torch
@@ -10,6 +13,8 @@ from torch.utils.data.dataloader import DataLoader
 from lease import Lease
 
 from runtime.rpc import iterator_client
+
+logging.getLogger('filelock').setLevel(logging.CRITICAL)
 
 INFINITY = (1e9)
 LEASE_UPDATE_FRACTION = 0.75
@@ -23,6 +28,7 @@ class GavelIterator:
         else:
             self._data_loader = data_loader
 
+        atexit.register(self._write_info)
         self._verbose = verbose
         self._load_checkpoint_func = load_checkpoint_func
         self._save_checkpoint_func = save_checkpoint_func
@@ -43,14 +49,10 @@ class GavelIterator:
         self._done = False
         if self._synthetic_data:
             self._initial_val = None
-        # TODO: Tie this with loading the checkpoint
         self._lease = Lease(0, 0)
         self._update_lease(init=True)
         self._write_info()
         self._prev_time = time.time()
-
-    def __del__(self):
-        self.complete()
 
     def __iter__(self):
         self._iterator = iter(self._data_loader)
@@ -74,14 +76,14 @@ class GavelIterator:
                 print('Gavel lease expired: %f seconds '
                       '(max %f seconds)' % (self._duration,
                                             self._lease.max_duration))
-            self.complete()
+            self._done = True
             raise StopIteration
         elif self._steps >= self._lease.max_steps:
             if self._verbose:
                 print('Gavel lease expired: %d steps '
                       '(max %d steps)' % (self._steps,
                                           self._lease.max_steps))
-            self.complete()
+            self._done = True
             raise StopIteration
 
         # Return a new data item if one exists.
@@ -94,15 +96,9 @@ class GavelIterator:
                     self._initial_val = val
             self._steps += 1
         except StopIteration as e:
-            # TODO: Enforce contract that application calls complete before
-            # exiting.
-            self._write_info()
             raise StopIteration
 
         if self._synthetic_data and self._steps % len(self._data_loader) == 0:
-            # TODO: Enforce contract that application calls complete before
-            # exiting.
-            self._write_info()
             raise StopIteration
 
         self._steps_until_next_lease_update -= 1
@@ -117,15 +113,16 @@ class GavelIterator:
     def done(self):
         return self._done
 
-    def load_checkpoint(self, *args, **kwargs):
-        self._load_checkpoint_func(*args, **kwargs)
-
-    def save_checkpoint(self, *args, **kwargs):
-        self._save_checkpoint_func(*args, **kwargs)
-
     def complete(self):
         self._done = True
-        self._write_info()
+
+    def load_checkpoint(self, *args, **kwargs):
+        print('[%s] Gavel loading checkpoint' % (datetime.datetime.now()))
+        return self._load_checkpoint_func(*args, **kwargs)
+
+    def save_checkpoint(self, *args, **kwargs):
+        print('[%s] Gavel saving checkpoint' % (datetime.datetime.now()))
+        return self._save_checkpoint_func(*args, **kwargs)
 
     def _write_info(self):
         job_id = str(self._job_id)
@@ -143,8 +140,6 @@ class GavelIterator:
                     gavel_info[job_id][worker_id] = {}
                 gavel_info[job_id][worker_id]['steps'] = self._steps
                 gavel_info[job_id][worker_id]['duration'] = self._duration
-                print('Gavel info:\n{0}'.format(
-                        json.dumps(gavel_info, indent=2)))
                 with open(self._gavel_file, 'w') as f:
                     json.dump(gavel_info, f)
             except Exception as e:
