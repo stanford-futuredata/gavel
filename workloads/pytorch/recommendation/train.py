@@ -45,7 +45,7 @@ torch.cuda.set_device(args.local_rank)
 
 
 if not os.path.isdir(args.checkpoint_dir):
-  os.makedirs(args.checkpoint_dir)
+  os.mkdir(args.checkpoint_dir)
 checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
 
 common_params = {
@@ -90,12 +90,12 @@ metrics = [Recall(k=20, normalize=True), Recall(k=50, normalize=True),
            NDCG(k=100)]
 
 try:
-    trainer.train(checkpoint_path, train_dataset=train_dataset, val_dataset=val_tr_dataset,
+    trainer.train(args.local_rank, train_dataset=train_dataset, val_dataset=val_tr_dataset,
                 batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
                 num_epochs=args.num_epochs, negative_sampling=True,
-                lr_milestones=[60, 80],
+                lr_milestones=None,#[60, 80],
                 num_data_workers=0,
-                model_checkpoint_prefix=None,
+                model_checkpoint_prefix=checkpoint_path,
                 checkpoint_freq=0, eval_num_recommendations=0,
                 metrics=metrics, eval_freq=0)
 
