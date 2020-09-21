@@ -163,30 +163,30 @@ test_dataset = CorpusDataset(corpus.test,
                              args.bptt)
 
 ###############################################################################
+# Handle checkpoints
+###############################################################################
+
+def load_checkpoint(args, checkpoint_path):
+    try:
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        with open(checkpoint_path, 'rb') as f:
+            state = torch.load(f, map_location='cuda:{}'.format(args.local_rank))
+            return state
+        load_from_checkpoint = True
+    except Exception as e:
+        print('Could not load from checkpoint: %s' % (e))
+        return None
+
+def save_checkpoint(state, checkpoint_path):
+    with open(checkpoint_path, 'wb') as f:
+        print('Saving checkpoint at %s...' % (checkpoint_path))
+        torch.save(state, f)
+
+###############################################################################
 # Build the model
 ###############################################################################
 
 ntokens = len(corpus.dictionary)
-
-load_from_checkpoint = False
-if args.checkpoint_dir is not None:
-    if not os.path.isdir(args.checkpoint_dir):
-        os.mkdir(args.checkpoint_dir)
-    else:
-        checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
-        if os.path.exists(checkpoint_path):
-            try:
-                print('Loading checkpoint from %s...' % (checkpoint_path))
-                with open(checkpoint_path, 'rb') as f:
-                    state = torch.load(f, map_location='cuda:{}'.format(args.local_rank))
-                    model = state['model'].to(device)
-                load_from_checkpoint = True
-            except Exception as e:
-                print('Could not load from checkpoint: %s' % (e))
-                load_from_checkpoint = False
-if not load_from_checkpoint:
-    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
-                           args.nlayers, args.dropout, args.tied).to(device)
 
 args.distributed = False
 if args.master_addr is not None:
@@ -222,8 +222,25 @@ test_loader = torch.utils.data.DataLoader(test_dataset,
                                           drop_last=True)
 
 if args.enable_gavel_iterator:
-    train_loader = GavelIterator(train_loader, args.checkpoint_dir)
+    train_loader = GavelIterator(train_loader, args.checkpoint_dir,
+                                 load_checkpoint, save_checkpoint)
 
+state = None
+if args.checkpoint_dir is not None:
+    if not os.path.isdir(args.checkpoint_dir):
+        os.mkdir(args.checkpoint_dir)
+    else:
+        checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+        if os.path.exists(checkpoint_path):
+            if args.enable_gavel_iterator:
+                state = train_loader.load_checkpoint(args, checkpoint_path)
+            else:
+                state = load_checkpoint(args, checkpoint_path)
+if state is not None:
+    state['model'].to(device)
+else:
+    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
+                           args.nlayers, args.dropout, args.tied).to(device)
 
 cumulative_steps = 0
 cumulative_time = 0
@@ -360,14 +377,15 @@ try:
           break
         print('-' * 89)
     checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
-    with open(checkpoint_path, 'wb') as f:
-        print('Saving checkpoint at %s...' % (checkpoint_path))
+    if not args.distributed or args.rank == 0:
         if args.distributed:
             state = {'model': model.module}
         else:
             state = {'model': model}
-        if not args.distributed or args.rank == 0:
-            torch.save(state, f)
+        if args.enable_gavel_iterator:
+            train_loader.save_checkpoint(state, f)
+        else:
+            save_checkpoint(state, f)
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')

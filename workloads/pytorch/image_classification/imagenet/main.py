@@ -142,26 +142,6 @@ def main():
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
-    # Load from checkpoint.
-    if not os.path.isdir(args.checkpoint_dir):
-        os.mkdir(args.checkpoint_dir)
-    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
-    if os.path.exists(checkpoint_path):
-        try:    
-            print("=> loading checkpoint '{}'".format(checkpoint_path))
-            checkpoint = torch.load(checkpoint_path,
-                                    map_location='cuda:{}'.format(args.local_rank))
-            args.start_epoch = checkpoint['epoch']
-            # best_acc1 = checkpoint['best_acc1']
-            model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(checkpoint_path, checkpoint['epoch']))
-        except Exception as e:
-            print('=> Could not load from checkpoint: %s' % (e))
-    else:
-        print("=> no checkpoint found at '{}'".format(checkpoint_path))
-
     cudnn.benchmark = True
 
     # Data loading code
@@ -204,7 +184,27 @@ def main():
         return
 
     if args.enable_gavel_iterator:
-        train_loader = GavelIterator(train_loader, args.checkpoint_dir)
+        train_loader = GavelIterator(train_loader, args.checkpoint_dir,
+                                     load_checkpoint_func,
+                                     save_checkpoint_func)
+
+    # Load from checkpoint.
+    if not os.path.isdir(args.checkpoint_dir):
+        os.mkdir(args.checkpoint_dir)
+    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+    if os.path.exists(checkpoint_path):
+        if args.enable_gavel_iterator:
+            checkpoint = train_loader.load_checkpoint(checkpoint_path)
+        else:
+            checkpoint = load_checkpoint(checkpoint_path)
+
+        if checkpoint is not None:
+            args.start_epoch = checkpoint['epoch']
+            # best_acc1 = checkpoint['best_acc1']
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            print("=> loaded checkpoint '{}' (epoch {})"
+                  .format(checkpoint_path, checkpoint['epoch']))
 
     if args.num_minibatches is not None:
         args.epochs = math.ceil(float(args.num_minibatches) *
@@ -245,13 +245,17 @@ def main():
         # remember best acc@1 and save checkpoint
         #best_acc1 = max(acc1, best_acc1)
     if not args.distributed or args.rank == 0:
-        save_checkpoint({
+        state = {
             'epoch': epoch,
             'arch': args.arch,
             'state_dict': model.state_dict(),
             # 'best_acc1': best_acc1,
             'optimizer' : optimizer.state_dict(),
-        }, checkpoint_path)
+        }
+        if args.enable_gavel_iterator:
+            train_loader.save_checkpoint(state, checkpoint_path)
+        else:
+            save_checkpoint(state, checkpoint_path)
 
 def train(train_loader, model, criterion, optimizer, epoch,
           total_minibatches, max_minibatches, total_elapsed_time,
@@ -365,6 +369,18 @@ def validate(val_loader, model, criterion):
 
     return top1.avg
 
+def load_checkpoint(args, checkpoint_path):
+    if os.path.exists(checkpoint_path):
+        try:
+            print("=> loading checkpoint '{}'".format(checkpoint_path))
+            checkpoint = torch.load(checkpoint_path,
+                                    map_location='cuda:{}'.format(args.local_rank))
+            return checkpoint
+        except Exception as e:
+            print('=> Could not load from checkpoint: %s' % (e))
+            return None
+    print("=> no checkpoint found at '{}'".format(checkpoint_path))
+    return None
 
 def save_checkpoint(state, checkpoint_filename):
     if checkpoint_filename is not None:

@@ -15,8 +15,8 @@ INFINITY = (1e9)
 LEASE_UPDATE_FRACTION = 0.75
 
 class GavelIterator:
-    def __init__(self, data_loader, gavel_dir, synthetic_data=False,
-                 verbose=True):
+    def __init__(self, data_loader, gavel_dir, load_checkpoint_func,
+                 save_checkpoint_func, synthetic_data=False, verbose=True):
         if not isinstance(data_loader, Iterable):
             raise ValueError('Data is of uniterable '
                              'type %s' % (type(data_loader)))
@@ -24,6 +24,8 @@ class GavelIterator:
             self._data_loader = data_loader
 
         self._verbose = verbose
+        self._load_checkpoint_func = load_checkpoint_func
+        self._save_checkpoint_func = save_checkpoint_func
         self._job_id = int(os.environ['GAVEL_JOB_ID'])
         self._worker_id = int(os.environ['GAVEL_WORKER_ID'])
         self._sched_addr = os.environ['GAVEL_SCHED_ADDR']
@@ -46,6 +48,9 @@ class GavelIterator:
         self._update_lease(init=True)
         self._write_info()
         self._prev_time = time.time()
+
+    def __del__(self):
+        self.complete()
 
     def __iter__(self):
         self._iterator = iter(self._data_loader)
@@ -111,6 +116,12 @@ class GavelIterator:
     @property
     def done(self):
         return self._done
+
+    def load_checkpoint(self, *args, **kwargs):
+        self._load_checkpoint_func(*args, **kwargs)
+
+    def save_checkpoint(self, *args, **kwargs):
+        self._save_checkpoint_func(*args, **kwargs)
 
     def complete(self):
         self._done = True

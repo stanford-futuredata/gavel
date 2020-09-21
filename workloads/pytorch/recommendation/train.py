@@ -85,18 +85,12 @@ model = DynamicAutoencoder(hidden_layers=[200], activation_type='tanh',
 trainer = Recoder(model=model, use_cuda=use_cuda, optimizer_type='adam',
                   loss='logistic', user_based=False,
                   gavel_dir=(args.checkpoint_dir if args.enable_gavel_iterator else None))
-if os.path.exists(checkpoint_path):
-    try:
-        print('Loading checkpoint from %s...' % (checkpoint_path))
-        trainer.init_from_model_file(checkpoint_path, args.local_rank)
-    except Exception as e:
-        print('Could not load from checkpoint: %s' % (e))
 
 metrics = [Recall(k=20, normalize=True), Recall(k=50, normalize=True),
            NDCG(k=100)]
 
 try:
-    trainer.train(train_dataset=train_dataset, val_dataset=val_tr_dataset,
+    trainer.train(checkpoint_path, train_dataset=train_dataset, val_dataset=val_tr_dataset,
                 batch_size=args.batch_size, lr=1e-3, weight_decay=2e-5,
                 num_epochs=args.num_epochs, negative_sampling=True,
                 lr_milestones=[60, 80],
@@ -104,25 +98,6 @@ try:
                 model_checkpoint_prefix=None,
                 checkpoint_freq=0, eval_num_recommendations=0,
                 metrics=metrics, eval_freq=0)
-
-    current_state = {
-      'model_params': trainer.model.model_params(),
-      'last_epoch': trainer.current_epoch,
-      'model': trainer.model.state_dict(),
-      'optimizer_type': trainer.optimizer_type,
-      'optimizer': trainer.optimizer.state_dict(),
-      'items': trainer.items,
-      'users': trainer.users,
-      'num_items': trainer.num_items,
-      'num_users': trainer.num_users
-    }
-
-    if type(trainer.loss) is str:
-        current_state['loss'] = trainer.loss
-        current_state['loss_params'] = trainer.loss_params
-
-    print('Saving checkpoint at %s...' % (checkpoint_path))
-    torch.save(current_state, checkpoint_path)
 
 except (KeyboardInterrupt, SystemExit) as e:
   print(e)

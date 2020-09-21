@@ -13,6 +13,15 @@ from shared_optim import SharedRMSprop, SharedAdam
 #from gym.configuration import undo_logger_setup
 import time
 
+# TODO: Figure out a cleaner way of including gavel_iterator.
+rl_dir = os.path.dirname(os.path.realpath(__file__))
+pytorch_dir = os.path.dirname(rl_dir)
+workloads_dir = os.path.dirname(pytorch_dir)
+gpusched_dir = os.path.dirname(workloads_dir)
+scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
+sys.path.append(scheduler_dir)
+from gavel_iterator import GavelIterator
+
 INFINITY = 1000000
 
 #undo_logger_setup()
@@ -141,6 +150,18 @@ parser.add_argument('--enable_gavel_iterator',
 # Implemented multiprocessing using locks but was not beneficial. Hogwild
 # training was far superior
 
+def load_checkpoint(args, checkpoint_path):
+    try:
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        return torch.load(checkpoint_path, map_location='cuda:{}'.format(args.local_rank))
+    except Exception as e:
+        print('Could not load from checkpoint: %s' % (e))
+        return None
+
+def save_checkpoint(state, checkpoint_path):
+    print('Saving checkpoint at %s...' % (checkpoint_path))
+    torch.save(state, checkpoint_path)
+
 if __name__ == '__main__':
     args = parser.parse_args()
     torch.cuda.set_device(args.local_rank)
@@ -155,16 +176,23 @@ if __name__ == '__main__':
             env_conf = setup_json[i]
     env = atari_env(args.env, env_conf, args)
     shared_model = A3Clstm(env.observation_space.shape[0], env.action_space)
+
+    iters = {}
+    for rank in range(0, args.workers):
+        iters[rank] = range(args.max_steps)
+        if args.enable_gavel_iterator and rank == 0:
+            iters[rank] = GavelIterator(iters[rank], args.checkpoint_dir,
+                                        load_checkpoint, save_checkpoint)
+
     if not os.path.isdir(args.checkpoint_dir):
         os.mkdir(args.checkpoint_dir)
     checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
     if os.path.exists(checkpoint_path):
-        try:
-            print('Loading checkpoint from %s...' % (checkpoint_path))
-            saved_state = torch.load(checkpoint_path, map_location='cuda:{}'.format(args.local_rank))
-            shared_model.load_state_dict(saved_state)
-        except Exception as e:
-            print('Could not load from checkpoint: %s' % (e))
+        if args.enable_gavel_iterator:
+            saved_state = iters[0].load_checkpoint(args, checkpoint_path)
+        else:
+            saved_state = load_checkpoint(args, checkpoint_path)
+        shared_model.load_state_dict(saved_state)
     shared_model.share_memory()
 
     if args.shared_optimizer:
@@ -187,7 +215,7 @@ if __name__ == '__main__':
     time.sleep(0.1)
     for rank in range(0, args.workers):
         p = mp.Process(
-            target=train, args=(rank, args, shared_model, optimizer, env_conf))
+            target=train, args=(rank, args, shared_model, optimizer, env_conf, iters[rank]))
         p.start()
         processes.append(p)
         time.sleep(0.1)
@@ -196,5 +224,8 @@ if __name__ == '__main__':
         for p in processes[1:]:
             p.terminate()
             p.join()
-    print('Saving checkpoint at %s...' % (checkpoint_path))
-    torch.save(shared_model.state_dict(), checkpoint_path)
+    state = shared_model.state_dict()
+    if args.enable_gavel_iterator:
+        iters[0].save_checkpoint(state, checkpoint_path)
+    else:
+        save_checkpoint(state, checkpoint_path)
