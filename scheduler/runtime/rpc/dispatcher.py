@@ -1,5 +1,4 @@
 import copy
-from filelock import FileLock
 import json
 from multiprocessing.pool import ThreadPool
 import math
@@ -168,29 +167,34 @@ class Dispatcher:
 
         return command
 
-    def _get_steps_and_execution_time(self, job_id, worker_id):
+    def _get_steps_and_execution_time(self, job_id, worker_id, round_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
                                       'job_id=%d' % (job_id))
-        job_id = str(job_id)
-        worker_id = str(worker_id)
-        lock_file = os.path.join(checkpoint_dir, '.gavel.lock')
-        gavel_lock = FileLock(lock_file)
-        gavel_file = os.path.join(checkpoint_dir, '.gavel.json')
-        with gavel_lock:
-            if not os.path.exists(gavel_file):
-                raise RuntimeError('Gavel info file {0} '
-                                   'does not exist!'.format(gavel_file))
-            with open(gavel_file, 'r') as f:
-                gavel_info = json.load(f)
-            self._logger.debug(
-                'Gavel info for job {job_id}, worker {worker_id} '
-                'at completion time:\n{output}'.format(
-                    job_id=job_id, worker_id=worker_id,
-                    output=json.dumps(gavel_info, indent=2)))
-            steps = int(gavel_info[job_id][worker_id]['steps'])
-            execution_time = \
-                float(gavel_info[job_id][worker_id]['duration'])
-            return steps, execution_time
+        gavel_dir = os.path.join(checkpoint_dir, '.gavel')
+        round_dir = os.path.join(gavel_dir, 'round={0}'.format(round_id))
+        log_file = os.path.join(round_dir, 'worker={0}.log'.format(worker_id))
+        steps = 0
+        execution_time = 0
+        # TODO: Compute overhead
+        with open(log_file, 'r') as f:
+            for line in f:
+                match = re.match('\[(.*)\] \[(.*)\] \[(.*)\]\ ?(.*)', line)
+                if match is None:
+                    self._logger.error(
+                        'Malformed Gavel log file: {0}'.format(line))
+                    continue
+                timestamp = match.group(1)
+                event = match.group(2)
+                status = match.group(3)
+                message = match.group(4)
+
+                if event == 'PROGRESS':
+                    if status == 'STEPS':
+                        steps = int(message)
+                    elif status == 'DURATION':
+                        execution_time = float(message)
+
+        return steps, execution_time
 
     def _kill_job(self, pid):
         self._logger.debug('Killing process {0}'.format(pid))
@@ -221,13 +225,14 @@ class Dispatcher:
                         self._kill_job(pid)
             self._logger.debug('Finished killing job(s)')
 
-    def launch_job(self, job, command, worker_id, gpu_id):
+    def launch_job(self, job, command, worker_id, round_id, gpu_id):
         output = ''
         cwd = os.path.join(self._run_dir, job.working_directory)
         try:
             env = copy.deepcopy(os.environ)
             env['GAVEL_JOB_ID'] = str(job.job_id)
             env['GAVEL_WORKER_ID'] = str(worker_id)
+            env['GAVEL_ROUND_ID'] = str(round_id)
             env['GAVEL_SCHED_ADDR'] = self._sched_addr
             env['GAVEL_SCHED_PORT'] = str(self._sched_port)
             proc = subprocess.run(command,
@@ -238,70 +243,81 @@ class Dispatcher:
                                   shell=True)
             output = proc.stdout.decode('utf-8').strip()
         except subprocess.CalledProcessError as e:
-            error_message = \
-                'Job {job_id} (worker {worker_id}) failed!'.format(
-                    job_id=job.job_id, worker_id=worker_id)
+            error_message = ('Job {job_id} (worker {worker_id}, '
+                             'round {round_id}) failed!').format(
+                                     job_id=job.job_id, worker_id=worker_id,
+                                     round_id=round_id)
             self._logger.error(error_message)
             traceback.print_exc()
             if e.stdout is not None:
-                self._logger.debug('Job {job_id} (worker {worker_id}) '
+                self._logger.debug('Job {job_id} (worker {worker_id}, '
+                                   'round {round_id}) '
                                    'stdout:\n{output}'.format(
                                        job_id=job.job_id, worker_id=worker_id,
-                                       stdout=e.stdout))
+                                       round_id=round_id, stdout=e.stdout))
             if e.stderr is not None:
-                self._logger.debug('Job {job_id} (worker {worker_id}) '
+                self._logger.debug('Job {job_id} (worker {worker_id}, '
+                                   'round {round_id}) '
                                    'stderr:\n{output}'.format(
                                        job_id=job.job_id, worker_id=worker_id,
-                                       stderr=e.stderr))
+                                       round_id=round_id, stderr=e.stderr))
             self._kill_jobs(job_id=job.job_id)
             return [job.job_id, 0, 0]
         except Exception as e:
-            self._logger.error('Dispatcher failed to launch job '
-                               '{job_id} (worker {worker_id})!'.format(
-                                   job_id=job.job_id, worker_id=worker_id))
+            self._logger.error('Dispatcher failed to launch job {job_id} '
+                               '(worker {worker_id}, round {round_id})!'.format(
+                                   job_id=job.job_id, worker_id=worker_id,
+                                   round_id=round_id))
             traceback.print_exc()
             self._kill_jobs(job_id=job.job_id)
             return [job.job_id, 0, 0]
 
         try:
             completed_steps, execution_time = \
-                self._get_steps_and_execution_time(job.job_id, worker_id)
+                self._get_steps_and_execution_time(job.job_id, worker_id,
+                                                   round_id)
         except Exception as e:
             traceback.print_exc()
             self._logger.error('Could not get steps and execution time for '
-                               'job {job_id} (worker {worker_id})!'.format(
-                                   job_id=job.job_id, worker_id=worker_id))
+                               'job {job_id} (worker {worker_id},  '
+                               'round {round_id})!'.format(
+                                   job_id=job.job_id, worker_id=worker_id,
+                                   round_id=round_id))
             self._logger.debug(
                 'Job ID: {job_id}, '
                 'Worker ID: {worker_id}, '
+                'Round: {round_id}, '
                 'Output:\n{output}'.format(
-                    job_id=job.job_id, worker_id=worker_id,
+                    job_id=job.job_id, worker_id=worker_id, round_id=round_id,
                     output=output))
             return [job.job_id, 0, 0]
 
         self._logger.info(
             'Job ID: {job_id}, '
             'Worker ID: {worker_id}, '
+            'Round: {round_id}, '
             'Num steps: {num_steps}, '
             'Execution time: {execution_time:.2f} seconds, '
             'Output:\n{output}'.format(
-                job_id=job.job_id, worker_id=worker_id,
+                job_id=job.job_id, worker_id=worker_id, round_id=round_id,
                 num_steps=completed_steps,
                 execution_time=execution_time,
                 output=output))
 
         return [job.job_id, execution_time, completed_steps]
 
-    def _dispatch_jobs_helper(self, jobs, worker_id):
+    def _dispatch_jobs_helper(self, jobs, worker_id, round_id):
         job_ids = [job.job_id for job in jobs]
         self._logger.debug(
-            'Requesting GPU for job(s) {0} (worker {1})...'.format(
-                job_ids, worker_id))
+            'Requesting GPU for job(s) {0} (worker {1}, round {2})...'.format(
+                job_ids, worker_id, round_id))
         gpu_id = self._gpu_queue.get()
         self._logger.debug('Using GPU {gpu_id} for job(s) '
-                           '{job_id} (worker {worker_id})'.format(
+                           '{job_id} (worker {worker_id}, '
+                           'round {round_id})'.format(
                                gpu_id=gpu_id, job_id=job_ids,
-                               worker_id=worker_id))
+                               worker_id=worker_id,
+                               round_id=round_id))
         with self._lock:
             for job_id in job_ids:
                 if job_id not in self._job_assignments:
@@ -328,14 +344,16 @@ class Dispatcher:
             # Launch the jobs.
             results = []
             for job, command in zip(jobs, commands):
-                self._logger.info('Running job {job_id} (worker {worker_id}) '
-                                  'on GPU {gpu_id}, '
+                self._logger.info('Running job {job_id} (worker {worker_id}, '
+                                  'round {round_id}) on GPU {gpu_id}, '
                                   'command: "{command}"'.format(
                                       job_id=job.job_id, worker_id=worker_id,
-                                      gpu_id=gpu_id, command=command))
+                                      round_id=round_id, gpu_id=gpu_id,
+                                      command=command))
                 results.append(self._thread_pool.apply_async(self.launch_job,
                                                              (job, command,
                                                               worker_id,
+                                                              round_id,
                                                               gpu_id)))
             job_descriptions = [result.get() for result in results]
         else:
@@ -353,9 +371,9 @@ class Dispatcher:
         self._worker_rpc_client.notify_scheduler(worker_id,
                                                  job_descriptions)
 
-    def dispatch_jobs(self, jobs, worker_id):
+    def dispatch_jobs(self, jobs, worker_id, round_id):
         self._thread_pool.apply_async(self._dispatch_jobs_helper,
-                                      (jobs, worker_id,))
+                                      (jobs, worker_id, round_id, ))
 
     def reset(self):
         self._logger.debug('Resetting dispatcher...')

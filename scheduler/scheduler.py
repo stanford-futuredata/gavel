@@ -1553,6 +1553,7 @@ class Scheduler:
                     master_job_port
 
         # Dispatch the job.
+        current_round = self._num_completed_rounds
         for i, worker_id in enumerate(worker_ids):
             job_descriptions = []
             for j, single_job_id in enumerate(job_id.singletons()):
@@ -1577,7 +1578,7 @@ class Scheduler:
                          self._jobs[single_job_id].num_steps_arg,
                          num_steps))
             self._worker_connections[worker_id].run(job_descriptions,
-                                                    worker_id)
+                                                    worker_id, current_round)
             if not next_round:
                 self._remove_available_worker_id(worker_id)
 

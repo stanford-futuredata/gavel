@@ -26,4 +26,5 @@ message JobDescription {
 message RunRequest {
     repeated JobDescription job_descriptions = 1;
     uint64 worker_id = 2;
+    uint64 round_id = 3;
 }
