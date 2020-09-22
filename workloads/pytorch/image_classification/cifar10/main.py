@@ -120,25 +120,41 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-if args.enable_gavel_iterator:
-    trainloader = GavelIterator(trainloader, args.checkpoint_dir)
 
 cumulative_steps = 0
 cumulative_time = 0
-if args.checkpoint_dir is not None:
-    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+
+def load_checkpoint(args, checkpoint_path):
+    # Load checkpoint.
     if os.path.exists(checkpoint_path):
-        # Load checkpoint.
-        print('==> Resuming from checkpoint at %s...' % (checkpoint_path))
-        assert os.path.isdir(args.checkpoint_dir), 'Error: no checkpoint directory found!'
         try:
             checkpoint = torch.load(checkpoint_path,
                                     map_location='cuda:{}'.format(args.local_rank))
-            net.load_state_dict(checkpoint['net'])
-            # best_acc = checkpoint['acc']
-            start_epoch = checkpoint['epoch']
+            print('==> Resuming from checkpoint at %s...' % (checkpoint_path))
+            return checkpoint
         except Exception as e:
             print('Error reading checkpoint: %s' % (e))
+            return None
+    return None
+
+def save_checkpoint(checkpoint_path, state):
+    print('==> Saving checkpoint at %s...' % (checkpoint_path))
+    torch.save(state, checkpoint_path)
+
+if args.checkpoint_dir is not None:
+    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.chkpt')
+
+if args.enable_gavel_iterator:
+    trainloader = GavelIterator(trainloader, args.checkpoint_dir,
+                                load_checkpoint_func=load_checkpoint,
+                                save_checkpoint_func=save_checkpoint)
+    checkpoint = trainloader.load_checkpoint(args, checkpoint_path)
+else:
+    checkpoint = load_checkpoint(args, checkpoint_path)
+if checkpoint is not None:
+    net.load_state_dict(checkpoint['net'])
+    # best_acc = checkpoint['acc']
+    start_epoch = checkpoint['epoch']
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
@@ -241,7 +257,7 @@ for epoch in range(start_epoch, args.num_epochs):
             break
     elif done:
         break
-print('Saving checkpoint at %s...' % (checkpoint_path))
+
 state = {
     'net': net.state_dict(),
     'epoch': epoch,
@@ -249,4 +265,7 @@ state = {
 if not os.path.isdir(args.checkpoint_dir):
     os.mkdir(args.checkpoint_dir)
 if not args.distributed or args.rank == 0:
-    torch.save(state, checkpoint_path)
+    if args.enable_gavel_iterator:
+        trainloader.save_checkpoint(checkpoint_path, state)
+    else:
+        save_checkpoint(checkpoint_path, state)

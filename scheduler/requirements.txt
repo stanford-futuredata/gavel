@@ -1,5 +1,6 @@
 annoy
 cvxpy
+dill
 filelock
 func_timeout
 glog

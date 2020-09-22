@@ -98,45 +98,6 @@ if cuda:
     criterion_cycle.cuda()
     criterion_identity.cuda()
 
-
-checkpoint_path = os.path.join(opt.checkpoint_dir, "model.chkpt")
-load_from_checkpoint = False
-if os.path.exists(checkpoint_path):
-    try:
-        print('Loading checkpoint from %s...' % (checkpoint_path))
-        checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(opt.local_rank))
-        G_AB.load_state_dict(checkpoint['G_AB'])
-        G_BA.load_state_dict(checkpoint['G_BA'])
-        D_A.load_state_dict(checkpoint['D_A'])
-        D_B.load_state_dict(checkpoint['D_B'])
-        start_epoch = checkpoint['epoch']
-        load_from_checkpoint = True
-    except Exception as e:
-        print('Could not load from checkpoint: %s' % (e))
-        load_from_checkpoint = False
-
-if not load_from_checkpoint:
-    # Initialize weights
-    G_AB.apply(weights_init_normal)
-    G_BA.apply(weights_init_normal)
-    D_A.apply(weights_init_normal)
-    D_B.apply(weights_init_normal)
-    start_epoch = 0
-
-# Optimizers
-optimizer_G = torch.optim.Adam(
-    itertools.chain(G_AB.parameters(), G_BA.parameters()), lr=opt.lr, betas=(opt.b1, opt.b2)
-)
-optimizer_D_A = torch.optim.Adam(D_A.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
-optimizer_D_B = torch.optim.Adam(D_B.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
-
-
-Tensor = torch.cuda.FloatTensor if cuda else torch.Tensor
-
-# Buffers of previously generated samples
-fake_A_buffer = ReplayBuffer()
-fake_B_buffer = ReplayBuffer()
-
 # Image transformations
 transforms_ = [
     transforms.Resize(int(opt.img_height * 1.12), Image.BICUBIC),
@@ -161,8 +122,60 @@ val_dataloader = DataLoader(
     num_workers=1,
 )
 
+def load_checkpoint(opt, checkpoint_path):
+    try:
+        print('Loading checkpoint from %s...' % (checkpoint_path))
+        checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(opt.local_rank))
+        return checkpoint
+    except Exception as e:
+        print('Could not load from checkpoint: %s' % (e))
+        return None
+
+def save_checkpoint(state, checkpoint_path):
+    print('Saving checkpoint at %s...' % (checkpoint_path))
+    torch.save(state, checkpoint_path)
+
 if opt.enable_gavel_iterator:
-    dataloader = GavelIterator(dataloader, opt.checkpoint_dir)
+    dataloader = GavelIterator(dataloader, opt.checkpoint_dir, load_checkpoint, save_checkpoint)
+
+checkpoint_path = os.path.join(opt.checkpoint_dir, "model.chkpt")
+checkpoint = None
+if os.path.exists(checkpoint_path):
+    if opt.enable_gavel_iterator:
+        checkpoint = dataloader.load_checkpoint(opt, checkpoint_path)
+    else:
+        checkpoint = load_checkpoint(opt, checkpoint_path)
+else:
+    print('Could not load from checkpoint!')
+
+if checkpoint is not None:
+    G_AB.load_state_dict(checkpoint['G_AB'])
+    G_BA.load_state_dict(checkpoint['G_BA'])
+    D_A.load_state_dict(checkpoint['D_A'])
+    D_B.load_state_dict(checkpoint['D_B'])
+    start_epoch = checkpoint['epoch']
+else:
+    # Initialize weights
+    G_AB.apply(weights_init_normal)
+    G_BA.apply(weights_init_normal)
+    D_A.apply(weights_init_normal)
+    D_B.apply(weights_init_normal)
+    start_epoch = 0
+
+# Optimizers
+optimizer_G = torch.optim.Adam(
+    itertools.chain(G_AB.parameters(), G_BA.parameters()), lr=opt.lr, betas=(opt.b1, opt.b2)
+)
+optimizer_D_A = torch.optim.Adam(D_A.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
+optimizer_D_B = torch.optim.Adam(D_B.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
+
+
+Tensor = torch.cuda.FloatTensor if cuda else torch.Tensor
+
+# Buffers of previously generated samples
+fake_A_buffer = ReplayBuffer()
+fake_B_buffer = ReplayBuffer()
+
 
 if opt.n_steps is not None:
     opt.n_epochs = math.ceil(opt.n_steps * opt.batch_size / len(dataloader))
@@ -353,5 +366,7 @@ state = {
     'epoch': epoch
 }
 print('')
-print('Saving checkpoint at %s...' % (checkpoint_path))
-torch.save(state, checkpoint_path)
+if opt.enable_gavel_iterator:
+    dataloader.save_checkpoint(state, checkpoint_path)
+else:
+    save_checkpoint(state, checkpoint_path)

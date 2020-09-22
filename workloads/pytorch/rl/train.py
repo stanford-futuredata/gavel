@@ -1,4 +1,5 @@
 from __future__ import division
+import dill
 from setproctitle import setproctitle as ptitle
 import torch
 import torch.optim as optim
@@ -11,17 +12,8 @@ import os
 import sys
 import time
 
-# TODO: Figure out a cleaner way of including gavel_iterator.
-rl_dir = os.path.dirname(os.path.realpath(__file__))
-pytorch_dir = os.path.dirname(rl_dir)
-workloads_dir = os.path.dirname(pytorch_dir)
-gpusched_dir = os.path.dirname(workloads_dir)
-scheduler_dir = os.path.join(gpusched_dir, 'scheduler')
-sys.path.append(scheduler_dir)
-from gavel_iterator import GavelIterator
-
-
-def train(rank, args, shared_model, optimizer, env_conf):
+def train(rank, args, shared_model, optimizer, env_conf, iters):
+    iters = dill.loads(iters)
     ptitle('Training Agent: {}'.format(rank))
     gpu_id = args.gpu_ids[rank % len(args.gpu_ids)]
     torch.manual_seed(args.seed + rank)
@@ -50,10 +42,6 @@ def train(rank, args, shared_model, optimizer, env_conf):
     player.eps_len += 2
     elapsed_time = 0
     start_time = time.time()
-
-    iters = range(args.max_steps)
-    if args.enable_gavel_iterator and rank == 0:
-        iters = GavelIterator(iters, args.checkpoint_dir)
 
     for i in iters:
         if i % 100 == 0:
@@ -135,4 +123,6 @@ def train(rank, args, shared_model, optimizer, env_conf):
 
         if (args.max_duration is not None and
             elapsed_time >= args.max_duration):
-          return
+            break
+    if args.enable_gavel_iterator:
+        iters.complete()

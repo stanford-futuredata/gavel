@@ -178,7 +178,13 @@ class Recoder(object):
       self.sparse_optimizer.load_state_dict(self.__sparse_optimizer_state_dict)
       self.__sparse_optimizer_state_dict = None
 
-  def init_from_model_file(self, model_file, local_rank):
+  def load_checkpoint(self, model_file, local_rank):
+    return torch.load(model_file, map_location='cuda:{}'.format(local_rank))
+
+  def save_checkpoint(self, state, model_file):
+    torch.save(state, model_file)
+
+  def init_from_model_file(self, model_file, local_rank, train_dataloader=None):
     """
     Initializes the model from a pre-trained model
 
@@ -188,7 +194,12 @@ class Recoder(object):
     log.info('Loading model from: {}'.format(model_file))
     if not os.path.isfile(model_file):
       raise Exception('No state file found in {}'.format(model_file))
-    model_saved_state = torch.load(model_file, map_location='cuda:{}'.format(local_rank))
+    elif train_dataloader is not None:
+      model_saved_state = train_dataloader.load_checkpoint(model_file, local_rank)
+    else:
+      model_saved_state = load_checkpoint(model_file, local_rank)
+    if model_saved_state is None:
+      raise Exception('Could not read state in {}'.format(model_file))
     model_params = model_saved_state['model_params']
     self.current_epoch = model_saved_state['last_epoch']
     self.loss = model_saved_state.get('loss', self.loss)
@@ -205,7 +216,7 @@ class Recoder(object):
     self.__init_model()
     self.model.load_state_dict(model_saved_state['model'])
 
-  def save_state(self, model_checkpoint_prefix):
+  def save_state(self, model_checkpoint_prefix, train_dataloader=None):
     """
     Saves the model state in the path starting with ``model_checkpoint_prefix`` and appending it
     with the model current training epoch
@@ -216,7 +227,8 @@ class Recoder(object):
     Returns:
       the model state file path
     """
-    checkpoint_file = "{}_epoch_{}.model".format(model_checkpoint_prefix, self.current_epoch)
+    #checkpoint_file = "{}_epoch_{}.model".format(model_checkpoint_prefix, self.current_epoch)
+    checkpoint_file = model_checkpoint_prefix
     log.info("Saving model to {}".format(checkpoint_file))
     current_state = {
       'recoder_version': __version__,
@@ -235,7 +247,10 @@ class Recoder(object):
       current_state['loss'] = self.loss
       current_state['loss_params'] = self.loss_params
 
-    torch.save(current_state, checkpoint_file)
+    if train_dataloader is not None:
+      train_dataloader.save_checkpoint(current_state, checkpoint_file)
+    else:
+      save_checkpoint(current_state, checkpoint_file)
     return checkpoint_file
 
   def __init_training(self, train_dataset, lr,
@@ -268,7 +283,7 @@ class Recoder(object):
     self.__init_optimizer(lr=lr, weight_decay=weight_decay)
     self.__init_loss_module()
 
-  def train(self, train_dataset, val_dataset=None,
+  def train(self, local_rank, train_dataset, val_dataset=None,
             lr=0.001, weight_decay=0, num_epochs=1,
             iters_per_epoch=None, batch_size=64, lr_milestones=None,
             negative_sampling=False, num_sampling_users=0, num_data_workers=0,
@@ -340,8 +355,22 @@ class Recoder(object):
       val_dataloader = None
 
     if self._enable_gavel_iterator:
-        train_dataloader = GavelIterator(train_dataloader, self._gavel_dir,
-                                         synthetic_data=True)
+      train_dataloader = GavelIterator(train_dataloader, self._gavel_dir,
+                                       self.load_checkpoint, self.save_checkpoint,
+                                       synthetic_data=True)
+
+    if os.path.exists(model_checkpoint_prefix):
+      try:
+        print('Loading checkpoint from %s...' % (model_checkpoint_prefix))
+        if self._enable_gavel_iterator:
+          self.init_from_model_file(model_checkpoint_prefix, local_rank,
+                                    train_dataloader)
+        else:
+          self.init_from_model_file(model_checkpoint_prefix, local_rank)
+      except Exception as e:
+        print('Could not load from checkpoint: %s' % (e))
+    else:
+      print('Checkpoint does not exist at %s' % (model_checkpoint_prefix))
 
     if lr_milestones is not None:
       _last_epoch = -1 if self.current_epoch == 1 else (self.current_epoch - 2)
@@ -366,7 +395,10 @@ class Recoder(object):
                 eval_batch_size=eval_batch_size)
 
     if self._enable_gavel_iterator:
-        train_dataloader.complete()
+      train_dataloader.complete()
+      self.save_state(model_checkpoint_prefix, train_dataloader)
+    else:
+      self.save_state(model_checkpoint_prefix)
 
   def _train(self, train_dataloader, val_dataloader,
              num_epochs, current_epoch, lr_scheduler,
@@ -402,6 +434,7 @@ class Recoder(object):
 
       progress_bar = tqdm(range(iters_to_process), desc=description)
 
+      loss = None
       for batch_itr, (input, target) in iterator:
         if self.optimizer is not None:
           self.optimizer.zero_grad()
@@ -439,6 +472,8 @@ class Recoder(object):
         if batch_itr % iters_per_epoch == 0:
           break
 
+      if loss is None:
+        return
       postfix = {'loss': loss.item()}
       if eval_freq > 0 and epoch % eval_freq == 0 and val_dataloader is not None:
         val_loss = self._validate(val_dataloader)
@@ -456,10 +491,13 @@ class Recoder(object):
 
       if model_checkpoint_prefix and \
           ((checkpoint_freq > 0 and epoch % checkpoint_freq == 0) or epoch == num_epochs):
-        self.save_state(model_checkpoint_prefix)
+        if self._enable_gavel_iterator:
+          self.save_state(model_checkpoint_prefix, train_dataloader)
+        else:
+          self.save_state(model_checkpoint_prefix)
 
       if self._enable_gavel_iterator and train_dataloader.done:
-          break
+        return
 
   def _validate(self, val_dataloader):
     self.model.eval()

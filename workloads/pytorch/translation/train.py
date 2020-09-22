@@ -164,6 +164,19 @@ def eval_epoch(model, validation_data, device):
     accuracy = n_word_correct/n_word_total
     return loss_per_word, accuracy
 
+def load_checkpoint(opt, checkpoint_path):
+    print('Loading checkpoint from %s...' % (checkpoint_path))
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(opt.local_rank))
+        return checkpoint
+    except Exception as e:
+        print('Could not load from checkpoint: %s' % (e))
+        return None
+
+def save_checkpoint(state, checkpoint_path):
+    print('Saving checkpoint at %s...' % (checkpoint_path))
+    torch.save(state, checkpoint_path)
+
 def train(model, training_data, validation_data, optimizer, device, opt):
     ''' Start training '''
 
@@ -185,14 +198,13 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     if not os.path.isdir(opt.checkpoint_dir):
         os.mkdir(opt.checkpoint_dir)
     checkpoint_path = os.path.join(opt.checkpoint_dir, 'model.chkpt')
-    if os.path.exists(checkpoint_path):
-        print('Loading checkpoint from %s...' % (checkpoint_path))
-        try:
-            checkpoint = torch.load(checkpoint_path, map_location='cuda:{}'.format(opt.local_rank))
-            model.load_state_dict(checkpoint['model'])
-            start_epoch = checkpoint['epoch']
-        except Exception as e:
-            print('Could not load from checkpoint: %s' % (e))
+    if opt.enable_gavel_iterator:
+        checkpoint = training_data.load_checkpoint(opt, checkpoint_path)
+    else:
+        checkpoint = load_checkpoint(opt, checkpoint_path)
+    if checkpoint is not None:
+        model.load_state_dict(checkpoint['model'])
+        start_epoch = checkpoint['epoch']
     else:
         print('No checkpoint file found!')
 
@@ -241,8 +253,10 @@ def train(model, training_data, validation_data, optimizer, device, opt):
 
         if not opt.distributed or opt.rank == 0:
             if opt.save_mode == 'all':
-                print('Saving checkpoint at %s...' % (checkpoint_path))
-                torch.save(checkpoint, checkpoint_path)
+                if opt.enable_gavel_iterator:
+                    training_data.save_checkpoint(checkpoint, checkpoint_path)
+                else:
+                    save_checkpoint(checkpoint, checkpoint_path)
             elif opt.save_mode == 'best':
                 if valid_accu >= max(valid_accus):
                     print('Saving checkpoint at %s...' % (checkpoint_path))
@@ -384,7 +398,8 @@ def main():
                           output_device=opt.local_rank)
 
     if opt.enable_gavel_iterator:
-        training_data = GavelIterator(training_data, opt.checkpoint_dir)
+        training_data = GavelIterator(training_data, opt.checkpoint_dir,
+                                      load_checkpoint, save_checkpoint)
 
     optimizer = ScheduledOptim(
         optim.Adam(
