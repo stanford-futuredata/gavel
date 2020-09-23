@@ -453,7 +453,7 @@ class Scheduler:
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
             self._job_cost_so_far[job_id] = 0.0
-            self._timelines[job_id] = []
+            self._job_timelines[job_id] = []
             self._throughputs[job_id] = {}
             job_type = self._jobs[job_id].job_type
             scale_factor = job.scale_factor
@@ -1830,9 +1830,9 @@ class Scheduler:
     def get_job_overheads(self):
         # TODO: Compute overhead
         print('Job timelines:\n')
-        for job_id in sorted(self._timelines.keys()):
+        for job_id in sorted(self._job_timelines.keys()):
             print('Job {0}'.format(job_id))
-            for event in self._timelines[job_id]:
+            for event in self._job_timelines[job_id]:
                 print(event)
             print('')
 
@@ -2597,7 +2597,7 @@ class Scheduler:
             if all_iterator_logs is not None:
                 for i, single_job_id in enumerate(job_id.singletons()):
                     events = all_iterator_logs[i].split('\n')
-                    self._timelines[single_job_id].extend(events)
+                    self._job_timelines[single_job_id].extend(events)
 
             # Check whether jobs are still active as jobs might have
             # completed after being dispatched for the subsequent round.

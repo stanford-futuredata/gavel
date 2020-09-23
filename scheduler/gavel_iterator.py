@@ -32,9 +32,9 @@ class GavelIterator:
             self._data_loader = data_loader
 
         self._write_on_close = write_on_close
+        atexit.register(self._close_file_handler)
         if self._write_on_close:
             atexit.register(self._write_info)
-        atexit.register(self._close_file_handler)
         self._verbose = verbose
         self._load_checkpoint_func = load_checkpoint_func
         self._save_checkpoint_func = save_checkpoint_func
