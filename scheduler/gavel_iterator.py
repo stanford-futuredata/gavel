@@ -34,6 +34,7 @@ class GavelIterator:
         self._write_on_close = write_on_close
         if self._write_on_close:
             atexit.register(self._write_info)
+        atexit.register(self._close_file_handler)
         self._verbose = verbose
         self._load_checkpoint_func = load_checkpoint_func
         self._save_checkpoint_func = save_checkpoint_func
@@ -59,11 +60,11 @@ class GavelIterator:
         self._logger = logging.getLogger('gavel_iterator')
         self._logger.propagate = False
         self._logger.setLevel(logging.DEBUG)
-        fh = logging.FileHandler(self._log_file)
-        fh.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT,
-                                          style='{'))
-        fh.setLevel(logging.DEBUG)
-        self._logger.addHandler(fh)
+        self._file_handler = logging.FileHandler(self._log_file)
+        self._file_handler.setFormatter(
+                logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT, style='{'))
+        self._file_handler.setLevel(logging.DEBUG)
+        self._logger.addHandler(self._file_handler)
         self._rpc_client = \
             iterator_client.IteratorRpcClient(self._job_id, self._worker_id,
                                               self._sched_addr,
@@ -162,6 +163,10 @@ class GavelIterator:
                           extra={'event': 'PROGRESS', 'status': 'STEPS'})
         self._logger.info('{0}'.format(self._duration),
                           extra={'event': 'PROGRESS', 'status': 'DURATION'})
+
+    def _close_file_handler(self):
+        self._logger.removeHandler(self._file_handler)
+        self._file_handler.close()
 
     def _update_lease(self, init=False):
         if init:

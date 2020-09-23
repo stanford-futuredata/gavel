@@ -2553,7 +2553,7 @@ class Scheduler:
                 self._scheduler_cv.notifyAll()
 
     def _done_callback(self, job_id, worker_id, all_num_steps,
-                       all_execution_times):
+                       all_execution_times, all_iterator_logs=None):
         """Handles completion of a scheduled job.
 
         Updates the running total of completed steps and time spent on each
@@ -2565,6 +2565,8 @@ class Scheduler:
             job_id: The id of the completed job(s).
             worker_id: The id of the worker where the job(s) were completed.
             all_num_steps: List of the number of steps each job ran for.
+            all_execution_times: List of the duration each job ran for.
+            all_iterator_logs: List of the GavelIterator logs for each job.
         """
 
         to_remove = []

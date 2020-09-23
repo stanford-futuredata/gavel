@@ -72,7 +72,8 @@ class SchedulerRpcServer(w2s_pb2_grpc.WorkerToSchedulerServicer):
                     num_steps=str(request.num_steps),
                     execution_time=str(request.execution_time)))
             done_callback(job_id, request.worker_id,
-                          request.num_steps, request.execution_time)
+                          request.num_steps, request.execution_time,
+                          request.iterator_log)
         except Exception as e:
             self._logger.error('Could not process completion '
                                'notification for job {0}'.format(job_id))

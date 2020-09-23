@@ -23,6 +23,7 @@ CUDA_MPS_PIPE_DIRECTORY = '/tmp/nvidia-mps'
 CUDA_MPS_LOG_DIRECTORY = '/tmp/nvidia-log'
 MAX_CPUS_PER_GPU = 8
 LOG_FORMAT = '{name}:{levelname} [{asctime}] {message}'
+ITERATOR_LOG_FORMAT = '[{asctime}] [{event}] [{status}] {message}'
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 class Dispatcher:
@@ -173,6 +174,7 @@ class Dispatcher:
         gavel_dir = os.path.join(checkpoint_dir, '.gavel')
         round_dir = os.path.join(gavel_dir, 'round={0}'.format(round_id))
         log_file = os.path.join(round_dir, 'worker={0}.log'.format(worker_id))
+
         steps = 0
         execution_time = 0
         # TODO: Compute overhead
@@ -225,9 +227,63 @@ class Dispatcher:
                         self._kill_job(pid)
             self._logger.debug('Finished killing job(s)')
 
+    def _get_job_logger_and_fh(self, job_id, worker_id, round_id):
+        checkpoint_dir = os.path.join(self._checkpoint_dir,
+                                      'job_id=%d' % (job_id))
+        gavel_dir = os.path.join(checkpoint_dir, '.gavel')
+        round_dir = os.path.join(gavel_dir, 'round={0}'.format(round_id))
+        log_file = os.path.join(round_dir, 'worker={0}.log'.format(worker_id))
+
+        with self._lock:
+            if not os.path.isdir(gavel_dir):
+                os.mkdir(gavel_dir)
+            if not os.path.isdir(round_dir):
+                os.mkdir(round_dir)
+
+        job_logger = \
+            logging.getLogger('job={0}_worker={1}_round={2}'.format(
+                job_id, worker_id, round_id))
+        job_logger.propagate = False
+        job_logger.setLevel(logging.DEBUG)
+        fh = logging.FileHandler(log_file)
+        fh.setFormatter(logging.Formatter(ITERATOR_LOG_FORMAT,
+                                          datefmt=DATE_FORMAT,
+                                          style='{'))
+        fh.setLevel(logging.DEBUG)
+        job_logger.addHandler(fh)
+
+        return job_logger, fh
+
+
+    def _get_iterator_log(self, job_id, worker_id, round_id):
+        checkpoint_dir = os.path.join(self._checkpoint_dir,
+                                      'job_id=%d' % (job_id))
+        gavel_dir = os.path.join(checkpoint_dir, '.gavel')
+        round_dir = os.path.join(gavel_dir, 'round={0}'.format(round_id))
+        log_file = os.path.join(round_dir, 'worker={0}.log'.format(worker_id))
+
+        if not os.path.exists(log_file):
+            self._logger.error('Could not read GavelIterator log file for '
+                               'job {job_id} (worker {worker_id}, '
+                               'round {round_id})!'.format(
+                                   job_id=job_id, worker_id=worker_id,
+                                   round_id=round_id))
+            return ''
+
+        with open(log_file, 'r') as f:
+            return f.read()
+
     def launch_job(self, job, command, worker_id, round_id, gpu_id):
         output = ''
         cwd = os.path.join(self._run_dir, job.working_directory)
+
+        # Log job dispatch.
+        job_logger, fh = self._get_job_logger_and_fh(job.job_id, worker_id,
+                                                     round_id)
+        job_logger.info('', extra={'event': 'DISPATCHER', 'status': 'LAUNCH'})
+
+        # Try to dispatch job.
+        job_succeeded = False
         try:
             env = copy.deepcopy(os.environ)
             env['GAVEL_JOB_ID'] = str(job.job_id)
@@ -242,6 +298,7 @@ class Dispatcher:
                                   env=env,
                                   shell=True)
             output = proc.stdout.decode('utf-8').strip()
+            job_succeeded = True
         except subprocess.CalledProcessError as e:
             error_message = ('Job {job_id} (worker {worker_id}, '
                              'round {round_id}) failed!').format(
@@ -262,7 +319,6 @@ class Dispatcher:
                                        job_id=job.job_id, worker_id=worker_id,
                                        round_id=round_id, stderr=e.stderr))
             self._kill_jobs(job_id=job.job_id)
-            return [job.job_id, 0, 0]
         except Exception as e:
             self._logger.error('Dispatcher failed to launch job {job_id} '
                                '(worker {worker_id}, round {round_id})!'.format(
@@ -270,7 +326,16 @@ class Dispatcher:
                                    round_id=round_id))
             traceback.print_exc()
             self._kill_jobs(job_id=job.job_id)
-            return [job.job_id, 0, 0]
+
+        # Log job completion and retrieve log output.
+        job_logger.info('', extra={'event': 'DISPATCHER',
+                                   'status': 'COMPLETE'})
+        job_logger.removeHandler(fh)
+        fh.close()
+        iterator_log = self._get_iterator_log(job.job_id, worker_id, round_id)
+
+        if not job_succeeded:
+            return [job.job_id, 0, 0, iterator_log]
 
         try:
             completed_steps, execution_time = \
@@ -290,7 +355,7 @@ class Dispatcher:
                 'Output:\n{output}'.format(
                     job_id=job.job_id, worker_id=worker_id, round_id=round_id,
                     output=output))
-            return [job.job_id, 0, 0]
+            return [job.job_id, 0, 0, iterator_log]
 
         self._logger.info(
             'Job ID: {job_id}, '
@@ -304,7 +369,7 @@ class Dispatcher:
                 execution_time=execution_time,
                 output=output))
 
-        return [job.job_id, execution_time, completed_steps]
+        return [job.job_id, execution_time, completed_steps, iterator_log]
 
     def _dispatch_jobs_helper(self, jobs, worker_id, round_id):
         job_ids = [job.job_id for job in jobs]
@@ -357,7 +422,7 @@ class Dispatcher:
                                                               gpu_id)))
             job_descriptions = [result.get() for result in results]
         else:
-            job_descriptions = [[job.job_id, -1, 0] for job in jobs]
+            job_descriptions = [[job.job_id, -1, 0, ''] for job in jobs]
 
         # Cleanup and notify the scheduler.
         self._gpu_queue.put(gpu_id)
