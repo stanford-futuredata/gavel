@@ -271,7 +271,7 @@ class Dispatcher:
             return ''
 
         with open(log_file, 'r') as f:
-            return f.read()
+            return f.read().strip()
 
     def launch_job(self, job, command, worker_id, round_id, gpu_id):
         output = ''
@@ -422,7 +422,7 @@ class Dispatcher:
                                                               gpu_id)))
             job_descriptions = [result.get() for result in results]
         else:
-            job_descriptions = [[job.job_id, -1, 0, ''] for job in jobs]
+            job_descriptions = [[job.job_id, 0, 0, ''] for job in jobs]
 
         # Cleanup and notify the scheduler.
         self._gpu_queue.put(gpu_id)

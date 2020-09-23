@@ -58,10 +58,10 @@ class WorkerRpcClient:
         request = w2s_pb2.DoneRequest()
         request.worker_id = worker_id
         for job_description in job_descriptions:
-            request.job_id.append(job_description.job_id)
-            request.execution_time.append(job_description.execution_time)
-            request.num_steps.append(job_description.num_steps)
-            request.iterator_log.append(job_description.iterator_log)
+            request.job_id.append(job_description[0])
+            request.execution_time.append(job_description[1])
+            request.num_steps.append(job_description[2])
+            request.iterator_log.append(job_description[3])
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
             response = stub.Done(request)

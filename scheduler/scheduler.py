@@ -164,6 +164,8 @@ class Scheduler:
             sched.scheduler(time.time, time.sleep)
         # Map from job ID to lease extension scheduler event.
         self._lease_extension_events = {}
+        # Map from job ID to timeline of events.
+        self._job_timelines = {}
         # Set of ports in use for each worker.
         self._active_ports = {}
         # Iterations run on each worker_id, for all current incomplete
@@ -451,6 +453,7 @@ class Scheduler:
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
             self._job_cost_so_far[job_id] = 0.0
+            self._timelines[job_id] = []
             self._throughputs[job_id] = {}
             job_type = self._jobs[job_id].job_type
             scale_factor = job.scale_factor
@@ -2579,6 +2582,13 @@ class Scheduler:
                     self._logger.debug(
                         'Waiting to complete job {0}...'.format(job_id))
                     self._scheduler_cv.wait()
+
+            # Add the job's GavelIterator log events to its timeline if
+            # running on a physical cluster.
+            if all_iterator_logs is not None:
+                for i, single_job_id in enumerate(job_id.singletons()):
+                    events = all_iterator_logs[i].split('\n')
+                    self._timelines[single_job_id].extend(events)
 
             # Check whether jobs are still active as jobs might have
             # completed after being dispatched for the subsequent round.
