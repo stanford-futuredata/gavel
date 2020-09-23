@@ -1827,6 +1827,15 @@ class Scheduler:
             print('Number of SLO violations: %d' % (num_SLO_violations))
         return num_SLO_violations
 
+    def get_job_overheads(self):
+        # TODO: Compute overhead
+        print('Job timelines:\n')
+        for job_id in sorted(self._timelines.keys()):
+            print('Job {0}'.format(job_id))
+            for event in self._timelines[job_id]:
+                print(event)
+            print('')
+
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
 

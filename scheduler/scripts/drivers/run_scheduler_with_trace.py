@@ -63,6 +63,7 @@ def main(args):
         sched.get_average_jct(jobs_to_complete)
         sched.get_completed_steps(jobs_to_complete)
         sched.get_cluster_utilization()
+        sched.get_job_overheads()
         elapsed_time = (datetime.datetime.now() - start_time).seconds
         print('Total time taken: %d seconds' % (elapsed_time))
     except KeyboardInterrupt as e:
