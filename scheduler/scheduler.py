@@ -13,6 +13,7 @@ import threading
 import time
 import datetime
 import random
+import re
 import sched
 import math
 import matrix_completion
@@ -1510,9 +1511,12 @@ class Scheduler:
         # Dispatch jobs for upcoming round.
         for (job_id, worker_ids) in \
             self._next_worker_assignments.items():
-            if (job_id not in self._jobs_with_extended_lease or
-                (job_id in self._jobs_with_extended_lease and
-                 job_id in self._completed_jobs_in_current_round)):
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if not is_active:
+                continue
+            elif (job_id not in self._jobs_with_extended_lease or
+                  (job_id in self._jobs_with_extended_lease and
+                   job_id in self._completed_jobs_in_current_round)):
                 self._logger.info('Dispatching job {0}'.format(job_id))
                 self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
@@ -1525,10 +1529,6 @@ class Scheduler:
            Updates relevant metadata and returns if job has already been
            dispatched.
         """
-        # Job could have been completed after schedule was computed.
-        if (job_id in self._completed_jobs_in_current_round or
-            not any([x in self._jobs for x in job_id.singletons()])):
-            return
 
         # Initialize metadata for distributed jobs.
         if not next_round or job_id not in self._current_worker_assignments:
@@ -1827,16 +1827,60 @@ class Scheduler:
             print('Number of SLO violations: %d' % (num_SLO_violations))
         return num_SLO_violations
 
+    def _get_job_overhead(self, timeline):
+        computation_time = 0.0
+        total_time = 0.0
+        current_dispatch_start_time = None
+        current_compute_start_time = None
+        for (timestamp, event, status, _) in timeline:
+            if event == 'DISPATCHER' and status == 'LAUNCH':
+                if current_dispatch_start_time is None:
+                    current_dispatch_start_time = timestamp
+            elif event == 'INIT' and status == 'COMPLETE':
+                current_compute_start_time = timestamp
+            elif event == 'SAVE CHECKPOINT' and status == 'END':
+                delta = (timestamp - current_compute_start_time)
+                computation_time += delta.total_seconds()
+                current_compute_start_time = None
+            elif event == 'DISPATCHER' and status == 'COMPLETE':
+                delta = (timestamp - current_dispatch_start_time)
+                total_time += delta.total_seconds()
+                current_dispatch_start_time = None
+        return (computation_time, total_time)
+
+
     def get_job_overheads(self):
-        # TODO: Compute overhead
-        print('Job timelines:\n')
+        print('Job overheads:')
         for job_id in sorted(self._job_timelines.keys()):
-            print('Job {0}:'.format(job_id))
+            computation_time_sum = 0.0
+            total_time_sum = 0.0
+            for i in range(len(self._job_timelines[job_id])):
+                timeline = sorted(self._job_timelines[job_id][i],
+                                  key=lambda x: x[0])
+                computation_time, total_time = self._get_job_overhead(timeline)
+                computation_time_sum += computation_time
+                total_time_sum += total_time
+            overhead = computation_time_sum / total_time_sum
+            print('Job {job_id}: Total time={total_time:.2f} seconds, '
+                  'Computation time={computation_time:.2f} seconds, '
+                  'Overhead={overhead:.2f}%'.format(
+                      job_id=job_id, total_time=total_time_sum,
+                      computation_time=computation_time_sum,
+                      overhead=100 * overhead))
+        print()
+
+    def print_job_timelines(self):
+        print('Job timelines:\n')
+
+        for job_id in sorted(self._job_timelines.keys()):
+            print('Job {0}:\n'.format(job_id))
             for i in range(len(self._job_timelines[job_id])):
                 print('Worker {0}:'.format(i))
                 for event in self._job_timelines[job_id][i]:
-                    print(event)
-            print('')
+                    (timestamp, event, status, message) = event
+                    print('[{0}] [{1}] [{2}] {3}'.format(
+                        timestamp, event, status, message))
+                print('')
 
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
@@ -2675,8 +2719,27 @@ class Scheduler:
                         all_execution_times[j] = max(all_execution_times[j],
                                                      all_execution_times_[j])
                         if all_iterator_logs_ is not None:
-                            self._job_timelines[single_job_id][i].extend(
-                                all_iterator_logs_[j].split('\n'))
+                            for line in all_iterator_logs_[j].split('\n'):
+                                match = \
+                                    re.match(
+                                        '\[(.*)\] \[(.*)\] \[(.*)\]\ ?(.*)',
+                                        line)
+                                if match is None:
+                                    self._logger.error(
+                                        'Malformed GavelIterator '
+                                        'log line: {0}'.format(line))
+                                    continue
+
+                                timestamp = \
+                                    datetime.datetime.strptime(
+                                            match.group(1),
+                                            '%Y-%m-%d %H:%M:%S')
+                                event = match.group(2)
+                                status = match.group(3)
+                                message = match.group(4)
+
+                                self._job_timelines[single_job_id][i].append(
+                                    (timestamp, event, status, message))
 
             # Reset metadata for distributed jobs.
             self._in_progress_updates[job_id] = []

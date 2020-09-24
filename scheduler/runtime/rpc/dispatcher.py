@@ -177,7 +177,6 @@ class Dispatcher:
 
         steps = 0
         execution_time = 0
-        # TODO: Compute overhead
         with open(log_file, 'r') as f:
             for line in f:
                 match = re.match('\[(.*)\] \[(.*)\] \[(.*)\]\ ?(.*)', line)
