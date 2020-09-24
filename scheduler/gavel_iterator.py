@@ -57,14 +57,7 @@ class GavelIterator:
                 os.mkdir(self._round_dir)
         self._log_file = os.path.join(self._round_dir,
                                       'worker={0}.log'.format(self._worker_id))
-        self._logger = logging.getLogger('gavel_iterator')
-        self._logger.propagate = False
-        self._logger.setLevel(logging.DEBUG)
-        self._file_handler = logging.FileHandler(self._log_file)
-        self._file_handler.setFormatter(
-                logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT, style='{'))
-        self._file_handler.setLevel(logging.DEBUG)
-        self._logger.addHandler(self._file_handler)
+        self._init_logger()
         self._rpc_client = \
             iterator_client.IteratorRpcClient(self._job_id, self._worker_id,
                                               self._sched_addr,
@@ -157,6 +150,16 @@ class GavelIterator:
         self._logger.info('', extra={'event': 'SAVE CHECKPOINT',
                                      'status': 'END'})
         return retval
+
+    def _init_logger(self):
+        self._logger = logging.getLogger('gavel_iterator')
+        self._logger.propagate = False
+        self._logger.setLevel(logging.DEBUG)
+        self._file_handler = logging.FileHandler(self._log_file)
+        self._file_handler.setFormatter(
+                logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT, style='{'))
+        self._file_handler.setLevel(logging.DEBUG)
+        self._logger.addHandler(self._file_handler)
 
     def _write_info(self):
         self._logger.info('{0}'.format(self._steps),

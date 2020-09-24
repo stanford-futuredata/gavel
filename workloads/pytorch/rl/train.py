@@ -12,8 +12,10 @@ import os
 import sys
 import time
 
-def train(rank, args, shared_model, optimizer, env_conf, iters):
+def train(rank, args, shared_model, optimizer, env_conf, iters, checkpoint_path):
     iters = dill.loads(iters)
+    if args.enable_gavel_iterator and rank == 0:
+        iters._init_logger()
     ptitle('Training Agent: {}'.format(rank))
     gpu_id = args.gpu_ids[rank % len(args.gpu_ids)]
     torch.manual_seed(args.seed + rank)
@@ -126,5 +128,5 @@ def train(rank, args, shared_model, optimizer, env_conf, iters):
             break
     if args.enable_gavel_iterator and rank == 0:
         state = shared_model.state_dict()
-        iters[0].save_checkpoint(state, checkpoint_path)
+        iters.save_checkpoint(state, checkpoint_path)
         iters.complete()

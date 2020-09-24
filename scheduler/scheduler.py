@@ -1833,11 +1833,10 @@ class Scheduler:
         for job_id in sorted(self._job_timelines.keys()):
             print('Job {0}:'.format(job_id))
             for i in range(len(self._job_timelines[job_id])):
-                print('Worker {0}'.format(i))
+                print('Worker {0}:'.format(i))
                 for event in self._job_timelines[job_id][i]:
                     print(event)
             print('')
-        print('')
 
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
@@ -2675,8 +2674,9 @@ class Scheduler:
                         all_num_steps[j] += all_num_steps_[j]
                         all_execution_times[j] = max(all_execution_times[j],
                                                      all_execution_times_[j])
-                        self._job_timelines[single_job_id][i].extend(
-                            all_iterator_logs_[j])
+                        if all_iterator_logs_ is not None:
+                            self._job_timelines[single_job_id][i].extend(
+                                all_iterator_logs_[j].split('\n'))
 
             # Reset metadata for distributed jobs.
             self._in_progress_updates[job_id] = []
