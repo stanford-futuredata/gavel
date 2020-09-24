@@ -172,7 +172,6 @@ def load_checkpoint(args, checkpoint_path):
         with open(checkpoint_path, 'rb') as f:
             state = torch.load(f, map_location='cuda:{}'.format(args.local_rank))
             return state
-        load_from_checkpoint = True
     except Exception as e:
         print('Could not load from checkpoint: %s' % (e))
         return None
@@ -238,6 +237,8 @@ if args.checkpoint_dir is not None:
                 state = load_checkpoint(args, checkpoint_path)
 if state is not None:
     model = state['model'].to(device)
+    if model is None:
+        raise RuntimeError('Failed to get model from checkpoint!')
 else:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                            args.nlayers, args.dropout, args.tied).to(device)

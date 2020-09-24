@@ -453,7 +453,7 @@ class Scheduler:
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
             self._job_cost_so_far[job_id] = 0.0
-            self._job_timelines[job_id] = []
+            self._job_timelines[job_id] = [[] for _ in range(job.scale_factor)]
             self._throughputs[job_id] = {}
             job_type = self._jobs[job_id].job_type
             scale_factor = job.scale_factor
@@ -1831,10 +1831,13 @@ class Scheduler:
         # TODO: Compute overhead
         print('Job timelines:\n')
         for job_id in sorted(self._job_timelines.keys()):
-            print('Job {0}'.format(job_id))
-            for event in self._job_timelines[job_id]:
-                print(event)
+            print('Job {0}:'.format(job_id))
+            for i in range(len(self._job_timelines[job_id])):
+                print('Worker {0}'.format(i))
+                for event in self._job_timelines[job_id][i]:
+                    print(event)
             print('')
+        print('')
 
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
@@ -2552,17 +2555,31 @@ class Scheduler:
 
     def _done_callback_extended_lease(self, job_id):
         with self._scheduler_cv:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+
             if job_id in self._lease_extension_events:
                 # Mark job as completed.
                 self._completed_jobs_in_current_round.add(job_id)
+                del self._lease_extension_events[job_id]
 
                 # Reset metadata for distributed jobs.
                 self._in_progress_updates[job_id] = []
                 self._lease_update_requests[job_id] = []
                 self._max_steps[job_id] = None
 
-                del self._lease_extension_events[job_id]
-                self._scheduler_cv.notifyAll()
+            elif is_active and job_id in self._jobs_with_extended_lease:
+                # Re-dispatch jobs with extended leases that are still active
+                # and have completed early.
+                if job_id not in self._completed_jobs_in_current_round:
+                    raise RuntimeError('Job does not have lease extension '
+                                       'event but has completed!')
+                worker_ids = self._next_worker_assignments[job_id]
+                self._logger.info('Re-dispatching job {0} as it completed '
+                                  'early but has an extended lease'.format(
+                                      job_id))
+                self._try_dispatch_job(job_id, worker_ids)
+
+            self._scheduler_cv.notifyAll()
 
     def _done_callback(self, job_id, worker_id, all_num_steps,
                        all_execution_times, all_iterator_logs=None):
@@ -2592,13 +2609,6 @@ class Scheduler:
                         'Waiting to complete job {0}...'.format(job_id))
                     self._scheduler_cv.wait()
 
-            # Add the job's GavelIterator log events to its timeline if
-            # running on a physical cluster.
-            if all_iterator_logs is not None:
-                for i, single_job_id in enumerate(job_id.singletons()):
-                    events = all_iterator_logs[i].split('\n')
-                    self._job_timelines[single_job_id].extend(events)
-
             # Check whether jobs are still active as jobs might have
             # completed after being dispatched for the subsequent round.
             is_active = {}
@@ -2617,10 +2627,14 @@ class Scheduler:
             scale_factor = len(self._current_worker_assignments[job_id])
             self._in_progress_updates[job_id].append((worker_id,
                                                       all_num_steps,
-                                                      all_execution_times))
+                                                      all_execution_times,
+                                                      all_iterator_logs))
             if len(self._in_progress_updates[job_id]) < scale_factor:
                 return
             else:
+                # Sort updates in order of increasing worker ID.
+                self._in_progress_updates[job_id].sort(key=lambda x: x[0])
+
                 # Reset ports when running on a physical cluster.
                 if not self._simulate and scale_factor > 1:
                     master_addr = self._worker_connections[worker_id].addr
@@ -2646,19 +2660,23 @@ class Scheduler:
                 all_worker_ids.sort()
                 all_num_steps = [0] * len(job_id.singletons())
                 all_execution_times = [0] * len(job_id.singletons())
-                for (_, all_num_steps_, all_execution_times_) in \
-                    self._in_progress_updates[job_id]:
-                    for i in range(len(job_id.singletons())):
-                        if not is_active[job_id.singletons()[i]]:
+                for i, update in enumerate(self._in_progress_updates[job_id]):
+                    all_num_steps_ = update[1]
+                    all_execution_times_ = update[2]
+                    all_iterator_logs_ = update[3]
+                    for j in range(len(job_id.singletons())):
+                        if not is_active[job_id.singletons()[j]]:
                             continue
-                        elif (all_num_steps_[i] <= 0 or
-                              all_execution_times_[i] <= 0):
+                        elif (all_num_steps_[j] <= 0 or
+                              all_execution_times_[j] <= 0):
                             micro_task_succeeded = False
                             break
-                    for i in range(len(job_id.singletons())):
-                        all_num_steps[i] += all_num_steps_[i]
-                        all_execution_times[i] = max(all_execution_times[i],
-                                                     all_execution_times_[i])
+                    for j, single_job_id in enumerate(job_id.singletons()):
+                        all_num_steps[j] += all_num_steps_[j]
+                        all_execution_times[j] = max(all_execution_times[j],
+                                                     all_execution_times_[j])
+                        self._job_timelines[single_job_id][i].extend(
+                            all_iterator_logs_[j])
 
             # Reset metadata for distributed jobs.
             self._in_progress_updates[job_id] = []
@@ -2738,7 +2756,6 @@ class Scheduler:
                                     'remaining steps'.format(
                                         job_id=single_job_id,
                                         steps=remaining_steps))
-                            pass
                         else:
                             start_time = \
                                 self._per_job_start_timestamps[single_job_id]
@@ -2776,5 +2793,15 @@ class Scheduler:
 
             for single_job_id in to_remove:
                 self._remove_job(single_job_id)
+
+            # Re-dispatch jobs with extended leases that are still active
+            # and have completed early.
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if is_active and job_id in self._jobs_with_extended_lease:
+                worker_ids = self._next_worker_assignments[job_id]
+                self._logger.info('Re-dispatching job {0} as it completed '
+                                  'early but has an extended lease'.format(
+                                    job_id))
+                self._try_dispatch_job(job_id, worker_ids)
 
             self._scheduler_cv.notifyAll()

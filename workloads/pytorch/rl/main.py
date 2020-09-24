@@ -228,8 +228,6 @@ if __name__ == '__main__':
         for p in processes[1:]:
             p.terminate()
             p.join()
-    state = shared_model.state_dict()
-    if args.enable_gavel_iterator:
-        iters[0].save_checkpoint(state, checkpoint_path)
-    else:
+    if not args.enable_gavel_iterator:
+        state = shared_model.state_dict()
         save_checkpoint(state, checkpoint_path)

@@ -124,5 +124,7 @@ def train(rank, args, shared_model, optimizer, env_conf, iters):
         if (args.max_duration is not None and
             elapsed_time >= args.max_duration):
             break
-    if args.enable_gavel_iterator:
+    if args.enable_gavel_iterator and rank == 0:
+        state = shared_model.state_dict()
+        iters[0].save_checkpoint(state, checkpoint_path)
         iters.complete()
