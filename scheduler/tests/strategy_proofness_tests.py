@@ -26,14 +26,15 @@ def test_strategy_proofness(unflattened_throughputs, cluster_spec):
             scale_factors[i]))
     print("-" * 100)
     start_time = time.time()
-    allocation = policy.get_allocation(unflattened_throughputs, scale_factors,
-                                       unflattened_priority_weights,
-                                       cluster_spec)
+    allocation, discount_factors = policy.get_allocation(
+        unflattened_throughputs, scale_factors,
+        unflattened_priority_weights,
+        cluster_spec)
     non_strategy_proof_allocation = non_strategy_proof_policy.get_allocation(
         unflattened_throughputs, scale_factors,
         unflattened_priority_weights,
         cluster_spec)
-    return allocation, non_strategy_proof_allocation, time.time() - start_time
+    return allocation, discount_factors, non_strategy_proof_allocation, time.time() - start_time
 
 
 if __name__ == '__main__':
@@ -67,7 +68,7 @@ if __name__ == '__main__':
             i: {worker_types[j]: throughputs[i][j] for j in range(len(worker_types))}
             for i in range(len(throughputs))
         }
-        unflattened_allocation, unflattened_non_strategy_proof_allocation, runtime = \
+        unflattened_allocation, discount_factors, unflattened_non_strategy_proof_allocation, runtime = \
             test_strategy_proofness(unflattened_throughputs, cluster_spec)
         allocation = np.zeros((len(throughputs), len(cluster_spec)))
         non_strategy_proof_allocation = np.zeros((len(throughputs), len(cluster_spec)))
@@ -79,6 +80,7 @@ if __name__ == '__main__':
         effective_throughputs = np.sum(np.multiply(throughputs, allocation),
                                        axis=1)
         print("Strategy-proof allocation:", allocation)
+        print("Discount factors:", discount_factors)
         effective_throughputs = np.sum(np.multiply(throughputs, allocation),
                                        axis=1)
         print("Effective_throughputs with advertised raw throughputs:", effective_throughputs)
