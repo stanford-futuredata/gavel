@@ -185,8 +185,6 @@ def save_checkpoint(state, checkpoint_path):
 # Build the model
 ###############################################################################
 
-ntokens = len(corpus.dictionary)
-
 args.distributed = False
 if args.master_addr is not None:
     args.distributed = True
@@ -196,15 +194,13 @@ if args.master_addr is not None:
                             init_method=args.dist_url,
                             world_size=args.world_size,
                             rank=args.rank)
-
 if args.distributed:
-    model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[args.local_rank],
-                output_device=args.local_rank)
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset, shuffle=False)
 else:
     train_sampler = None
+
+ntokens = len(corpus.dictionary)
 
 train_loader = torch.utils.data.DataLoader(train_dataset,
                                            batch_size=args.batch_size,
@@ -242,6 +238,11 @@ if state is not None:
 else:
     model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid,
                            args.nlayers, args.dropout, args.tied).to(device)
+
+if args.distributed:
+    model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[args.local_rank],
+                output_device=args.local_rank)
 
 cumulative_steps = 0
 cumulative_time = 0
