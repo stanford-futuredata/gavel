@@ -1,6 +1,7 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
+import copy
 import cvxpy as cp
 import numpy as np
 
@@ -40,12 +41,23 @@ class MaxMinFairnessStrategyProofPolicyWithPerf(Policy):
         self._proportional_policy = ProportionalPolicy()
 
     def get_allocation(self, unflattened_throughputs, scale_factors,
-                       unflattened_priority_weights, cluster_spec):
+                       unflattened_priority_weights, cluster_spec, recurse_deeper=True):
         throughputs, index = super().flatten(unflattened_throughputs,
                                              cluster_spec)
         if throughputs is None: return None
         (m, n) = throughputs.shape
         (job_ids, worker_types) = index
+
+        if recurse_deeper:
+            all_throughputs_minus_job = []
+            for job_id in job_ids:
+                unflattened_throughputs_minus_job = copy.copy(unflattened_throughputs)
+                del unflattened_throughputs_minus_job[job_id]
+                throughputs_minus_job = self.get_allocation(
+                    unflattened_throughputs_minus_job, scale_factors,
+                    unflattened_priority_weights, cluster_spec,
+                    recurse_deeper=False)
+                all_throughputs_minus_job.append(throughputs_minus_job)
 
         # Row i of scale_factors_array is the scale_factor of job i
         # repeated len(worker_types) times.
@@ -78,4 +90,19 @@ class MaxMinFairnessStrategyProofPolicyWithPerf(Policy):
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
 
-        return super().unflatten(x.value.clip(min=0.0).clip(max=1.0), index)
+        throughputs = np.sum(np.multiply(throughputs, x.value), axis=1)
+        throughputs_dict = {job_ids[i]: throughputs[i] for i in range(len(job_ids))}
+        if not recurse_deeper:
+            return throughputs_dict
+
+        discount_factors = np.zeros(len(job_ids))
+        for i, job_id in enumerate(job_ids):
+            discount_factor = 1.0
+            for other_job_id in all_throughputs_minus_job[i]:
+                discount_factor *= (
+                    throughputs_dict[other_job_id] / all_throughputs_minus_job[i][other_job_id])
+            discount_factors[i] = discount_factor
+
+        discounted_allocation = np.multiply(x.value.T, discount_factors).T
+
+        return super().unflatten(discounted_allocation.clip(min=0.0).clip(max=1.0), index)
