@@ -2693,8 +2693,8 @@ class Scheduler:
                     all_num_steps_ = update[1]
                     all_execution_times_ = update[2]
                     all_iterator_logs_ = update[3]
-                    for j in range(len(job_id.singletons())):
-                        if not is_active[job_id.singletons()[j]]:
+                    for j, single_job_id in enumerate(job_id.singletons()):
+                        if not is_active[single_job_id]:
                             continue
                         elif (all_num_steps_[j] <= 0 or
                               all_execution_times_[j] <= 0):
