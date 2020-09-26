@@ -105,4 +105,5 @@ class MaxMinFairnessStrategyProofPolicyWithPerf(Policy):
 
         discounted_allocation = np.multiply(x.value.T, discount_factors).T
 
-        return super().unflatten(discounted_allocation.clip(min=0.0).clip(max=1.0), index)
+        return super().unflatten(discounted_allocation.clip(min=0.0).clip(max=1.0), index), \
+            discount_factors
