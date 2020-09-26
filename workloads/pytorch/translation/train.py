@@ -263,7 +263,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                 """
         if opt.enable_gavel_iterator:
             if training_data.done:
-                return
+                break
             elif done:
                 # Early stop.
                 training_data.complete()

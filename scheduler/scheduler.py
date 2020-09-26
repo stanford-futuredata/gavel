@@ -738,12 +738,13 @@ class Scheduler:
         worker_assignments[job_id] = tuple(worker_ids_for_job)
         num_workers_assigned += scale_factor
 
-        # TODO: Move this to when a job is actually dispatched when running
-        # on a physical cluster.
         for single_job_id in job_id.singletons():
-            self._per_job_latest_timestamps[single_job_id] = \
-                self.get_current_timestamp()
-            self._running_jobs.add(single_job_id)
+            if self._simulate:
+                # This will be done on initialization when running on a
+                # physical cluster.
+                self._per_job_latest_timestamps[single_job_id] = \
+                    self.get_current_timestamp()
+                self._running_jobs.add(single_job_id)
 
         # Update state.
         worker_state['worker_ids'] = worker_ids
@@ -1456,6 +1457,10 @@ class Scheduler:
               '(%.2f hours)' % (self._current_timestamp,
                                 self._current_timestamp / 3600.0))
 
+    def _is_final_round(self):
+        return (self._max_rounds is not None and
+                self._num_completed_rounds + 1 == self._max_rounds)
+
     def _begin_round(self, state_snapshot=None):
         """Executes beginning stage of a scheduling round."""
 
@@ -1475,6 +1480,11 @@ class Scheduler:
         Note that this updates self._next_worker_assignments. We update
         self._current_worker_assignments when we end the round.
         """
+
+        if self._is_final_round():
+            self._logger.debug('In final round, not dispatching any more jobs')
+            self._jobs_with_extended_leases = set()
+            return
 
         round_end_time = \
             self._current_round_start_time + self._time_per_iteration
@@ -1646,17 +1656,18 @@ class Scheduler:
             self._jobs_with_extended_lease.remove(job_id)
         self._logger.debug('Reset extended leases')
 
-        # The next worker assignments must have been computed here as
-        # _end_round is called sequentially after _mid_round.
-        if self._next_worker_assignments is None:
-            raise RuntimeError(
-                'Next worker assignments have not been computed!')
+        if not self._is_final_round():
+            # The next worker assignments must have been computed here as
+            # _end_round is called sequentially after _mid_round.
+            if self._next_worker_assignments is None:
+                raise RuntimeError(
+                    'Next worker assignments have not been computed!')
 
-        for (job_id, worker_ids) in self._next_worker_assignments.items():
-            is_active = any([x in self._jobs for x in job_id.singletons()])
-            if is_active:
-                for worker_id in worker_ids:
-                    self._remove_available_worker_id(worker_id)
+            for (job_id, worker_ids) in self._next_worker_assignments.items():
+                is_active = any([x in self._jobs for x in job_id.singletons()])
+                if is_active:
+                    for worker_id in worker_ids:
+                        self._remove_available_worker_id(worker_id)
 
         self._num_completed_rounds += 1
 
@@ -1693,14 +1704,16 @@ class Scheduler:
             self._scheduler_cv.wait()
 
         # Compute initial schedule and dispatch initial set of jobs.
-        state_snapshot = self._get_state_snapshot()
         self._current_worker_assignments = self._schedule_jobs_on_workers()
+        state_snapshot = self._get_state_snapshot()
         for (job_id, worker_ids) in self._current_worker_assignments.items():
             self._try_dispatch_job(job_id, worker_ids)
         self._scheduler_cv.release()
 
         with ThreadPoolExecutor(max_workers=1) as pool:
             while True:
+                is_final_round = self._is_final_round()
+
                 round_start_time = self.get_current_timestamp()
                 with self._scheduler_cv:
                     self._begin_round(state_snapshot)
@@ -1710,9 +1723,12 @@ class Scheduler:
                 time.sleep(delay)
 
                 with self._scheduler_cv:
-                    state_snapshot = self._get_state_snapshot(deepcopy=True)
                     self._mid_round(pool)
+                    state_snapshot = self._get_state_snapshot(deepcopy=True)
                     self._end_round()
+
+                if is_final_round:
+                    break
 
     def get_average_jct(self, job_ids=None, verbose=True):
         """Computes the average job completion time.
@@ -1827,60 +1843,25 @@ class Scheduler:
             print('Number of SLO violations: %d' % (num_SLO_violations))
         return num_SLO_violations
 
-    def _get_job_overhead(self, timeline):
-        computation_time = 0.0
-        total_time = 0.0
-        current_dispatch_start_time = None
-        current_compute_start_time = None
-        for (timestamp, event, status, _) in timeline:
-            if event == 'DISPATCHER' and status == 'LAUNCH':
-                if current_dispatch_start_time is None:
-                    current_dispatch_start_time = timestamp
-            elif event == 'INIT' and status == 'COMPLETE':
-                current_compute_start_time = timestamp
-            elif event == 'SAVE CHECKPOINT' and status == 'END':
-                delta = (timestamp - current_compute_start_time)
-                computation_time += delta.total_seconds()
-                current_compute_start_time = None
-            elif event == 'DISPATCHER' and status == 'COMPLETE':
-                delta = (timestamp - current_dispatch_start_time)
-                total_time += delta.total_seconds()
-                current_dispatch_start_time = None
-        return (computation_time, total_time)
-
-
-    def get_job_overheads(self):
-        print('Job overheads:')
-        for job_id in sorted(self._job_timelines.keys()):
-            computation_time_sum = 0.0
-            total_time_sum = 0.0
-            for i in range(len(self._job_timelines[job_id])):
-                timeline = sorted(self._job_timelines[job_id][i],
-                                  key=lambda x: x[0])
-                computation_time, total_time = self._get_job_overhead(timeline)
-                computation_time_sum += computation_time
-                total_time_sum += total_time
-            overhead = computation_time_sum / total_time_sum
-            print('Job {job_id}: Total time={total_time:.2f} seconds, '
-                  'Computation time={computation_time:.2f} seconds, '
-                  'Overhead={overhead:.2f}%'.format(
-                      job_id=job_id, total_time=total_time_sum,
-                      computation_time=computation_time_sum,
-                      overhead=100 * overhead))
-        print()
-
-    def print_job_timelines(self):
-        print('Job timelines:\n')
+    def save_job_timelines(self, timelines_dir):
+        if not os.path.isdir(timelines_dir):
+            try:
+                os.mkdir(timelines_dir)
+            except Exception as e:
+                self._logger.error('Could not save timelines!')
+                traceback.print_exc()
+                return
 
         for job_id in sorted(self._job_timelines.keys()):
-            print('Job {0}:\n'.format(job_id))
+            job_dir = os.path.join(timelines_dir, 'job_id={0}'.format(job_id))
+            if not os.path.isdir(job_dir):
+                os.mkdir(job_dir)
             for i in range(len(self._job_timelines[job_id])):
-                print('Worker {0}:'.format(i))
-                for event in self._job_timelines[job_id][i]:
-                    (timestamp, event, status, message) = event
-                    print('[{0}] [{1}] [{2}] {3}'.format(
-                        timestamp, event, status, message))
-                print('')
+                timeline_file = os.path.join(job_dir,
+                                             'worker={0}.log'.format(i))
+                with open(timeline_file, 'w') as f:
+                    for event in self._job_timelines[job_id][i]:
+                        f.write('{0}\n'.format(event))
 
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
@@ -2169,6 +2150,7 @@ class Scheduler:
 
         Requires self._scheduler_lock to be held when calling this function.
         """
+        self._logger.debug('Resetting time run so far')
         current_time = self.get_current_timestamp()
         elapsed_time_since_last_reset = current_time - self._last_reset_time
         for worker_type in self._worker_types:
@@ -2303,6 +2285,15 @@ class Scheduler:
                 elapsed_job_time[job_id][worker_type] += elapsed_time
                 elapsed_worker_time[worker_type] += elapsed_time
 
+            for job_id in elapsed_job_time:
+                self._logger.debug('Elapsed time for job {0}: {1}'.format(
+                    job_id, elapsed_job_time[job_id]))
+            for worker_type in elapsed_worker_time:
+                self._logger.debug('Elapsed time for worker type {0}: '
+                                   '{1}'.format(
+                                       worker_type,
+                                       elapsed_worker_time[worker_type]))
+
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
 
@@ -2324,6 +2315,10 @@ class Scheduler:
                         job_time_so_far += \
                             elapsed_job_time[job_id][worker_type]
                     fraction = job_time_so_far / worker_time_so_far
+                    self._logger.debug('Job {0} fraction: '
+                                       '{1:.2f} / {2:.2f} = {3:.2f}'.format(
+                                           job_id, job_time_so_far,
+                                           worker_time_so_far, fraction))
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 # Don't use inf so 2*new_priority > new_priority.
@@ -2345,6 +2340,11 @@ class Scheduler:
                     elif fractions[worker_type][job_id] > 0.0:
                         new_priority = self._allocation[job_id][worker_type] /\
                                 fractions[worker_type][job_id]
+                        self._logger.debug(
+                            'Job {0} new priority: '
+                            '{1:.2f} / {2:.2f} = {3:.2f}'.format(
+                                job_id, self._allocation[job_id][worker_type],
+                                fractions[worker_type][job_id], new_priority))
                     self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):
@@ -2481,6 +2481,7 @@ class Scheduler:
             if job_id not in self._jobs:
                 return (0, 0, 0)
 
+
             # Wait if this job has been scheduled for the next round
             # but is still running in the previous round (possibly on
             # a different worker).
@@ -2527,12 +2528,16 @@ class Scheduler:
             self._per_job_latest_timestamps[job_id] = \
                 self.get_current_timestamp()
 
-            # Return initial lease.
+            for single_job_id in job_id.singletons():
+                self._running_jobs.add(single_job_id)
+
+            # Determine initial lease.
             scale_factor = self._jobs[job_id].scale_factor
             remaining_steps = self._get_remaining_steps(job_id)
             remaining_steps = int(math.ceil(remaining_steps / scale_factor))
-            extra_time = 0
+
             # Add additional time to the lease if the job was dispatched early.
+            extra_time = 0
             if (self._next_worker_assignments is not None and
                 next_job_combination is not None):
                 current_time = self.get_current_timestamp()
@@ -2719,27 +2724,8 @@ class Scheduler:
                         all_execution_times[j] = max(all_execution_times[j],
                                                      all_execution_times_[j])
                         if all_iterator_logs_ is not None:
-                            for line in all_iterator_logs_[j].split('\n'):
-                                match = \
-                                    re.match(
-                                        '\[(.*)\] \[(.*)\] \[(.*)\]\ ?(.*)',
-                                        line)
-                                if match is None:
-                                    self._logger.error(
-                                        'Malformed GavelIterator '
-                                        'log line: {0}'.format(line))
-                                    continue
-
-                                timestamp = \
-                                    datetime.datetime.strptime(
-                                            match.group(1),
-                                            '%Y-%m-%d %H:%M:%S')
-                                event = match.group(2)
-                                status = match.group(3)
-                                message = match.group(4)
-
-                                self._job_timelines[single_job_id][i].append(
-                                    (timestamp, event, status, message))
+                            self._job_timelines[single_job_id][i].extend(
+                                all_iterator_logs_[j].split('\n'))
 
             # Reset metadata for distributed jobs.
             self._in_progress_updates[job_id] = []

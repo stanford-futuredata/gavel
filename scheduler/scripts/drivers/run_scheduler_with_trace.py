@@ -63,7 +63,8 @@ def main(args):
         sched.get_average_jct(jobs_to_complete)
         sched.get_completed_steps(jobs_to_complete)
         sched.get_cluster_utilization()
-        sched.get_job_overheads()
+        if args.timelines_dir is not None:
+            sched.save_job_timelines(args.timelines_dir)
         elapsed_time = (datetime.datetime.now() - start_time).seconds
         print('Total time taken: %d seconds' % (elapsed_time))
     except KeyboardInterrupt as e:
@@ -95,4 +96,6 @@ if __name__=='__main__':
                         help='Measurement window end (job ID)')
     parser.add_argument('--max_rounds', type=int, default=None,
                         help='Maximum number of rounds to run')
+    parser.add_argument('--timelines_dir', type=str, default=None,
+                        help='Directory to save timelnes to')
     main(parser.parse_args())

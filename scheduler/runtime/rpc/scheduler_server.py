@@ -110,7 +110,7 @@ class SchedulerIteratorRpcServer(i2s_pb2_grpc.IteratorToSchedulerServicer):
         self._logger.info(
             'Received lease update request: '
             'job_id={job_id}, worker_id={worker_id}, steps={steps}, '
-            'duration={duration:.2f}, max_steps={max_steps},'
+            'duration={duration:.2f}, max_steps={max_steps}, '
             'max_duration={max_duration:.2f}'.format(
                 job_id=job_id, worker_id=request.worker_id,
                 steps=request.steps, duration=request.duration,
