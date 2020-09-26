@@ -2284,15 +2284,6 @@ class Scheduler:
                 elapsed_job_time[job_id][worker_type] += elapsed_time
                 elapsed_worker_time[worker_type] += elapsed_time
 
-            for job_id in elapsed_job_time:
-                self._logger.debug('Elapsed time for job {0}: {1}'.format(
-                    job_id, elapsed_job_time[job_id]))
-            for worker_type in elapsed_worker_time:
-                self._logger.debug('Elapsed time for worker type {0}: '
-                                   '{1}'.format(
-                                       worker_type,
-                                       elapsed_worker_time[worker_type]))
-
         # Stores the fraction of time spent running a job for each worker.
         fractions = {}
 
