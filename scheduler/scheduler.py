@@ -13,7 +13,6 @@ import threading
 import time
 import datetime
 import random
-import re
 import sched
 import math
 import matrix_completion
