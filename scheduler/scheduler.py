@@ -2314,10 +2314,6 @@ class Scheduler:
                         job_time_so_far += \
                             elapsed_job_time[job_id][worker_type]
                     fraction = job_time_so_far / worker_time_so_far
-                    self._logger.debug('Job {0} fraction: '
-                                       '{1:.2f} / {2:.2f} = {3:.2f}'.format(
-                                           job_id, job_time_so_far,
-                                           worker_time_so_far, fraction))
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
                 # Don't use inf so 2*new_priority > new_priority.
@@ -2339,11 +2335,6 @@ class Scheduler:
                     elif fractions[worker_type][job_id] > 0.0:
                         new_priority = self._allocation[job_id][worker_type] /\
                                 fractions[worker_type][job_id]
-                        self._logger.debug(
-                            'Job {0} new priority: '
-                            '{1:.2f} / {2:.2f} = {3:.2f}'.format(
-                                job_id, self._allocation[job_id][worker_type],
-                                fractions[worker_type][job_id], new_priority))
                     self._priorities[worker_type][job_id] = new_priority
 
     def _add_available_worker_id(self, worker_id):
