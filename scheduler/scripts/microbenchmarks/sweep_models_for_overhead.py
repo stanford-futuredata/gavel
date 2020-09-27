@@ -23,16 +23,6 @@ BASE_WORKER_COMMAND = \
     """python worker.py -i 127.0.1.1 -s 50060 -w 50061 -g 1 -t p100"""
 INFINITY = 10000000000
 
-def get_overhead(line):
-    pattern = ('Job (\d+): Total time=([-+]?[0-9]*\.?[0-9]+) seconds, '
-               'Computation time=([-+]?[0-9]*\.?[0-9]+) seconds, '
-               'Overhead=([-+]?[0-9]*\.?[0-9]+)%')
-    match = re.match(pattern, line)
-    if match is None:
-        return None
-    return (int(match.group(1)), float(match.group(2)), float(match.group(3)),
-            float(match.group(4)))
-
 async def run(cmd, sleep_seconds=None):
     if sleep_seconds is not None:
         time.sleep(sleep_seconds)

@@ -70,7 +70,23 @@ def main(args):
             print()
 
 if __name__=='__main__':
-    parser = argparse.ArgumentParser(description='Get overhead from timelines')
+    description = """
+Gets overhead from timelines.
+
+This requires the following directory structure, which is used
+by scripts/microbenchmarks/sweep_models_for_overhead.py:
+|-> timelines_dir
+  |-> model=modelA
+    |-> num_jobs=1
+      |-> job_id=0
+        |-> worker0.log
+
+This is also limited to measuring the overhead for jobs running
+on a single GPU, as multi-GPU configurations enable job launch latency
+hiding which we do not include in this analysis."""
+    parser = argparse.ArgumentParser(
+            description=description,
+            formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--timeline_dir', required=True, type=str,
                         help='Root timeline directory')
     args = parser.parse_args()
