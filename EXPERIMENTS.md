@@ -220,7 +220,7 @@ The following commands can be used to measure the overhead of Gavel's
 implementation. These require only a single GPU.
 
 The first command sweeps through all model types and runs each model
-for 10 rounds in configurations with 1 and 2 total jobs. It saves
+for 10 rounds in configurations with and without lease extensions. It saves
 job timelines into the specified directory.
 ```bash
 python scripts/microbenchmarks/sweep_models_for_overhead.py \
