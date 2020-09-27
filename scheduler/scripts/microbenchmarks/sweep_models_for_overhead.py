@@ -48,6 +48,9 @@ def main(args):
         ('CycleGAN', 'cyclegan'),
     ]
 
+    if not os.path.isdir(timeline_dir):
+        os.mkdir(timeline_dir)
+
     for (model, model_dir) in models:
         model_dir = os.path.join(timeline_dir, 'model={0}'.format(model_dir))
         if not os.path.isdir(model_dir):
