@@ -36,7 +36,7 @@ async def run(cmd, sleep_seconds=None):
 def main(args):
     loop = asyncio.get_event_loop()
     max_rounds = args.max_rounds
-    timelines_dir = args.timelines_dir
+    timeline_dir = args.timeline_dir
     trace_file = '/tmp/overhead.trace'
     models = [
         ('ResNet-18 (batch size 256)', 'resnet18'),
@@ -49,7 +49,7 @@ def main(args):
     ]
 
     for (model, model_dir) in models:
-        model_dir = os.path.join(timelines_dir, 'model={0}'.format(model_dir))
+        model_dir = os.path.join(timeline_dir, 'model={0}'.format(model_dir))
         if not os.path.isdir(model_dir):
             os.mkdir(model_dir)
 
@@ -86,7 +86,7 @@ def main(args):
             scheduler_cmd = BASE_SCHEDULER_COMMAND
             scheduler_cmd += ' --max_rounds {0}'.format(max_rounds)
             scheduler_cmd += ' --trace_file {0}'.format(trace_file)
-            scheduler_cmd += ' --timelines_dir {0}'.format(num_jobs_dir)
+            scheduler_cmd += ' --timeline_dir {0}'.format(num_jobs_dir)
             worker_cmd = BASE_WORKER_COMMAND
             worker_cmd += ' --run_dir {0}'.format(args.run_dir)
             worker_cmd += ' --data_dir {0}'.format(args.data_dir)
@@ -102,7 +102,7 @@ if __name__=='__main__':
                     'measuring overhead')
     parser.add_argument('--max_rounds', type=int, default=10,
                         help='Maximum number of rounds to run')
-    parser.add_argument('--timelines_dir', type=str, required=True,
+    parser.add_argument('--timeline_dir', type=str, required=True,
                         help='Root directory to write timelines to')
     parser.add_argument('--run_dir', type=str, required=True,
                         help='Directory to run jobs from')

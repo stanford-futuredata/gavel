@@ -1842,17 +1842,17 @@ class Scheduler:
             print('Number of SLO violations: %d' % (num_SLO_violations))
         return num_SLO_violations
 
-    def save_job_timelines(self, timelines_dir):
-        if not os.path.isdir(timelines_dir):
+    def save_job_timelines(self, timeline_dir):
+        if not os.path.isdir(timeline_dir):
             try:
-                os.mkdir(timelines_dir)
+                os.mkdir(timeline_dir)
             except Exception as e:
                 self._logger.error('Could not save timelines!')
                 traceback.print_exc()
                 return
 
         for job_id in sorted(self._job_timelines.keys()):
-            job_dir = os.path.join(timelines_dir, 'job_id={0}'.format(job_id))
+            job_dir = os.path.join(timeline_dir, 'job_id={0}'.format(job_id))
             if not os.path.isdir(job_dir):
                 os.mkdir(job_dir)
             for i in range(len(self._job_timelines[job_id])):
