@@ -158,6 +158,10 @@ class Scheduler:
         self._completed_jobs_in_current_round = set()
         # Set of jobs with an extended lease for the upcoming round.
         self._jobs_with_extended_lease = set()
+        # The total number of lease extensions across all jobs.
+        self._num_lease_extensions = 0
+        # The total number of instances where leasees could have been extended.
+        self._num_lease_extension_opportunities = 0
         # Event scheduler to trigger round completions for jobs with
         # extended leases.
         self._lease_extension_scheduler = \
@@ -1417,6 +1421,19 @@ class Scheduler:
             else:
                 with self._scheduler_lock:
                     scheduled_jobs = self._schedule_jobs_on_workers()
+                    for job_id in self._current_worker_assignments:
+                        is_active = \
+                            any([x in self._jobs for x in job_id.singletons()])
+                        if is_active:
+                            self._num_lease_extension_opportunities += \
+                                len(self._current_worker_assignments)
+                    for job_id in scheduled_jobs:
+                        if job_id in self._current_worker_assignments:
+                            current_worker_ids = \
+                                set(self._current_worker_assignments[job_id])
+                            next_worker_ids = set(scheduled_jobs[job_id])
+                            if current_worker_ids == next_worker_ids:
+                                self._num_lease_extensions += 1
                     self._current_worker_assignments = scheduled_jobs
                     self._print_schedule_summary()
                 for (job_id, worker_ids) in scheduled_jobs.items():
@@ -1491,6 +1508,12 @@ class Scheduler:
         # Recompute the schedule for the upcoming round.
         self._next_worker_assignments = self._schedule_jobs_on_workers()
 
+        # Count how many jobs could be eligible for lease extensions.
+        for job_id in self._current_worker_assignments:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if is_active:
+                self._num_lease_extension_opportunities += 1
+
         # Check whether we should update the lease for any jobs.
         for job_id in self._current_worker_assignments:
             current_worker_ids = \
@@ -1505,6 +1528,7 @@ class Scheduler:
                     self._jobs_with_extended_lease.add(job_id)
                     self._logger.info(
                         'Extending lease for job {0}'.format(job_id))
+                    self._num_lease_extensions += 1
                 elif job_id in self._jobs_with_extended_lease:
                     # Job will not be scheduled on the same workers
                     # in upcoming round; remove it from the
@@ -1841,6 +1865,21 @@ class Scheduler:
         if verbose:
             print('Number of SLO violations: %d' % (num_SLO_violations))
         return num_SLO_violations
+
+    def get_num_lease_extensions(self, verbose=True):
+        if self._num_lease_extension_opportunities > 0:
+            percentage = (100.0 * self._num_lease_extensions) / \
+                            self._num_lease_extension_opportunities
+            if verbose:
+                print('Extended leases {0:.2f}% of the time ({1}/{2})'.format(
+                        percentage,
+                        self._num_lease_extensions,
+                        self._num_lease_extension_opportunities))
+        elif verbose:
+            percentage = 0
+            print('No lease extension opportunities')
+
+        return percentage
 
     def save_job_timelines(self, timeline_dir):
         if not os.path.isdir(timeline_dir):

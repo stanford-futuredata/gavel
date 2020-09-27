@@ -65,14 +65,17 @@ def simulate(policy_name, throughputs_file, cluster_spec,
     utilization = sched.get_cluster_utilization()
     total_cost = sched.get_total_cost()
     num_SLO_violations = sched.get_num_SLO_violations()
+    lease_extension_freq = sched.get_num_lease_extensions()
 
     current_time = datetime.datetime.now()
     print('[%s] Results: average JCT=%f, utilization=%f, '
-          'total_cost=$%.2f, num_SLO_violations=%d' % (current_time,
-                                                       average_jct,
-                                                       utilization,
-                                                       total_cost,
-                                                       num_SLO_violations),
+          'total_cost=$%.2f, num_SLO_violations=%d, '
+          'lease_extension_frequency=%.2f%%' % (current_time,
+                                                average_jct,
+                                                utilization,
+                                                total_cost,
+                                                num_SLO_violations,
+                                                lease_extension_freq),
           file=sys.stderr)
 
     sched.shutdown()
