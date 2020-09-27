@@ -213,3 +213,25 @@ a cluster size of 6 GPUs (2 V100s and 4 K80s), and is intended merely to show th
 required to deploy Gavel in a physical cluster is included; actually replicating
 the physical cluster experiments shown in the paper will require more
 resources for a much longer duration.
+
+### Measuring Overhead of Running Jobs with Gavel's Preemptive Scheduler
+
+The following commands can be used to measure the overhead of Gavel's
+preemptive scheduler. These require only a single GPU.
+
+The first script sweeps through all model types and runs each model
+for 10 rounds in configurations with and without lease extensions. It saves
+job timelines into the specified directory.
+```bash
+python scripts/microbenchmarks/sweep_models_for_overhead.py \
+  --timeline_dir /path/to/timelines \
+  --run_dir /path/to/gavel/workloads/pytorch \
+  --data_dir /path/to/data \
+  --checkpoint_dir /path/to/checkpoints
+```
+
+The next script parses the saved timelines and computes the overhead.
+```bash
+python scripts/utils/get_job_overhead.py \
+  --timeline_dir /path/to/timelines
+```

@@ -251,18 +251,6 @@ def train(model, training_data, validation_data, optimizer, device, opt):
             'epoch': epoch_i,
         }
 
-        if not opt.distributed or opt.rank == 0:
-            if opt.save_mode == 'all':
-                if opt.enable_gavel_iterator:
-                    training_data.save_checkpoint(checkpoint, checkpoint_path)
-                else:
-                    save_checkpoint(checkpoint, checkpoint_path)
-            elif opt.save_mode == 'best':
-                if valid_accu >= max(valid_accus):
-                    print('Saving checkpoint at %s...' % (checkpoint_path))
-                    torch.save(checkpoint, checkpoint_path)
-                    print('    - [Info] The checkpoint file has been updated.')
-
         if log_train_file:#and log_valid_file:
             with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
                 log_tf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
@@ -275,13 +263,26 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                 """
         if opt.enable_gavel_iterator:
             if training_data.done:
-                return
+                break
             elif done:
                 # Early stop.
                 training_data.complete()
-                return
+                break
         elif done:
-            return
+            break
+
+    if not opt.distributed or opt.rank == 0:
+        if opt.save_mode == 'all':
+            if opt.enable_gavel_iterator:
+                training_data.save_checkpoint(checkpoint, checkpoint_path)
+            else:
+                save_checkpoint(checkpoint, checkpoint_path)
+        elif opt.save_mode == 'best':
+            if valid_accu >= max(valid_accus):
+                print('Saving checkpoint at %s...' % (checkpoint_path))
+                torch.save(checkpoint, checkpoint_path)
+                print('    - [Info] The checkpoint file has been updated.')
+
 
 def main():
     ''' Main function '''

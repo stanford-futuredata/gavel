@@ -161,6 +161,7 @@ def load_checkpoint(args, checkpoint_path):
         return None
 
 def save_checkpoint(state, checkpoint_path):
+    import torch
     print('Saving checkpoint at %s...' % (checkpoint_path))
     torch.save(state, checkpoint_path)
 
@@ -217,9 +218,12 @@ if __name__ == '__main__':
 
     time.sleep(0.1)
     for rank in range(0, args.workers):
+        if args.enable_gavel_iterator and rank == 0:
+            iters[rank]._close_file_handler()
         iters_ = dill.dumps(iters[rank])
         p = mp.Process(
-            target=train, args=(rank, args, shared_model, optimizer, env_conf, iters_))
+            target=train, args=(rank, args, shared_model, optimizer, env_conf,
+                                iters_, checkpoint_path))
         p.start()
         processes.append(p)
         time.sleep(0.1)
@@ -228,8 +232,6 @@ if __name__ == '__main__':
         for p in processes[1:]:
             p.terminate()
             p.join()
-    state = shared_model.state_dict()
-    if args.enable_gavel_iterator:
-        iters[0].save_checkpoint(state, checkpoint_path)
-    else:
+    if not args.enable_gavel_iterator:
+        state = shared_model.state_dict()
         save_checkpoint(state, checkpoint_path)
