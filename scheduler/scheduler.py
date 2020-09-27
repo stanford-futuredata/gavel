@@ -2272,6 +2272,7 @@ class Scheduler:
                 if single_job_id not in self._per_job_latest_timestamps:
                     continue
                 dispatch_time = self._per_job_latest_timestamps[single_job_id]
+                dispatch_time = max(dispatch_time, self._last_reset_time)
                 elapsed_time = current_time - dispatch_time
                 elapsed_job_time[job_id] = {}
                 worker_ids = self._current_worker_assignments[job_id]
