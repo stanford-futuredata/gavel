@@ -214,10 +214,10 @@ required to deploy Gavel in a physical cluster is included; actually replicating
 the physical cluster experiments shown in the paper will require more
 resources for a much longer duration.
 
-### Measuring job overhead
+### Measuring Overhead of Running Jobs with Gavel's Preemptive Scheduler
 
 The following commands can be used to measure the overhead of Gavel's
-implementation. These require only a single GPU.
+preemptive scheduler. These require only a single GPU.
 
 The first script sweeps through all model types and runs each model
 for 10 rounds in configurations with and without lease extensions. It saves
