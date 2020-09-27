@@ -2341,9 +2341,11 @@ class Scheduler:
                 else:
                     job_time_so_far = \
                         self._job_time_so_far[job_id][worker_type]
-                    if not self._simulate and job_id in elapsed_job_time:
-                        job_time_so_far += \
-                            elapsed_job_time[job_id][worker_type]
+                    if not self._simulate:
+                        if (job_id in elapsed_job_time and
+                            worker_type in elapsed_job_time[job_id]):
+                            job_time_so_far += \
+                                elapsed_job_time[job_id][worker_type]
                     fraction = job_time_so_far / worker_time_so_far
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
