@@ -219,7 +219,7 @@ resources for a much longer duration.
 The following commands can be used to measure the overhead of Gavel's
 implementation. These require only a single GPU.
 
-The first command sweeps through all model types and runs each model
+The first script sweeps through all model types and runs each model
 for 10 rounds in configurations with and without lease extensions. It saves
 job timelines into the specified directory.
 ```bash
