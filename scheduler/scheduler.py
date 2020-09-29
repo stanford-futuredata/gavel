@@ -47,7 +47,7 @@ SCHEDULE_RECOMPUTE_FRACTION = 0.5
 # Format string for logging.
 LOG_FORMAT = '{name}:{levelname} {message}'
 # Buffer time for jobs to complete.
-JOB_COMPLETION_BUFFER_TIME = 10
+JOB_COMPLETION_BUFFER_TIME = 60
 
 class Scheduler:
 
@@ -2634,6 +2634,9 @@ class Scheduler:
                         if max_steps is not None:
                             break
                     # TODO: Sleep for less time?
+                    self._logger.debug(
+                        'Job {0} (worker {1}) waiting for '
+                        'lease...'.format(job_id, worker_id))
                     time.sleep(1)
                 assert max_steps is not None
                 return (max_steps, INFINITY)
