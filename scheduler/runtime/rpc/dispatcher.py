@@ -228,6 +228,8 @@ class Dispatcher:
                     self._kill_job(pid)
             else:
                 for job_id in self._job_assignments:
+                    if job_id not in self._commands:
+                        continue
                     pids = []
                     for (prefix, command) in self._commands[job_id]:
                         pid = utils.get_pid_for_job(prefix, command)
