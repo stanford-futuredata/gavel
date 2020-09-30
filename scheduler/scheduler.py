@@ -46,6 +46,8 @@ MAX_FAILED_ATTEMPTS = 5
 SCHEDULE_RECOMPUTE_FRACTION = 0.5
 # Format string for logging.
 LOG_FORMAT = '{name}:{levelname} {message}'
+# Buffer time for jobs to complete.
+JOB_COMPLETION_BUFFER_TIME = 60
 
 class Scheduler:
 
@@ -164,10 +166,10 @@ class Scheduler:
         self._num_lease_extension_opportunities = 0
         # Event scheduler to trigger round completions for jobs with
         # extended leases.
-        self._lease_extension_scheduler = \
+        self._completion_event_scheduler = \
             sched.scheduler(time.time, time.sleep)
-        # Map from job ID to lease extension scheduler event.
-        self._lease_extension_events = {}
+        # Map from job ID to completion event.
+        self._completion_events = {}
         # Map from job ID to timeline of events.
         self._job_timelines = {}
         # Set of ports in use for each worker.
@@ -1553,8 +1555,8 @@ class Scheduler:
                 self._logger.info('Dispatching job {0}'.format(job_id))
                 self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
-        # Schedule extended lease completion events.
-        self._schedule_extended_lease_completion_events(round_end_time, pool)
+        # Schedule completion events.
+        self._schedule_completion_events(round_end_time, pool)
 
     def _try_dispatch_job(self, job_id, worker_ids, next_round=False):
         """Attempts to dispatch the specified job combination.
@@ -1563,7 +1565,7 @@ class Scheduler:
            dispatched.
         """
 
-        # Initialize metadata for distributed jobs.
+        # Initialize metadata.
         if not next_round or job_id not in self._current_worker_assignments:
             self._in_progress_updates[job_id] = []
             self._lease_update_requests[job_id] = []
@@ -1613,29 +1615,36 @@ class Scheduler:
                          self._jobs[single_job_id].needs_data_dir,
                          self._jobs[single_job_id].num_steps_arg,
                          num_steps))
-            self._worker_connections[worker_id].run(job_descriptions,
-                                                    worker_id, current_round)
+            self._worker_connections[worker_id].run_job(
+                    job_descriptions, worker_id, current_round)
             if not next_round:
                 self._remove_available_worker_id(worker_id)
 
-    def _schedule_extended_lease_completion_events(self, round_end_time, pool):
-        """Schedules completion events for jobs with extended lease.
+    def _schedule_completion_events(self, round_end_time, pool):
+        """Schedules completion events for every dispatched job.
 
         A completion event in this setting is a callback that will be
         triggered at the conclusion of the current round to indicate that the
-        specified job has completed the round. This is necessary because
-        jobs with extended leases will not trigger the standard done_callback
-        at the end of the round.
+        specified job has completed the round. This is necessary for two
+        reasons: 1) jobs with extended leases will not trigger the standard
+        done_callback at the end of the round, and 2) jobs might freeze.
         """
         current_time = self.get_current_timestamp()
-        delay = round_end_time - current_time
-        for job_id in self._jobs_with_extended_lease:
-            event = self._lease_extension_scheduler.enter(
-                    delay=delay, priority=1,
-                    action=self._done_callback_extended_lease,
-                    argument=(job_id,))
-            self._lease_extension_events[job_id] = event
-        pool.submit(self._lease_extension_scheduler.run)
+        for job_id in self._current_worker_assignments:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if (not is_active or
+                job_id in self._completed_jobs_in_current_round):
+                continue
+            delay = round_end_time - current_time
+            if job_id not in self._jobs_with_extended_lease:
+                delay += JOB_COMPLETION_BUFFER_TIME
+                action = self._kill_job
+            else:
+                action = self._done_callback_extended_lease
+            event = self._completion_event_scheduler.enter(
+                    delay=delay, priority=1, action=action, argument=(job_id,))
+            self._completion_events[job_id] = event
+        pool.submit(self._completion_event_scheduler.run)
 
     def _end_round(self):
         """Executes final stage of a scheduling round.
@@ -1664,9 +1673,9 @@ class Scheduler:
         self._logger.debug(
             'All jobs in round {0} have completed!'.format(current_round))
 
-        if len(self._lease_extension_events) > 0:
-            raise RuntimeError('Remaining lease extension events: {0}'.format(
-                self._lease_extension_events.keys()))
+        if len(self._completion_events) > 0:
+            raise RuntimeError('Remaining completion events: {0}'.format(
+                self._completion_events.keys()))
 
         # Reset extended leases.
         jobs_with_extended_lease = list(self._jobs_with_extended_lease)
@@ -2311,6 +2320,8 @@ class Scheduler:
                 if single_job_id not in self._per_job_latest_timestamps:
                     continue
                 dispatch_time = self._per_job_latest_timestamps[single_job_id]
+                if dispatch_time is None:
+                    continue
                 dispatch_time = max(dispatch_time, self._last_reset_time)
                 elapsed_time = current_time - dispatch_time
                 elapsed_job_time[job_id] = {}
@@ -2573,6 +2584,14 @@ class Scheduler:
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
 
+        with self._scheduler_lock:
+            if job_id not in self._lease_update_requests:
+                self._lease_update_requests[job_id] = []
+            update_id = len(self._lease_update_requests[job_id])
+            self._lease_update_requests[job_id].append((steps, duration,
+                                                        max_steps,
+                                                        max_duration))
+
         # Round the remaining steps to the nearest multiple of scale_factor.
         scale_factor = self._jobs[job_id].scale_factor
         remaining_steps = self._get_remaining_steps(job_id)
@@ -2592,13 +2611,8 @@ class Scheduler:
         if scale_factor == 1:
             return (max_steps, max_duration)
         else:
-            with self._scheduler_lock:
-                update_id = len(self._lease_update_requests[job_id])
-                self._lease_update_requests[job_id].append((steps, duration,
-                                                            max_steps,
-                                                            max_duration))
-                if update_id == 0:
-                    assert self._max_steps[job_id] is None
+            if update_id == 0:
+                assert self._max_steps[job_id] is None
 
             # The first worker to request a lease update computes the new
             # lease for all workers.
@@ -2620,27 +2634,71 @@ class Scheduler:
                         if max_steps is not None:
                             break
                     # TODO: Sleep for less time?
+                    self._logger.debug(
+                        'Job {0} (worker {1}) waiting for '
+                        'lease...'.format(job_id, worker_id))
                     time.sleep(1)
                 assert max_steps is not None
                 return (max_steps, INFINITY)
 
+    def _kill_job(self, job_id):
+        if job_id not in self._current_worker_assignments:
+            raise RuntimeError(
+                'Trying to kill job ({0}) that is not active '
+                'in this round!'.format(job_id))
+        elif job_id not in self._completion_events:
+            if job_id not in self._completed_jobs_in_current_round:
+                raise RuntimeError(
+                    'Completion event for job {0} is not active '
+                    'even though job has not completed!'.format(job_id))
+            elif job_id not in self._jobs_with_extended_lease:
+                # Job has already completed normally.
+                return
+        self._logger.info('Killing job {0}'.format(job_id))
+        worker_ids = self._current_worker_assignments[job_id]
+        servers = set()
+        for worker_id in worker_ids:
+            rpc_client = self._worker_connections[worker_id]
+            server = (rpc_client.addr, rpc_client.port)
+            if server not in servers:
+                for i in range(len(job_id.singletons())):
+                    rpc_client.kill_job(job_id[i])
+                servers.add(server)
+        del self._completion_events[job_id]
+
     def _done_callback_extended_lease(self, job_id):
         with self._scheduler_cv:
             is_active = any([x in self._jobs for x in job_id.singletons()])
+            if not is_active:
+                return
 
-            if job_id in self._lease_extension_events:
+            num_updates = []
+            for single_job_id in job_id.singletons():
+                num_updates.append(
+                    len(self._lease_update_requests[single_job_id]))
+            updated_lease = \
+                min(num_updates) == self._jobs[job_id].scale_factor
+            if not updated_lease:
+                # Job has not requested lease updates so assume it has failed.
+                self._logger.info(
+                    'Job {0} had an extended lease but has '
+                    'been unresponsive'.format(job_id))
+                self._kill_job(job_id)
+                return
+            elif job_id in self._completion_events:
                 # Mark job as completed.
+                self._logger.info('Completing job {0} which had an '
+                                  'extended lease'.format(job_id))
                 self._completed_jobs_in_current_round.add(job_id)
-                del self._lease_extension_events[job_id]
+                del self._completion_events[job_id]
 
-                # Reset metadata for distributed jobs.
+                # Reset metadata.
                 self._in_progress_updates[job_id] = []
                 self._lease_update_requests[job_id] = []
                 self._max_steps[job_id] = None
-
-            elif is_active and job_id in self._jobs_with_extended_lease:
-                # Re-dispatch jobs with extended leases that are still active
-                # and have completed early.
+            elif job_id in self._jobs_with_extended_lease:
+                # Re-dispatch jobs with extended leases that are still
+                # active and have completed early.
                 if job_id not in self._completed_jobs_in_current_round:
                     raise RuntimeError('Job does not have lease extension '
                                        'event but has completed!')
@@ -2675,7 +2733,8 @@ class Scheduler:
             # round r+1 and completed before round r is done. If so,
             # wait for round r to finish before proceeding.
             if not self._simulate:
-                while job_id not in self._current_worker_assignments:
+                while (job_id not in self._current_worker_assignments or
+                       job_id in self._completed_jobs_in_current_round):
                     self._logger.debug(
                         'Waiting to complete job {0}...'.format(job_id))
                     self._scheduler_cv.wait()
@@ -2713,17 +2772,22 @@ class Scheduler:
                         if single_job_id in self._active_ports[master_addr]:
                             del self._active_ports[master_addr][single_job_id]
 
-                # If a job with an extended lease completes before the end
-                # of the round, cancel the job's completion event.
-                if job_id in self._lease_extension_events:
-                    event = self._lease_extension_events[job_id]
+                # If a job completes before the end of the round, cancel the
+                # job's completion event.
+                self._logger.debug(
+                    'Current active completion events: {0}'.format(
+                        self._completion_events.keys()))
+                if job_id in self._completion_events:
+                    event = self._completion_events[job_id]
                     try:
-                        self._lease_extension_scheduler.cancel(event)
+                        self._completion_event_scheduler.cancel(event)
                     except ValueError:
                         # Completion event might have been triggered after
                         # entering done_callback.
                         pass
-                    del self._lease_extension_events[job_id]
+                    self._logger.debug(
+                        'Removing completion event for job {0}'.format(job_id))
+                    del self._completion_events[job_id]
                 self._completed_jobs_in_current_round.add(job_id)
                 micro_task_succeeded = True
                 all_worker_ids = \
@@ -2750,7 +2814,7 @@ class Scheduler:
                             self._job_timelines[single_job_id][i].extend(
                                 all_iterator_logs_[j].split('\n'))
 
-            # Reset metadata for distributed jobs.
+            # Reset metadata.
             self._in_progress_updates[job_id] = []
             self._lease_update_requests[job_id] = []
             self._max_steps[job_id] = None

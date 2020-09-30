@@ -72,7 +72,7 @@ class GavelIterator:
         self._lease = Lease(0, 0)
         self._update_lease(init=True)
         self._write_info()
-        self._prev_time = time.time()
+        self._prev_time = None
 
     def __iter__(self):
         self._iterator = iter(self._data_loader)
@@ -81,6 +81,8 @@ class GavelIterator:
     def __next__(self):
         # Update the elapsed time.
         cur_time = time.time()
+        if self._prev_time is None:
+            self._prev_time = cur_time
         elapsed_time = cur_time - self._prev_time
         self._duration += elapsed_time
         self._prev_time = cur_time
@@ -112,6 +114,7 @@ class GavelIterator:
                     self._initial_val = val
             self._steps += 1
         except StopIteration as e:
+            self._write_info()
             raise StopIteration
 
         if self._synthetic_data and self._steps % len(self._data_loader) == 0:

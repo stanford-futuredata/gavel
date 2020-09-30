@@ -168,19 +168,15 @@ def get_num_gpus():
                             shell=True).stdout.decode('utf-8').strip()
     return len(output.split('\n'))
 
-def get_pid_for_job(job_id):
+def get_pid_for_job(prefix, command):
     processes = subprocess.check_output('ps -aux', shell=True)
-    pids = []
     for line in processes.decode('utf-8').strip().split('\n'):
-        if '--job_id %d' % (job_id) in line:
+        if command in line and prefix not in line:
             match = re.search(' +(\d+)', line)
             if match is not None:
                 pid = int(match.group(1))
-                pids.append(pid)
-            else:
-                print('WARNING: Could not find PID for '
-                      'job %d in line \"%s\"' % (job_id, line))
-    return pids
+                return pid
+    return None
 
 def get_gpu_processes():
     output = subprocess.check_output('nvidia-smi').decode('utf-8')

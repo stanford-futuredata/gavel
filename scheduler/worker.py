@@ -46,7 +46,8 @@ class Worker:
                 self._worker_port, sched_addr, sched_port)
 
         callbacks = {
-            'Run': self._run_callback,
+            'RunJob': self._run_job_callback,
+            'KillJob': self._kill_job_callback,
             'Reset': self._reset_callback,
             'Shutdown': self._shutdown_callback,
         }
@@ -83,7 +84,7 @@ class Worker:
 
         self._server_thread.join()
 
-    def _run_callback(self, jobs, worker_id, round_id):
+    def _run_job_callback(self, jobs, worker_id, round_id):
         # hack to prevent a job being dispatched before the dispatcher is set up
         # TODO: fix this by sending a "I'm ready" message to scheduler
         while True:
@@ -94,6 +95,9 @@ class Worker:
               continue
         self._logger.debug('Dispatching run request')
         self._dispatcher.dispatch_jobs(jobs, worker_id, round_id)
+
+    def _kill_job_callback(self, job_id):
+        self._dispatcher._kill_jobs(job_id=job_id)
 
     def _signal_handler(self, sig, frame):
         self._dispatcher.shutdown()

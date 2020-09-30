@@ -48,6 +48,7 @@ class Dispatcher:
         self._gpu_ids = gpu_ids
         self._gpu_queue = queue.Queue(len(self._gpu_ids))
         self._job_assignments = {}
+        self._commands = {}
         self._lock = threading.Lock()
         for gpu_id in self._gpu_ids:
             self._gpu_queue.put(gpu_id)
@@ -164,9 +165,11 @@ class Dispatcher:
         if self._numa_available:
             cpus = self._numa_cpu_map[gpu_id]
             cpus_str = ','.join([str(cpu) for cpu in cpus])
-            command = 'numactl --physcpubind=%s %s' % (cpus_str, command)
+            prefix = 'numactl --physcpubind=%s' % (cpus_str)
+        else:
+            prefix = None
 
-        return command
+        return prefix, command
 
     def _get_steps_and_execution_time(self, job_id, worker_id, round_id):
         checkpoint_dir = os.path.join(self._checkpoint_dir,
@@ -214,14 +217,26 @@ class Dispatcher:
             else:
                 self._logger.debug('Killing all jobs!')
             if job_id is not None:
-                pids = utils.get_pid_for_job(job_id)
-                self._logger.debug('PIDs for job {0}: {1}'.format(
-                    job_id, pids))
+                pids = []
+                for (prefix, command) in self._commands[job_id]:
+                    pid = utils.get_pid_for_job(prefix, command)
+                    if pid is not None:
+                        pids.append(pid)
+                self._logger.debug(
+                    'PIDs for job {0}: {1}'.format(job_id, pids))
                 for pid in pids:
                     self._kill_job(pid)
             else:
                 for job_id in self._job_assignments:
-                    pids = utils.get_pid_for_job(job_id)
+                    if job_id not in self._commands:
+                        continue
+                    pids = []
+                    for (prefix, command) in self._commands[job_id]:
+                        pid = utils.get_pid_for_job(prefix, command)
+                        if pid is not None:
+                            pids.append(pid)
+                    self._logger.debug(
+                        'PIDs for job {0}: {1}'.format(job_id, pids))
                     for pid in pids:
                         self._kill_job(pid)
             self._logger.debug('Finished killing job(s)')
@@ -272,7 +287,7 @@ class Dispatcher:
         with open(log_file, 'r') as f:
             return f.read().strip()
 
-    def launch_job(self, job, command, worker_id, round_id, gpu_id):
+    def launch_job(self, job, prefix, command, worker_id, round_id, gpu_id):
         output = ''
         cwd = os.path.join(self._run_dir, job.working_directory)
 
@@ -280,6 +295,16 @@ class Dispatcher:
         job_logger, fh = self._get_job_logger_and_fh(job.job_id, worker_id,
                                                      round_id)
         job_logger.info('', extra={'event': 'DISPATCHER', 'status': 'LAUNCH'})
+
+        with self._lock:
+            if job.job_id not in self._commands:
+                self._commands[job.job_id] = set()
+            self._commands[job.job_id].add((prefix, command))
+
+        if prefix is not None:
+            full_command = '{0} {1}'.format(prefix, command)
+        else:
+            full_command = command
 
         # Try to dispatch job.
         job_succeeded = False
@@ -290,7 +315,7 @@ class Dispatcher:
             env['GAVEL_ROUND_ID'] = str(round_id)
             env['GAVEL_SCHED_ADDR'] = self._sched_addr
             env['GAVEL_SCHED_PORT'] = str(self._sched_port)
-            proc = subprocess.run(command,
+            proc = subprocess.run(full_command,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,
                                   cwd=cwd,
@@ -332,6 +357,11 @@ class Dispatcher:
         job_logger.removeHandler(fh)
         fh.close()
         iterator_log = self._get_iterator_log(job.job_id, worker_id, round_id)
+
+        with self._lock:
+            self._commands[job.job_id].remove((prefix, command))
+            if len(self._commands[job.job_id]) == 0:
+                del self._commands[job.job_id]
 
         if not job_succeeded:
             return [job.job_id, 0, 0, iterator_log]
@@ -395,8 +425,9 @@ class Dispatcher:
         commands = []
         for job in jobs:
             try:
-                command = self._construct_command(job, gpu_id, worker_id)
-                commands.append(command)
+                prefix, command = \
+                    self._construct_command(job, gpu_id, worker_id)
+                commands.append((prefix, command))
             except Exception as e:
                 self._logger.error('Failed to construct command '
                                    'for job {0}!'.format(job.job_id))
@@ -407,18 +438,20 @@ class Dispatcher:
         if success:
             # Launch the jobs.
             results = []
-            for job, command in zip(jobs, commands):
-                self._logger.info('Running job {job_id} (worker {worker_id}, '
-                                  'round {round_id}) on GPU {gpu_id}, '
-                                  'command: "{command}"'.format(
-                                      job_id=job.job_id, worker_id=worker_id,
-                                      round_id=round_id, gpu_id=gpu_id,
-                                      command=command))
-                results.append(self._thread_pool.apply_async(self.launch_job,
-                                                             (job, command,
-                                                              worker_id,
-                                                              round_id,
-                                                              gpu_id)))
+            for job, (prefix, command) in zip(jobs, commands):
+                self._logger.info(
+                    'Running job {job_id} (worker {worker_id}, '
+                    'round {round_id}) on GPU {gpu_id}, '
+                    'prefix: {prefix}, '
+                    'command: "{command}"'.format(
+                        job_id=job.job_id, worker_id=worker_id,
+                        round_id=round_id, gpu_id=gpu_id,
+                        prefix=('N/A' if prefix is None else prefix),
+                        command=command))
+                results.append(
+                    self._thread_pool.apply_async(
+                        self.launch_job,
+                        (job, prefix, command, worker_id, round_id, gpu_id)))
             job_descriptions = [result.get() for result in results]
         else:
             job_descriptions = [[job.job_id, 0, 0, ''] for job in jobs]
