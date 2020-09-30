@@ -2733,7 +2733,8 @@ class Scheduler:
             # round r+1 and completed before round r is done. If so,
             # wait for round r to finish before proceeding.
             if not self._simulate:
-                while job_id not in self._current_worker_assignments:
+                while (job_id not in self._current_worker_assignments or
+                       job_id in self._completed_jobs_in_current_round):
                     self._logger.debug(
                         'Waiting to complete job {0}...'.format(job_id))
                     self._scheduler_cv.wait()

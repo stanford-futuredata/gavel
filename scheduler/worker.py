@@ -100,10 +100,7 @@ class Worker:
         self._dispatcher._kill_jobs(job_id=job_id)
 
     def _signal_handler(self, sig, frame):
-        self._dispatcher.shutdown()
-        self._logger.removeHandler(self._logging_handler)
-        self._logging_handler.close()
-        sys.exit(0)
+        self._shutdown_callback()
 
     def _reset_callback(self):
         self._dispatcher.reset()
@@ -112,6 +109,7 @@ class Worker:
         self._dispatcher.shutdown()
         self._logger.removeHandler(self._logging_handler)
         self._logging_handler.close()
+        sys.exit(0)
 
     def join(self):
         self._server_thread.join()
