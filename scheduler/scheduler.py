@@ -158,8 +158,6 @@ class Scheduler:
         self._next_worker_assignments = None
         # Set of completed jobs in current round.
         self._completed_jobs_in_current_round = set()
-        # Set of jobs that have updated their lease in the current round.
-        self._jobs_with_updated_lease_in_current_round = set()
         # Set of jobs with an extended lease for the upcoming round.
         self._jobs_with_extended_lease = set()
         # The total number of lease extensions across all jobs.
@@ -1567,7 +1565,7 @@ class Scheduler:
            dispatched.
         """
 
-        # Initialize metadata for distributed jobs.
+        # Initialize metadata.
         if not next_round or job_id not in self._current_worker_assignments:
             self._in_progress_updates[job_id] = []
             self._lease_update_requests[job_id] = []
@@ -1707,7 +1705,6 @@ class Scheduler:
 
         # Reset metadata.
         self._completed_jobs_in_current_round = set()
-        self._jobs_with_updated_lease_in_current_round = set()
         self._current_worker_assignments = self._next_worker_assignments
         self._next_worker_assignments = None
 
@@ -2587,7 +2584,13 @@ class Scheduler:
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
 
-        self._jobs_with_updated_lease_in_current_round.add(job_id)
+        with self._scheduler_lock:
+            if job_id not in self._lease_update_requests:
+                self._lease_update_requests[job_id] = []
+            update_id = len(self._lease_update_requests[job_id])
+            self._lease_update_requests[job_id].append((steps, duration,
+                                                        max_steps,
+                                                        max_duration))
 
         # Round the remaining steps to the nearest multiple of scale_factor.
         scale_factor = self._jobs[job_id].scale_factor
@@ -2608,13 +2611,8 @@ class Scheduler:
         if scale_factor == 1:
             return (max_steps, max_duration)
         else:
-            with self._scheduler_lock:
-                update_id = len(self._lease_update_requests[job_id])
-                self._lease_update_requests[job_id].append((steps, duration,
-                                                            max_steps,
-                                                            max_duration))
-                if update_id == 0:
-                    assert self._max_steps[job_id] is None
+            if update_id == 0:
+                assert self._max_steps[job_id] is None
 
             # The first worker to request a lease update computes the new
             # lease for all workers.
@@ -2665,44 +2663,42 @@ class Scheduler:
             if server not in servers:
                 for i in range(len(job_id.singletons())):
                     rpc_client.kill_job(job_id[i])
-            else:
                 servers.add(server)
         del self._completion_events[job_id]
 
     def _done_callback_extended_lease(self, job_id):
         with self._scheduler_cv:
-            # Check whether the job requested an updated lease in this round.
-            # If not, we assume the job is unresponsive and kill the job.
-            updated_lease = False
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if not is_active:
+                return
+
+            num_updates = []
             for single_job_id in job_id.singletons():
-                if single_job_id in \
-                    self._jobs_with_updated_lease_in_current_round:
-                    updated_lease = True
-                    break
+                num_updates.append(
+                    len(self._lease_update_requests[single_job_id]))
+            updated_lease = \
+                min(num_updates) == self._jobs[job_id].scale_factor
             if not updated_lease:
+                # Job has not requested lease updates so assume it has failed.
                 self._logger.info(
                     'Job {0} had an extended lease but has '
                     'been unresponsive'.format(job_id))
                 self._kill_job(job_id)
                 return
-            self._logger.info('Completing job {0} which had an '
-                              'extended lease'.format(job_id))
-
-            is_active = any([x in self._jobs for x in job_id.singletons()])
-
-            if job_id in self._completion_events:
+            elif job_id in self._completion_events:
                 # Mark job as completed.
+                self._logger.info('Completing job {0} which had an '
+                                  'extended lease'.format(job_id))
                 self._completed_jobs_in_current_round.add(job_id)
                 del self._completion_events[job_id]
 
-                # Reset metadata for distributed jobs.
+                # Reset metadata.
                 self._in_progress_updates[job_id] = []
                 self._lease_update_requests[job_id] = []
                 self._max_steps[job_id] = None
-
-            elif is_active and job_id in self._jobs_with_extended_lease:
-                # Re-dispatch jobs with extended leases that are still active
-                # and have completed early.
+            elif job_id in self._jobs_with_extended_lease:
+                # Re-dispatch jobs with extended leases that are still
+                # active and have completed early.
                 if job_id not in self._completed_jobs_in_current_round:
                     raise RuntimeError('Job does not have lease extension '
                                        'event but has completed!')
@@ -2817,7 +2813,7 @@ class Scheduler:
                             self._job_timelines[single_job_id][i].extend(
                                 all_iterator_logs_[j].split('\n'))
 
-            # Reset metadata for distributed jobs.
+            # Reset metadata.
             self._in_progress_updates[job_id] = []
             self._lease_update_requests[job_id] = []
             self._max_steps[job_id] = None

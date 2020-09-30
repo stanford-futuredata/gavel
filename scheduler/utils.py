@@ -168,10 +168,10 @@ def get_num_gpus():
                             shell=True).stdout.decode('utf-8').strip()
     return len(output.split('\n'))
 
-def get_pid_for_job(command):
+def get_pid_for_job(prefix, command):
     processes = subprocess.check_output('ps -aux', shell=True)
     for line in processes.decode('utf-8').strip().split('\n'):
-        if command in line:
+        if command in line and prefix not in line:
             match = re.search(' +(\d+)', line)
             if match is not None:
                 pid = int(match.group(1))
