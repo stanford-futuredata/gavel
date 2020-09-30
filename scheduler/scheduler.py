@@ -1633,7 +1633,9 @@ class Scheduler:
         """
         current_time = self.get_current_timestamp()
         for job_id in self._current_worker_assignments:
-            if job_id in self._completed_jobs_in_current_round:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if (not is_active or
+                job_id in self._completed_jobs_in_current_round):
                 continue
             delay = round_end_time - current_time
             if job_id not in self._jobs_with_extended_lease:
