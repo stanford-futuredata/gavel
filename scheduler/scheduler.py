@@ -48,6 +48,10 @@ SCHEDULE_RECOMPUTE_FRACTION = 0.5
 LOG_FORMAT = '{name}:{levelname} {message}'
 # Buffer time for jobs to complete.
 JOB_COMPLETION_BUFFER_TIME = 60
+# Base port to use for distributed jobs.
+BASE_JOB_PORT = 60570
+# Maximum port number.
+MAX_PORT = 65535
 
 class Scheduler:
 
@@ -172,8 +176,8 @@ class Scheduler:
         self._completion_events = {}
         # Map from job ID to timeline of events.
         self._job_timelines = {}
-        # Set of ports in use for each worker.
-        self._active_ports = {}
+        # Port offset for distributed jobs.
+        self._port_offset = 0
         # Iterations run on each worker_id, for all current incomplete
         # applications.
         self._steps_run_so_far = {}
@@ -1571,27 +1575,22 @@ class Scheduler:
             self._lease_update_requests[job_id] = []
             self._max_steps[job_id] = None
 
-        # Find available ports to use for distributed jobs.
         scale_factor = len(worker_ids)
         worker_type = \
             self._worker_id_to_worker_type_mapping[worker_ids[0]]
         if scale_factor > 1:
             master_addr = self._worker_connections[worker_ids[0]].addr
             master_server_port = self._worker_connections[worker_ids[0]].port
-            active_ports_for_worker = set()
-            for job_id_ in self._active_ports[master_addr]:
-                active_ports_for_worker.add(
-                    self._active_ports[master_addr][job_id_])
-            for single_job_id in job_id.singletons():
-                master_job_port = master_server_port + 1
-                while master_job_port in active_ports_for_worker:
-                    master_job_port += 1
-                active_ports_for_worker.add(master_job_port)
-                self._active_ports[master_addr][single_job_id] = \
-                    master_job_port
+            master_job_ports = []
+            for i in range(len(job_id.singletons())):
+                master_job_ports.append(BASE_JOB_PORT + self._port_offset) 
+                self._port_offset += 1
+                self._port_offset %= (MAX_PORT - BASE_JOB_PORT)
 
         # Dispatch the job.
         current_round = self._num_completed_rounds
+        if next_round:
+            current_round += 1
         for i, worker_id in enumerate(worker_ids):
             job_descriptions = []
             for j, single_job_id in enumerate(job_id.singletons()):
@@ -1599,14 +1598,12 @@ class Scheduler:
                 command = self._jobs[single_job_id].command
                 # Add distributed args if necessary.
                 if scale_factor > 1:
-                    master_job_port = \
-                        self._active_ports[master_addr][single_job_id]
                     command = ('%s --master_addr %s '
                                '--master_port %d '
                                '--world_size %d '
                                '--rank %d' % (command,
                                               master_addr,
-                                              master_job_port,
+                                              master_job_ports[j],
                                               scale_factor, i))
                 job_descriptions.append(
                         (single_job_id,
@@ -2444,7 +2441,6 @@ class Scheduler:
         if not self._simulate:
             rpc_client = scheduler_client.SchedulerRpcClient(ip_addr, port)
             self._all_rpc_clients.append(rpc_client)
-            self._active_ports[rpc_client.addr] = {}
 
         with self._scheduler_lock:
             # Update relevant data structures if worker type was
@@ -2764,13 +2760,6 @@ class Scheduler:
             else:
                 # Sort updates in order of increasing worker ID.
                 self._in_progress_updates[job_id].sort(key=lambda x: x[0])
-
-                # Reset ports when running on a physical cluster.
-                if not self._simulate and scale_factor > 1:
-                    master_addr = self._worker_connections[worker_id].addr
-                    for single_job_id in job_id.singletons():
-                        if single_job_id in self._active_ports[master_addr]:
-                            del self._active_ports[master_addr][single_job_id]
 
                 # If a job completes before the end of the round, cancel the
                 # job's completion event.
