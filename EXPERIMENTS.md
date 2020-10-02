@@ -191,7 +191,7 @@ python scripts/drivers/run_scheduler_with_trace.py \
   --solver ECOS \
   --throughputs_file physical_cluster_throughputs.json \
   --time_per_iteration 360 \
-  --policy min_total_duration \
+  --policy min_total_duration_perf \
   --expected_num_workers 6
 ```
 Running this command will start the scheduler and log the IP address
@@ -200,7 +200,7 @@ as follows:
 ```bash
 python worker.py \
   -t [WORKER_TYPE] \
-  -i [IP_ADDRESS] -w 50061 -g [NUM_GPUS] \
+  -i [IP_ADDRESS] -s 50060 -w 50061 -g [NUM_GPUS_ON_WORKER] \
   --run_dir /path/to/gavel/workloads/pytorch \
   --data_dir /path/to/data \
   --checkpoint_dir /path/to/checkpoints
