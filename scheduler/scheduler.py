@@ -1719,8 +1719,9 @@ class Scheduler:
             remaining_time_in_round = round_end_time - current_time
             if remaining_time_in_round > 0:
                 self._logger.debug(
-                    'Waiting {0} seconds before starting '
-                    'round {1}...'.format(current_round))
+                    'Waiting {0:.2f} seconds before starting '
+                    'round {1}...'.format(remaining_time_in_round,
+					  current_round))
                 time.sleep(remaining_time_in_round)
 
         self._num_completed_rounds += 1
