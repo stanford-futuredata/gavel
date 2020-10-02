@@ -160,6 +160,9 @@ class Scheduler:
         self._current_worker_assignments = collections.OrderedDict()
         # Map from job combinations to assigned workers for the upcoming round.
         self._next_worker_assignments = None
+        # Map from job combinations to assigned workers for jobs that need to
+        # be re-dispatched on account of finishing early.
+        self._redispatched_worker_assignments = collections.OrderedDict()
         # Set of completed jobs in current round.
         self._completed_jobs_in_current_round = set()
         # Set of jobs with an extended lease for the upcoming round.
@@ -1491,6 +1494,16 @@ class Scheduler:
         self._logger.info('*** START ROUND {0} ***'.format(current_round))
         self._print_schedule_summary(state_snapshot)
 
+        # Re-dispatch jobs that had extended leases but completed early.
+        jobs_to_redispatch = self._redispatched_worker_assignments.keys()
+        for job_id in jobs_to_redispatch:
+            worker_ids = self._redispatched_worker_assignments[job_id]
+            self._logger.info('Re-dispatching job {0} as it completed '
+                              'early but has an extended lease'.format(
+                                job_id))
+            self._try_dispatch_job(job_id, worker_ids)
+            del jobs_to_redispatch[job_id]
+
     def _mid_round(self, pool):
         """Executes intermediate stage of a scheduling round.
 
@@ -1583,7 +1596,7 @@ class Scheduler:
             master_server_port = self._worker_connections[worker_ids[0]].port
             master_job_ports = []
             for i in range(len(job_id.singletons())):
-                master_job_ports.append(BASE_JOB_PORT + self._port_offset) 
+                master_job_ports.append(BASE_JOB_PORT + self._port_offset)
                 self._port_offset += 1
                 self._port_offset %= (MAX_PORT - BASE_JOB_PORT)
 
@@ -1697,6 +1710,18 @@ class Scheduler:
                 if is_active:
                     for worker_id in worker_ids:
                         self._remove_available_worker_id(worker_id)
+
+            # Ensure that rounds do not finish earlier than the specified
+            # round duration.
+            current_time = self.get_current_timestamp()
+            round_end_time = \
+                self._current_round_start_time + self._time_per_iteration
+            remaining_time_in_round = round_end_time - current_time
+            if remaining_time_in_round > 0:
+                self._logger.debug(
+                    'Waiting {0} seconds before starting '
+                    'round {1}...'.format(current_round))
+                time.sleep(remaining_time_in_round)
 
         self._num_completed_rounds += 1
 
@@ -2693,16 +2718,8 @@ class Scheduler:
                 self._lease_update_requests[job_id] = []
                 self._max_steps[job_id] = None
             elif job_id in self._jobs_with_extended_lease:
-                # Re-dispatch jobs with extended leases that are still
-                # active and have completed early.
-                if job_id not in self._completed_jobs_in_current_round:
-                    raise RuntimeError('Job does not have lease extension '
-                                       'event but has completed!')
-                worker_ids = self._next_worker_assignments[job_id]
-                self._logger.info('Re-dispatching job {0} as it completed '
-                                  'early but has an extended lease'.format(
-                                      job_id))
-                self._try_dispatch_job(job_id, worker_ids)
+                # TODO: Remove this once we verify this does not happen
+                self._logger.warning('Job {0} might need to be re-dispatched!')
 
             self._scheduler_cv.notifyAll()
 
@@ -2919,14 +2936,10 @@ class Scheduler:
             for single_job_id in to_remove:
                 self._remove_job(single_job_id)
 
-            # Re-dispatch jobs with extended leases that are still active
-            # and have completed early.
+            # Record the job for re-dispatching if necessary.
             is_active = any([x in self._jobs for x in job_id.singletons()])
             if is_active and job_id in self._jobs_with_extended_lease:
-                worker_ids = self._next_worker_assignments[job_id]
-                self._logger.info('Re-dispatching job {0} as it completed '
-                                  'early but has an extended lease'.format(
-                                    job_id))
-                self._try_dispatch_job(job_id, worker_ids)
+                self._redispatched_worker_assignments[job_id] = \
+                    self._next_worker_assignments[job_id]
 
             self._scheduler_cv.notifyAll()
