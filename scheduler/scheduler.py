@@ -1507,7 +1507,12 @@ class Scheduler:
                                   'early but had an extended lease'.format(
                                     job_id))
                 self._try_dispatch_job(job_id, worker_ids)
+                self._logger.debug('Re-dispatched job {0}'.format(job_id))
+            self._logger.debug('Removing job {0} from redispatched_worker_assignments'.format(job_id))
             del self._redispatched_worker_assignments[job_id]
+            self._logger.debug('Removed job {0} from redispatched_worker_assignments'.format(job_id))
+
+        self._logger.debug('Finished re-dispatching jobs')
 
         self._logger.info('*** START ROUND {0} ***'.format(current_round))
         self._print_schedule_summary(state_snapshot)
