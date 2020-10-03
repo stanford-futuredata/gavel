@@ -1491,18 +1491,26 @@ class Scheduler:
 
         self._current_round_start_time = self.get_current_timestamp()
         current_round = self._num_completed_rounds
-        self._logger.info('*** START ROUND {0} ***'.format(current_round))
-        self._print_schedule_summary(state_snapshot)
 
         # Re-dispatch jobs that had extended leases but completed early.
         jobs_to_redispatch = self._redispatched_worker_assignments.keys()
         for job_id in jobs_to_redispatch:
-            worker_ids = self._redispatched_worker_assignments[job_id]
-            self._logger.info('Re-dispatching job {0} as it completed '
-                              'early but has an extended lease'.format(
-                                job_id))
-            self._try_dispatch_job(job_id, worker_ids)
-            del jobs_to_redispatch[job_id]
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if is_active:
+                if job_id not in self._current_worker_assignments:
+                    raise RuntimeError(
+                        'Trying to re-dispatch job {0} but it has not '
+                        'been scheduled for round {1}!'.format(
+                            job_id, current_round))
+                worker_ids = self._redispatched_worker_assignments[job_id]
+                self._logger.info('Re-dispatching job {0} as it completed '
+                                  'early but had an extended lease'.format(
+                                    job_id))
+                self._try_dispatch_job(job_id, worker_ids)
+            del self._redispatched_worker_assignments[job_id]
+
+        self._logger.info('*** START ROUND {0} ***'.format(current_round))
+        self._print_schedule_summary(state_snapshot)
 
     def _mid_round(self, pool):
         """Executes intermediate stage of a scheduling round.
