@@ -2747,7 +2747,8 @@ class Scheduler:
                 del self._completion_events[job_id]
 
                 # Reset metadata.
-                self._in_progress_updates[job_id] = []
+                # NOTE: We do not reset self._in_progress_updates here as
+                # multi-GPU jobs might have partially completed updates.
                 for single_job_id in job_id.singletons():
                     self._lease_update_requests[job_id] = []
                     self._max_steps[single_job_id] = None
