@@ -2726,11 +2726,11 @@ class Scheduler:
                 num_updates.append(
                     len(self._lease_update_requests[single_job_id]))
             updated_lease = min(num_updates) == scale_factor
-            for i, single_job_id in job_id.singletons():
+            for i, single_job_id in enumerate(job_id.singletons()):
                 self._logger.debug('{0} / {1} worker(s) for job {2} have '
                                    'requested a lease update this '
                                    'round'.format(
-                                       len(num_updates[i]), scale_factor,
+                                       num_updates[i], scale_factor,
                                        single_job_id))
             if not updated_lease:
                 # Job has not requested lease updates so assume it has failed.
