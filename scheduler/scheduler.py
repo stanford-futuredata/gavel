@@ -1498,7 +1498,7 @@ class Scheduler:
         for job_id in self._current_worker_assignments:
             for single_job_id in job_id.singletons():
                 self._lease_update_requests[single_job_id] = []
-                self._max_steps[single_job_id] = []
+                self._max_steps[single_job_id] = None
 
         # Re-dispatch jobs that had extended leases but completed early.
         for job_id in self._redispatched_worker_assignments:
