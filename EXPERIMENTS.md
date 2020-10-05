@@ -151,7 +151,7 @@ The code for the simulation shown in Figure 11 is in `scheduler/notebooks/figure
 
 ### Figure 12: Policy Runtime Scaling
 
-Policy runtimes can be measured using the following command (TODO: Fix this):
+Policy runtimes can be measured using the following command:
 
 ```bash
 python scripts/microbenchmarks/sweep_policy_runtimes.py -n 32 64 128 256 512 1024 2048 -p max_min_fairness_perf max_min_fairness_packed max_min_fairness_water_filling max_min_fairness_water_filling_packed --num_trials 3
@@ -166,7 +166,7 @@ The time proportions returned by the policy can be used directly to grant jobs
 times on each resource type between "reset events" -- this is a useful comparison
 for our scheduling mechanism. This "ideal" scheduling mechanism can be run
 for a given policy and trace by appending the `--ideal` argument to any of the
-sweep commands above -- in our experiment, we used the `max_min_fairness` policy.
+sweep commands above (Figures 9 or 10) -- in our experiment, we used the `max_min_fairness` policy.
 
 The round durations used by the scheduling mechanism can be similarly studied
 by using the `-i` argument -- the default used is 360 seconds, but other round
