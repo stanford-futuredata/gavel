@@ -44,7 +44,7 @@ class SchedulerRpcClient:
         with grpc.insecure_channel(self._server_loc) as channel:
             stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
             request = s2w_pb2.KillJobRequest()
-            request.job_id = job_id
+            request.job_id = job_id[0] # job_id is a JobIdPair
             response = stub.KillJob(request)
 
     def reset(self):

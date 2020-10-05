@@ -217,6 +217,10 @@ class Dispatcher:
             else:
                 self._logger.debug('Killing all jobs!')
             if job_id is not None:
+                if job_id not in self._commands:
+                    self._logger.warning(
+                        'No commands found for job {0}'.format(job_id))
+                    return
                 pids = []
                 for (prefix, command) in self._commands[job_id]:
                     pid = utils.get_pid_for_job(prefix, command)
