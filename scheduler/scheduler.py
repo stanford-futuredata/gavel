@@ -2430,11 +2430,13 @@ class Scheduler:
     def _add_available_worker_id(self, worker_id):
         """Adds a worker_id to the list of available workers."""
 
-        self._logger.debug(
-            'Adding worker {0} back to queue...'.format(worker_id))
+        if not self._simulate:
+            self._logger.debug(
+                'Adding worker {0} back to queue...'.format(worker_id))
         self._available_worker_ids.put(worker_id)
-        self._logger.debug(
-            'Added worker {0} back to queue'.format(worker_id))
+        if not self._simulate:
+            self._logger.debug(
+                'Added worker {0} back to queue'.format(worker_id))
 
     def _remove_available_worker_id(self, worker_id=None):
         """Returns the worker_id of the next available worker."""
@@ -2720,8 +2722,12 @@ class Scheduler:
                 rpc_client = self._worker_connections[worker_id]
                 server = (rpc_client.addr, rpc_client.port)
                 if server not in servers:
-                    for i in range(len(job_id.singletons())):
-                        rpc_client.kill_job(job_id[i])
+                    for single_job_id in job_id.singletons():
+                        self._logger.debug(
+                            'Killing job {0} on server {1}:{2}'.format(
+                                single_job_id, rpc_client.addr,
+                                rpc_client.port))
+                        rpc_client.kill_job(single_job_id)
                     servers.add(server)
             del self._completion_events[job_id]
 
