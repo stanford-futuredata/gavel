@@ -2710,6 +2710,31 @@ class Scheduler:
                     rpc_client.kill_job(job_id[i])
                 servers.add(server)
         del self._completion_events[job_id]
+        
+        # Wait for the killed job to send a completion notification and
+        # proceed if no notification is sent.
+        prev_round = self._num_completed_rounds
+        self._logger.debug(
+            'Waiting for job {0} to be killed...'.format(job_id))
+        self._scheduler_cv.wait(timeout=30)
+        self._logger.debug(
+            'Checking if job {0} was killed...'.format(job_id))
+        new_round = self._num_completed_rounds
+        if (new_round == prev_round and
+            job_id not in self._completed_jobs_in_current_round):
+            self._logger.debug(
+                'Job {0} was killed but did not complete!'.format(job_id))
+            # TODO: Refactor _done_callback to call function for handling
+            # failed micro tasks and call that function here.
+            self._completed_jobs_in_current_round.add(job_id)
+            if job_id in self._jobs_with_extended_lease:
+                self._redispatched_worker_assignments[job_id] = \
+                    self._current_worker_assignments[job_id]
+            self._scheduler_cv.notifyAll()
+        else:
+            self._logger.debug(
+                'Job {0} was successfully killed in round {1}'.format(
+                    job_id, prev_round))
 
     def _done_callback_extended_lease(self, job_id):
         with self._scheduler_cv:
@@ -2750,7 +2775,7 @@ class Scheduler:
                 # NOTE: We do not reset self._in_progress_updates here as
                 # multi-GPU jobs might have partially completed updates.
                 for single_job_id in job_id.singletons():
-                    self._lease_update_requests[job_id] = []
+                    self._lease_update_requests[single_job_id] = []
                     self._max_steps[single_job_id] = None
 
             self._scheduler_cv.notifyAll()
