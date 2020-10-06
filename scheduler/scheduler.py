@@ -210,6 +210,9 @@ class Scheduler:
         self._last_reset_time = 0
         # Flag indicating when to update the allocation.
         self._need_to_update_allocation = False
+        # Flag indicating whether allocation has been updated since elapsed
+        # time was last reset.
+        self._allocation_changed_since_last_time_reset = False
         # Measured and predicted throughputs for all current incomplete
         # applications.
         self._throughputs = {}
@@ -2165,6 +2168,7 @@ class Scheduler:
                             del allocation[job_id]
             self._allocation = allocation
             self._need_to_update_allocation = False
+            self._allocation_changed_since_last_time_reset = True
             self._scheduler_cv.notifyAll()
             self._scheduler_cv.release()
 
@@ -2282,6 +2286,7 @@ class Scheduler:
         # Prints deficits every time allocation is reset.
         # self._print_deficits()
         self._last_reset_time = current_time
+        self._allocation_changed_since_last_time_reset = False
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _add_to_priorities(self, job_id, worker_type=None):
@@ -2349,6 +2354,10 @@ class Scheduler:
         if self._simulate:
             need_to_reset_time_run_so_far = \
                 (self._need_to_update_allocation and
+                 need_to_reset_time_run_so_far)
+        else:
+            need_to_reset_time_run_so_far = \
+                (self._allocation_changed_since_last_time_reset and
                  need_to_reset_time_run_so_far)
         if need_to_reset_time_run_so_far:
             self._reset_time_run_so_far()
