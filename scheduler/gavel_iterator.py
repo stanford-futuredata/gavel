@@ -102,6 +102,8 @@ class GavelIterator:
                     self._steps, self._lease.max_steps,
                     self._duration, self._lease.max_duration),
                 extra={'event': 'LEASE', 'status': 'EXPIRED'})
+            if torch.distributed.is_initialized():
+                torch.distributed.barrier()
             raise StopIteration
 
         # Return a new data item if one exists.

@@ -2832,6 +2832,12 @@ class Scheduler:
             if not self._simulate:
                 while (job_id not in self._current_worker_assignments or
                        job_id in self._completed_jobs_in_current_round):
+                    if (job_id not in self._current_worker_assignments and
+                        job_id not in self._next_worker_assignments):
+                        self._logger.warning(
+                            'Discarding completion notification for job {0} '
+                            'as it is not currently scheduled'.format(job_id))
+                        return
                     self._logger.debug(
                         'Waiting to complete job {0}...'.format(job_id))
                     self._scheduler_cv.wait()
