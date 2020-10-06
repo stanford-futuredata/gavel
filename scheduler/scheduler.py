@@ -2344,8 +2344,13 @@ class Scheduler:
         time_since_last_reset = current_time - self._last_reset_time
         reset_interval_elapsed = time_since_last_reset >= \
             self._minimum_time_between_allocation_resets
-        if (self._need_to_update_allocation and
-            (reset_interval_elapsed or self._last_reset_time == 0)):
+        need_to_reset_time_run_so_far = \
+            reset_interval_elapsed or self._last_reset_time == 0
+        if self._simulate:
+            need_to_reset_time_run_so_far = \
+                (self._need_to_update_allocation and
+                 need_to_reset_time_run_so_far)
+        if need_to_reset_time_run_so_far:
             self._reset_time_run_so_far()
             # In simulation mode, wait for allocation computation to complete
             # before proceeding.
