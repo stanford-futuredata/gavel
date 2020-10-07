@@ -2696,7 +2696,7 @@ class Scheduler:
                     return (max_steps, updated_lease_duration)
 
         if scale_factor == 1:
-            return (max_steps, max_duration + remaining_time_in_current_round)
+            return (max_steps, duration + remaining_time_in_current_round)
         else:
             if update_id == 0:
                 assert self._max_steps[job_id] is None
