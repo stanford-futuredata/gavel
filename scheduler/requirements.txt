@@ -15,6 +15,7 @@ opencv-python
 pandas
 pillow
 preconditions
+psutil
 seaborn
 setproctitle
 sklearn

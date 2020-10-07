@@ -2754,23 +2754,34 @@ class Scheduler:
             self._logger.debug(
                 'Checking if job {0} was killed...'.format(job_id))
             new_round = self._num_completed_rounds
-            if (new_round == prev_round and
-                job_id not in self._completed_jobs_in_current_round):
-                self._logger.debug(
-                    'Job {0} was killed but did not complete!'.format(job_id))
-                # TODO: Refactor _done_callback to call function for handling
-                # failed micro tasks and call that function here.
-                for worker_id in worker_ids:
-                    self._add_available_worker_id(worker_id)
-                self._completed_jobs_in_current_round.add(job_id)
-                if job_id in self._jobs_with_extended_lease:
-                    self._redispatched_worker_assignments[job_id] = \
-                        self._current_worker_assignments[job_id]
-                self._scheduler_cv.notifyAll()
-            else:
+
+            successful_kill = (new_round != prev_round or
+                               job_id in self._completed_jobs_in_current_round)
+            if successful_kill:
                 self._logger.debug(
                     'Job {0} was successfully killed in round {1}'.format(
                         job_id, prev_round))
+            else:
+                self._logger.debug(
+                    'Job {0} was killed but did not complete!'.format(job_id))
+                all_worker_ids = set(self._current_worker_assignments[job_id])
+                completed_worker_ids = set()
+                for update in self._in_progress_updates[job_id]:
+                    worker_id = update[0]
+                    completed_worker_ids.add(worker_id)
+                worker_ids_to_complete = \
+                    all_worker_ids.difference(completed_worker_ids)
+                self._logger.debug(
+                    'Need to send done callbacks for the following '
+                    'workers for job {0}: {1}'.format(
+                        job_id, worker_ids_to_complete))
+        if not successful_kill:
+            x = [0 for _ in range(len(job_id.singletons()))]
+            for worker_id in worker_ids_to_complete:
+                self._logger.debug(
+                    'Sending done callback for worker {0} '
+                    'for job {1}'.format(worker_id, job_id))
+                self._done_callback(job_id, worker_id, x, x)
 
     def _done_callback_extended_lease(self, job_id):
         kill_job = False
