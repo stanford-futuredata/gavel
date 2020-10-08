@@ -2643,17 +2643,22 @@ class Scheduler:
             scale_factor = self._jobs[job_id].scale_factor
             remaining_steps = self._get_remaining_steps(job_id)
             remaining_steps = int(math.ceil(remaining_steps / scale_factor))
+            current_time = self.get_current_timestamp()
+            current_round_end_time = \
+                self._current_round_start_time + self._time_per_iteration
+            remaining_time_in_current_round = \
+                current_round_end_time - current_time
 
-            # Add additional time to the lease if the job was dispatched early.
-            extra_time = 0
+            # Return a tuple of (steps, duration, extra time) as the initial
+            # lease. Extra time is granted if the job was scheduled for the
+            # upcoming round but is being initialized in the current round.
             if (self._next_worker_assignments is not None and
                 next_job_combination is not None):
-                current_time = self.get_current_timestamp()
-                elapsed_time_in_round = \
-                    current_time - self._current_round_start_time
-                extra_time += self._time_per_iteration - elapsed_time_in_round
-                extra_time = max(extra_time, 0)
-            return (remaining_steps, self._time_per_iteration, extra_time)
+                # Job was dispatched early, so add additional time.
+                return (remaining_steps, self._time_per_iteration,
+                        remaining_time_in_current_round)
+            else:
+                return (remaining_steps, remaining_time_in_current_round, 0)
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
@@ -2666,13 +2671,20 @@ class Scheduler:
                                                         max_steps,
                                                         max_duration))
 
-        # Round the remaining steps to the nearest multiple of scale_factor.
-        scale_factor = self._jobs[job_id].scale_factor
-        remaining_steps = self._get_remaining_steps(job_id)
-        remaining_steps = int(math.ceil(remaining_steps / scale_factor))
+            # Round the remaining steps to the nearest multiple of scale_factor.
+            scale_factor = self._jobs[job_id].scale_factor
+            remaining_steps = self._get_remaining_steps(job_id)
+            remaining_steps = int(math.ceil(remaining_steps / scale_factor))
+            current_time = self.get_current_timestamp()
+            current_round_end_time = \
+                self._current_round_start_time + self._time_per_iteration
+            remaining_time_in_current_round = \
+                current_round_end_time - current_time
+            remaining_time_in_current_round = \
+                max(0, remaining_time_in_current_round)
 
         if steps == 0 or duration == 0:
-            return (remaining_steps, self._time_per_iteration)
+            return (remaining_steps, remaining_time_in_current_round)
 
         # Extend the lease if the job has been placed on the same workers
         # for the upcoming round.
@@ -2680,10 +2692,13 @@ class Scheduler:
             # TODO: Remove scan of self._jobs_with_extended_lease.
             for job_id_combination in self._jobs_with_extended_lease:
                 if job_id.overlaps_with(job_id_combination):
-                    return (max_steps, max_duration + self._time_per_iteration)
+                    updated_lease_duration = max_duration
+                    updated_lease_duration += remaining_time_in_current_round
+                    updated_lease_duration += self._time_per_iteration
+                    return (max_steps, updated_lease_duration)
 
         if scale_factor == 1:
-            return (max_steps, max_duration)
+            return (max_steps, duration + remaining_time_in_current_round)
         else:
             if update_id == 0:
                 assert self._max_steps[job_id] is None
@@ -2692,13 +2707,11 @@ class Scheduler:
             # lease for all workers.
             if update_id == 0:
                 with self._scheduler_lock:
-                    remaining_time = \
-                        (self._time_per_iteration -
-                         duration % self._time_per_iteration)
                     throughput = steps / duration
                     self._max_steps[job_id] = \
                         min(remaining_steps,
-                            steps + int(remaining_time * throughput))
+                            steps + int(remaining_time_in_current_round *
+                                        throughput))
                     return (self._max_steps[job_id], INFINITY)
             else:
                 # Wait for the first update to complete.
@@ -2858,7 +2871,8 @@ class Scheduler:
                 while (job_id not in self._current_worker_assignments or
                        job_id in self._completed_jobs_in_current_round):
                     if (job_id not in self._current_worker_assignments and
-                        job_id not in self._next_worker_assignments):
+                        (self._next_worker_assignments is not None and
+                         job_id not in self._next_worker_assignments)):
                         self._logger.warning(
                             'Discarding completion notification for job {0} '
                             'as it is not currently scheduled'.format(job_id))
