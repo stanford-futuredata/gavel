@@ -761,11 +761,6 @@ class Scheduler:
                     self.get_current_timestamp()
                 self._running_jobs.add(single_job_id)
 
-        # Update state.
-        worker_state['worker_ids'] = worker_ids
-        worker_state['assigned_worker_ids'] = assigned_worker_ids
-        worker_state['server_id_ptr'] = server_id_ptr
-
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_types):
         """Greedily selects the jobs to run in the next round by iterating
@@ -934,8 +929,6 @@ class Scheduler:
                             new_worker_assignments[job_id] = prev_worker_ids
                             for prev_worker_id in prev_worker_ids:
                                 assigned_worker_ids.add(prev_worker_id)
-                            per_worker_state['assigned_worker_ids'] = \
-                                assigned_worker_ids
 
                 # Assign workers for remaining jobs.
                 for (job_id, scale_factor) in scheduled_jobs[worker_type]:
