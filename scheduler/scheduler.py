@@ -752,6 +752,7 @@ class Scheduler:
                 'Could not assign workers to job %s!' % (job_id))
 
         worker_assignments[job_id] = tuple(worker_ids_for_job)
+        worker_state['server_id_ptr'] = server_id_ptr
 
         for single_job_id in job_id.singletons():
             if self._simulate:
