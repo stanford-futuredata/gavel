@@ -1764,7 +1764,7 @@ class Scheduler:
                 self._logger.debug(
                     'Waiting {0:.2f} seconds before starting '
                     'round {1}...'.format(remaining_time_in_round,
-                                          current_round))
+                                          current_round + 1))
                 time.sleep(remaining_time_in_round)
 
         self._num_completed_rounds += 1
@@ -2606,7 +2606,6 @@ class Scheduler:
             if job_id not in self._jobs:
                 return (0, 0, 0)
 
-
             # Wait if this job has been scheduled for the next round
             # but is still running in the previous round (possibly on
             # a different worker).
@@ -2664,7 +2663,7 @@ class Scheduler:
             current_round_end_time = \
                 self._current_round_start_time + self._time_per_iteration
             remaining_time_in_current_round = \
-                current_round_end_time - current_time
+                max(current_round_end_time - current_time, 0)
 
             # Return a tuple of (steps, duration, extra time) as the initial
             # lease. Extra time is granted if the job was scheduled for the
@@ -2709,7 +2708,7 @@ class Scheduler:
             # TODO: Remove scan of self._jobs_with_extended_lease.
             for job_id_combination in self._jobs_with_extended_lease:
                 if job_id.overlaps_with(job_id_combination):
-                    updated_lease_duration = max_duration
+                    updated_lease_duration = duration
                     updated_lease_duration += remaining_time_in_current_round
                     updated_lease_duration += self._time_per_iteration
                     return (max_steps, updated_lease_duration)
