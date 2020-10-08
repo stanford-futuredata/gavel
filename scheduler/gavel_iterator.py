@@ -188,24 +188,49 @@ class GavelIterator:
                                               self._lease.max_duration)
             extra_time = 0
         # Update when the next lease update will be. If the lease max steps or
-        # max duration has not changed, then assume this will be the final
+        # max duration has not increased, then assume this will be the final
         # max steps or max duration.
         if updated_max_steps == self._lease.max_steps:
             self._steps_until_next_lease_update = INFINITY
         else:
-            next_lease_update_steps = \
-                int(updated_max_steps * LEASE_UPDATE_FRACTION +
-                    self._lease.max_steps * (1.0 - LEASE_UPDATE_FRACTION))
+            additional_lease_steps = \
+                updated_max_steps - self._lease.max_steps
+            steps_left_on_current_lease = \
+                self._lease.max_steps - self._steps
             self._steps_until_next_lease_update = \
-                next_lease_update_steps - self._steps
-        if updated_max_duration == self._lease.max_duration:
+                (steps_left_on_current_lease +
+                 additional_lease_steps * LEASE_UPDATE_FRACTION)
+
+        if updated_max_duration <= self._lease.max_duration:
             self._time_until_next_lease_update = INFINITY
         else:
-            next_lease_update_time = \
-                (updated_max_duration * LEASE_UPDATE_FRACTION +
-                 self._lease.max_duration * (1.0 - LEASE_UPDATE_FRACTION))
+            additional_lease_time = \
+                updated_max_duration - self._lease.max_duration
+            time_left_on_current_lease = \
+                self._lease.max_duration - self._duration
             self._time_until_next_lease_update = \
-                next_lease_update_time - self._duration + extra_time
+                (time_left_on_current_lease +
+                 additional_lease_time * LEASE_UPDATE_FRACTION +
+                 extra_time)
+            self._logger.debug('Progress: steps={0}, duration={1}'.format(
+                self._steps, self._duration),
+                extra={'event': 'LEASE', 'status': 'DEBUG'})
+            self._logger.debug(
+                    'Current lease: max_steps={0}, max_duration={1}'.format(
+                        self._lease.max_steps, self._lease.max_duration),
+                    extra={'event': 'LEASE', 'status': 'DEBUG'})
+            self._logger.debug(
+                'New lease: max_steps={0}, max_duration={1}, '
+                'extra_time={2}'.format(
+                    updated_max_steps, updated_max_duration, extra_time),
+                extra={'event': 'LEASE', 'status': 'DEBUG'})
+            self._logger.debug('Steps until next lease update={0}'.format(
+                self._steps_until_next_lease_update),
+                extra={'event': 'LEASE', 'status': 'DEBUG'})
+            self._logger.debug('Time until next lease update={0}'.format(
+                self._time_until_next_lease_update),
+                extra={'event': 'LEASE', 'status': 'DEBUG'})
+
 
         # Update the lease.
         self._lease.max_steps = updated_max_steps
