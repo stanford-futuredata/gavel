@@ -916,8 +916,8 @@ class Scheduler:
             for current_scale_factor in scale_factors:
                 # Try to keep jobs on current workers if possible.
                 for (job_id, scale_factor) in scheduled_jobs[worker_type]:
-                    if scale_factor < current_scale_factor:
-                        break
+                    if scale_factor != current_scale_factor:
+                        continue
                     if (job_id in prev_worker_types and
                         prev_worker_types[job_id] == worker_type):
                         prev_worker_ids = \
@@ -939,8 +939,8 @@ class Scheduler:
 
                 # Assign workers for remaining jobs.
                 for (job_id, scale_factor) in scheduled_jobs[worker_type]:
-                    if scale_factor < current_scale_factor:
-                        break
+                    if scale_factor != current_scale_factor:
+                        continue
                     elif job_id not in self._allocation:
                         continue
                     self._assign_workers_to_job(job_id, scale_factor,
