@@ -2649,10 +2649,12 @@ class Scheduler:
             remaining_time_in_current_round = \
                 current_round_end_time - current_time
 
-            # Add additional time to the lease if the job was dispatched early.
+            # Return a tuple of (steps, duration, extra time) as the initial
+            # lease. Extra time is granted if the job was scheduled for the
+            # upcoming round but is being initialized in the current round.
             if (self._next_worker_assignments is not None and
                 next_job_combination is not None):
-                extra_time = remaining_time_in_current_round
+                # Job was dispatched early, so add additional time.
                 return (remaining_steps, self._time_per_iteration,
                         remaining_time_in_current_round)
             else:
