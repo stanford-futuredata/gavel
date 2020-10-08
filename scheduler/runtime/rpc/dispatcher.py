@@ -217,17 +217,20 @@ class Dispatcher:
             else:
                 self._logger.debug('Killing all jobs!')
             if job_id is not None:
-                if job_id not in self._commands:
+                if (job_id not in self._commands or
+                    len(self._commands[job_id]) == 0):
                     self._logger.warning(
                         'No commands found for job {0}'.format(job_id))
                     return
+                round_id = min(self._commands[job_id].keys())
                 pids = []
-                for (prefix, command) in self._commands[job_id]:
-                    pid = utils.get_pid_for_job(prefix, command)
+                for command in self._commands[job_id][round_id]:
+                    pid = utils.get_pid_for_job(command)
                     if pid is not None:
                         pids.append(pid)
                 self._logger.debug(
-                    'PIDs for job {0}: {1}'.format(job_id, pids))
+                    'PIDs for job {0} in round {1}: {2}'.format(
+                        job_id, round_id, pids))
                 for pid in pids:
                     self._kill_job(pid)
             else:
@@ -235,14 +238,16 @@ class Dispatcher:
                     if job_id not in self._commands:
                         continue
                     pids = []
-                    for (prefix, command) in self._commands[job_id]:
-                        pid = utils.get_pid_for_job(prefix, command)
-                        if pid is not None:
-                            pids.append(pid)
-                    self._logger.debug(
-                        'PIDs for job {0}: {1}'.format(job_id, pids))
-                    for pid in pids:
-                        self._kill_job(pid)
+                    for round_id in sorted(self._commands[job_id].keys()):
+                        for command in self._commands[job_id][round_id]:
+                            pid = utils.get_pid_for_job(command)
+                            if pid is not None:
+                                pids.append(pid)
+                        self._logger.debug(
+                            'PIDs for job {0} in round {1}: {2}'.format(
+                                job_id, round_id, pids))
+                        for pid in pids:
+                            self._kill_job(pid)
             self._logger.debug('Finished killing job(s)')
 
     def _get_job_logger_and_fh(self, job_id, worker_id, round_id):
@@ -302,8 +307,10 @@ class Dispatcher:
 
         with self._lock:
             if job.job_id not in self._commands:
-                self._commands[job.job_id] = set()
-            self._commands[job.job_id].add((prefix, command))
+                self._commands[job.job_id] = {}
+            if round_id not in self._commands[job.job_id]:
+                self._commands[job.job_id][round_id] = set()
+            self._commands[job.job_id][round_id].add(command)
 
         if prefix is not None:
             full_command = '{0} {1}'.format(prefix, command)
@@ -363,7 +370,9 @@ class Dispatcher:
         iterator_log = self._get_iterator_log(job.job_id, worker_id, round_id)
 
         with self._lock:
-            self._commands[job.job_id].remove((prefix, command))
+            self._commands[job.job_id][round_id].remove(command)
+            if len(self._commands[job.job_id][round_id]) == 0:
+                del self._commands[job.job_id][round_id]
             if len(self._commands[job.job_id]) == 0:
                 del self._commands[job.job_id]
 

@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import os
 import pickle
+import psutil
 import random
 import re
 import socket
@@ -168,15 +169,13 @@ def get_num_gpus():
                             shell=True).stdout.decode('utf-8').strip()
     return len(output.split('\n'))
 
-def get_pid_for_job(prefix, command):
-    processes = subprocess.check_output('ps -aux', shell=True)
-    for line in processes.decode('utf-8').strip().split('\n'):
-        if command in line and prefix not in line:
-            match = re.search(' +(\d+)', line)
-            if match is not None:
-                pid = int(match.group(1))
-                return pid
-    return None
+def get_pid_for_job(command):
+    pids = []
+    for proc in psutil.process_iter():
+        cmdline = ' '.join(proc.cmdline())
+        if cmdline == command:
+            pids.append(proc.pid)
+    return min(pids)
 
 def get_gpu_processes():
     output = subprocess.check_output('nvidia-smi').decode('utf-8')
