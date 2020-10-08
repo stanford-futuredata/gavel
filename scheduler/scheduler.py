@@ -902,6 +902,7 @@ class Scheduler:
 
         for worker_type in worker_types:
             per_worker_state = worker_state[worker_type]
+            assigned_worker_ids = per_worker_state['assigned_worker_ids']
             current_job = 0
             scale_factors = set([x[1] for x in scheduled_jobs[worker_type]])
             scale_factors = sorted(scale_factors, reverse=True)
@@ -919,8 +920,6 @@ class Scheduler:
                             self._current_worker_assignments[job_id]
                         assert(isinstance(prev_worker_ids, tuple))
                         extend_placement = True
-                        assigned_worker_ids = \
-                            per_worker_state['assigned_worker_ids']
                         for prev_worker_id in prev_worker_ids:
                             if prev_worker_id in assigned_worker_ids:
                                 extend_placement = False
