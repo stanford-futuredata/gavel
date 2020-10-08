@@ -732,7 +732,6 @@ class Scheduler:
         assigned_worker_ids = worker_state['assigned_worker_ids']
         server_id_ptr = worker_state['server_id_ptr']
 
-        # Assign the remaining workers.
         if job_id in worker_assignments:
             worker_ids_for_job = list(worker_assignments[job_id])
         else:
