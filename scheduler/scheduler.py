@@ -712,8 +712,7 @@ class Scheduler:
                         num_active_jobs=len(self._jobs)))
 
     def _assign_workers_to_job(self, job_id, scale_factor, worker_type,
-                               worker_state, worker_assignments,
-                               worker_ids_for_job=None):
+                               worker_state, worker_assignments):
         """Assign workers to jobs.
 
         Assigns workers in a strided fashion to minimize the number
@@ -727,14 +726,12 @@ class Scheduler:
             worker_ids: Worker IDs organized into servers.
             assigned_worker_ids: The set of worker IDs assigned so far.
             server_id_ptr: The server to assign workers from.
-            num_workers_assigned: The total number of allocated workers.
           worker_assignments: A list of (job_id, worker_ids) assignment tuples.
           worker_ids_for_job: An optional list of worker IDs to assign.
         """
         worker_ids = worker_state['worker_ids']
         assigned_worker_ids = worker_state['assigned_worker_ids']
         server_id_ptr = worker_state['server_id_ptr']
-        num_workers_assigned = worker_state['num_workers_assigned']
 
         # If the job was previously scheduled on the same worker type, try
         # to keep it on the same workers.
@@ -758,6 +755,7 @@ class Scheduler:
             worker_id_to_assign = worker_ids[server_id_ptr][0]
             if worker_id_to_assign not in assigned_worker_ids:
                 worker_ids_for_job.append(worker_id_to_assign)
+                assigned_worker_ids.add(worker_id_to_assign)
             worker_ids[server_id_ptr].pop(0)
 
         if len(worker_ids_for_job) != scale_factor:
@@ -765,7 +763,6 @@ class Scheduler:
                 'Could not assign workers to job %s!' % (job_id))
 
         worker_assignments[job_id] = tuple(worker_ids_for_job)
-        num_workers_assigned += scale_factor
 
         for single_job_id in job_id.singletons():
             if self._simulate:
@@ -779,7 +776,6 @@ class Scheduler:
         worker_state['worker_ids'] = worker_ids
         worker_state['assigned_worker_ids'] = assigned_worker_ids
         worker_state['server_id_ptr'] = server_id_ptr
-        worker_state['num_workers_assigned'] = num_workers_assigned
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_types):
@@ -913,7 +909,6 @@ class Scheduler:
                 'worker_ids': worker_ids,
                 'assigned_worker_ids': set(),
                 'server_id_ptr': 0,
-                'num_workers_assigned': 0,
             }
 
         for worker_type in worker_types:
@@ -923,6 +918,20 @@ class Scheduler:
                 self._assign_workers_to_job(job_id, scale_factor, worker_type,
                                             worker_state[worker_type],
                                             new_worker_assignments)
+
+        # Verify the assignment.
+        num_assignments = {}
+        for job_id in new_worker_assignments:
+            for worker_id in new_worker_assignments[job_id]:
+                if worker_id not in num_assignments:
+                    num_assignments[worker_id] = 0
+                num_assignments[worker_id] += 1
+        for worker_id in num_assignments:
+            if num_assignments[worker_id] != 1:
+                raise RuntimeError(
+                    'Worker {0} was assigned {1} times!'.format(
+                        worker_id, num_assignments[worker_id]))
+
         return new_worker_assignments
 
     def _get_num_steps(self, job_id, worker_type, single_job_id=None):
