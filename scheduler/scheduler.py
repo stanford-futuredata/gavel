@@ -726,27 +726,17 @@ class Scheduler:
             worker_ids: Worker IDs organized into servers.
             assigned_worker_ids: The set of worker IDs assigned so far.
             server_id_ptr: The server to assign workers from.
-          worker_assignments: A list of (job_id, worker_ids) assignment tuples.
-          worker_ids_for_job: An optional list of worker IDs to assign.
+          worker_assignments: A map from job_id to assigned worker_ids tuple.
         """
         worker_ids = worker_state['worker_ids']
         assigned_worker_ids = worker_state['assigned_worker_ids']
         server_id_ptr = worker_state['server_id_ptr']
 
-        # If the job was previously scheduled on the same worker type, try
-        # to keep it on the same workers.
-        worker_ids_for_job = []
-        if job_id in self._current_worker_assignments:
-            prev_worker_ids = sorted(self._current_worker_assignments[job_id])
-            prev_worker_type = \
-                self._worker_id_to_worker_type_mapping[prev_worker_ids[0]]
-            if prev_worker_type == worker_type:
-                for prev_worker_id in prev_worker_ids:
-                    if prev_worker_id not in assigned_worker_ids:
-                        worker_ids_for_job.append(prev_worker_id)
-                        assigned_worker_ids.add(prev_worker_id)
-
         # Assign the remaining workers.
+        if job_id in worker_assignments:
+            worker_ids_for_job = list(worker_assignments[job_id])
+        else:
+            worker_ids_for_job = []
         while (len(worker_ids_for_job) < scale_factor and
                server_id_ptr < len(worker_ids)):
             if len(worker_ids[server_id_ptr]) == 0:
@@ -911,13 +901,53 @@ class Scheduler:
                 'server_id_ptr': 0,
             }
 
+        prev_worker_types = {}
+        for (job_id, worker_ids) in self._current_worker_assignments.items():
+            worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
+            prev_worker_types[job_id] = worker_type
+
         for worker_type in worker_types:
-            for (job_id, scale_factor) in scheduled_jobs[worker_type]:
-                if job_id not in self._allocation:
-                    continue
-                self._assign_workers_to_job(job_id, scale_factor, worker_type,
-                                            worker_state[worker_type],
-                                            new_worker_assignments)
+            per_worker_state = worker_state[worker_type]
+            current_job = 0
+            scale_factors = set([x[1] for x in scheduled_jobs[worker_type]])
+            scale_factors = sorted(scale_factors, reverse=True)
+
+            # Assign workers in order of decreasing scale factor to prioritize
+            # locality for multi-GPU jobs.
+            for current_scale_factor in scale_factors:
+                # Try to keep jobs on current workers if possible.
+                for (job_id, scale_factor) in scheduled_jobs[worker_type]:
+                    if scale_factor < current_scale_factor:
+                        break
+                    if (job_id in prev_worker_types and
+                        prev_worker_types[job_id] == worker_type):
+                        prev_worker_ids = \
+                            self._current_worker_assignments[job_id]
+                        assert(isinstance(prev_worker_ids, tuple))
+                        extend_placement = True
+                        assigned_worker_ids = \
+                            per_worker_state['assigned_worker_ids']
+                        for prev_worker_id in prev_worker_ids:
+                            if prev_worker_id in assigned_worker_ids:
+                                extend_placement = False
+                                break
+                        if extend_placement:
+                            new_worker_assignments[job_id] = prev_worker_ids
+                            for prev_worker_id in prev_worker_ids:
+                                assigned_worker_ids.add(prev_worker_id)
+                            per_worker_state['assigned_worker_ids'] = \
+                                assigned_worker_ids
+
+                # Assign workers for remaining jobs.
+                for (job_id, scale_factor) in scheduled_jobs[worker_type]:
+                    if scale_factor < current_scale_factor:
+                        break
+                    elif job_id not in self._allocation:
+                        continue
+                    self._assign_workers_to_job(job_id, scale_factor,
+                                                worker_type,
+                                                per_worker_state,
+                                                new_worker_assignments)
 
         # Verify the assignment.
         num_assignments = {}
