@@ -1040,6 +1040,7 @@ class Scheduler:
             self._running_jobs.add(single_job_id)
         return all_num_steps, max_finish_time
 
+
     def _save_checkpoint(self, checkpoint_file,
                          last_job_arrival_time,
                          next_job_arrival_time,
