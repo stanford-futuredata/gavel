@@ -1040,14 +1040,6 @@ class Scheduler:
             self._running_jobs.add(single_job_id)
         return all_num_steps, max_finish_time
 
-
-    def _save_trace(self, trace_file):
-        with open(trace_file, 'w') as f:
-            for job_id in sorted(self._jobs.keys()):
-                job_copy = copy.deepcopy(self._jobs[job_id])
-                job_copy.total_steps = self._get_remaining_steps(job_id)
-                f.write('{0}\t{1}\n'.format(job_copy, 0))
-
     def _save_checkpoint(self, checkpoint_file,
                          last_job_arrival_time,
                          next_job_arrival_time,
@@ -1780,8 +1772,6 @@ class Scheduler:
         self._completed_jobs_in_current_round = set()
         self._current_worker_assignments = self._next_worker_assignments
         self._next_worker_assignments = None
-
-        self._save_trace('.in_progress.trace')
 
         self._scheduler_cv.notifyAll()
 
