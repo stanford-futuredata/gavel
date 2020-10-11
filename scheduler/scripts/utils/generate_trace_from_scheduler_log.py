@@ -36,6 +36,7 @@ def main(args):
                         start_timestamp = timestamp
                     end_timestamp = timestamp
 
+                # Check if job completed a micro-task.
                 match = re.search('Job (\d+) has (\d+) remaining steps', line)
                 if match is not None:
                     job_id = int(match.group(1))
@@ -43,6 +44,7 @@ def main(args):
                     in_progress_steps[job_id] = 0
                     continue
 
+                # Check if job has any in-progress steps.
                 match = re.search('Received lease update request.*'
                                   'job_id=(\d+).* steps=(\d+)', line)
                 if match is not None:
@@ -59,12 +61,20 @@ def main(args):
                     del remaining_steps[job_id]
                     continue
 
-                # Check if job failed
+                # Check if job failed.
                 match = re.search('\[Job failed\].*Job ID: (\d+)', line)
                 if match is not None:
                     job_id = int(match.group(1))
                     del remaining_steps[job_id]
                     continue
+
+                # Verify that jobs received all update requests in the round.
+                match = re.search('END', line)
+                if match is not None:
+                    for job_id in in_progress_steps:
+                        num_updates = len(in_progress_steps[job_id])
+                        assert(num_updates == 0 or
+                               num_updates == scale_factors[job_id])
 
         offset = (end_timestamp - start_timestamp).total_seconds()
 
