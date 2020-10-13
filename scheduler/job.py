@@ -62,6 +62,10 @@ class Job:
     def total_steps(self):
         return self._total_steps
 
+    @total_steps.setter
+    def total_steps(self, total_steps):
+        self._total_steps = total_steps
+
     @property
     def duration(self):
         return self._duration

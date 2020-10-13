@@ -25,13 +25,19 @@ class WorkerServer(s2w_pb2_grpc.SchedulerToWorkerServicer):
         self._condition = condition
         self._logger = logger 
 
-    def Run(self, request, context):
-        self._logger.debug('Received run request from server')
+    def RunJob(self, request, context):
+        self._logger.debug('Received run job request from server')
         jobs = []
         for job_description in request.job_descriptions:
             jobs.append(job.Job.from_proto(job_description))
-        run_callback = self._callbacks['Run']
-        run_callback(jobs, request.worker_id)
+        run_job_callback = self._callbacks['RunJob']
+        run_job_callback(jobs, request.worker_id, request.round_id)
+        return common_pb2.Empty()
+
+    def KillJob(self, request, context):
+        self._logger.debug('Received kill job request from server')
+        kill_job_callback = self._callbacks['KillJob']
+        kill_job_callback(request.job_id)
         return common_pb2.Empty()
 
     def Reset(self, request, context):

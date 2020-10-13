@@ -23,10 +23,10 @@ class SchedulerRpcClient:
     def port(self):
         return self._port
 
-    def run(self, job_descriptions, worker_id):
+    def run_job(self, job_descriptions, worker_id, round_id):
         with grpc.insecure_channel(self._server_loc) as channel:
             stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
-            request = s2w_pb2.RunRequest()
+            request = s2w_pb2.RunJobRequest()
             for (job_id, command, working_directory, needs_data_dir,
                  num_steps_arg, num_steps) in job_descriptions:
                 job_description = request.job_descriptions.add()
@@ -37,7 +37,15 @@ class SchedulerRpcClient:
                 job_description.num_steps_arg = num_steps_arg
                 job_description.num_steps = num_steps
             request.worker_id = worker_id
-            response = stub.Run(request)
+            request.round_id = round_id
+            response = stub.RunJob(request)
+
+    def kill_job(self, job_id):
+        with grpc.insecure_channel(self._server_loc) as channel:
+            stub = s2w_pb2_grpc.SchedulerToWorkerStub(channel)
+            request = s2w_pb2.KillJobRequest()
+            request.job_id = job_id[0] # job_id is a JobIdPair
+            response = stub.KillJob(request)
 
     def reset(self):
         with grpc.insecure_channel(self._server_loc) as channel:

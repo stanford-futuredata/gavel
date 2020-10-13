@@ -46,6 +46,12 @@ MAX_FAILED_ATTEMPTS = 5
 SCHEDULE_RECOMPUTE_FRACTION = 0.5
 # Format string for logging.
 LOG_FORMAT = '{name}:{levelname} {message}'
+# Buffer time for jobs to complete.
+JOB_COMPLETION_BUFFER_TIME = 60
+# Base port to use for distributed jobs.
+BASE_JOB_PORT = 60570
+# Maximum port number.
+MAX_PORT = 65535
 
 class Scheduler:
 
@@ -154,18 +160,27 @@ class Scheduler:
         self._current_worker_assignments = collections.OrderedDict()
         # Map from job combinations to assigned workers for the upcoming round.
         self._next_worker_assignments = None
+        # Map from job combinations to assigned workers for jobs that need to
+        # be re-dispatched on account of finishing early.
+        self._redispatched_worker_assignments = collections.OrderedDict()
         # Set of completed jobs in current round.
         self._completed_jobs_in_current_round = set()
         # Set of jobs with an extended lease for the upcoming round.
         self._jobs_with_extended_lease = set()
+        # The total number of lease extensions across all jobs.
+        self._num_lease_extensions = 0
+        # The total number of instances where leasees could have been extended.
+        self._num_lease_extension_opportunities = 0
         # Event scheduler to trigger round completions for jobs with
         # extended leases.
-        self._lease_extension_scheduler = \
+        self._completion_event_scheduler = \
             sched.scheduler(time.time, time.sleep)
-        # Map from job ID to lease extension scheduler event.
-        self._lease_extension_events = {}
-        # Set of ports in use for each worker.
-        self._active_ports = {}
+        # Map from job ID to completion event.
+        self._completion_events = {}
+        # Map from job ID to timeline of events.
+        self._job_timelines = {}
+        # Port offset for distributed jobs.
+        self._port_offset = 0
         # Iterations run on each worker_id, for all current incomplete
         # applications.
         self._steps_run_so_far = {}
@@ -195,6 +210,9 @@ class Scheduler:
         self._last_reset_time = 0
         # Flag indicating when to update the allocation.
         self._need_to_update_allocation = False
+        # Flag indicating whether allocation has been updated since elapsed
+        # time was last reset.
+        self._allocation_changed_since_last_time_reset = False
         # Measured and predicted throughputs for all current incomplete
         # applications.
         self._throughputs = {}
@@ -239,8 +257,10 @@ class Scheduler:
             self._per_instance_type_spot_prices = None
             self._per_worker_type_prices = None
         # The per-round maximum number of steps to run for distributed jobs.
+        # Indexed by single job IDs.
         self._max_steps = {}
         # All per-round lease update requests for distributed jobs.
+        # Indexed by single job IDs.
         self._lease_update_requests = {}
         # List of all RPC clients.
         self._all_rpc_clients = []
@@ -451,6 +471,7 @@ class Scheduler:
             self._steps_run_so_far[job_id] = {}
             self._job_time_so_far[job_id] = {}
             self._job_cost_so_far[job_id] = 0.0
+            self._job_timelines[job_id] = [[] for _ in range(job.scale_factor)]
             self._throughputs[job_id] = {}
             job_type = self._jobs[job_id].job_type
             scale_factor = job.scale_factor
@@ -691,8 +712,7 @@ class Scheduler:
                         num_active_jobs=len(self._jobs)))
 
     def _assign_workers_to_job(self, job_id, scale_factor, worker_type,
-                               worker_state, worker_assignments,
-                               worker_ids_for_job=None):
+                               worker_state, worker_assignments):
         """Assign workers to jobs.
 
         Assigns workers in a strided fashion to minimize the number
@@ -704,47 +724,43 @@ class Scheduler:
           worker_type: The worker type to allocate.
           worker_state: A dict comprised of the following information:
             worker_ids: Worker IDs organized into servers.
-            reserved_worker_ids: A set of worker IDs that are already in use.
+            assigned_worker_ids: The set of worker IDs assigned so far.
             server_id_ptr: The server to assign workers from.
-            num_workers_assigned: The total number of allocated workers.
-          worker_assignments: A list of (job_id, worker_ids) assignment tuples.
-          worker_ids_for_job: An optional list of worker IDs to assign.
+          worker_assignments: A map from job_id to assigned worker_ids tuple.
         """
         worker_ids = worker_state['worker_ids']
-        reserved_worker_ids = worker_state['reserved_worker_ids']
+        assigned_worker_ids = worker_state['assigned_worker_ids']
         server_id_ptr = worker_state['server_id_ptr']
-        num_workers_assigned = worker_state['num_workers_assigned']
 
-        if worker_ids_for_job is None:
+        if job_id in worker_assignments:
+            worker_ids_for_job = list(worker_assignments[job_id])
+        else:
             worker_ids_for_job = []
-            while (len(worker_ids_for_job) < scale_factor and
-                   server_id_ptr < len(worker_ids)):
-                if len(worker_ids[server_id_ptr]) == 0:
-                    server_id_ptr += 1
-                    continue
-                worker_id_to_assign = worker_ids[server_id_ptr][0]
-                if worker_id_to_assign not in reserved_worker_ids:
-                    worker_ids_for_job.append(worker_id_to_assign)
-                worker_ids[server_id_ptr].pop(0)
+        while (len(worker_ids_for_job) < scale_factor and
+               server_id_ptr < len(worker_ids)):
+            if len(worker_ids[server_id_ptr]) == 0:
+                server_id_ptr += 1
+                continue
+            worker_id_to_assign = worker_ids[server_id_ptr][0]
+            if worker_id_to_assign not in assigned_worker_ids:
+                worker_ids_for_job.append(worker_id_to_assign)
+                assigned_worker_ids.add(worker_id_to_assign)
+            worker_ids[server_id_ptr].pop(0)
 
         if len(worker_ids_for_job) != scale_factor:
             raise RuntimeError(
                 'Could not assign workers to job %s!' % (job_id))
 
         worker_assignments[job_id] = tuple(worker_ids_for_job)
-        num_workers_assigned += scale_factor
-
-        # TODO: Move this to when a job is actually dispatched when running
-        # on a physical cluster.
-        for single_job_id in job_id.singletons():
-            self._per_job_latest_timestamps[single_job_id] = \
-                self.get_current_timestamp()
-            self._running_jobs.add(single_job_id)
-
-        # Update state.
-        worker_state['worker_ids'] = worker_ids
         worker_state['server_id_ptr'] = server_id_ptr
-        worker_state['num_workers_assigned'] = num_workers_assigned
+
+        for single_job_id in job_id.singletons():
+            if self._simulate:
+                # This will be done on initialization when running on a
+                # physical cluster.
+                self._per_job_latest_timestamps[single_job_id] = \
+                    self.get_current_timestamp()
+                self._running_jobs.add(single_job_id)
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _schedule_jobs_on_workers_helper(self, worker_types):
@@ -876,45 +892,68 @@ class Scheduler:
                 self._worker_type_to_worker_id_mapping[worker_type])
             worker_state[worker_type] = {
                 'worker_ids': worker_ids,
-                'reserved_worker_ids': set(),
+                'assigned_worker_ids': set(),
                 'server_id_ptr': 0,
-                'num_workers_assigned': 0,
             }
 
-        # Keep jobs on the same server if possible.
-        already_scheduled_jobs = set()
-        new_worker_types = {}
-        for worker_type in scheduled_jobs:
-            for (job_id, scale_factor) in scheduled_jobs[worker_type]:
-                new_worker_types[job_id] = worker_type
+        prev_worker_types = {}
         for (job_id, worker_ids) in self._current_worker_assignments.items():
-            current_worker_type = \
-                self._worker_id_to_worker_type_mapping[worker_ids[0]]
-            if job_id not in new_worker_types:
-                continue
-            if new_worker_types[job_id] == current_worker_type:
-                reserved_worker_ids = \
-                    worker_state[current_worker_type]['reserved_worker_ids']
-                scale_factor = len(worker_ids)
-                for worker_id in worker_ids:
-                    reserved_worker_ids.add(worker_id)
-                already_scheduled_jobs.add(job_id)
-                self._assign_workers_to_job(job_id, scale_factor,
-                                            current_worker_type,
-                                            worker_state[current_worker_type],
-                                            new_worker_assignments,
-                                            worker_ids)
+            worker_type = self._worker_id_to_worker_type_mapping[worker_ids[0]]
+            prev_worker_types[job_id] = worker_type
 
-        # Assign all jobs that have an updated placement.
         for worker_type in worker_types:
-            for (job_id, scale_factor) in scheduled_jobs[worker_type]:
-                if job_id not in self._allocation:
-                    continue
-                elif job_id in already_scheduled_jobs:
-                    continue
-                self._assign_workers_to_job(job_id, scale_factor, worker_type,
-                                            worker_state[worker_type],
-                                            new_worker_assignments)
+            per_worker_state = worker_state[worker_type]
+            assigned_worker_ids = per_worker_state['assigned_worker_ids']
+            current_job = 0
+            scale_factors = set([x[1] for x in scheduled_jobs[worker_type]])
+            scale_factors = sorted(scale_factors, reverse=True)
+
+            # Assign workers in order of decreasing scale factor to prioritize
+            # locality for multi-GPU jobs.
+            for current_scale_factor in scale_factors:
+                # Try to keep jobs on current workers if possible.
+                for (job_id, scale_factor) in scheduled_jobs[worker_type]:
+                    if scale_factor != current_scale_factor:
+                        continue
+                    if (job_id in prev_worker_types and
+                        prev_worker_types[job_id] == worker_type):
+                        prev_worker_ids = \
+                            self._current_worker_assignments[job_id]
+                        assert(isinstance(prev_worker_ids, tuple))
+                        extend_placement = True
+                        for prev_worker_id in prev_worker_ids:
+                            if prev_worker_id in assigned_worker_ids:
+                                extend_placement = False
+                                break
+                        if extend_placement:
+                            new_worker_assignments[job_id] = prev_worker_ids
+                            for prev_worker_id in prev_worker_ids:
+                                assigned_worker_ids.add(prev_worker_id)
+
+                # Assign workers for remaining jobs.
+                for (job_id, scale_factor) in scheduled_jobs[worker_type]:
+                    if scale_factor != current_scale_factor:
+                        continue
+                    elif job_id not in self._allocation:
+                        continue
+                    self._assign_workers_to_job(job_id, scale_factor,
+                                                worker_type,
+                                                per_worker_state,
+                                                new_worker_assignments)
+
+        # Verify the assignment.
+        num_assignments = {}
+        for job_id in new_worker_assignments:
+            for worker_id in new_worker_assignments[job_id]:
+                if worker_id not in num_assignments:
+                    num_assignments[worker_id] = 0
+                num_assignments[worker_id] += 1
+        for worker_id in num_assignments:
+            if num_assignments[worker_id] != 1:
+                raise RuntimeError(
+                    'Worker {0} was assigned {1} times!'.format(
+                        worker_id, num_assignments[worker_id]))
+
         return new_worker_assignments
 
     def _get_num_steps(self, job_id, worker_type, single_job_id=None):
@@ -1413,6 +1452,19 @@ class Scheduler:
             else:
                 with self._scheduler_lock:
                     scheduled_jobs = self._schedule_jobs_on_workers()
+                    for job_id in self._current_worker_assignments:
+                        is_active = \
+                            any([x in self._jobs for x in job_id.singletons()])
+                        if is_active:
+                            self._num_lease_extension_opportunities += \
+                                len(self._current_worker_assignments)
+                    for job_id in scheduled_jobs:
+                        if job_id in self._current_worker_assignments:
+                            current_worker_ids = \
+                                set(self._current_worker_assignments[job_id])
+                            next_worker_ids = set(scheduled_jobs[job_id])
+                            if current_worker_ids == next_worker_ids:
+                                self._num_lease_extensions += 1
                     self._current_worker_assignments = scheduled_jobs
                     self._print_schedule_summary()
                 for (job_id, worker_ids) in scheduled_jobs.items():
@@ -1452,11 +1504,41 @@ class Scheduler:
               '(%.2f hours)' % (self._current_timestamp,
                                 self._current_timestamp / 3600.0))
 
+    def _is_final_round(self):
+        return (self._max_rounds is not None and
+                self._num_completed_rounds + 1 == self._max_rounds)
+
     def _begin_round(self, state_snapshot=None):
         """Executes beginning stage of a scheduling round."""
 
         self._current_round_start_time = self.get_current_timestamp()
         current_round = self._num_completed_rounds
+
+        # Reset lease update requests.
+        for job_id in self._current_worker_assignments:
+            for single_job_id in job_id.singletons():
+                self._lease_update_requests[single_job_id] = []
+                self._max_steps[single_job_id] = None
+
+        # Re-dispatch jobs that had extended leases but completed early.
+        for job_id in self._redispatched_worker_assignments:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if is_active:
+                if job_id not in self._current_worker_assignments:
+                    raise RuntimeError(
+                        'Trying to re-dispatch job {0} but it has not '
+                        'been scheduled for round {1}!'.format(
+                            job_id, current_round))
+                worker_ids = self._redispatched_worker_assignments[job_id]
+                self._logger.info('Re-dispatching job {0} as it completed '
+                                  'early but had an extended lease'.format(
+                                    job_id))
+                self._try_dispatch_job(job_id, worker_ids)
+                self._logger.debug('Re-dispatched job {0}'.format(job_id))
+        self._redispatched_worker_assignments = collections.OrderedDict()
+
+        self._logger.debug('Finished re-dispatching jobs')
+
         self._logger.info('*** START ROUND {0} ***'.format(current_round))
         self._print_schedule_summary(state_snapshot)
 
@@ -1472,11 +1554,22 @@ class Scheduler:
         self._current_worker_assignments when we end the round.
         """
 
+        if self._is_final_round():
+            self._logger.debug('In final round, not dispatching any more jobs')
+            self._jobs_with_extended_leases = set()
+            return
+
         round_end_time = \
             self._current_round_start_time + self._time_per_iteration
 
         # Recompute the schedule for the upcoming round.
         self._next_worker_assignments = self._schedule_jobs_on_workers()
+
+        # Count how many jobs could be eligible for lease extensions.
+        for job_id in self._current_worker_assignments:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if is_active:
+                self._num_lease_extension_opportunities += 1
 
         # Check whether we should update the lease for any jobs.
         for job_id in self._current_worker_assignments:
@@ -1492,6 +1585,7 @@ class Scheduler:
                     self._jobs_with_extended_lease.add(job_id)
                     self._logger.info(
                         'Extending lease for job {0}'.format(job_id))
+                    self._num_lease_extensions += 1
                 elif job_id in self._jobs_with_extended_lease:
                     # Job will not be scheduled on the same workers
                     # in upcoming round; remove it from the
@@ -1507,14 +1601,17 @@ class Scheduler:
         # Dispatch jobs for upcoming round.
         for (job_id, worker_ids) in \
             self._next_worker_assignments.items():
-            if (job_id not in self._jobs_with_extended_lease or
-                (job_id in self._jobs_with_extended_lease and
-                 job_id in self._completed_jobs_in_current_round)):
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if not is_active:
+                continue
+            elif (job_id not in self._jobs_with_extended_lease or
+                  (job_id in self._jobs_with_extended_lease and
+                   job_id in self._completed_jobs_in_current_round)):
                 self._logger.info('Dispatching job {0}'.format(job_id))
                 self._try_dispatch_job(job_id, worker_ids, next_round=True)
 
-        # Schedule extended lease completion events.
-        self._schedule_extended_lease_completion_events(round_end_time, pool)
+        # Schedule completion events.
+        self._schedule_completion_events(round_end_time, pool)
 
     def _try_dispatch_job(self, job_id, worker_ids, next_round=False):
         """Attempts to dispatch the specified job combination.
@@ -1522,37 +1619,30 @@ class Scheduler:
            Updates relevant metadata and returns if job has already been
            dispatched.
         """
-        # Job could have been completed after schedule was computed.
-        if (job_id in self._completed_jobs_in_current_round or
-            not any([x in self._jobs for x in job_id.singletons()])):
-            return
 
-        # Initialize metadata for distributed jobs.
+        # Initialize metadata.
         if not next_round or job_id not in self._current_worker_assignments:
             self._in_progress_updates[job_id] = []
-            self._lease_update_requests[job_id] = []
-            self._max_steps[job_id] = None
+            for single_job_id in job_id.singletons():
+                self._lease_update_requests[single_job_id] = []
+                self._max_steps[single_job_id] = None
 
-        # Find available ports to use for distributed jobs.
         scale_factor = len(worker_ids)
         worker_type = \
             self._worker_id_to_worker_type_mapping[worker_ids[0]]
         if scale_factor > 1:
             master_addr = self._worker_connections[worker_ids[0]].addr
             master_server_port = self._worker_connections[worker_ids[0]].port
-            active_ports_for_worker = set()
-            for job_id_ in self._active_ports[master_addr]:
-                active_ports_for_worker.add(
-                    self._active_ports[master_addr][job_id_])
-            for single_job_id in job_id.singletons():
-                master_job_port = master_server_port + 1
-                while master_job_port in active_ports_for_worker:
-                    master_job_port += 1
-                active_ports_for_worker.add(master_job_port)
-                self._active_ports[master_addr][single_job_id] = \
-                    master_job_port
+            master_job_ports = []
+            for i in range(len(job_id.singletons())):
+                master_job_ports.append(BASE_JOB_PORT + self._port_offset)
+                self._port_offset += 1
+                self._port_offset %= (MAX_PORT - BASE_JOB_PORT)
 
         # Dispatch the job.
+        current_round = self._num_completed_rounds
+        if next_round:
+            current_round += 1
         for i, worker_id in enumerate(worker_ids):
             job_descriptions = []
             for j, single_job_id in enumerate(job_id.singletons()):
@@ -1560,14 +1650,12 @@ class Scheduler:
                 command = self._jobs[single_job_id].command
                 # Add distributed args if necessary.
                 if scale_factor > 1:
-                    master_job_port = \
-                        self._active_ports[master_addr][single_job_id]
                     command = ('%s --master_addr %s '
                                '--master_port %d '
                                '--world_size %d '
                                '--rank %d' % (command,
                                               master_addr,
-                                              master_job_port,
+                                              master_job_ports[j],
                                               scale_factor, i))
                 job_descriptions.append(
                         (single_job_id,
@@ -1576,29 +1664,36 @@ class Scheduler:
                          self._jobs[single_job_id].needs_data_dir,
                          self._jobs[single_job_id].num_steps_arg,
                          num_steps))
-            self._worker_connections[worker_id].run(job_descriptions,
-                                                    worker_id)
+            self._worker_connections[worker_id].run_job(
+                    job_descriptions, worker_id, current_round)
             if not next_round:
                 self._remove_available_worker_id(worker_id)
 
-    def _schedule_extended_lease_completion_events(self, round_end_time, pool):
-        """Schedules completion events for jobs with extended lease.
+    def _schedule_completion_events(self, round_end_time, pool):
+        """Schedules completion events for every dispatched job.
 
         A completion event in this setting is a callback that will be
         triggered at the conclusion of the current round to indicate that the
-        specified job has completed the round. This is necessary because
-        jobs with extended leases will not trigger the standard done_callback
-        at the end of the round.
+        specified job has completed the round. This is necessary for two
+        reasons: 1) jobs with extended leases will not trigger the standard
+        done_callback at the end of the round, and 2) jobs might freeze.
         """
         current_time = self.get_current_timestamp()
-        delay = round_end_time - current_time
-        for job_id in self._jobs_with_extended_lease:
-            event = self._lease_extension_scheduler.enter(
-                    delay=delay, priority=1,
-                    action=self._done_callback_extended_lease,
-                    argument=(job_id,))
-            self._lease_extension_events[job_id] = event
-        pool.submit(self._lease_extension_scheduler.run)
+        for job_id in self._current_worker_assignments:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if (not is_active or
+                job_id in self._completed_jobs_in_current_round):
+                continue
+            delay = round_end_time - current_time
+            if job_id not in self._jobs_with_extended_lease:
+                delay += JOB_COMPLETION_BUFFER_TIME
+                action = self._kill_job
+            else:
+                action = self._done_callback_extended_lease
+            event = self._completion_event_scheduler.enter(
+                    delay=delay, priority=1, action=action, argument=(job_id,))
+            self._completion_events[job_id] = event
+        pool.submit(self._completion_event_scheduler.run)
 
     def _end_round(self):
         """Executes final stage of a scheduling round.
@@ -1627,9 +1722,9 @@ class Scheduler:
         self._logger.debug(
             'All jobs in round {0} have completed!'.format(current_round))
 
-        if len(self._lease_extension_events) > 0:
-            raise RuntimeError('Remaining lease extension events: {0}'.format(
-                self._lease_extension_events.keys()))
+        if len(self._completion_events) > 0:
+            raise RuntimeError('Remaining completion events: {0}'.format(
+                self._completion_events.keys()))
 
         # Reset extended leases.
         jobs_with_extended_lease = list(self._jobs_with_extended_lease)
@@ -1642,17 +1737,35 @@ class Scheduler:
             self._jobs_with_extended_lease.remove(job_id)
         self._logger.debug('Reset extended leases')
 
-        # The next worker assignments must have been computed here as
-        # _end_round is called sequentially after _mid_round.
-        if self._next_worker_assignments is None:
-            raise RuntimeError(
-                'Next worker assignments have not been computed!')
+        if not self._is_final_round():
+            # The next worker assignments must have been computed here as
+            # _end_round is called sequentially after _mid_round.
+            if self._next_worker_assignments is None:
+                raise RuntimeError(
+                    'Next worker assignments have not been computed!')
 
-        for (job_id, worker_ids) in self._next_worker_assignments.items():
-            is_active = any([x in self._jobs for x in job_id.singletons()])
-            if is_active:
-                for worker_id in worker_ids:
-                    self._remove_available_worker_id(worker_id)
+            for (job_id, worker_ids) in self._next_worker_assignments.items():
+                is_active = any([x in self._jobs for x in job_id.singletons()])
+                if is_active:
+                    # If the job needs to be dispatched again, defer removing
+                    # its worker ID.
+                    if job_id in self._redispatched_worker_assignments:
+                        continue
+                    for worker_id in worker_ids:
+                        self._remove_available_worker_id(worker_id)
+
+            # Ensure that rounds do not finish earlier than the specified
+            # round duration.
+            current_time = self.get_current_timestamp()
+            round_end_time = \
+                self._current_round_start_time + self._time_per_iteration
+            remaining_time_in_round = round_end_time - current_time
+            if remaining_time_in_round > 0:
+                self._logger.debug(
+                    'Waiting {0:.2f} seconds before starting '
+                    'round {1}...'.format(remaining_time_in_round,
+                                          current_round + 1))
+                time.sleep(remaining_time_in_round)
 
         self._num_completed_rounds += 1
 
@@ -1689,14 +1802,16 @@ class Scheduler:
             self._scheduler_cv.wait()
 
         # Compute initial schedule and dispatch initial set of jobs.
-        state_snapshot = self._get_state_snapshot()
         self._current_worker_assignments = self._schedule_jobs_on_workers()
+        state_snapshot = self._get_state_snapshot()
         for (job_id, worker_ids) in self._current_worker_assignments.items():
             self._try_dispatch_job(job_id, worker_ids)
         self._scheduler_cv.release()
 
         with ThreadPoolExecutor(max_workers=1) as pool:
             while True:
+                is_final_round = self._is_final_round()
+
                 round_start_time = self.get_current_timestamp()
                 with self._scheduler_cv:
                     self._begin_round(state_snapshot)
@@ -1706,9 +1821,12 @@ class Scheduler:
                 time.sleep(delay)
 
                 with self._scheduler_cv:
-                    state_snapshot = self._get_state_snapshot(deepcopy=True)
                     self._mid_round(pool)
+                    state_snapshot = self._get_state_snapshot(deepcopy=True)
                     self._end_round()
+
+                if is_final_round:
+                    break
 
     def get_average_jct(self, job_ids=None, verbose=True):
         """Computes the average job completion time.
@@ -1822,6 +1940,41 @@ class Scheduler:
         if verbose:
             print('Number of SLO violations: %d' % (num_SLO_violations))
         return num_SLO_violations
+
+    def get_num_lease_extensions(self, verbose=True):
+        if self._num_lease_extension_opportunities > 0:
+            percentage = (100.0 * self._num_lease_extensions) / \
+                            self._num_lease_extension_opportunities
+            if verbose:
+                print('Extended leases {0:.2f}% of the time ({1}/{2})'.format(
+                        percentage,
+                        self._num_lease_extensions,
+                        self._num_lease_extension_opportunities))
+        elif verbose:
+            percentage = 0
+            print('No lease extension opportunities')
+
+        return percentage
+
+    def save_job_timelines(self, timeline_dir):
+        if not os.path.isdir(timeline_dir):
+            try:
+                os.mkdir(timeline_dir)
+            except Exception as e:
+                self._logger.error('Could not save timelines!')
+                traceback.print_exc()
+                return
+
+        for job_id in sorted(self._job_timelines.keys()):
+            job_dir = os.path.join(timeline_dir, 'job_id={0}'.format(job_id))
+            if not os.path.isdir(job_dir):
+                os.mkdir(job_dir)
+            for i in range(len(self._job_timelines[job_id])):
+                timeline_file = os.path.join(job_dir,
+                                             'worker={0}.log'.format(i))
+                with open(timeline_file, 'w') as f:
+                    for event in self._job_timelines[job_id][i]:
+                        f.write('{0}\n'.format(event))
 
     def get_micro_tasks(self):
         """Prints all micro-tasks run for each job.
@@ -2032,6 +2185,7 @@ class Scheduler:
                             del allocation[job_id]
             self._allocation = allocation
             self._need_to_update_allocation = False
+            self._allocation_changed_since_last_time_reset = True
             self._scheduler_cv.notifyAll()
             self._scheduler_cv.release()
 
@@ -2110,6 +2264,7 @@ class Scheduler:
 
         Requires self._scheduler_lock to be held when calling this function.
         """
+        self._logger.debug('Resetting time run so far')
         current_time = self.get_current_timestamp()
         elapsed_time_since_last_reset = current_time - self._last_reset_time
         for worker_type in self._worker_types:
@@ -2148,6 +2303,7 @@ class Scheduler:
         # Prints deficits every time allocation is reset.
         # self._print_deficits()
         self._last_reset_time = current_time
+        self._allocation_changed_since_last_time_reset = False
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _add_to_priorities(self, job_id, worker_type=None):
@@ -2210,8 +2366,17 @@ class Scheduler:
         time_since_last_reset = current_time - self._last_reset_time
         reset_interval_elapsed = time_since_last_reset >= \
             self._minimum_time_between_allocation_resets
-        if (self._need_to_update_allocation and
-            (reset_interval_elapsed or self._last_reset_time == 0)):
+        need_to_reset_time_run_so_far = \
+            reset_interval_elapsed or self._last_reset_time == 0
+        if self._simulate:
+            need_to_reset_time_run_so_far = \
+                (self._need_to_update_allocation and
+                 need_to_reset_time_run_so_far)
+        else:
+            need_to_reset_time_run_so_far = \
+                (self._allocation_changed_since_last_time_reset and
+                 need_to_reset_time_run_so_far)
+        if need_to_reset_time_run_so_far:
             self._reset_time_run_so_far()
             # In simulation mode, wait for allocation computation to complete
             # before proceeding.
@@ -2232,6 +2397,9 @@ class Scheduler:
                 if single_job_id not in self._per_job_latest_timestamps:
                     continue
                 dispatch_time = self._per_job_latest_timestamps[single_job_id]
+                if dispatch_time is None:
+                    continue
+                dispatch_time = max(dispatch_time, self._last_reset_time)
                 elapsed_time = current_time - dispatch_time
                 elapsed_job_time[job_id] = {}
                 worker_ids = self._current_worker_assignments[job_id]
@@ -2261,9 +2429,11 @@ class Scheduler:
                 else:
                     job_time_so_far = \
                         self._job_time_so_far[job_id][worker_type]
-                    if not self._simulate and job_id in elapsed_job_time:
-                        job_time_so_far += \
-                            elapsed_job_time[job_id][worker_type]
+                    if not self._simulate:
+                        if (job_id in elapsed_job_time and
+                            worker_type in elapsed_job_time[job_id]):
+                            job_time_so_far += \
+                                elapsed_job_time[job_id][worker_type]
                     fraction = job_time_so_far / worker_time_so_far
                 fractions[worker_type][job_id] = fraction
             for job_id in self._priorities[worker_type]:
@@ -2291,7 +2461,13 @@ class Scheduler:
     def _add_available_worker_id(self, worker_id):
         """Adds a worker_id to the list of available workers."""
 
+        if not self._simulate:
+            self._logger.debug(
+                'Adding worker {0} back to queue...'.format(worker_id))
         self._available_worker_ids.put(worker_id)
+        if not self._simulate:
+            self._logger.debug(
+                'Added worker {0} back to queue'.format(worker_id))
 
     def _remove_available_worker_id(self, worker_id=None):
         """Returns the worker_id of the next available worker."""
@@ -2302,7 +2478,16 @@ class Scheduler:
             except queue.Empty as e:
                 return None
         else:
-            return self._available_worker_ids.get(item=worker_id)
+            self._logger.debug(
+                'Removing worker {0} from the queue...'.format(worker_id))
+            ret = self._available_worker_ids.get(item=worker_id)
+            if ret != worker_id:
+                self._logger.warning(
+                    'Worker {0} does not match requested worker {1}!'.format(
+                        ret, worker_id))
+            self._logger.debug(
+                'Removed worker {0} from the queue'.format(ret))
+            return ret
 
     # @preconditions(lambda self: self._simulate or self._scheduler_lock.locked())
     def _get_remaining_steps(self, job_id):
@@ -2351,7 +2536,6 @@ class Scheduler:
         if not self._simulate:
             rpc_client = scheduler_client.SchedulerRpcClient(ip_addr, port)
             self._all_rpc_clients.append(rpc_client)
-            self._active_ports[rpc_client.addr] = {}
 
         with self._scheduler_lock:
             # Update relevant data structures if worker type was
@@ -2468,31 +2652,55 @@ class Scheduler:
             self._per_job_latest_timestamps[job_id] = \
                 self.get_current_timestamp()
 
-            # Return initial lease.
+            for single_job_id in job_id.singletons():
+                self._running_jobs.add(single_job_id)
+
+            # Determine initial lease.
             scale_factor = self._jobs[job_id].scale_factor
             remaining_steps = self._get_remaining_steps(job_id)
             remaining_steps = int(math.ceil(remaining_steps / scale_factor))
-            extra_time = 0
-            # Add additional time to the lease if the job was dispatched early.
+            current_time = self.get_current_timestamp()
+            current_round_end_time = \
+                self._current_round_start_time + self._time_per_iteration
+            remaining_time_in_current_round = \
+                max(current_round_end_time - current_time, 0)
+
+            # Return a tuple of (steps, duration, extra time) as the initial
+            # lease. Extra time is granted if the job was scheduled for the
+            # upcoming round but is being initialized in the current round.
             if (self._next_worker_assignments is not None and
                 next_job_combination is not None):
-                current_time = self.get_current_timestamp()
-                elapsed_time_in_round = \
-                    current_time - self._current_round_start_time
-                extra_time += self._time_per_iteration - elapsed_time_in_round
-                extra_time = max(extra_time, 0)
-            return (remaining_steps, self._time_per_iteration, extra_time)
+                # Job was dispatched early, so add additional time.
+                return (remaining_steps, self._time_per_iteration,
+                        remaining_time_in_current_round)
+            else:
+                return (remaining_steps, remaining_time_in_current_round, 0)
 
     def _update_lease_callback(self, job_id, worker_id, steps, duration,
                                max_steps, max_duration):
 
-        # Round the remaining steps to the nearest multiple of scale_factor.
-        scale_factor = self._jobs[job_id].scale_factor
-        remaining_steps = self._get_remaining_steps(job_id)
-        remaining_steps = int(math.ceil(remaining_steps / scale_factor))
+        with self._scheduler_lock:
+            if job_id not in self._lease_update_requests:
+                self._lease_update_requests[job_id] = []
+            update_id = len(self._lease_update_requests[job_id])
+            self._lease_update_requests[job_id].append((steps, duration,
+                                                        max_steps,
+                                                        max_duration))
+
+            # Round the remaining steps to the nearest multiple of scale_factor.
+            scale_factor = self._jobs[job_id].scale_factor
+            remaining_steps = self._get_remaining_steps(job_id)
+            remaining_steps = int(math.ceil(remaining_steps / scale_factor))
+            current_time = self.get_current_timestamp()
+            current_round_end_time = \
+                self._current_round_start_time + self._time_per_iteration
+            remaining_time_in_current_round = \
+                current_round_end_time - current_time
+            remaining_time_in_current_round = \
+                max(0, remaining_time_in_current_round)
 
         if steps == 0 or duration == 0:
-            return (remaining_steps, self._time_per_iteration)
+            return (remaining_steps, remaining_time_in_current_round)
 
         # Extend the lease if the job has been placed on the same workers
         # for the upcoming round.
@@ -2500,30 +2708,26 @@ class Scheduler:
             # TODO: Remove scan of self._jobs_with_extended_lease.
             for job_id_combination in self._jobs_with_extended_lease:
                 if job_id.overlaps_with(job_id_combination):
-                    return (max_steps, max_duration + self._time_per_iteration)
+                    updated_lease_duration = duration
+                    updated_lease_duration += remaining_time_in_current_round
+                    updated_lease_duration += self._time_per_iteration
+                    return (max_steps, updated_lease_duration)
 
         if scale_factor == 1:
-            return (max_steps, max_duration)
+            return (max_steps, duration + remaining_time_in_current_round)
         else:
-            with self._scheduler_lock:
-                update_id = len(self._lease_update_requests[job_id])
-                self._lease_update_requests[job_id].append((steps, duration,
-                                                            max_steps,
-                                                            max_duration))
-                if update_id == 0:
-                    assert self._max_steps[job_id] is None
+            if update_id == 0:
+                assert self._max_steps[job_id] is None
 
             # The first worker to request a lease update computes the new
             # lease for all workers.
             if update_id == 0:
                 with self._scheduler_lock:
-                    remaining_time = \
-                        (self._time_per_iteration -
-                         duration % self._time_per_iteration)
                     throughput = steps / duration
                     self._max_steps[job_id] = \
                         min(remaining_steps,
-                            steps + int(remaining_time * throughput))
+                            steps + int(remaining_time_in_current_round *
+                                        throughput))
                     return (self._max_steps[job_id], INFINITY)
             else:
                 # Wait for the first update to complete.
@@ -2533,26 +2737,132 @@ class Scheduler:
                         if max_steps is not None:
                             break
                     # TODO: Sleep for less time?
+                    self._logger.debug(
+                        'Job {0} (worker {1}) waiting for '
+                        'lease...'.format(job_id, worker_id))
                     time.sleep(1)
                 assert max_steps is not None
                 return (max_steps, INFINITY)
 
-    def _done_callback_extended_lease(self, job_id):
+    def _kill_job(self, job_id):
         with self._scheduler_cv:
-            if job_id in self._lease_extension_events:
+            if job_id not in self._current_worker_assignments:
+                raise RuntimeError(
+                    'Trying to kill job ({0}) that is not active '
+                    'in this round!'.format(job_id))
+            elif job_id not in self._completion_events:
+                if job_id not in self._completed_jobs_in_current_round:
+                    raise RuntimeError(
+                        'Completion event for job {0} is not active '
+                        'even though job has not completed!'.format(job_id))
+                elif job_id not in self._jobs_with_extended_lease:
+                    # Job has already completed normally.
+                    return
+            self._logger.info('Killing job {0}'.format(job_id))
+            worker_ids = self._current_worker_assignments[job_id]
+            servers = set()
+            for worker_id in worker_ids:
+                rpc_client = self._worker_connections[worker_id]
+                server = (rpc_client.addr, rpc_client.port)
+                if server not in servers:
+                    for single_job_id in job_id.singletons():
+                        self._logger.debug(
+                            'Killing job {0} on server {1}:{2}'.format(
+                                single_job_id, rpc_client.addr,
+                                rpc_client.port))
+                        rpc_client.kill_job(single_job_id)
+                    servers.add(server)
+            del self._completion_events[job_id]
+
+            # Wait for the killed job to send a completion notification and
+            # proceed if no notification is sent.
+            prev_round = self._num_completed_rounds
+            self._logger.debug(
+                'Waiting for job {0} to be killed...'.format(job_id))
+            self._scheduler_cv.wait(timeout=30)
+            self._logger.debug(
+                'Checking if job {0} was killed...'.format(job_id))
+            new_round = self._num_completed_rounds
+
+            successful_kill = (new_round != prev_round or
+                               job_id in self._completed_jobs_in_current_round)
+            if successful_kill:
+                self._logger.debug(
+                    'Job {0} was successfully killed in round {1}'.format(
+                        job_id, prev_round))
+            else:
+                self._logger.debug(
+                    'Job {0} was killed but did not complete!'.format(job_id))
+                all_worker_ids = set(self._current_worker_assignments[job_id])
+                completed_worker_ids = set()
+                for update in self._in_progress_updates[job_id]:
+                    worker_id = update[0]
+                    completed_worker_ids.add(worker_id)
+                worker_ids_to_complete = \
+                    all_worker_ids.difference(completed_worker_ids)
+                self._logger.debug(
+                    'Need to send done callbacks for the following '
+                    'workers for job {0}: {1}'.format(
+                        job_id, worker_ids_to_complete))
+        if not successful_kill:
+            x = [0 for _ in range(len(job_id.singletons()))]
+            for worker_id in worker_ids_to_complete:
+                self._logger.debug(
+                    'Sending done callback for worker {0} '
+                    'for job {1}'.format(worker_id, job_id))
+                self._done_callback(job_id, worker_id, x, x)
+
+    def _done_callback_extended_lease(self, job_id):
+        kill_job = False
+
+        with self._scheduler_cv:
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if not is_active:
+                return
+
+            self._logger.debug('Trying to complete job {0} which had an '
+                               'extended lease...'.format(job_id))
+
+            scale_factor = self._jobs[job_id.singletons()[0]].scale_factor
+            num_updates = []
+            for single_job_id in job_id.singletons():
+                num_updates.append(
+                    len(self._lease_update_requests[single_job_id]))
+            updated_lease = min(num_updates) == scale_factor
+            for i, single_job_id in enumerate(job_id.singletons()):
+                self._logger.debug('{0} / {1} worker(s) for job {2} have '
+                                   'requested a lease update this '
+                                   'round'.format(
+                                       num_updates[i], scale_factor,
+                                       single_job_id))
+            if not updated_lease:
+                # Job has not requested lease updates so assume it has failed.
+                self._logger.error(
+                    'Job {0} had an extended lease but has '
+                    'been unresponsive'.format(job_id))
+                kill_job = True
+            elif job_id in self._completion_events:
+                self._logger.info('Completing job {0}'.format(job_id))
+
                 # Mark job as completed.
                 self._completed_jobs_in_current_round.add(job_id)
+                del self._completion_events[job_id]
 
-                # Reset metadata for distributed jobs.
-                self._in_progress_updates[job_id] = []
-                self._lease_update_requests[job_id] = []
-                self._max_steps[job_id] = None
+                # Reset metadata.
+                # NOTE: We do not reset self._in_progress_updates here as
+                # multi-GPU jobs might have partially completed updates.
+                for single_job_id in job_id.singletons():
+                    self._lease_update_requests[single_job_id] = []
+                    self._max_steps[single_job_id] = None
 
-                del self._lease_extension_events[job_id]
+            if not kill_job:
                 self._scheduler_cv.notifyAll()
 
+        if kill_job:
+            self._kill_job(job_id)
+
     def _done_callback(self, job_id, worker_id, all_num_steps,
-                       all_execution_times):
+                       all_execution_times, all_iterator_logs=None):
         """Handles completion of a scheduled job.
 
         Updates the running total of completed steps and time spent on each
@@ -2564,6 +2874,8 @@ class Scheduler:
             job_id: The id of the completed job(s).
             worker_id: The id of the worker where the job(s) were completed.
             all_num_steps: List of the number of steps each job ran for.
+            all_execution_times: List of the duration each job ran for.
+            all_iterator_logs: List of the GavelIterator logs for each job.
         """
 
         to_remove = []
@@ -2572,7 +2884,15 @@ class Scheduler:
             # round r+1 and completed before round r is done. If so,
             # wait for round r to finish before proceeding.
             if not self._simulate:
-                while job_id not in self._current_worker_assignments:
+                while (job_id not in self._current_worker_assignments or
+                       job_id in self._completed_jobs_in_current_round):
+                    if (job_id not in self._current_worker_assignments and
+                        (self._next_worker_assignments is not None and
+                         job_id not in self._next_worker_assignments)):
+                        self._logger.warning(
+                            'Discarding completion notification for job {0} '
+                            'as it is not currently scheduled'.format(job_id))
+                        return
                     self._logger.debug(
                         'Waiting to complete job {0}...'.format(job_id))
                     self._scheduler_cv.wait()
@@ -2595,28 +2915,30 @@ class Scheduler:
             scale_factor = len(self._current_worker_assignments[job_id])
             self._in_progress_updates[job_id].append((worker_id,
                                                       all_num_steps,
-                                                      all_execution_times))
+                                                      all_execution_times,
+                                                      all_iterator_logs))
             if len(self._in_progress_updates[job_id]) < scale_factor:
                 return
             else:
-                # Reset ports when running on a physical cluster.
-                if not self._simulate and scale_factor > 1:
-                    master_addr = self._worker_connections[worker_id].addr
-                    for single_job_id in job_id.singletons():
-                        if single_job_id in self._active_ports[master_addr]:
-                            del self._active_ports[master_addr][single_job_id]
+                # Sort updates in order of increasing worker ID.
+                self._in_progress_updates[job_id].sort(key=lambda x: x[0])
 
-                # If a job with an extended lease completes before the end
-                # of the round, cancel the job's completion event.
-                if job_id in self._lease_extension_events:
-                    event = self._lease_extension_events[job_id]
+                # If a job completes before the end of the round, cancel the
+                # job's completion event.
+                self._logger.debug(
+                    'Current active completion events: {0}'.format(
+                        self._completion_events.keys()))
+                if job_id in self._completion_events:
+                    event = self._completion_events[job_id]
                     try:
-                        self._lease_extension_scheduler.cancel(event)
+                        self._completion_event_scheduler.cancel(event)
                     except ValueError:
                         # Completion event might have been triggered after
                         # entering done_callback.
                         pass
-                    del self._lease_extension_events[job_id]
+                    self._logger.debug(
+                        'Removing completion event for job {0}'.format(job_id))
+                    del self._completion_events[job_id]
                 self._completed_jobs_in_current_round.add(job_id)
                 micro_task_succeeded = True
                 all_worker_ids = \
@@ -2624,24 +2946,30 @@ class Scheduler:
                 all_worker_ids.sort()
                 all_num_steps = [0] * len(job_id.singletons())
                 all_execution_times = [0] * len(job_id.singletons())
-                for (_, all_num_steps_, all_execution_times_) in \
-                    self._in_progress_updates[job_id]:
-                    for i in range(len(job_id.singletons())):
-                        if not is_active[job_id.singletons()[i]]:
+                for i, update in enumerate(self._in_progress_updates[job_id]):
+                    all_num_steps_ = update[1]
+                    all_execution_times_ = update[2]
+                    all_iterator_logs_ = update[3]
+                    for j, single_job_id in enumerate(job_id.singletons()):
+                        if not is_active[single_job_id]:
                             continue
-                        elif (all_num_steps_[i] <= 0 or
-                              all_execution_times_[i] <= 0):
+                        elif (all_num_steps_[j] <= 0 or
+                              all_execution_times_[j] <= 0):
                             micro_task_succeeded = False
                             break
-                    for i in range(len(job_id.singletons())):
-                        all_num_steps[i] += all_num_steps_[i]
-                        all_execution_times[i] = max(all_execution_times[i],
-                                                     all_execution_times_[i])
+                    for j, single_job_id in enumerate(job_id.singletons()):
+                        all_num_steps[j] += all_num_steps_[j]
+                        all_execution_times[j] = max(all_execution_times[j],
+                                                     all_execution_times_[j])
+                        if all_iterator_logs_ is not None:
+                            self._job_timelines[single_job_id][i].extend(
+                                all_iterator_logs_[j].split('\n'))
 
-            # Reset metadata for distributed jobs.
+            # Reset metadata.
             self._in_progress_updates[job_id] = []
-            self._lease_update_requests[job_id] = []
-            self._max_steps[job_id] = None
+            for single_job_id in job_id.singletons():
+                self._lease_update_requests[single_job_id] = []
+                self._max_steps[single_job_id] = None
 
             if not self._simulate:
                 # NOTE: We update the timestamp before calling this
@@ -2716,7 +3044,6 @@ class Scheduler:
                                     'remaining steps'.format(
                                         job_id=single_job_id,
                                         steps=remaining_steps))
-                            pass
                         else:
                             start_time = \
                                 self._per_job_start_timestamps[single_job_id]
@@ -2754,5 +3081,11 @@ class Scheduler:
 
             for single_job_id in to_remove:
                 self._remove_job(single_job_id)
+
+            # Schedule the job for re-dispatching if necessary.
+            is_active = any([x in self._jobs for x in job_id.singletons()])
+            if is_active and job_id in self._jobs_with_extended_lease:
+                self._redispatched_worker_assignments[job_id] = \
+                    self._next_worker_assignments[job_id]
 
             self._scheduler_cv.notifyAll()

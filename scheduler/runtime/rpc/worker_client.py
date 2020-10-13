@@ -57,10 +57,11 @@ class WorkerRpcClient:
         # Send a Done message.
         request = w2s_pb2.DoneRequest()
         request.worker_id = worker_id
-        for (job_id, execution_time, num_steps) in job_descriptions:
-            request.job_id.append(job_id)
-            request.execution_time.append(execution_time)
-            request.num_steps.append(num_steps)
+        for job_description in job_descriptions:
+            request.job_id.append(job_description[0])
+            request.execution_time.append(job_description[1])
+            request.num_steps.append(job_description[2])
+            request.iterator_log.append(job_description[3])
         with grpc.insecure_channel(self._sched_loc) as channel:
             stub = w2s_pb2_grpc.WorkerToSchedulerStub(channel)
             response = stub.Done(request)
@@ -68,4 +69,7 @@ class WorkerRpcClient:
               [job_description[0] for job_description in job_descriptions]
             if len(job_ids) == 1:
               self._logger.debug('Notified scheduler that '
-                                 'job {0} has completed'.format(str(job_ids)))
+                                 'job {0} has completed'.format(job_ids[0]))
+            else:
+              self._logger.debug('Notified scheduler that '
+                                 'jobs {0} have completed'.format(job_ids))

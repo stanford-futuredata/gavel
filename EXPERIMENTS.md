@@ -151,7 +151,7 @@ The code for the simulation shown in Figure 11 is in `scheduler/notebooks/figure
 
 ### Figure 12: Policy Runtime Scaling
 
-Policy runtimes can be measured using the following command (TODO: Fix this):
+Policy runtimes can be measured using the following command:
 
 ```bash
 python scripts/microbenchmarks/sweep_policy_runtimes.py -n 32 64 128 256 512 1024 2048 -p max_min_fairness_perf max_min_fairness_packed max_min_fairness_water_filling max_min_fairness_water_filling_packed --num_trials 3
@@ -166,7 +166,7 @@ The time proportions returned by the policy can be used directly to grant jobs
 times on each resource type between "reset events" -- this is a useful comparison
 for our scheduling mechanism. This "ideal" scheduling mechanism can be run
 for a given policy and trace by appending the `--ideal` argument to any of the
-sweep commands above -- in our experiment, we used the `max_min_fairness` policy.
+sweep commands above (Figures 9 or 10) -- in our experiment, we used the `max_min_fairness` policy.
 
 The round durations used by the scheduling mechanism can be similarly studied
 by using the `-i` argument -- the default used is 360 seconds, but other round
@@ -191,7 +191,7 @@ python scripts/drivers/run_scheduler_with_trace.py \
   --solver ECOS \
   --throughputs_file physical_cluster_throughputs.json \
   --time_per_iteration 360 \
-  --policy min_total_duration \
+  --policy min_total_duration_perf \
   --expected_num_workers 6
 ```
 Running this command will start the scheduler and log the IP address
@@ -200,7 +200,7 @@ as follows:
 ```bash
 python worker.py \
   -t [WORKER_TYPE] \
-  -i [IP_ADDRESS] -w 50061 -g [NUM_GPUS] \
+  -i [IP_ADDRESS] -s 50060 -w 50061 -g [NUM_GPUS_ON_WORKER] \
   --run_dir /path/to/gavel/workloads/pytorch \
   --data_dir /path/to/data \
   --checkpoint_dir /path/to/checkpoints
@@ -213,3 +213,25 @@ a cluster size of 6 GPUs (2 V100s and 4 K80s), and is intended merely to show th
 required to deploy Gavel in a physical cluster is included; actually replicating
 the physical cluster experiments shown in the paper will require more
 resources for a much longer duration.
+
+### Measuring Overhead of Running Jobs with Gavel's Preemptive Scheduler
+
+The following commands can be used to measure the overhead of Gavel's
+preemptive scheduler. These require only a single GPU.
+
+The first script sweeps through all model types and runs each model
+for 10 rounds in configurations with and without lease extensions. It saves
+job timelines into the specified directory.
+```bash
+python scripts/microbenchmarks/sweep_models_for_overhead.py \
+  --timeline_dir /path/to/timelines \
+  --run_dir /path/to/gavel/workloads/pytorch \
+  --data_dir /path/to/data \
+  --checkpoint_dir /path/to/checkpoints
+```
+
+The next script parses the saved timelines and computes the overhead.
+```bash
+python scripts/utils/get_job_overhead.py \
+  --timeline_dir /path/to/timelines
+```

@@ -4,7 +4,9 @@ import "common.proto";
 
 service SchedulerToWorker {
     // Starts a job on worker.
-    rpc Run (RunRequest) returns (Empty) {}
+    rpc RunJob (RunJobRequest) returns (Empty) {}
+    // Ends a job on worker.
+    rpc KillJob (KillJobRequest) returns (Empty) {}
     // Resets the worker.
     rpc Reset (Empty) returns (Empty) {}
     // Shuts down the worker.
@@ -23,7 +25,12 @@ message JobDescription {
     uint64 duration = 9;
 }
 
-message RunRequest {
+message RunJobRequest {
     repeated JobDescription job_descriptions = 1;
     uint64 worker_id = 2;
+    uint64 round_id = 3;
+}
+
+message KillJobRequest {
+    uint64 job_id = 1;
 }

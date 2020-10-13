@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import os
 import pickle
+import psutil
 import random
 import re
 import socket
@@ -168,19 +169,13 @@ def get_num_gpus():
                             shell=True).stdout.decode('utf-8').strip()
     return len(output.split('\n'))
 
-def get_pid_for_job(job_id):
-    processes = subprocess.check_output('ps -aux', shell=True)
+def get_pid_for_job(command):
     pids = []
-    for line in processes.decode('utf-8').strip().split('\n'):
-        if '--job_id %d' % (job_id) in line:
-            match = re.search(' +(\d+)', line)
-            if match is not None:
-                pid = int(match.group(1))
-                pids.append(pid)
-            else:
-                print('WARNING: Could not find PID for '
-                      'job %d in line \"%s\"' % (job_id, line))
-    return pids
+    for proc in psutil.process_iter():
+        cmdline = ' '.join(proc.cmdline())
+        if cmdline == command:
+            pids.append(proc.pid)
+    return min(pids)
 
 def get_gpu_processes():
     output = subprocess.check_output('nvidia-smi').decode('utf-8')
@@ -221,6 +216,7 @@ def get_available_policies():
             'max_sum_throughput_normalized_by_cost_perf_SLOs',
             'max_sum_throughput_normalized_by_cost_packed_SLOs',
             'min_total_duration',
+            'min_total_duration_perf',
             'min_total_duration_packed',
             ]
 
