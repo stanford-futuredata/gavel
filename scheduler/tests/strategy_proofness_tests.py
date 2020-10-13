@@ -7,7 +7,7 @@ import time
 import numpy as np
 np.set_printoptions(precision=3, suppress=True)
 
-def test_strategy_proofness(unflattened_throughputs, cluster_spec):
+def test_strategy_proofness(unflattened_throughputs, cluster_spec, verbose=True):
     policy = max_min_fairness_strategy_proof.MaxMinFairnessStrategyProofPolicyWithPerf(
         solver='ECOS')
     non_strategy_proof_policy = max_min_fairness.MaxMinFairnessPolicyWithPerf(
@@ -21,10 +21,12 @@ def test_strategy_proofness(unflattened_throughputs, cluster_spec):
         scale_factors[i] = 1
         num_workers_requested += scale_factors[i]
         unflattened_priority_weights[i] = 1
-        print("Job %d: Throughputs=%s, Priority=%d, Scale factor=%d" % (
-            i, unflattened_throughputs[i], unflattened_priority_weights[i],
-            scale_factors[i]))
-    print("-" * 100)
+        if verbose:
+            print("Job %d: Throughputs=%s, Priority=%d, Scale factor=%d" % (
+                i, unflattened_throughputs[i], unflattened_priority_weights[i],
+                scale_factors[i]))
+    if verbose:
+        print("-" * 100)
     start_time = time.time()
     allocation, discount_factors = policy.get_allocation(
         unflattened_throughputs, scale_factors,
