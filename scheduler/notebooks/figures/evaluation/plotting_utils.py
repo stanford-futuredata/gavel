@@ -117,10 +117,16 @@ def plot_metric_vs_inverse_lambda_different_mechanisms(all_logfile_paths,
                 logfile_paths, v100s, p100s, k80s, policy)))
             label = labels[policy] + label_modifier
             
-            lambdas = [x[0] for x in relevant_logfile_paths]
+            lambdas = []
+            metrics = []
+            seeds = []
+            for x in relevant_logfile_paths:
+                metric = metric_fn(x[1])
+                if metric is not None:
+                    lambdas.append(x[0])
+                    metrics.append(metric)
+                    seeds.append(x[2])
             input_job_rates = [3600.0 / x for x in lambdas]
-            metrics = [metric_fn(x[1]) for x in relevant_logfile_paths]
-            seeds = [x[2] for x in relevant_logfile_paths]
 
             policies = [label for i in range(len(metrics))]
             data["input_job_rate"] += input_job_rates
@@ -128,7 +134,7 @@ def plot_metric_vs_inverse_lambda_different_mechanisms(all_logfile_paths,
             data["seed"] += seeds
             data["policy"] += policies
             if len(input_job_rates) > 0 and extrapolate:
-                data["input_job_rate"] += [max(input_job_rates) + 0.4]
+                data["input_job_rate"] += [max(input_job_rates) + 0.2]
                 data["metric"] += [105.0]
                 data["seed"] += [0]
                 data["policy"] += [label]
