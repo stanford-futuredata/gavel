@@ -33,7 +33,8 @@ def plot_metric_vs_inverse_lambda(logfile_paths,
                                   xmax=None,
                                   ymax=None,
                                   output_filename=None,
-                                  extrapolate=False):
+                                  extrapolate=False,
+                                  verbose=False):
     from utils import prune
 
     plt.figure(figsize=(8, 3))
@@ -56,15 +57,16 @@ def plot_metric_vs_inverse_lambda(logfile_paths,
         data["seed"] += seeds
         data["policy"] += policies
         if len(input_job_rates) > 0 and extrapolate:
-            data["input_job_rate"] += [max(input_job_rates) + 0.2]
+            data["input_job_rate"] += [max(input_job_rates) + 0.4]
             data["metric"] += [105.0]
             data["seed"] += [0]
             data["policy"] += [labels[policy]]
-    df = pd.DataFrame(data)
-    grouped_df = df.groupby(["policy", "input_job_rate", "seed"])
-    for name_of_the_group, group in grouped_df:
-        print(name_of_the_group)
-        print(group.mean())
+    if verbose:
+        df = pd.DataFrame(data)
+        grouped_df = df.groupby(["policy", "input_job_rate", "seed"])
+        for name_of_the_group, group in grouped_df:
+            print(name_of_the_group)
+            print(group.mean())
 
     sns.lineplot(x='input_job_rate', y='metric', style='policy',
                  hue='policy',
@@ -162,10 +164,11 @@ def plot_metric_vs_inverse_lambda_different_metric_fns(logfile_paths,
                                                        metric_fn_labels,
                                                        metric_label,
                                                        xmin=0,
-                                  xmax=None,
-                                  ymin=0,
-                                  ymax=None,
-                                  output_filename=None):
+                                                       xmax=None,
+                                                       ymin=0,
+                                                       ymax=None,
+                                                       output_filename=None,
+                                                       verbose=False):
     from utils import prune
 
     plt.figure(figsize=(8, 3))
@@ -190,9 +193,10 @@ def plot_metric_vs_inverse_lambda_different_metric_fns(logfile_paths,
             data["metric"] += metrics
             data["seed"] += seeds
             data["policy"] += policies
-    import pandas as pd
-    df = pd.DataFrame(data)
-    print(df.groupby(["policy", "input_job_rate"]).mean())
+    if verbose:
+        import pandas as pd
+        df = pd.DataFrame(data)
+        print(df.groupby(["policy", "input_job_rate"]).mean())
 
     sns.lineplot(x='input_job_rate', y='metric', style='policy',
                  hue='policy',
@@ -224,6 +228,7 @@ def plot_jct_cdf(logfile_paths,
                  max_input_job_rate,
                  policies,
                  min_job_id, max_job_id,
+                 partition=True,
                  finish_time_fairness=False,
                  output_directory=None):
     from utils import get_jcts, prune
@@ -242,11 +247,20 @@ def plot_jct_cdf(logfile_paths,
         print("Input job rate: %.2f" % input_job_rate)
         
         plt.figure(figsize=(8, 3))
-        axes = [
-            plt.subplot2grid((1, 2), (0, 0), rowspan=1),
-            plt.subplot2grid((1, 2), (0, 1), rowspan=1),
-        ]
-        titles = ["Short jobs", "Long jobs"]
+        if partition:
+            axes = [
+                plt.subplot2grid((1, 2), (0, 0), rowspan=1),
+                plt.subplot2grid((1, 2), (0, 1), rowspan=1),
+            ]
+            titles = ["Short jobs", "Long jobs"]
+        else:
+            axes = [
+                plt.subplot2grid((1, 1), (0, 0), rowspan=1),
+            ]
+            titles = [None]
+            if not finish_time_fairness:
+                axes.append(axes[0].inset_axes([0.4, 0.2, 0.5, 0.6]))
+                titles.append(None)
 
         if finish_time_fairness:
             relevant_logfile_paths = list(reversed(prune(
@@ -273,18 +287,21 @@ def plot_jct_cdf(logfile_paths,
                             min_job_id=min_job_id,
                             max_job_id=max_job_id)
             jcts.sort(key=lambda x: x[1])
+            partition_point = int(len(jcts) * 0.8)
             if finish_time_fairness:
                 jcts = [x[0] / y[0] for (x, y) in zip(jcts, isolated_jcts)]
             else:
                 jcts = [x[0] for x in jcts]
                 
             print("%s: %.2f" % (policy, np.mean(jcts)))
-            partition_point = int(len(jcts) * 0.8)
-            jcts = np.split(np.array(jcts), [partition_point])
+            if partition:
+                jcts = np.split(np.array(jcts), [partition_point])
+            else:
+                jcts = [np.array(jcts), np.array(jcts)]
             for j, (ax, jcts_segment) in enumerate(zip(axes, jcts)):
                 jcts_segment.sort()
-                percentiles = [(i+1) / len(jcts_segment)
-                               for i in range(len(jcts_segment))]
+                percentiles = [(k+1) / len(jcts_segment)
+                               for k in range(len(jcts_segment))]
 
                 if "Gavel" in labels[policy]:
                     handle = ax.plot(jcts_segment, percentiles,
@@ -301,30 +318,48 @@ def plot_jct_cdf(logfile_paths,
 
         for i, (ax, title) in enumerate(zip(axes, titles)):
             if finish_time_fairness:
-                ax.set_xlabel("FTF" + "\n" + title)
+                if partition:
+                    ax.set_xlabel("FTF" + "\n" + title)
+                else:
+                    ax.set_xlabel("FTF")
                 ax.set_xlim([0, 4])
                 ax.set_xticks([0, 1, 2, 3, 4])
+                ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
             else:
-                ax.set_xlabel("JCT (hrs)" + "\n" + title)
-                ax.set_xscale('log', base=2)
-                ax.xaxis.set_major_locator(plt.LogLocator(base=2, numticks=4))
+                if partition:
+                    ax.set_xlabel("JCT (hrs)" + "\n" + title)
+                else:
+                    if i == 0:
+                        ax.set_xlabel("JCT (hrs)")
+                if not partition:
+                    if i == 0:
+                        ax.set_xlim([0, 500])
+                        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+                    else:
+                        ax.set_xlim([0, 25])
+                        ax.set_xticks([0, 5, 10, 15, 20, 25])
+                        ax.set_yticks([0, 0.33, 0.67, 1.0])
             if i == 0:
                 ax.set_ylabel("Fraction of jobs")
-            ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
-            if i > 0:
-                ax.set_yticklabels(["", "", "", "", "", ""])
+            if partition:
+                if i > 0:
+                    ax.set_yticklabels(["", "", "", "", "", ""])
             ax.set_ylim([0, 1.0])
         sns.despine()
+        
+        if not partition and not finish_time_fairness:
+            axes[0].indicate_inset_zoom(axes[1], linewidth=3)
     
         leg = plt.figlegend(handles=handles_in_legend,
                             labels=labels_in_legend,
                             ncol=3, frameon=False,
                             loc='upper center')
+
         bb = leg.get_bbox_to_anchor().inverse_transformed(
-            axes[1].transAxes)
+            axes[0].transAxes)
         bb.y0 += 0.22
         bb.y1 += 0.22
-        leg.set_bbox_to_anchor(bb, transform=axes[1].transAxes)
+        leg.set_bbox_to_anchor(bb, transform=axes[0].transAxes)
         
         if output_directory is not None:
             output_filename = os.path.join(output_directory,
