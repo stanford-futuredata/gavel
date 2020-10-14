@@ -1456,8 +1456,7 @@ class Scheduler:
                         is_active = \
                             any([x in self._jobs for x in job_id.singletons()])
                         if is_active:
-                            self._num_lease_extension_opportunities += \
-                                len(self._current_worker_assignments)
+                            self._num_lease_extension_opportunities += 1
                     for job_id in scheduled_jobs:
                         if job_id in self._current_worker_assignments:
                             current_worker_ids = \
