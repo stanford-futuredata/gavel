@@ -1,8 +1,6 @@
 # OSDI 2020 Experiments
 
 This document describes how to run the main experiments in the OSDI 2020 paper.
-The goal of this document is to satisfy the requirements for the "Artifact Functional" and
-"Results Reproduced" badges.
 
 ## Setup
 
@@ -88,7 +86,7 @@ The output of this script looks like this:
 ```
 
 This script can take on the order of hours to complete for most of the datapoints,
-and multiple days to a week for the tail; we suggest using `tmux`. The
+and a couple of days for the tail; we suggest using `tmux`. The
 `max_min_fairness_packed` policy is particularly slow, and can be ommited to
 start to get results quickly. There are a couple of different ways to obtain results quicker:
 a) use a smaller cluster (e.g., 16 GPUs of each type, controlled by the `-c`
@@ -97,6 +95,11 @@ by `-a` and `-b` command line arguments), b) use a fewer number of seeds,
 c) sweep fewer input job rates (controlled by the `-n` argument),
 d) adjust the `-s` and `-e` arguments, which control the
 size of the trace, and the size of the set of jobs of interest (e.g., `-s 2000 -e 3000`).
+
+NOTE: Do not let this script run for an unbounded amount of time: traces with really
+high input rates will never finish, since the input rate is higher than the average
+rate the cluster can complete jobs. As a result, average job completion time for these
+traces is infinity (jobs never complete).
 
 Some policies might need to be run for higher input job rates as well. Our
 experiments were run using seeds 0, 1, and 2; results with other seeds should
@@ -109,6 +112,9 @@ in the above command line.
 
 Notebooks can be used to view the results of in-progress runs -- the sweep
 script can be killed once sufficient points are run.
+The [`prune_logs.py`](scheduler/notebooks/figures/evaluation/prune_logs.py) script
+can be used to clean up really large logfiles that have not completed -- this will
+speed up the plotting scripts.
 
 ### Figure 9: Least Attained Service Policy on Continuous-Multiple Trace
 
@@ -157,6 +163,9 @@ Policy runtimes can be measured using the following command:
 python scripts/microbenchmarks/sweep_policy_runtimes.py -n 32 64 128 256 512 1024 2048 -p max_min_fairness_perf max_min_fairness_packed max_min_fairness_water_filling max_min_fairness_water_filling_packed --num_trials 3
 ```
 
+This script prints some comma-separated values to `stdout` -- these values should
+be copied into a file for the plotting script to work.
+
 `scheduler/notebooks/figures/evaluation/policy_runtimes.ipynb` contains relevant
 parsing and plotting code.
 
@@ -168,9 +177,18 @@ for our scheduling mechanism. This "ideal" scheduling mechanism can be run
 for a given policy and trace by appending the `--ideal` argument to any of the
 sweep commands above (Figures 9 or 10) -- in our experiment, we used the `max_min_fairness` policy.
 
+Concretely, one can run:
+```bash
+python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l /path/to/log/directory -j 24 -p allox gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds 0 1 2 -c 36:36:36 -a 0.0 -b 6.0 -n 16 --ideal
+```
+
 The round durations used by the scheduling mechanism can be similarly studied
 by using the `-i` argument -- the default used is 360 seconds, but other round
-durations can be used as well.
+durations can be used as well. For example, to use 720 seconds:
+
+```bash
+python -u scripts/sweeps/run_sweep_continuous.py -s 4000 -e 5000 -l /path/to/log/directory -j 24 -p allox gandiva max_min_fairness max_min_fairness_perf max_min_fairness_packed --seeds 0 1 2 -c 36:36:36 -a 0.0 -b 6.0 -n 16 -i 720
+```
 
 
 ### Physical Cluster
