@@ -32,8 +32,10 @@ def test_strategy_proofness(unflattened_throughputs, cluster_spec, verbose=True)
         unflattened_throughputs, scale_factors,
         unflattened_priority_weights,
         cluster_spec)
+    intermediate_time = time.time()
     non_strategy_proof_allocation = non_strategy_proof_policy.get_allocation(
         unflattened_throughputs, scale_factors,
         unflattened_priority_weights,
         cluster_spec)
-    return allocation, discount_factors, non_strategy_proof_allocation, time.time() - start_time
+    return allocation, discount_factors, non_strategy_proof_allocation, \
+        intermediate_time - start_time, time.time() - intermediate_time
