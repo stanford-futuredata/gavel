@@ -354,7 +354,7 @@ class MaxMinFairnessWaterFillingPolicy(Policy, WaterFillingAlgorithm):
             normalized_effective_throughputs = np.multiply(
                 effective_throughputs,
                 1.0 / proportional_throughputs.reshape(m))
-            return normalized_effective_throughputs
+            return normalized_effective_throughputs, job_ids
         return unflattened_x
 
 class MaxMinFairnessWaterFillingPolicyWithPerf(Policy, WaterFillingAlgorithm):
@@ -420,7 +420,7 @@ class MaxMinFairnessWaterFillingPolicyWithPerf(Policy, WaterFillingAlgorithm):
                 x.sum(axis=1))
 
         if return_effective_throughputs:
-            return normalized_effective_throughputs
+            return normalized_effective_throughputs, job_ids
 
         self._lp = None
         self._milp = None
@@ -527,7 +527,7 @@ class MaxMinFairnessWaterFillingPolicyWithPacking(PolicyWithPacking, WaterFillin
                 x.sum(axis=1))
 
         if return_effective_throughputs:
-            return normalized_effective_throughputs
+            return normalized_effective_throughputs, single_job_ids
 
         self._lp = None
         self._milp = None
