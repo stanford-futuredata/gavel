@@ -6,6 +6,7 @@ import matplotlib.patches as mpatches
 from matplotlib.ticker import MultipleLocator
 import seaborn as sns
 from matplotlib import rc
+import numpy as np
 sns.set_style('ticks')
 font = {
     'font.family':'Roboto',
@@ -28,7 +29,7 @@ def plot_runtimes(data, xticks, yticks, yticklabels, output_filename=None):
                  data=data, ci=None,
                  markers=True)
     ax.set_xlabel("Number of jobs")
-    ax.set_ylabel("Seconds")
+    ax.set_ylabel("Runtime (seconds)")
     ax.set_xscale('log', base=2)
     ax.set_yscale('log', base=2)
     ax.set_xticks(xticks)
@@ -77,6 +78,36 @@ def plot_effective_throughput_ratios(all_effective_throughputs, cdf=False,
     ax.set_ylim([0, 2.0])
     plt.legend(frameon=False)
     sns.despine()
+    
+    if output_filename is not None:
+        with PdfPages(output_filename) as pdf:
+            pdf.savefig(bbox_inches='tight')
+            
+    plt.show()
+
+
+def plot_runtime_vs_effective_throughput_ratios(runtimes, all_effective_throughputs, labels,
+                                                output_filename=None):
+    plt.figure(figsize=(6.5, 3))
+    ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)
+    job_ids = list(all_effective_throughputs[0].keys())
+    for (runtime, effective_throughputs, label) in zip(
+        runtimes,
+        all_effective_throughputs,
+        labels):
+        effective_throughput_ratios = np.array([
+            effective_throughputs[job_id] / all_effective_throughputs[0][job_id]
+            for job_id in job_ids])
+        mean = np.mean(effective_throughput_ratios)
+        ax.scatter(runtime, mean, label=label)
+        ax.errorbar(runtime, mean, np.std(effective_throughput_ratios))
+        ax.annotate(label, (runtime*1.1, mean-0.08))
+
+    ax.set_ylabel("Throughput ratio")
+    ax.set_xlabel("Runtime (seconds)")
+    sns.despine()
+    
+    ax.set_xscale('log')
     
     if output_filename is not None:
         with PdfPages(output_filename) as pdf:
