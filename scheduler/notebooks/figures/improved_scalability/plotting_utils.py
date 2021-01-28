@@ -87,6 +87,7 @@ def plot_effective_throughput_ratios(all_effective_throughputs, cdf=False,
 
 
 def plot_runtime_vs_effective_throughput_ratios(runtimes, all_effective_throughputs, labels,
+                                                draw_arrow=False,
                                                 output_filename=None):
     plt.figure(figsize=(6.5, 3))
     ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)
@@ -108,6 +109,11 @@ def plot_runtime_vs_effective_throughput_ratios(runtimes, all_effective_throughp
     sns.despine()
     
     ax.set_xscale('log')
+    
+    if draw_arrow:
+        ax.annotate('Ideal', xy=(30, 0.8), xytext=(90, 0.5), 
+            arrowprops=dict(facecolor='black', shrink=0.),
+        )
     
     if output_filename is not None:
         with PdfPages(output_filename) as pdf:
