@@ -111,7 +111,7 @@ def plot_runtime_vs_effective_throughput_ratios(runtimes, all_effective_throughp
     ax.set_xscale('log')
     
     if draw_arrow:
-        ax.annotate('Ideal', xy=(30, 0.8), xytext=(90, 0.5), 
+        ax.annotate('Ideal', xy=(300, 0.8), xytext=(900, 0.5), 
             arrowprops=dict(facecolor='black', shrink=0.),
         )
     
