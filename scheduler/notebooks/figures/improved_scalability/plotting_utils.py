@@ -102,16 +102,21 @@ def plot_runtime_vs_effective_throughput_ratios(runtimes, all_effective_throughp
         mean = np.mean(effective_throughput_ratios)
         ax.scatter(runtime, mean, label=label)
         ax.errorbar(runtime, mean, np.std(effective_throughput_ratios))
-        ax.annotate(label, (runtime*1.1, mean-0.08))
+        ax.annotate(label, (runtime*1.15, mean-0.08))
 
     ax.set_ylabel("Throughput ratio")
     ax.set_xlabel("Runtime (seconds)")
     sns.despine()
     
     ax.set_xscale('log')
+    ax.set_yticks([0.0, 0.25, 0.5, 0.75, 1.0])
+    xmin, xmax = plt.xlim()
+    ymin, ymax = plt.ylim()
+    plt.xlim(xmin, xmax*1.2)
+    plt.ylim(0, ymax*1.15)
     
     if draw_arrow:
-        ax.annotate('Ideal', xy=(300, 0.8), xytext=(900, 0.5), 
+        ax.annotate('Ideal', xy=(300, 0.8), xytext=(900, 0.3), 
             arrowprops=dict(facecolor='black', shrink=0.),
         )
     
