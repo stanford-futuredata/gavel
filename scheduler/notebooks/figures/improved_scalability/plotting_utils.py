@@ -100,6 +100,7 @@ def plot_runtime_vs_effective_throughput_ratios(runtimes, all_effective_throughp
             effective_throughputs[job_id] / all_effective_throughputs[0][job_id]
             for job_id in job_ids])
         mean = np.mean(effective_throughput_ratios)
+        print(label, runtime, mean, np.std(effective_throughput_ratios))
         ax.scatter(runtime, mean, label=label)
         ax.errorbar(runtime, mean, np.std(effective_throughput_ratios))
         ax.annotate(label, (runtime*1.15, mean-0.08))
