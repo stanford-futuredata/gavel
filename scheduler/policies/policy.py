@@ -166,16 +166,19 @@ class PolicyWithPacking(Policy):
         constraints = [
             x >= 0,
             cp.sum(cp.multiply(
-                scale_factors_array, x), axis=0) <= self._num_workers,
+                scale_factors_array, x), axis=0) <= np.array(self._num_workers),
         ]
 
         # Every job cannot receive a total time share sum greater than 1.0.
-        per_job_allocations = []
+        idx = []
         for single_job_id in single_job_ids:
             indexes = relevant_combinations[single_job_id]
-            per_job_allocations.append(cp.sum(x[indexes]))
-        constraints.append(cp.vstack(per_job_allocations) <= 1)
-
+            idx += indexes
+        index_var = x[idx]
+        index_var = cp.reshape(index_var,
+            (len(single_job_ids), int(np.prod(index_var.shape) /
+             len(single_job_ids))), order='C')
+        constraints.append(cp.sum(index_var, axis=1) <= 1)
         return constraints
 
     def convert_job_type_allocation(self, allocation, job_id_to_job_type_key):
