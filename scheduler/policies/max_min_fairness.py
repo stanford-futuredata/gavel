@@ -302,23 +302,36 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
         # is taken into account while allocating times to different jobs.
         # A job run on 1 GPU should receive `scale_factor` more time than
         # a job run on `scale_factor` GPUs.
+        import scipy.sparse as sp
+        idx = []
+        tputs = []
+        # compute the obejctive in a vectorized fashion
         for i in range(len(all_throughputs)):
             indexes = relevant_combinations[single_job_ids[i]]
-            proportional_throughput = proportional_throughputs[i]
-            objective_terms.append(cp.sum(cp.multiply(
-                np.multiply(all_throughputs[i][indexes],
-                            scale_factors_array[indexes]), x[indexes])) /
-                proportional_throughput
-            )
-        if len(objective_terms) == 1:
-            objective = cp.Maximize(objective_terms[0])
-        else:
-            objective = cp.Maximize(cp.minimum(*objective_terms))
+            idx += indexes
+            proportional_throughput = float(proportional_throughputs[i])
+            curr_throughputs = np.multiply(
+                    all_throughputs[i][indexes],
+                    scale_factors_array[indexes]) / proportional_throughput
+            tputs.append(curr_throughputs)
+
+        tputs = sp.csc_matrix(np.vstack(tputs))
+        indexed_vars = x[idx]
+        realized_tputs = cp.multiply(tputs, indexed_vars)
+        # reshape so that the sum of each row gives the throughput
+        realized_tputs_mat = cp.reshape(realized_tputs,
+                (len(all_throughputs),
+                int(np.prod(realized_tputs.shape) / len(all_throughputs))),
+                order='C')
+
+        objective_fn = cp.min(cp.sum(realized_tputs_mat, axis=1))
+
+        objective = cp.Maximize(objective_fn)
 
         # Make sure the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, single_job_ids,
-                                                scale_factors_array,
-                                                relevant_combinations)
+                                               scale_factors_array,
+                                               relevant_combinations)
 
         # Explicitly constrain all allocation values with an effective scale
         # factor of 0 to be 0.
@@ -330,7 +343,14 @@ class MaxMinFairnessPolicyWithPacking(PolicyWithPacking):
                 if scale_factors_array[i,j] == 0:
                     constraints.append(x[i,j] == 0)
         cvxprob = cp.Problem(objective, constraints)
-        result = cvxprob.solve(solver=self._solver)
+        if self._solver == 'SCS':
+            # anderson acceleration is sometimes unstable, and adds
+            # significant overhead
+            kwargs = {'acceleration_lookback': 0}
+        else:
+            kwargs = {}
+
+        result = cvxprob.solve(solver=self._solver, **kwargs)
 
         if cvxprob.status != "optimal":
             print('WARNING: Allocation returned by policy not optimal!')
