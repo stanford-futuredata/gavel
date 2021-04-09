@@ -116,8 +116,10 @@ def split_generic(input_dict, k, verbose=False, method='means'):
         max_dist_sp = 0
         updated_cov = None
         random_sp1 = random.randint(0,k-1)
+        while len(subproblem_entity_assignments[random_sp1]) > (num_inputs+1)/(k*1.0):
+            random_sp1 = random.randint(0,k-1)
         random_sp2 = random.randint(0,k-1)
-        while random_sp1 == random_sp2:
+        while random_sp1 == random_sp2 or len(subproblem_entity_assignments[random_sp2]) > (num_inputs+1)/(k*1.0):
             random_sp2 = random.randint(0,k-1)
         
         for sp_index in [random_sp1, random_sp2]:
