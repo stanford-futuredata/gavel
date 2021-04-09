@@ -1,4 +1,6 @@
 import numpy as np
+import random
+import math
 
 # subproblem_list: list of lists, one for each subproblem, containing assigned entities
 # input_set_dims: dictionary mapping entity to its dimensions
@@ -69,11 +71,12 @@ def calc_dist_mean_change(input_set_dims, new_entity, origin_dist, num_entity_me
     num_entity = num_entity_mean[0]
     current_means = num_entity_mean[1]
     
-    new_means = (current_means*num_entity + np.asarray(new_entity))/(num_entity+1)
+    #new_means = (current_means*num_entity + np.asarray(new_entity))/(num_entity+1)
+    new_means = current_means + np.asarray(new_entity)
     
     sq_sum_distance_new = np.sum(np.square((new_means - origin_dist)/origin_dist))
     sq_sum_distance = np.sum(np.square((current_means - origin_dist)/origin_dist))
-    
+
     return math.sqrt(sq_sum_distance) - math.sqrt(sq_sum_distance_new)
 
 # input_dict: keys are entities and values are (ordered) list of entity dimensions, 
@@ -90,7 +93,7 @@ def split_generic(input_dict, k, verbose=False, method='means'):
         inputs = [val[d] for val in input_dict.values()]
         original_dist_inputs_by_dim.append(inputs)
         sum_d = sum(inputs)
-        original_dist_means_array[d] = sum_d/(num_inputs*1.0)
+        original_dist_means_array[d] = sum_d#/(num_inputs*1.0)
     
     original_dist_cov = np.cov(original_dist_inputs_by_dim)
     
@@ -148,8 +151,9 @@ def split_generic(input_dict, k, verbose=False, method='means'):
         num_entity = subproblem_num_entity_means[max_dist_sp][0]
         dim_means = subproblem_num_entity_means[max_dist_sp][1]
         subproblem_num_entity_means[max_dist_sp][0] += 1
-        subproblem_num_entity_means[max_dist_sp][1] = (dim_means*num_entity + np.asarray(dims))/(num_entity+1)
-        
+        #subproblem_num_entity_means[max_dist_sp][1] = (dim_means*num_entity + np.asarray(dims))/(num_entity+1)
+        subproblem_num_entity_means[max_dist_sp][1] = dim_means + np.asarray(dims)
+
         num_assigned += 1
         
         if verbose:
