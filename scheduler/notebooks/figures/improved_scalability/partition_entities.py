@@ -109,43 +109,53 @@ def split_generic(input_dict, k, verbose=False, method='means'):
     num_assigned = 0
     subproblem_num_entity_means = [[0, np.zeros(num_dimensions)] for _ in range(k)]
     subproblem_covs = [np.zeros((num_dimensions,num_dimensions)) for _ in range(k)]
+    sp_ids = [i for i in range(k)]
     for entity, dims in input_dict.items():
         if num_assigned % 5000 == 0:
             print("Assigned " + str(num_assigned) + " entities")
         max_dist_change = -np.inf
         max_dist_sp = 0
         updated_cov = None
-        random_sp1 = random.randint(0,k-1)
-        while len(subproblem_entity_assignments[random_sp1]) > (num_inputs*1.02)/(k*1.0):
-            random_sp1 = random.randint(0,k-1)
-        random_sp2 = random.randint(0,k-1)
-        while random_sp1 == random_sp2 or len(subproblem_entity_assignments[random_sp2]) > (num_inputs*1.02)/(k*1.0):
-            random_sp2 = random.randint(0,k-1)
         
-        for sp_index in [random_sp1, random_sp2]:
+
+	# choose 2 random subproblems to compare, as long as they aren't equal or full
+        num_sp_left = len(sp_ids)
+        if num_sp_left == 1:
+            max_dist_sp = sp_ids[0]
+        else:
+            random_sp1_id = random.randint(0,num_sp_left-1)
+            random_sp2_id = random.randint(0,num_sp_left-1)
+            while random_sp1_id == random_sp2_id:
+                random_sp2_id = random.randint(0,num_sp_left-1)
+            random_sp1 = sp_ids[random_sp1_id]
+            random_sp2 = sp_ids[random_sp2_id]
+
+            for sp_index in [random_sp1, random_sp2]:
             
-            # skip those that have more than equal share of currently assigned entities
-            if len(subproblem_entity_assignments[sp_index]) > (num_inputs+1)/(k*1.0):
-                continue
-            dist_change = 0
-            if method == 'means':
-                dist_change = calc_dist_mean_change(subproblem_dim_lists[sp_index], dims, 
-                                           original_dist_means_array, subproblem_num_entity_means[sp_index])
-            elif method == 'covs':
-                dist_change, new_cov = calc_dist_cov_change(subproblem_dim_lists[sp_index], dims, 
-                                           original_dist_cov, subproblem_num_entity_means[sp_index],
-                                                       subproblem_covs[sp_index])
-            #print("subproblem " + str(i) + ", dist change: " + str(dist_change))
-            if dist_change >= max_dist_change:
-                max_dist_change = dist_change
-                max_dist_sp = sp_index
-                if method == 'covs':
-                    updated_cov = new_cov
+                # skip those that have more than equal share of currently assigned entities
+                #if len(subproblem_entity_assignments[sp_index]) > (num_inputs+1.02)/(k*1.0):
+                #    continue
+                dist_change = 0
+                if method == 'means':
+                    dist_change = calc_dist_mean_change(subproblem_dim_lists[sp_index], dims, 
+                                               original_dist_means_array, subproblem_num_entity_means[sp_index])
+                elif method == 'covs':
+                    dist_change, new_cov = calc_dist_cov_change(subproblem_dim_lists[sp_index], dims, 
+                                               original_dist_cov, subproblem_num_entity_means[sp_index],
+                                                           subproblem_covs[sp_index])
+                #print("subproblem " + str(i) + ", dist change: " + str(dist_change))
+                if dist_change >= max_dist_change:
+                    max_dist_change = dist_change
+                    max_dist_sp = sp_index
+                    if method == 'covs':
+                        updated_cov = new_cov
                 
-        subproblem_entity_assignments[max_dist_sp].append(entity)
-        if method == 'cov':
-            subproblem_covs[max_dist_sp] = new_cov
+            if method == 'cov':
+                subproblem_covs[max_dist_sp] = new_cov
         
+        subproblem_entity_assignments[max_dist_sp].append(entity)
+        if len(subproblem_entity_assignments[max_dist_sp]) > (num_inputs*1.02)/(k*1.0):
+            sp_ids.remove(max_dist_sp)
         # update means to reflect entity assignment
         for d in range(num_dimensions):
             subproblem_dim_lists[max_dist_sp][d].append(dims[d])
