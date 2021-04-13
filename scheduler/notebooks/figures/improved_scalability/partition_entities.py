@@ -2,6 +2,8 @@ import numpy as np
 import random
 import math
 
+from kmodes.kprototypes import KPrototypes
+
 # subproblem_list: list of lists, one for each subproblem, containing assigned entities
 # input_set_dims: dictionary mapping entity to its dimensions
 # calculate mean value of every dimension of each subproblem and return
@@ -79,13 +81,11 @@ def calc_dist_mean_change(input_set_dims, new_entity, origin_dist, num_entity_me
 
     return math.sqrt(sq_sum_distance) - math.sqrt(sq_sum_distance_new)
 
-# input_dict: keys are entities and values are (ordered) list of entity dimensions, 
-# k: number of subproblems
-def split_generic(input_dict, k, verbose=False, method='means'):
-    
+def two_choice(input_dict, k, verbose=False, method='means'):
+
     num_inputs = len(input_dict)
     num_dimensions = len(list(input_dict.values())[0])
-    
+
     # original_dist_dict: keys are dimension indices (0..d), values are frequency
     original_dist_means_array = np.zeros(num_dimensions)
     original_dist_inputs_by_dim = []
@@ -93,7 +93,8 @@ def split_generic(input_dict, k, verbose=False, method='means'):
         inputs = [val[d] for val in input_dict.values()]
         original_dist_inputs_by_dim.append(inputs)
         sum_d = sum(inputs)
-        original_dist_means_array[d] = sum_d#/(num_inputs*1.0)
+        # original dist will reflect the sum of each dimension, divided by the number of subproblems
+        original_dist_means_array[d] = sum_d/k#/(num_inputs*1.0)
     
     original_dist_cov = np.cov(original_dist_inputs_by_dim)
     
@@ -118,7 +119,7 @@ def split_generic(input_dict, k, verbose=False, method='means'):
         updated_cov = None
         
 
-	# choose 2 random subproblems to compare, as long as they aren't equal or full
+    # choose 2 random subproblems to compare, as long as they aren't equal or full
         num_sp_left = len(sp_ids)
         if num_sp_left == 1:
             max_dist_sp = sp_ids[0]
@@ -173,3 +174,38 @@ def split_generic(input_dict, k, verbose=False, method='means'):
             print(subproblem_entity_assignments)
             print('\n')
     return subproblem_entity_assignments
+
+# compute cluster using input data
+def compute_precluster(data, num_clusters, categorical_indices=None)
+    kp = KPrototypes(n_clusters=20, init='Huang', n_init=1, verbose=1, n_jobs=24, max_iter=8)
+    clusters = kp.fit_predict(data, categorical=categorical_indices)
+    return kp
+
+# cluster data according to provided precluster (or compute it on the fly)
+def cluster(data, k, num_clusters, precluster=None, categorical_indices=None):
+    if precluster is None:
+        kp = KPrototypes(n_clusters=num_clusters, init='Huang', 
+                         n_init=1, verbose=1, n_jobs=24, max_iter=8)
+        clusters = kp.fit_predict(data, categorical=categorical_indices)
+    else: 
+        start_time = time.time()
+        clusters = precluster.predict(data)
+        print("--- %s seconds ---" % (time.time() - start_time))
+    return clusters
+    
+
+# input_dict: keys are entities and values are (ordered) list of entity dimensions, 
+# k: number of subproblems
+def split_generic(input_dict, np_data, k, verbose=False, 
+                  method='means', precluster=None, categorical_indices=None):
+    
+    if method == 'cluster':
+        subproblem_entity_assignments = cluster(np_data, k, precluster=precluster, 
+                                                categorical_indices=categorical_indices)
+    elif method == 'means' or method == 'covs':
+        subproblem_entity_assignments = two_choice(input_dict, k, verbose=verbose, method=method)
+    
+    return subproblem_entity_assignments
+    
+
+
