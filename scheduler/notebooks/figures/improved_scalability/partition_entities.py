@@ -1,8 +1,10 @@
 import numpy as np
 import random
 import math
+import time
 
 from kmodes.kprototypes import KPrototypes
+from sklearn.cluster import KMeans
 
 # subproblem_list: list of lists, one for each subproblem, containing assigned entities
 # input_set_dims: dictionary mapping entity to its dimensions
@@ -112,7 +114,7 @@ def two_choice(input_dict, k, verbose=False, method='means'):
     subproblem_covs = [np.zeros((num_dimensions,num_dimensions)) for _ in range(k)]
     sp_ids = [i for i in range(k)]
     for entity, dims in input_dict.items():
-        if num_assigned % 5000 == 0:
+        if num_assigned % int(num_inputs/4) == 0:
             print("Assigned " + str(num_assigned) + " entities")
         max_dist_change = -np.inf
         max_dist_sp = 0
@@ -155,8 +157,9 @@ def two_choice(input_dict, k, verbose=False, method='means'):
                 subproblem_covs[max_dist_sp] = new_cov
         
         subproblem_entity_assignments[max_dist_sp].append(entity)
-        if len(subproblem_entity_assignments[max_dist_sp]) > (num_inputs*1.02)/(k*1.0):
+        if len(subproblem_entity_assignments[max_dist_sp]) > ((num_inputs)*1.01)/(k*1.0):
             sp_ids.remove(max_dist_sp)
+            #print("removed sp " + str(max_dist_sp))
         # update means to reflect entity assignment
         for d in range(num_dimensions):
             subproblem_dim_lists[max_dist_sp][d].append(dims[d])
@@ -176,32 +179,53 @@ def two_choice(input_dict, k, verbose=False, method='means'):
     return subproblem_entity_assignments
 
 # compute cluster using input data
-def compute_precluster(data, num_clusters, categorical_indices=None)
-    kp = KPrototypes(n_clusters=20, init='Huang', n_init=1, verbose=1, n_jobs=24, max_iter=8)
-    clusters = kp.fit_predict(data, categorical=categorical_indices)
+def compute_precluster(data, num_clusters, categorical_indices=None):
+    if categorical_indices is None:
+        kp = KMeans(n_clusters=num_clusters)
+        kp.fit(data)
+    else:
+        kp = KPrototypes(n_clusters=num_clusters, init='Huang', n_init=1, verbose=1, n_jobs=24, max_iter=8)
+        clusters = kp.fit(data, categorical=categorical_indices)
     return kp
 
 # cluster data according to provided precluster (or compute it on the fly)
-def cluster(data, k, num_clusters, precluster=None, categorical_indices=None):
-    if precluster is None:
-        kp = KPrototypes(n_clusters=num_clusters, init='Huang', 
-                         n_init=1, verbose=1, n_jobs=24, max_iter=8)
-        clusters = kp.fit_predict(data, categorical=categorical_indices)
-    else: 
-        start_time = time.time()
-        clusters = precluster.predict(data)
-        print("--- %s seconds ---" % (time.time() - start_time))
-    return clusters
+def cluster(data, k, precluster):
+    # compute clusters, which is a list of cluster ids, one for each data item
+    start_time = time.time()
+    clusters = precluster.predict(data)
+    print("--- %s seconds ---" % (time.time() - start_time))
+    #print(clusters)
+
+    # subproblem_entity_assignments is a list of lists
+    subproblem_entity_assignments = [[] for _ in range(k)]
+
+    num_clusters = precluster.n_clusters
+    cluster_lists = [[] for _ in range(num_clusters)]
+    for i, j in enumerate(clusters): 
+        cluster_lists[j].append(i)
+
+    for cluster_list in cluster_lists:
+        np.random.shuffle(cluster_list)
+        #print(cluster_list)
+
+    # equally assign items in each cluster across subproblems
+    sp_roundrobin_id = 0
+    for cluster in cluster_lists:
+        for item in cluster:
+            subproblem_entity_assignments[sp_roundrobin_id].append(item)
+            sp_roundrobin_id = (sp_roundrobin_id + 1) % k
+
+    #print(subproblem_entity_assignments)
+    return subproblem_entity_assignments
     
 
 # input_dict: keys are entities and values are (ordered) list of entity dimensions, 
 # k: number of subproblems
 def split_generic(input_dict, np_data, k, verbose=False, 
-                  method='means', precluster=None, categorical_indices=None):
+                  method='means', precluster=None):
     
     if method == 'cluster':
-        subproblem_entity_assignments = cluster(np_data, k, precluster=precluster, 
-                                                categorical_indices=categorical_indices)
+        subproblem_entity_assignments = cluster(np_data, k, precluster=precluster)
     elif method == 'means' or method == 'covs':
         subproblem_entity_assignments = two_choice(input_dict, k, verbose=verbose, method=method)
     
