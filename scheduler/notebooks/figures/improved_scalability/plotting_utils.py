@@ -126,3 +126,46 @@ def plot_runtime_vs_effective_throughput_ratios(runtimes, all_effective_throughp
             pdf.savefig(bbox_inches='tight')
             
     plt.show()
+
+
+def plot_runtime_vs_effective_throughput_ratios_generic(runtimes, all_effective_throughputs, labels,
+                                                draw_arrow=False,
+                                                output_filename=None):
+    plt.figure(figsize=(6.5, 3))
+    ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)
+    job_ids = list(all_effective_throughputs[0].keys())
+    for (runtime, effective_throughputs, label) in zip(
+        runtimes,
+        all_effective_throughputs,
+        labels):
+        effective_throughput_ratios = np.array([
+            effective_throughputs[job_id] / all_effective_throughputs[0][job_id]
+            for job_id in job_ids])
+        mean = np.mean(effective_throughput_ratios)
+        print(label, runtime, mean, np.std(effective_throughput_ratios))
+        ax.scatter(runtime, mean, label=label)
+        ax.errorbar(runtime, mean, np.std(effective_throughput_ratios))
+        ax.annotate(label, (runtime*1.05, mean-0.08))
+
+    ax.set_ylabel("Throughput ratio")
+    ax.set_xlabel("Runtime (seconds)")
+    sns.despine()
+
+    ax.set_xscale('log')
+    ax.set_yticks([0.0, 0.25, 0.5, 0.75, 1.0])
+    xmin, xmax = plt.xlim()
+    ymin, ymax = plt.ylim()
+    plt.xlim(xmin, xmax*1.2)
+    plt.ylim(0, ymax*1.15)
+
+    if draw_arrow:
+        ax.annotate('Ideal', xy=(300, 0.8), xytext=(900, 0.3),
+            arrowprops=dict(facecolor='black', shrink=0.),
+        )
+
+    if output_filename is not None:
+        with PdfPages(output_filename) as pdf:
+            pdf.savefig(bbox_inches='tight')
+
+    plt.show()
+
