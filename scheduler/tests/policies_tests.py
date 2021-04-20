@@ -2,6 +2,7 @@ import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
 from policies import allox, finish_time_fairness, gandiva, isolated, \
     max_min_fairness, max_min_fairness_water_filling, max_sum_throughput
+from policies import PartitionedProblem
 
 import itertools
 import numpy as np
@@ -145,6 +146,27 @@ class TestPolicies(unittest.TestCase):
     def test_max_min_fairness_with_perf(self):
         policy = max_min_fairness.MaxMinFairnessPolicyWithPerf(
             solver='ECOS')
+        unflattened_throughputs = {
+            0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
+        }
+        scale_factors = {
+            0: 1,
+            1: 1
+        }
+        unflattened_priority_weights = {0: 1, 1: 1}
+        cluster_spec = {
+            'v100': 1,
+            'p100': 2,
+            'k80': 3
+        }
+        policy.get_allocation(unflattened_throughputs, scale_factors,
+                              unflattened_priority_weights,
+                              cluster_spec)
+
+    def test_partitioned_max_min_fairness_with_perf(self):
+        policy = partitioned_problem.PartitionedProblem(
+            max_min_fairness.MaxMinFairnessPolicyWithPerf(solver='ECOS'), 1)
         unflattened_throughputs = {
             0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
             1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
