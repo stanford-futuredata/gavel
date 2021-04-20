@@ -148,6 +148,8 @@ if __name__=='__main__':
     parser.add_argument('--num_gpus_per_server', type=str, default='1:1:1',
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
+    parser.add_argument('--num_sub_problems', type=int, nargs='+',
+                        default=[1], help='Number of sub-problems')
     parser.add_argument('-s', '--window-start', type=int, default=0,
                         help='Measurement window start (job ID)')
     parser.add_argument('-e', '--window-end', type=int, default=5000,

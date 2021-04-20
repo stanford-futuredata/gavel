@@ -23,6 +23,7 @@ import logging
 from job import Job
 import job_id_pair
 from job_table import JobTable
+from policies import partitioned_problem
 from runtime.rpc import scheduler_server, scheduler_client
 import set_queue
 from custom_logging import SchedulerAdapter
@@ -65,7 +66,7 @@ class Scheduler:
                  enable_global_queue=False,
                  expected_num_workers=None,
                  minimum_time_between_allocation_resets=1920,
-                 max_rounds=None):
+                 max_rounds=None, num_sub_problems=1):
 
         # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
@@ -138,7 +139,11 @@ class Scheduler:
         self._worker_id_to_worker_type_mapping = {}
         self._worker_type_to_worker_id_mapping = {}
         # Policy instance.
-        self._policy = policy
+        if num_sub_problems > 1:
+            self._policy = partitioned_problem.PartitionedProblem(policy,
+                                                                  num_sub_problems)
+        else:
+            self._policy = policy
         # Should jobs be packed.
         self._job_packing = 'Packing' in policy.name
         # RPC clients.
