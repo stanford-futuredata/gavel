@@ -2,7 +2,7 @@ import sys; sys.path.append("..")
 from job_id_pair import JobIdPair
 from policies import allox, finish_time_fairness, gandiva, isolated, \
     max_min_fairness, max_min_fairness_water_filling, max_sum_throughput
-from policies import PartitionedProblem
+from policies import partitioned_problem
 
 import itertools
 import numpy as np
@@ -166,20 +166,26 @@ class TestPolicies(unittest.TestCase):
 
     def test_partitioned_max_min_fairness_with_perf(self):
         policy = partitioned_problem.PartitionedProblem(
-            max_min_fairness.MaxMinFairnessPolicyWithPerf(solver='ECOS'), 1)
+            max_min_fairness.MaxMinFairnessPolicyWithPerf(solver='ECOS'), 2)
         unflattened_throughputs = {
-            0: {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
-            1: {'v100': 3.0, 'p100': 2.0, 'k80': 1.0}
+            JobIdPair(0, None): {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            JobIdPair(1, None): {'v100': 3.0, 'p100': 2.0, 'k80': 1.0},
+            JobIdPair(2, None): {'v100': 2.0, 'p100': 1.0, 'k80': 0.5},
+            JobIdPair(3, None): {'v100': 3.0, 'p100': 2.0, 'k80': 1.0},
         }
         scale_factors = {
-            0: 1,
-            1: 1
+            JobIdPair(0, None): 1,
+            JobIdPair(1, None): 1,
+            JobIdPair(2, None): 1,
+            JobIdPair(3, None): 1,
         }
-        unflattened_priority_weights = {0: 1, 1: 1}
+        unflattened_priority_weights = {
+            JobIdPair(0, None): 1, JobIdPair(1, None): 1,
+            JobIdPair(2, None): 1, JobIdPair(3, None): 1}
         cluster_spec = {
-            'v100': 1,
-            'p100': 2,
-            'k80': 3
+            'v100': 2,
+            'p100': 4,
+            'k80': 6
         }
         policy.get_allocation(unflattened_throughputs, scale_factors,
                               unflattened_priority_weights,
