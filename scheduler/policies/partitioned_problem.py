@@ -8,6 +8,10 @@ class PartitionedProblem:
         self._k = k
         self._name = policy._name
 
+    @property
+    def name(self):
+        return self._name
+
     def get_allocation(self, *args, **kwargs):
         args_list = list(args)
         throughputs = args_list[0]
@@ -42,7 +46,8 @@ class PartitionedProblem:
             print(args_list_sub_problem)
             sub_problem_allocation = self._policy_instances[i].get_allocation(
                 *args_list_sub_problem, **kwargs)
-            for job_id in sub_problem_allocation:
-                full_allocation[job_id] = sub_problem_allocation[job_id]
+            if sub_problem_allocation is not None:
+                for job_id in sub_problem_allocation:
+                    full_allocation[job_id] = sub_problem_allocation[job_id]
 
         return full_allocation

@@ -21,7 +21,8 @@ def simulate(policy_name, throughputs_file, cluster_spec,
              checkpoint_threshold, checkpoint_file,
              profiling_percentage, per_instance_type_prices_dir,
              available_clouds, assign_SLOs, enable_global_queue,
-             num_gpus_per_server, output_trace_file_name):
+             num_gpus_per_server, output_trace_file_name,
+             num_sub_problems):
     policy = utils.get_policy(policy_name, solver=solver, seed=seed)
     sched = scheduler.Scheduler(
                     policy,
@@ -33,15 +34,17 @@ def simulate(policy_name, throughputs_file, cluster_spec,
                     per_instance_type_prices_dir=per_instance_type_prices_dir,
                     available_clouds=available_clouds,
                     assign_SLOs=assign_SLOs,
-                    enable_global_queue=enable_global_queue)
+                    enable_global_queue=enable_global_queue,
+                    num_sub_problems=num_sub_problems)
 
     cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                    cluster_spec['p100'],
                                                    cluster_spec['k80'])
     current_time = datetime.datetime.now()
     print('[%s] Configuration: cluster_spec=%s, policy=%s, '
-           'seed=%d, lam=%f' % (current_time, cluster_spec_str, policy.name,
-                                seed, lam),
+           'seed=%d, lam=%f, num_sub_problems=%d' % (
+               current_time, cluster_spec_str, policy.name,
+               seed, lam, num_sub_problems),
           file=sys.stderr)
 
     if lam == 0:
@@ -116,7 +119,8 @@ def main(args):
                  args.assign_SLOs,
                  args.enable_global_queue,
                  num_gpus_per_server,
-                 args.output_trace_file_name)
+                 args.output_trace_file_name,
+                 args.num_sub_problems)
 
     else:
         with open('/dev/null', 'w') as f:
@@ -137,7 +141,8 @@ def main(args):
                          args.assign_SLOs,
                          args.enable_global_queue,
                          num_gpus_per_server,
-                         args.output_trace_file_name)
+                         args.output_trace_file_name,
+                         args.num_sub_problems)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(

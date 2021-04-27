@@ -26,7 +26,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                           num_total_jobs, solver,
                           log_dir, timeout, verbose,
                           num_gpus_per_server,
-                          ideal):
+                          ideal, num_sub_problems):
     # Add some random delay to prevent outputs from overlapping.
     # TODO: Replace this with postprocessing in the log parsing script.
     time.sleep(random.uniform(0, 5))
@@ -40,11 +40,13 @@ def simulate_with_timeout(experiment_id, policy_name,
         current_time = datetime.datetime.now()
         print('[%s] [Experiment ID: %2d] '
               'Configuration: cluster_spec=%s, policy=%s, '
-              'seed=%d, num_total_jobs=%d' % (current_time,
-                                              experiment_id,
-                                              cluster_spec_str,
-                                              policy.name,
-                                              seed, num_total_jobs))
+              'seed=%d, num_total_jobs=%d, num_sub_problems=%d' % (
+            current_time,
+            experiment_id,
+            cluster_spec_str,
+            policy.name,
+            seed, num_total_jobs,
+            num_sub_problems))
 
     with open(os.path.join(log_dir, num_total_jobs_str), 'w') as f:
         with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
@@ -56,7 +58,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                     available_clouds = available_clouds,
                     assign_SLOs=assign_SLOs,
                     enable_global_queue=enable_global_queue,
-                    simulate=True)
+                    simulate=True,
+                    num_sub_problems=num_sub_problems)
 
             cluster_spec_str = 'v100:%d|p100:%d|k80:%d' % (cluster_spec['v100'],
                                                            cluster_spec['p100'],
@@ -167,28 +170,36 @@ def main(args):
                 all_num_total_jobs = all_num_total_jobs[1:]
             for num_total_jobs in all_num_total_jobs:
                 lam = 0.0  # All jobs are added at the start of the trace.
-                for seed in args.seeds:
-                    seed_str = 'seed=%d' % (seed)
-                    raw_logs_seed_subdir = \
-                            os.path.join(raw_logs_policy_subdir, seed_str)
-                    if not os.path.isdir(raw_logs_seed_subdir):
-                        os.mkdir(raw_logs_seed_subdir)
-                    all_args_list.append((experiment_id, policy_name,
-                                          throughputs_file,
-                                          args.per_instance_type_prices_dir,
-                                          args.available_clouds,
-                                          args.assign_SLOs,
-                                          cluster_spec,
-                                          lam, seed, args.interval,
-                                          args.fixed_job_duration,
-                                          args.generate_multi_gpu_jobs,
-                                          args.enable_global_queue,
-                                          num_total_jobs,
-                                          args.solver,
-                                          raw_logs_seed_subdir,
-                                          args.timeout, args.verbose,
-                                          num_gpus_per_server,
-                                          args.ideal))
+                for num_sub_problems in args.num_sub_problems:
+                    num_sub_problems_str = 'num_sub_problems=%d' % num_sub_problems
+                    raw_logs_num_sub_problems_subdir = os.path.join(
+                        raw_logs_policy_subdir,
+                        num_sub_problems_str)
+                    if not os.path.isdir(raw_logs_num_sub_problems_subdir):
+                         os.mkdir(raw_logs_num_sub_problems_subdir)
+                    for seed in args.seeds:
+                        seed_str = 'seed=%d' % (seed)
+                        raw_logs_seed_subdir = \
+                                os.path.join(raw_logs_num_sub_problems_subdir, seed_str)
+                        if not os.path.isdir(raw_logs_seed_subdir):
+                            os.mkdir(raw_logs_seed_subdir)
+                        all_args_list.append((experiment_id, policy_name,
+                                              throughputs_file,
+                                              args.per_instance_type_prices_dir,
+                                              args.available_clouds,
+                                              args.assign_SLOs,
+                                              cluster_spec,
+                                              lam, seed, args.interval,
+                                              args.fixed_job_duration,
+                                              args.generate_multi_gpu_jobs,
+                                              args.enable_global_queue,
+                                              num_total_jobs,
+                                              args.solver,
+                                              raw_logs_seed_subdir,
+                                              args.timeout, args.verbose,
+                                              num_gpus_per_server,
+                                              args.ideal,
+                                              num_sub_problems))
                     experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
@@ -223,6 +234,8 @@ if __name__=='__main__':
                         default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
+    parser.add_argument('--num_sub_problems', type=int, nargs='+',
+                        default=[1], help='Number of sub-problems')
     parser.add_argument('--num_gpus_per_server', type=str, default='1:1:1',
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))

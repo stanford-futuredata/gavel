@@ -24,7 +24,7 @@ def simulate_with_timeout(experiment_id, policy_name,
                           generate_multi_priority_jobs, simulate_steady_state,
                           log_dir, timeout, verbose, checkpoint_threshold,
                           profiling_percentage, num_reference_models,
-                          num_gpus_per_server, ideal):
+                          num_gpus_per_server, ideal, num_sub_problems):
     lam_str = 'lambda=%f.log' % (lam)
     checkpoint_file = None
     if checkpoint_threshold is not None:
@@ -40,13 +40,15 @@ def simulate_with_timeout(experiment_id, policy_name,
               'Configuration: cluster_spec=%s, policy=%s, '
               'seed=%d, lam=%f, '
               'profiling_percentage=%f, '
-              'num_reference_models=%d' % (current_time,
-                                           experiment_id,
-                                           cluster_spec_str,
-                                           policy.name,
-                                           seed, lam,
-                                           profiling_percentage,
-                                           num_reference_models))
+              'num_reference_models=%d, '
+              'num_sub_problems=%d' % (current_time,
+                                       experiment_id,
+                                       cluster_spec_str,
+                                       policy.name,
+                                       seed, lam,
+                                       profiling_percentage,
+                                       num_reference_models,
+                                       num_sub_problems))
 
     with open(os.path.join(log_dir, lam_str), 'w') as f:
         with contextlib.redirect_stderr(f), contextlib.redirect_stdout(f):
@@ -57,7 +59,8 @@ def simulate_with_timeout(experiment_id, policy_name,
                             time_per_iteration=interval,
                             simulate=True,
                             profiling_percentage=profiling_percentage,
-                            num_reference_models=num_reference_models)
+                            num_reference_models=num_reference_models,
+                            num_sub_problems=num_sub_problems)
 
             if timeout is None:
                 sched.simulate(cluster_spec, lam=lam,
@@ -212,31 +215,39 @@ def main(args):
                                 continue
 
                         lam = 3600.0 / throughput
-                        for seed in args.seeds:
-                            seed_str = 'seed=%d' % (seed)
-                            raw_logs_seed_subdir = os.path.join(
-                                    raw_logs_num_reference_models_subdir,
-                                    seed_str)
-                            if not os.path.isdir(raw_logs_seed_subdir):
-                                os.mkdir(raw_logs_seed_subdir)
-                            all_args_list.append((experiment_id, policy_name,
-                                                  throughputs_file,
-                                                  cluster_spec,
-                                                  lam, seed, args.interval,
-                                                  jobs_to_complete,
-                                                  args.fixed_job_duration,
-                                                  args.solver,
-                                                  args.generate_multi_gpu_jobs,
-                                                  args.generate_multi_priority_jobs,
-                                                  args.simulate_steady_state,
-                                                  raw_logs_seed_subdir,
-                                                  args.timeout,
-                                                  args.verbose,
-                                                  args.checkpoint_threshold,
-                                                  profiling_percentage,
-                                                  num_reference_models,
-                                                  num_gpus_per_server,
-                                                  args.ideal))
+                        for num_sub_problems in args.num_sub_problems:
+                            num_sub_problems_str = 'num_sub_problems=%d' % num_sub_problems
+                            raw_logs_num_sub_problems_subdir = os.path.join(
+                                raw_logs_num_reference_models_subdir,
+                                num_sub_problems_str)
+                            if not os.path.isdir(raw_logs_num_sub_problems_subdir):
+                                os.mkdir(raw_logs_num_sub_problems_subdir)
+                            for seed in args.seeds:
+                                seed_str = 'seed=%d' % seed
+                                raw_logs_seed_subdir = os.path.join(
+                                        raw_logs_num_sub_problems_subdir,
+                                        seed_str)
+                                if not os.path.isdir(raw_logs_seed_subdir):
+                                    os.mkdir(raw_logs_seed_subdir)
+                                all_args_list.append((experiment_id, policy_name,
+                                                      throughputs_file,
+                                                      cluster_spec,
+                                                      lam, seed, args.interval,
+                                                      jobs_to_complete,
+                                                      args.fixed_job_duration,
+                                                      args.solver,
+                                                      args.generate_multi_gpu_jobs,
+                                                      args.generate_multi_priority_jobs,
+                                                      args.simulate_steady_state,
+                                                      raw_logs_seed_subdir,
+                                                      args.timeout,
+                                                      args.verbose,
+                                                      args.checkpoint_threshold,
+                                                      profiling_percentage,
+                                                      num_reference_models,
+                                                      num_gpus_per_server,
+                                                      args.ideal,
+                                                      num_sub_problems))
                             experiment_id += 1
     if len(all_args_list) > 0:
         current_time = datetime.datetime.now()
@@ -275,6 +286,8 @@ if __name__=='__main__':
                         default=['25:0:0', '12:12:0', '16:8:0', '8:8:8'],
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))
+    parser.add_argument('--num_sub_problems', type=int, nargs='+',
+                        default=[1], help='Number of sub-problems')
     parser.add_argument('--num_gpus_per_server', type=str, default='1:1:1',
                         help=('Cluster specification in the form of '
                               '#v100s:#p100s:#k80s'))

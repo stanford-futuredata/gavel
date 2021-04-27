@@ -40,7 +40,12 @@ def get_logfile_paths(directory_name, static_trace=False):
                               lambda_or_num_total_jobs, logfile_path))
     return logfile_paths
 
-def prune(logfile_paths, v100s, p100s, k80s, policy, seed=None):
+def prune(logfile_paths, v100s, p100s, k80s, policy,
+          seed=None, num_sub_problems_provided=False):
+    if num_sub_problems_provided:
+        return sorted([(x[5], x[7], x[4], x[6]) for x in logfile_paths
+                       if x[0] == v100s and x[1] == p100s and
+                       x[2] == k80s and x[3] == policy])
     if seed is None:
         return sorted([(x[5], x[6], x[4]) for x in logfile_paths
                        if x[0] == v100s and x[1] == p100s and
