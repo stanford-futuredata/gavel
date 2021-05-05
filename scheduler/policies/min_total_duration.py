@@ -38,15 +38,14 @@ class MinTotalDurationPolicyWithPerf(Policy):
         Policy.__init__(self, solver)
         self._name = 'MinTotalDuration_Perf'
 
-    def get_allocation_helper(self, throughputs, scale_factors_array, T):
+    def get_allocation_helper(self, throughputs, scale_factors_array):
         x = cp.Variable(throughputs.shape)
-        objective = cp.Maximize(1)
-        # Make sure the allocation can fit in the cluster, and that the
-        # currently active jobs can finish in time T.
+        inv_M = cp.Variable()
+        objective = cp.Maximize(inv_M)
         constraints = self.get_base_constraints(x, scale_factors_array)
         constraints.append(
             cp.sum(cp.multiply(throughputs, x), axis=1) >= (
-                self._num_steps_remaining / T)
+                self._num_steps_remaining * inv_M)
         )
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
@@ -70,26 +69,8 @@ class MinTotalDurationPolicyWithPerf(Policy):
         scale_factors_array = self.scale_factors_array(
              scale_factors, job_ids, m, n)
 
-        # Units are in seconds.
-        max_T = 1000000.
-        min_T = 100.
-        last_max_T = max_T
-        status = None
-        last_feasible_x = None
-        while last_feasible_x is None:
-            # Binary search for the smallest T that gives an optimal solution.
-            while (1.05 * min_T) < max_T:  # TODO: Can tweak the 1.05 in this loop.
-                T = (min_T + max_T) / 2.
-                status, x = self.get_allocation_helper(throughputs,
-                                                       scale_factors_array, T)
-                if status == "optimal":
-                    last_feasible_x = x
-                    max_T = T
-                else:
-                    min_T = T
-            max_T = last_max_T * 10.
-            min_T = last_max_T
-            last_max_T *= 10
+        status, last_feasible_x = self.get_allocation_helper(throughputs,
+                                                             scale_factors_array)
 
         assert(last_feasible_x is not None)
         return super().unflatten(
@@ -103,24 +84,22 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
         self._name = 'MinTotalDuration_Packing'
 
     def get_allocation_helper(self, all_throughputs, job_ids,
-                              single_job_ids, scale_factors_array, T,
+                              single_job_ids, scale_factors_array,
                               relevant_combinations):
         x = cp.Variable(all_throughputs[0].shape)
-        objective = cp.Maximize(1)
+        inv_M = cp.Variable()
+        objective = cp.Maximize(inv_M)
         # Make sure the allocation can fit in the cluster.
         constraints = self.get_base_constraints(x, single_job_ids,
                                                 scale_factors_array,
                                                 relevant_combinations)
 
-        # See if passed in T is feasible.
         for i, (throughputs, num_steps_remaining) in \
             enumerate(zip(all_throughputs, self._num_steps_remaining)):
             indexes = relevant_combinations[single_job_ids[i]]
-            # Ensure that every job satisfies its throughput constraint,
-            # and can finish in time T.
             constraints.append(
                 cp.sum(cp.multiply(throughputs[indexes], x[indexes])) >=
-                    (num_steps_remaining / T))
+                    (num_steps_remaining * inv_M))
         cvxprob = cp.Problem(objective, constraints)
         result = cvxprob.solve(solver=self._solver)
 
@@ -142,28 +121,11 @@ class MinTotalDurationPolicyWithPacking(PolicyWithPacking):
         scale_factors_array = self.scale_factors_array(
             scale_factors, job_ids, m, n)
 
-        # Units are in seconds.
-        max_T = 1000000.
-        min_T = 100.
-        last_max_T = max_T
-        status = None
-        last_feasible_x = None
-        while last_feasible_x is None:
-            # Binary search for the smallest T that gives an optimal solution.
-            while (1.05 * min_T) < max_T:  # TODO: Can tweak the 1.05 in this loop.
-                T = (min_T + max_T) / 2.
-                status, x = self.get_allocation_helper(all_throughputs,
-                                                       job_ids, single_job_ids,
-                                                       scale_factors_array, T,
-                                                       relevant_combinations)
-                if status == "optimal":
-                    last_feasible_x = x
-                    max_T = T
-                else:
-                    min_T = T
-            max_T = last_max_T * 10.
-            min_T = last_max_T
-            last_max_T *= 10
+        status, last_feasible_x = self.get_allocation_helper(all_throughputs,
+                                                             job_ids,
+                                                             single_job_ids,
+                                                             scale_factors_array,
+                                                             relevant_combinations)
 
         assert(last_feasible_x is not None)
         return super().unflatten(

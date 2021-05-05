@@ -66,7 +66,7 @@ class Scheduler:
                  enable_global_queue=False,
                  expected_num_workers=None,
                  minimum_time_between_allocation_resets=1920,
-                 max_rounds=None, num_sub_problems=1):
+                 max_rounds=None, num_sub_problems=None):
 
         # Flag to control whether scheduler runs in simulation mode.
         self._simulate = simulate
@@ -139,11 +139,13 @@ class Scheduler:
         self._worker_id_to_worker_type_mapping = {}
         self._worker_type_to_worker_id_mapping = {}
         # Policy instance.
-        if num_sub_problems > 1:
+        self._num_sub_problems = num_sub_problems
+        if num_sub_problems is not None:
             self._policy = partitioned_problem.PartitionedProblem(policy,
                                                                   num_sub_problems)
         else:
             self._policy = policy
+        self._allocation_computation_times = []
         # Should jobs be packed.
         self._job_packing = 'Packing' in policy.name
         # RPC clients.
@@ -1848,6 +1850,8 @@ class Scheduler:
                 job_ids = sorted(list(self._job_completion_times.keys()))
             else:
                 job_ids = sorted(job_ids)
+            print("Allocation computation times:",
+                self._allocation_computation_times)
             print('Job completion times:')
             all_job_completion_times = []
             low_priority_job_completion_times = []
@@ -1884,6 +1888,8 @@ class Scheduler:
                           '%.3f seconds '
                           '(%.2f hours)' % (average_high_pri_jct,
                                             average_high_pri_jct / 3600.0))
+            print("Mean allocation computation time: %.4f seconds" %
+                np.mean(np.array(self._allocation_computation_times)))
             return average_job_completion_time
 
 
@@ -2152,6 +2158,8 @@ class Scheduler:
                 throughputs, scale_factors, self._cluster_spec)
         if allocation is None:
             allocation = {}
+        if self._num_sub_problems is not None:
+            self._allocation_computation_times.append(self._policy.get_max_time())
         return allocation
 
     def _allocation_thread(self):

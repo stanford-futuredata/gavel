@@ -1,16 +1,22 @@
 import copy
+import numpy as np
 import random
+import time
 
 
 class PartitionedProblem:
     def __init__(self, policy, k):
         self._policy_instances = [copy.deepcopy(policy) for _ in range(k)]
+        assert k is not None
         self._k = k
         self._name = policy._name
 
     @property
     def name(self):
         return self._name
+
+    def get_max_time(self):
+        return np.max(np.array(self._times))
 
     def get_allocation(self, *args, **kwargs):
         args_list = list(args)
@@ -39,15 +45,17 @@ class PartitionedProblem:
                         throughputs[job_id])
 
         full_allocation = {}
+        self._times = []
         for i in range(self._k):
+            start_time = time.time()
             args_list_sub_problem = copy.deepcopy(args_list[1:])
             args_list_sub_problem[-1] = sub_problem_cluster_spec
             args_list_sub_problem = [sub_problem_throughputs[i]] + args_list_sub_problem
-            print(args_list_sub_problem)
             sub_problem_allocation = self._policy_instances[i].get_allocation(
                 *args_list_sub_problem, **kwargs)
             if sub_problem_allocation is not None:
                 for job_id in sub_problem_allocation:
                     full_allocation[job_id] = sub_problem_allocation[job_id]
+            self._times.append(time.time() - start_time)
 
         return full_allocation
