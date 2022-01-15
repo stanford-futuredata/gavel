@@ -1273,6 +1273,10 @@ class Scheduler:
                     next_job_arrival_time = queued_jobs[0][0]
                 else:
                     next_job_arrival_time = None
+                    # If no jobs are currently running and we are not yet done,
+                    # force a reset.
+                    if len(running_jobs) == 0:
+                        self._last_reset_time = 0
 
             # Jump to the next event's timestamp.
             # Find the time when the latest job completes, which signals
@@ -1287,7 +1291,8 @@ class Scheduler:
             if max_timestamp > 0:
                 self._current_timestamp = max_timestamp
             else:
-                self._current_timestamp = next_job_arrival_time
+                if next_job_arrival_time is not None:
+                    self._current_timestamp = next_job_arrival_time
 
             # Update per-instance type prices.
             if self._per_worker_type_prices is not None:
